@@ -397,6 +397,7 @@ class NewsModel(Base):
     __tablename__ = 'news'
 
     id = Column(Integer, primary_key=True)
+    deleted_status_id = Column(Integer)
     title = Column(String(255))
     short_description = Column(String(255))
     description = Column(Text())

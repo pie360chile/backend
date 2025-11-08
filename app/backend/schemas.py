@@ -165,11 +165,40 @@ class StoreNews(BaseModel):
     description: str
     image: Optional[str] = None
 
+    @classmethod
+    def as_form(
+        cls,
+        title: str = Form(...),
+        short_description: str = Form(...),
+        description: str = Form(...)
+    ):
+        return cls(
+            title=title,
+            short_description=short_description,
+            description=description
+        )
+
 class UpdateNews(BaseModel):
     title: str = None
     short_description: str = None
     description: str = None
     image: str = None
+
+    @classmethod
+    def as_form(
+        cls,
+        title: Optional[str] = Form(None),
+        short_description: Optional[str] = Form(None),
+        description: Optional[str] = Form(None)
+    ):
+        data = {}
+        if title is not None:
+            data["title"] = title
+        if short_description is not None:
+            data["short_description"] = short_description
+        if description is not None:
+            data["description"] = description
+        return cls(**data)
 
 # Nationality schemas
 class NationalityList(BaseModel):

@@ -17,11 +17,24 @@ def index(member: FamilyMemberList, session_user: UserLogin = Depends(get_curren
     result = FamilyMembersClass(db).get_all(page=page_value, items_per_page=member.per_page, family_member=member.family_member)
 
     if isinstance(result, dict) and result.get("status") == "error":
+        error_message = result.get("message", "Error")
+        lower_message = error_message.lower() if isinstance(error_message, str) else ""
+
+        if "no data" in lower_message or "no se encontraron datos" in lower_message:
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "status": 200,
+                    "message": error_message,
+                    "data": []
+                }
+            )
+
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
             content={
                 "status": 404,
-                "message": result.get("message", "Error"),
+                "message": error_message,
                 "data": None
             }
         )
@@ -33,29 +46,6 @@ def index(member: FamilyMemberList, session_user: UserLogin = Depends(get_curren
         content={
             "status": 200,
             "message": message,
-            "data": result
-        }
-    )
-
-@family_members.get("/list")
-def get_all_list(session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    result = FamilyMembersClass(db).get_all_list()
-
-    if isinstance(result, dict) and result.get("status") == "error":
-        return JSONResponse(
-            status_code=status.HTTP_404_NOT_FOUND,
-            content={
-                "status": 404,
-                "message": result.get("message", "Error"),
-                "data": None
-            }
-        )
-    
-    return JSONResponse(
-        status_code=status.HTTP_200_OK,
-        content={
-            "status": 200,
-            "message": "Family members list retrieved successfully",
             "data": result
         }
     )

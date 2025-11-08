@@ -21,16 +21,22 @@ class GenderClass:
             query = query.order_by(GenderModel.id)
 
             if page > 0:
-                total_items = query.count()
-                total_pages = (total_items + items_per_page - 1) // items_per_page
+                if page < 1:
+                    page = 1
 
-                if page < 1 or page > total_pages:
-                    return {"status": "error", "message": "Invalid page number"}
+                total_items = query.count()
+                total_pages = (total_items + items_per_page - 1) // items_per_page if items_per_page else 0
+
+                if total_items == 0 or total_pages == 0 or page > total_pages:
+                    return {
+                        "total_items": total_items,
+                        "total_pages": total_pages,
+                        "current_page": page,
+                        "items_per_page": items_per_page,
+                        "data": []
+                    }
 
                 data = query.offset((page - 1) * items_per_page).limit(items_per_page).all()
-
-                if not data:
-                    return {"status": "error", "message": "No data found"}
 
                 serialized_data = [{
                     "id": item.id,

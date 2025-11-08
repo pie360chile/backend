@@ -15,7 +15,7 @@ class NewsClass:
                 NewsModel.image,
                 NewsModel.added_date,
                 NewsModel.updated_date
-            )
+            ).filter(NewsModel.deleted_status_id == 0)
 
             # Aplicar filtro de búsqueda si se proporciona title
             if title and title.strip():
@@ -24,16 +24,22 @@ class NewsClass:
             query = query.order_by(NewsModel.id.desc())
 
             if page > 0:
-                total_items = query.count()
-                total_pages = (total_items + items_per_page - 1) // items_per_page
+                if page < 1:
+                    page = 1
 
-                if page < 1 or page > total_pages:
-                    return {"status": "error", "message": "Invalid page number"}
+                total_items = query.count()
+                total_pages = (total_items + items_per_page - 1) // items_per_page if items_per_page else 0
+
+                if total_items == 0 or total_pages == 0 or page > total_pages:
+                    return {
+                        "total_items": total_items,
+                        "total_pages": total_pages,
+                        "current_page": page,
+                        "items_per_page": items_per_page,
+                        "data": []
+                    }
 
                 data = query.offset((page - 1) * items_per_page).limit(items_per_page).all()
-
-                if not data:
-                    return {"status": "error", "message": "No data found"}
 
                 serialized_data = [{
                     "id": news.id,
@@ -74,7 +80,10 @@ class NewsClass:
     
     def get(self, id):
         try:
-            data_query = self.db.query(NewsModel).filter(NewsModel.id == id).first()
+            data_query = self.db.query(NewsModel).filter(
+                NewsModel.id == id,
+                NewsModel.deleted_status_id == 0
+            ).first()
 
             if data_query:
                 news_data = {
@@ -103,6 +112,7 @@ class NewsClass:
                 short_description=news_inputs['short_description'],
                 description=news_inputs['description'],
                 image=news_inputs.get('image'),
+                deleted_status_id=0,
                 added_date=datetime.now(),
                 updated_date=datetime.now()
             )
@@ -124,10 +134,13 @@ class NewsClass:
     def delete(self, id):
         try:
             data = self.db.query(NewsModel).filter(NewsModel.id == id).first()
-            if data:
-                self.db.delete(data)
+            if data and data.deleted_status_id == 0:
+                data.deleted_status_id = 1
+                data.updated_date = datetime.now()
                 self.db.commit()
                 return {"status": "success", "message": "News deleted successfully"}
+            elif data:
+                return {"status": "error", "message": "No data found"}
             else:
                 return {"status": "error", "message": "No data found"}
 
@@ -138,7 +151,10 @@ class NewsClass:
 
     def update(self, id, news_inputs):
         try:
-            existing_news = self.db.query(NewsModel).filter(NewsModel.id == id).one_or_none()
+            existing_news = self.db.query(NewsModel).filter(
+                NewsModel.id == id,
+                NewsModel.deleted_status_id == 0
+            ).one_or_none()
 
             if not existing_news:
                 return {"status": "error", "message": "No data found"}

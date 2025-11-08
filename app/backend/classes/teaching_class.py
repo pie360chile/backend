@@ -12,7 +12,7 @@ class TeachingClass:
                 TeachingModel.teaching_name,
                 TeachingModel.added_date,
                 TeachingModel.updated_date
-            )
+            ).filter(TeachingModel.deleted_status_id == 0)
 
             # Aplicar filtro de búsqueda si se proporciona teaching_name
             if teaching_name and teaching_name.strip():
@@ -71,7 +71,7 @@ class TeachingClass:
                 TeachingModel.teaching_name,
                 TeachingModel.added_date,
                 TeachingModel.updated_date
-            ).order_by(TeachingModel.id)
+            ).filter(TeachingModel.deleted_status_id == 0).order_by(TeachingModel.id)
             
             data = query.all()
 
@@ -113,6 +113,7 @@ class TeachingClass:
         try:
             new_teaching = TeachingModel(
                 teaching_name=teaching_inputs['teaching_name'],
+                deleted_status_id=0,
                 added_date=datetime.now(),
                 updated_date=datetime.now()
             )
@@ -135,7 +136,8 @@ class TeachingClass:
         try:
             data = self.db.query(TeachingModel).filter(TeachingModel.id == id).first()
             if data:
-                self.db.delete(data)
+                data.deleted_status_id = 1
+                data.updated_date = datetime.now()
                 self.db.commit()
                 return {"status": "success", "message": "Teaching deleted successfully"}
             else:

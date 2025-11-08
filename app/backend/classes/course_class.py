@@ -6,7 +6,6 @@ class CourseClass:
         self.db = db
 
     def get_all(self, page=0, items_per_page=10, course=None, teaching_id=None):
-        print(page, items_per_page, course, teaching_id)
         try:
             query = self.db.query(
                 CourseModel.id,

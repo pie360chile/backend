@@ -3,6 +3,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 import uvicorn
 import os
+from pathlib import Path
 from fastapi.middleware.cors import CORSMiddleware
 from app.backend.routers.authentications import authentications
 from app.backend.routers.rols import rols
@@ -44,10 +45,10 @@ async def general_exception_handler(request: Request, exc: Exception):
         }
     )
 
-#FILES_DIR = "C:/Users/jesus/OneDrive/Escritorio/backend-lacasadelvitrificado/files"
+FILES_DIR = "C:/Users/jesus/OneDrive/Escritorio/proyecto_pie360/backend/files"
 
-# Montar como directorio estático
-#app.mount("/files", StaticFiles(directory=FILES_DIR), name="files")
+Path(FILES_DIR).mkdir(parents=True, exist_ok=True)
+app.mount("/files", StaticFiles(directory=FILES_DIR), name="files")
 
 os.environ['SECRET_KEY'] = '7de4c36b48fce8dcb3a4bb527ba62d789ebf3d3a7582472ee49d430b01a7f868'
 os.environ['ALGORITHM'] = 'HS256'
