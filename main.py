@@ -29,6 +29,12 @@ from app.backend.routers.genders import genders
 app = FastAPI(root_path="/api")
 application = app
 
+# Nota: El límite de tamaño de archivo se configura en el servidor
+# Para uvicorn en desarrollo, el límite por defecto es ~1MB
+# Para aumentar en producción con gunicorn, agregar a la configuración:
+# --limit-request-line 8190 --limit-request-field_size 8190
+# O configurar en el archivo de servicio systemd/service
+
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(
@@ -90,4 +96,7 @@ app.include_router(nationalities)
 app.include_router(genders)
 
 if __name__ == "__main__":
+    # Para aumentar el límite de tamaño de archivo, configurar en el servidor
+    # En producción con gunicorn, usar: --limit-request-line 8190 --limit-request-field_size 8190
+    # El límite por defecto de Starlette es 1MB, se puede aumentar configurando el servidor
     uvicorn.run("main:app", port=8000, reload=True)

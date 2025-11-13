@@ -54,6 +54,11 @@ class ConfirmEmail(BaseModel):
     token: str
 
 # Role schemas
+class RolList(BaseModel):
+    page: Optional[int] = None
+    rol: Optional[str] = None
+    per_page: int = 10
+
 class Rol(BaseModel):
     rol: str
 

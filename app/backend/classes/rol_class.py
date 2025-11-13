@@ -1,59 +1,173 @@
+from datetime import datetime
 from app.backend.db.models import RolModel
 
 class RolClass:
     def __init__(self, db):
         self.db = db
 
-    def get_all(self):
+    def get_all(self, page=0, items_per_page=10, rol=None):
         try:
-            data = self.db.query(RolModel).order_by(RolModel.id).all()
-            if not data:
-                return "No data found"
-            return data
+            query = self.db.query(
+                RolModel.id,
+                RolModel.rol,
+                RolModel.added_date,
+                RolModel.updated_date
+            )
+
+            # Aplicar filtro de búsqueda si se proporciona rol
+            if rol and rol.strip():
+                query = query.filter(RolModel.rol.like(f"%{rol.strip()}%"))
+
+            query = query.order_by(RolModel.id)
+
+            if page > 0:
+                total_items = query.count()
+                total_pages = (total_items + items_per_page - 1) // items_per_page
+
+                if page < 1 or page > total_pages:
+                    return {"status": "error", "message": "Invalid page number"}
+
+                data = query.offset((page - 1) * items_per_page).limit(items_per_page).all()
+
+                if not data:
+                    return {"status": "error", "message": "No data found"}
+
+                serialized_data = [{
+                    "id": rol_item.id,
+                    "rol": rol_item.rol,
+                    "added_date": rol_item.added_date.strftime("%Y-%m-%d %H:%M:%S") if rol_item.added_date else None,
+                    "updated_date": rol_item.updated_date.strftime("%Y-%m-%d %H:%M:%S") if rol_item.updated_date else None
+                } for rol_item in data]
+
+                return {
+                    "total_items": total_items,
+                    "total_pages": total_pages,
+                    "current_page": page,
+                    "items_per_page": items_per_page,
+                    "data": serialized_data
+                }
+
+            else:
+                data = query.all()
+
+                serialized_data = [{
+                    "id": rol_item.id,
+                    "rol": rol_item.rol,
+                    "added_date": rol_item.added_date.strftime("%Y-%m-%d %H:%M:%S") if rol_item.added_date else None,
+                    "updated_date": rol_item.updated_date.strftime("%Y-%m-%d %H:%M:%S") if rol_item.updated_date else None
+                } for rol_item in data]
+
+                return serialized_data
+
         except Exception as e:
             error_message = str(e)
-            return f"Error: {error_message}"
+            return {"status": "error", "message": error_message}
     
-    def get(self, field, value):
+    def get_all_list(self):
+        """Retorna todos los roles sin paginación ni búsqueda"""
         try:
-            data = self.db.query(RolModel).filter(getattr(RolModel, field) == value).first()
-            return data
+            query = self.db.query(
+                RolModel.id,
+                RolModel.rol,
+                RolModel.added_date,
+                RolModel.updated_date
+            ).order_by(RolModel.id)
+            
+            data = query.all()
+
+            serialized_data = [{
+                "id": rol_item.id,
+                "rol": rol_item.rol,
+                "added_date": rol_item.added_date.strftime("%Y-%m-%d %H:%M:%S") if rol_item.added_date else None,
+                "updated_date": rol_item.updated_date.strftime("%Y-%m-%d %H:%M:%S") if rol_item.updated_date else None
+            } for rol_item in data]
+
+            return serialized_data
+
         except Exception as e:
             error_message = str(e)
-            return f"Error: {error_message}"
+            return {"status": "error", "message": error_message}
     
-    def store(self, Rol_inputs):
+    def get(self, id):
         try:
-            data = RolModel(**Rol_inputs)
-            self.db.add(data)
-            self.db.commit()
-            return 1
+            data_query = self.db.query(
+                RolModel.id,
+                RolModel.rol,
+                RolModel.added_date,
+                RolModel.updated_date
+            ).filter(RolModel.id == id).first()
+
+            if data_query:
+                rol_data = {
+                    "id": data_query.id,
+                    "rol": data_query.rol,
+                    "added_date": data_query.added_date.strftime("%Y-%m-%d %H:%M:%S") if data_query.added_date else None,
+                    "updated_date": data_query.updated_date.strftime("%Y-%m-%d %H:%M:%S") if data_query.updated_date else None
+                }
+
+                return {"rol_data": rol_data}
+
+            else:
+                return {"error": "No se encontraron datos para el rol especificado."}
+
         except Exception as e:
             error_message = str(e)
-            return f"Error: {error_message}"
+            return {"status": "error", "message": error_message}
         
+    def store(self, rol_inputs):
+        try:
+            new_rol = RolModel(
+                rol=rol_inputs['rol'],
+                added_date=datetime.now(),
+                updated_date=datetime.now()
+            )
+
+            self.db.add(new_rol)
+            self.db.commit()
+            self.db.refresh(new_rol)
+
+            return {
+                "status": "success",
+                "message": "Rol created successfully",
+                "rol_id": new_rol.id
+            }
+
+        except Exception as e:
+            self.db.rollback()
+            return {"status": "error", "message": str(e)}
+    
     def delete(self, id):
         try:
             data = self.db.query(RolModel).filter(RolModel.id == id).first()
             if data:
                 self.db.delete(data)
                 self.db.commit()
-                return 1
+                return {"status": "success", "message": "Rol deleted successfully"}
             else:
-                return "No data found"
+                return {"status": "error", "message": "No data found"}
+
         except Exception as e:
+            self.db.rollback()
             error_message = str(e)
-            return f"Error: {error_message}"
-        
+            return {"status": "error", "message": error_message}
+
     def update(self, id, rol_inputs):
-        existing_rol = self.db.query(RolModel).filter(RolModel.id == id).one_or_none()
+        try:
+            existing_rol = self.db.query(RolModel).filter(RolModel.id == id).one_or_none()
 
-        if not existing_rol:
-            return "No data found"
+            if not existing_rol:
+                return {"status": "error", "message": "No data found"}
 
-        for key, value in rol_inputs.items():
-            setattr(existing_rol, key, value)
+            for key, value in rol_inputs.items():
+                setattr(existing_rol, key, value)
 
-        self.db.commit()
+            existing_rol.updated_date = datetime.now()
 
-        return 1
+            self.db.commit()
+            self.db.refresh(existing_rol)
+
+            return {"status": "success", "message": "Rol updated successfully"}
+
+        except Exception as e:
+            self.db.rollback()
+            return {"status": "error", "message": str(e)}
