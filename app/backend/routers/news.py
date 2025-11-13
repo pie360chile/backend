@@ -72,7 +72,7 @@ async def store(
         remote_path = f"system/news/{unique_filename}"
 
         file_service.upload(image, remote_path)
-        news_inputs["image"] = file_service.get(remote_path)
+        news_inputs["image"] = remote_path
 
     result = NewsClass(db).store(news_inputs)
 
@@ -137,7 +137,7 @@ async def update(
         remote_path = f"system/news/{unique_filename}"
 
         file_service.upload(image, remote_path)
-        news_inputs["image"] = file_service.get(remote_path)
+        news_inputs["image"] = remote_path
 
     if not news_inputs:
         return JSONResponse(
