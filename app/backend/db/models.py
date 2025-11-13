@@ -255,6 +255,15 @@ class PermissionModel(Base):
     added_date = Column(DateTime())
     updated_date = Column(DateTime())
 
+class RolPermissionModel(Base):
+    __tablename__ = 'rols_permissions'
+
+    id = Column(Integer, primary_key=True)
+    rol_id = Column(Integer, ForeignKey('rols.id'))
+    permission_id = Column(Integer, ForeignKey('permissions.id'))
+    added_date = Column(DateTime())
+    updated_date = Column(DateTime())
+
 class TeachingModel(Base):
     __tablename__ = 'teachings'
 

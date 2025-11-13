@@ -1,5 +1,5 @@
 from datetime import datetime
-from app.backend.db.models import RolModel
+from app.backend.db.models import RolModel, RolPermissionModel, PermissionModel
 
 class RolClass:
     def __init__(self, db):
@@ -123,6 +123,23 @@ class RolClass:
             )
 
             self.db.add(new_rol)
+            self.db.flush()  # Para obtener el ID sin hacer commit
+            
+            # Si se proporcionan permisos, crear las relaciones
+            permissions = rol_inputs.get('permissions', [])
+            if permissions:
+                for permission_id in permissions:
+                    # Verificar que el permiso existe
+                    permission = self.db.query(PermissionModel).filter(PermissionModel.id == permission_id).first()
+                    if permission:
+                        rol_permission = RolPermissionModel(
+                            rol_id=new_rol.id,
+                            permission_id=permission_id,
+                            added_date=datetime.now(),
+                            updated_date=datetime.now()
+                        )
+                        self.db.add(rol_permission)
+            
             self.db.commit()
             self.db.refresh(new_rol)
 
@@ -140,6 +157,9 @@ class RolClass:
         try:
             data = self.db.query(RolModel).filter(RolModel.id == id).first()
             if data:
+                # Eliminar relaciones con permisos primero
+                self.db.query(RolPermissionModel).filter(RolPermissionModel.rol_id == id).delete()
+                # Eliminar el rol
                 self.db.delete(data)
                 self.db.commit()
                 return {"status": "success", "message": "Rol deleted successfully"}
@@ -158,10 +178,34 @@ class RolClass:
             if not existing_rol:
                 return {"status": "error", "message": "No data found"}
 
+            # Actualizar campos del rol (excepto permissions)
+            permissions = None
+            if 'permissions' in rol_inputs:
+                permissions = rol_inputs.pop('permissions')
+            
             for key, value in rol_inputs.items():
-                setattr(existing_rol, key, value)
+                if value is not None:
+                    setattr(existing_rol, key, value)
 
             existing_rol.updated_date = datetime.now()
+
+            # Si se proporcionan permisos, actualizar las relaciones
+            if permissions is not None:
+                # Eliminar relaciones existentes
+                self.db.query(RolPermissionModel).filter(RolPermissionModel.rol_id == id).delete()
+                
+                # Crear nuevas relaciones
+                for permission_id in permissions:
+                    # Verificar que el permiso existe
+                    permission = self.db.query(PermissionModel).filter(PermissionModel.id == permission_id).first()
+                    if permission:
+                        rol_permission = RolPermissionModel(
+                            rol_id=id,
+                            permission_id=permission_id,
+                            added_date=datetime.now(),
+                            updated_date=datetime.now()
+                        )
+                        self.db.add(rol_permission)
 
             self.db.commit()
             self.db.refresh(existing_rol)

@@ -61,9 +61,11 @@ class RolList(BaseModel):
 
 class Rol(BaseModel):
     rol: str
+    permissions: Optional[List[int]] = None
 
 class UpdateRol(BaseModel):
     rol: str = None
+    permissions: Optional[List[int]] = None
 
 # Permission schemas
 class PermissionList(BaseModel):
