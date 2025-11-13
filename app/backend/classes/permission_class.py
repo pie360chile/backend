@@ -10,6 +10,7 @@ class PermissionClass:
             query = self.db.query(
                 PermissionModel.id,
                 PermissionModel.permission,
+                PermissionModel.permission_type_id,
                 PermissionModel.added_date,
                 PermissionModel.updated_date
             )
@@ -18,7 +19,8 @@ class PermissionClass:
             if permission and permission.strip():
                 query = query.filter(PermissionModel.permission.like(f"%{permission.strip()}%"))
 
-            query = query.order_by(PermissionModel.permission.asc())
+            # Ordenar por permission_type_id primero, luego por permission
+            query = query.order_by(PermissionModel.permission_type_id.asc(), PermissionModel.permission.asc())
 
             if page > 0:
                 total_items = query.count()
@@ -32,12 +34,24 @@ class PermissionClass:
                 if not data:
                     return {"status": "error", "message": "No data found"}
 
-                serialized_data = [{
-                    "id": permission_item.id,
-                    "permission": permission_item.permission,
-                    "added_date": permission_item.added_date.strftime("%Y-%m-%d %H:%M:%S") if permission_item.added_date else None,
-                    "updated_date": permission_item.updated_date.strftime("%Y-%m-%d %H:%M:%S") if permission_item.updated_date else None
-                } for permission_item in data]
+                # Agrupar por permission_type_id
+                grouped_data = {}
+                for permission_item in data:
+                    type_id = permission_item.permission_type_id
+                    if type_id not in grouped_data:
+                        grouped_data[type_id] = []
+                    grouped_data[type_id].append({
+                        "id": permission_item.id,
+                        "permission": permission_item.permission,
+                        "permission_type_id": permission_item.permission_type_id,
+                        "added_date": permission_item.added_date.strftime("%Y-%m-%d %H:%M:%S") if permission_item.added_date else None,
+                        "updated_date": permission_item.updated_date.strftime("%Y-%m-%d %H:%M:%S") if permission_item.updated_date else None
+                    })
+
+                # Convertir a lista ordenada por permission_type_id
+                serialized_data = []
+                for type_id in sorted(grouped_data.keys()):
+                    serialized_data.extend(grouped_data[type_id])
 
                 return {
                     "total_items": total_items,
@@ -50,12 +64,24 @@ class PermissionClass:
             else:
                 data = query.all()
 
-                serialized_data = [{
-                    "id": permission_item.id,
-                    "permission": permission_item.permission,
-                    "added_date": permission_item.added_date.strftime("%Y-%m-%d %H:%M:%S") if permission_item.added_date else None,
-                    "updated_date": permission_item.updated_date.strftime("%Y-%m-%d %H:%M:%S") if permission_item.updated_date else None
-                } for permission_item in data]
+                # Agrupar por permission_type_id
+                grouped_data = {}
+                for permission_item in data:
+                    type_id = permission_item.permission_type_id
+                    if type_id not in grouped_data:
+                        grouped_data[type_id] = []
+                    grouped_data[type_id].append({
+                        "id": permission_item.id,
+                        "permission": permission_item.permission,
+                        "permission_type_id": permission_item.permission_type_id,
+                        "added_date": permission_item.added_date.strftime("%Y-%m-%d %H:%M:%S") if permission_item.added_date else None,
+                        "updated_date": permission_item.updated_date.strftime("%Y-%m-%d %H:%M:%S") if permission_item.updated_date else None
+                    })
+
+                # Convertir a lista ordenada por permission_type_id
+                serialized_data = []
+                for type_id in sorted(grouped_data.keys()):
+                    serialized_data.extend(grouped_data[type_id])
 
                 return serialized_data
 
@@ -64,23 +90,36 @@ class PermissionClass:
             return {"status": "error", "message": error_message}
     
     def get_all_list(self):
-        """Retorna todos los permissions sin paginación ni búsqueda"""
+        """Retorna todos los permissions sin paginación ni búsqueda, agrupados por permission_type_id"""
         try:
             query = self.db.query(
                 PermissionModel.id,
                 PermissionModel.permission,
+                PermissionModel.permission_type_id,
                 PermissionModel.added_date,
                 PermissionModel.updated_date
-            ).order_by(PermissionModel.permission.asc())
+            ).order_by(PermissionModel.permission_type_id.asc(), PermissionModel.permission.asc())
             
             data = query.all()
 
-            serialized_data = [{
-                "id": permission_item.id,
-                "permission": permission_item.permission,
-                "added_date": permission_item.added_date.strftime("%Y-%m-%d %H:%M:%S") if permission_item.added_date else None,
-                "updated_date": permission_item.updated_date.strftime("%Y-%m-%d %H:%M:%S") if permission_item.updated_date else None
-            } for permission_item in data]
+            # Agrupar por permission_type_id
+            grouped_data = {}
+            for permission_item in data:
+                type_id = permission_item.permission_type_id
+                if type_id not in grouped_data:
+                    grouped_data[type_id] = []
+                grouped_data[type_id].append({
+                    "id": permission_item.id,
+                    "permission": permission_item.permission,
+                    "permission_type_id": permission_item.permission_type_id,
+                    "added_date": permission_item.added_date.strftime("%Y-%m-%d %H:%M:%S") if permission_item.added_date else None,
+                    "updated_date": permission_item.updated_date.strftime("%Y-%m-%d %H:%M:%S") if permission_item.updated_date else None
+                })
+
+            # Convertir a lista ordenada por permission_type_id
+            serialized_data = []
+            for type_id in sorted(grouped_data.keys()):
+                serialized_data.extend(grouped_data[type_id])
 
             return serialized_data
 
@@ -93,6 +132,7 @@ class PermissionClass:
             data_query = self.db.query(
                 PermissionModel.id,
                 PermissionModel.permission,
+                PermissionModel.permission_type_id,
                 PermissionModel.added_date,
                 PermissionModel.updated_date
             ).filter(PermissionModel.id == id).first()
@@ -101,6 +141,7 @@ class PermissionClass:
                 permission_data = {
                     "id": data_query.id,
                     "permission": data_query.permission,
+                    "permission_type_id": data_query.permission_type_id,
                     "added_date": data_query.added_date.strftime("%Y-%m-%d %H:%M:%S") if data_query.added_date else None,
                     "updated_date": data_query.updated_date.strftime("%Y-%m-%d %H:%M:%S") if data_query.updated_date else None
                 }
@@ -118,6 +159,7 @@ class PermissionClass:
         try:
             new_permission = PermissionModel(
                 permission=permission_inputs['permission'],
+                permission_type_id=permission_inputs.get('permission_type_id'),
                 added_date=datetime.now(),
                 updated_date=datetime.now()
             )

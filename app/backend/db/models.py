@@ -252,6 +252,7 @@ class PermissionModel(Base):
 
     id = Column(Integer, primary_key=True)
     permission = Column(String(255))
+    permission_type_id = Column(Integer)
     added_date = Column(DateTime())
     updated_date = Column(DateTime())
 

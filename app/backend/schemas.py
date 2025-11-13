@@ -75,9 +75,11 @@ class PermissionList(BaseModel):
 
 class Permission(BaseModel):
     permission: str
+    permission_type_id: int
 
 class UpdatePermission(BaseModel):
     permission: str = None
+    permission_type_id: Optional[int] = None
 
 # Settings schemas
 class UpdateSettings(BaseModel):
