@@ -5,9 +5,12 @@ import uvicorn
 import os
 from pathlib import Path
 from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
 
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 from app.backend.routers.authentications import authentications
 from app.backend.routers.rols import rols
 from app.backend.routers.settings import settings
@@ -48,7 +51,8 @@ async def general_exception_handler(request: Request, exc: Exception):
         }
     )
 
-FILES_DIR = "C:/Users/jesus/OneDrive/Escritorio/proyecto_pie360/backend/files"
+# Usar variable de entorno o ruta por defecto según el entorno
+FILES_DIR = os.environ.get('FILES_DIR', '/var/www/pie360backend.cl/public_html/files')
 
 Path(FILES_DIR).mkdir(parents=True, exist_ok=True)
 app.mount("/files", StaticFiles(directory=FILES_DIR), name="files")
