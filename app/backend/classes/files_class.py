@@ -4,10 +4,11 @@ from fastapi import HTTPException, UploadFile
 class FileClass:
     def __init__(self, db):
         self.db = db
-        #self.files_dir = "/var/www/api.lacasadelvitrificado.com/files"
-        #self.base_url = "https://api.lacasadelvitrificado.com/files"
-        self.files_dir = "C:/Users/jesus/OneDrive/Escritorio/proyecto_pie360/backend/files"
-        self.base_url = "http://127.0.0.1:8000/files"
+        self.files_dir = "/var/www/pie360backend.cl/public_html/files"
+        self.base_url = "https://pie360backend.cl/files"
+        #self.files_dir = "C:/Users/jesus/OneDrive/Escritorio/proyecto_pie360/backend/files"
+        # Leer base_url desde variable de entorno, con fallback a localhost
+        #self.base_url = os.environ.get('FILES_BASE_URL', 'http://127.0.0.1:8000/files')
 
     def _normalize_remote_path(self, remote_path: str) -> str:
         if remote_path.startswith('/'):

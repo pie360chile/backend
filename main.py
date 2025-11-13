@@ -5,6 +5,9 @@ import uvicorn
 import os
 from pathlib import Path
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+
+load_dotenv()
 from app.backend.routers.authentications import authentications
 from app.backend.routers.rols import rols
 from app.backend.routers.settings import settings
