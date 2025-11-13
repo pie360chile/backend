@@ -129,6 +129,7 @@ async def update(
     news_inputs = news_item.dict(exclude_unset=True)
     file_service = FileClass(db)
 
+    # Procesar imagen si se proporciona
     if image is not None and image.filename:
         timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
         unique_id = uuid.uuid4().hex[:8]
@@ -139,6 +140,7 @@ async def update(
         file_service.upload(image, remote_path)
         news_inputs["image"] = file_service.get(remote_path)
 
+    # Verificar que haya al menos un campo para actualizar (después de procesar la imagen)
     if not news_inputs:
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
