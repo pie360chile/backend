@@ -65,6 +65,18 @@ class Rol(BaseModel):
 class UpdateRol(BaseModel):
     rol: str = None
 
+# Permission schemas
+class PermissionList(BaseModel):
+    page: Optional[int] = None
+    permission: Optional[str] = None
+    per_page: int = 10
+
+class Permission(BaseModel):
+    permission: str
+
+class UpdatePermission(BaseModel):
+    permission: str = None
+
 # Settings schemas
 class UpdateSettings(BaseModel):
     tax_value: int

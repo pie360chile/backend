@@ -13,6 +13,7 @@ except ImportError:
     pass
 from app.backend.routers.authentications import authentications
 from app.backend.routers.rols import rols
+from app.backend.routers.permissions import permissions
 from app.backend.routers.settings import settings
 from app.backend.routers.users import users
 from app.backend.routers.teachings import teachings
@@ -82,6 +83,7 @@ app.add_middleware(
 
 app.include_router(authentications)
 app.include_router(rols)
+app.include_router(permissions)
 app.include_router(settings)
 app.include_router(users)
 app.include_router(teachings)

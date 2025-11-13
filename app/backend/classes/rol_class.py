@@ -64,7 +64,7 @@ class RolClass:
             return {"status": "error", "message": error_message}
     
     def get_all_list(self):
-        """Retorna todos los roles sin paginación ni búsqueda"""
+        """Retorna todos los rols sin paginación ni búsqueda"""
         try:
             query = self.db.query(
                 RolModel.id,

@@ -2,19 +2,19 @@ from fastapi import APIRouter, Depends, status
 from fastapi.responses import JSONResponse
 from app.backend.db.database import get_db
 from sqlalchemy.orm import Session
-from app.backend.schemas import Rol, UpdateRol, UserLogin, RolList
-from app.backend.classes.rol_class import RolClass
+from app.backend.schemas import Permission, UpdatePermission, UserLogin, PermissionList
+from app.backend.classes.permission_class import PermissionClass
 from app.backend.auth.auth_user import get_current_active_user
 
-rols = APIRouter(
-    prefix="/rols",
-    tags=["Rols"]
+permissions = APIRouter(
+    prefix="/permissions",
+    tags=["Permissions"]
 )
 
-@rols.post("/")
-def index(rol_list: RolList, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    page_value = 0 if rol_list.page is None else rol_list.page
-    result = RolClass(db).get_all(page=page_value, items_per_page=rol_list.per_page, rol=rol_list.rol)
+@permissions.post("/")
+def index(permission_list: PermissionList, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
+    page_value = 0 if permission_list.page is None else permission_list.page
+    result = PermissionClass(db).get_all(page=page_value, items_per_page=permission_list.per_page, permission=permission_list.permission)
 
     if isinstance(result, dict) and result.get("status") == "error":
         return JSONResponse(
@@ -26,7 +26,7 @@ def index(rol_list: RolList, session_user: UserLogin = Depends(get_current_activ
             }
         )
         
-    message = "Complete rols list retrieved successfully" if rol_list.page is None else "Rols retrieved successfully"
+    message = "Complete permissions list retrieved successfully" if permission_list.page is None else "Permissions retrieved successfully"
     
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -37,9 +37,9 @@ def index(rol_list: RolList, session_user: UserLogin = Depends(get_current_activ
         }
     )
 
-@rols.get("/list")
+@permissions.get("/list")
 def get_all_list(session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    result = RolClass(db).get_all_list()
+    result = PermissionClass(db).get_all_list()
 
     if isinstance(result, dict) and result.get("status") == "error":
         return JSONResponse(
@@ -55,22 +55,22 @@ def get_all_list(session_user: UserLogin = Depends(get_current_active_user), db:
         status_code=status.HTTP_200_OK,
         content={
             "status": 200,
-            "message": "Rols list retrieved successfully",
+            "message": "Permissions list retrieved successfully",
             "data": result
         }
     )
 
-@rols.post("/store")
-def store(rol: Rol, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    rol_inputs = rol.dict()
-    result = RolClass(db).store(rol_inputs)
+@permissions.post("/store")
+def store(permission: Permission, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
+    permission_inputs = permission.dict()
+    result = PermissionClass(db).store(permission_inputs)
 
     if isinstance(result, dict) and result.get("status") == "error":
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
                 "status": 500,
-                "message": result.get("message", "Error creating role"),
+                "message": result.get("message", "Error creating permission"),
                 "data": None
             }
         )
@@ -79,21 +79,21 @@ def store(rol: Rol, session_user: UserLogin = Depends(get_current_active_user), 
         status_code=status.HTTP_201_CREATED,
         content={
             "status": 201,
-            "message": "Role created successfully",
+            "message": "Permission created successfully",
             "data": result
         }
     )
 
-@rols.get("/edit/{id}")
+@permissions.get("/edit/{id}")
 def edit(id: int, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    result = RolClass(db).get(id)
+    result = PermissionClass(db).get(id)
 
     if isinstance(result, dict) and (result.get("error") or result.get("status") == "error"):
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
             content={
                 "status": 404,
-                "message": result.get("error") or result.get("message", "Role not found"),
+                "message": result.get("error") or result.get("message", "Permission not found"),
                 "data": None
             }
         )
@@ -102,21 +102,21 @@ def edit(id: int, session_user: UserLogin = Depends(get_current_active_user), db
         status_code=status.HTTP_200_OK,
         content={
             "status": 200,
-            "message": "Role retrieved successfully",
+            "message": "Permission retrieved successfully",
             "data": result
         }
     )
 
-@rols.delete("/delete/{id}")
+@permissions.delete("/delete/{id}")
 def delete(id: int, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    result = RolClass(db).delete(id)
+    result = PermissionClass(db).delete(id)
 
     if isinstance(result, dict) and result.get("status") == "error":
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
             content={
                 "status": 404,
-                "message": result.get("message", "Role not found"),
+                "message": result.get("message", "Permission not found"),
                 "data": None
             }
         )
@@ -125,22 +125,22 @@ def delete(id: int, session_user: UserLogin = Depends(get_current_active_user), 
         status_code=status.HTTP_200_OK,
         content={
             "status": 200,
-            "message": "Role deleted successfully",
+            "message": "Permission deleted successfully",
             "data": result
         }
     )
 
-@rols.put("/update/{id}")
-def update(id: int, rol: UpdateRol, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    rol_inputs = rol.dict(exclude_unset=True)
-    result = RolClass(db).update(id, rol_inputs)
+@permissions.put("/update/{id}")
+def update(id: int, permission: UpdatePermission, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
+    permission_inputs = permission.dict(exclude_unset=True)
+    result = PermissionClass(db).update(id, permission_inputs)
 
     if isinstance(result, dict) and result.get("status") == "error":
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
                 "status": 500,
-                "message": result.get("message", "Error updating role"),
+                "message": result.get("message", "Error updating permission"),
                 "data": None
             }
         )
@@ -149,7 +149,8 @@ def update(id: int, rol: UpdateRol, session_user: UserLogin = Depends(get_curren
         status_code=status.HTTP_200_OK,
         content={
             "status": 200,
-            "message": "Role updated successfully",
+            "message": "Permission updated successfully",
             "data": result
         }
     )
+
