@@ -18,7 +18,7 @@ class PermissionClass:
             if permission and permission.strip():
                 query = query.filter(PermissionModel.permission.like(f"%{permission.strip()}%"))
 
-            query = query.order_by(PermissionModel.id)
+            query = query.order_by(PermissionModel.permission.asc())
 
             if page > 0:
                 total_items = query.count()
@@ -71,7 +71,7 @@ class PermissionClass:
                 PermissionModel.permission,
                 PermissionModel.added_date,
                 PermissionModel.updated_date
-            ).order_by(PermissionModel.id)
+            ).order_by(PermissionModel.permission.asc())
             
             data = query.all()
 
