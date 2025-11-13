@@ -53,26 +53,17 @@ class SettingClass:
         existing_setting = self.db.query(SettingModel).filter(SettingModel.id == id).one_or_none()
 
         if not existing_setting:
-            return "No data found"
+            return {"status": "error", "message": "No data found"}
 
         try:
-            existing_setting.tax_value = form_data.tax_value
-            existing_setting.identification_number = form_data.identification_number
-            existing_setting.account_type = form_data.account_type
-            existing_setting.account_number = form_data.account_number
-            existing_setting.account_name = form_data.account_name
-            existing_setting.account_email = form_data.account_email
-            existing_setting.bank = form_data.bank
-            existing_setting.delivery_cost = form_data.delivery_cost
-            existing_setting.shop_address = form_data.shop_address
-            existing_setting.payment_card_url = form_data.payment_card_url
-            existing_setting.prepaid_discount = form_data.prepaid_discount
-            existing_setting.phone = form_data.phone
+            for key, value in form_data.items():
+                setattr(existing_setting, key, value)
+            
             existing_setting.updated_date = datetime.now()
 
             self.db.commit()
             self.db.refresh(existing_setting)
-            return "Settings updated successfully"
+            return {"status": "success", "message": "Settings updated successfully"}
         except Exception as e:
             self.db.rollback()
             error_message = str(e)

@@ -94,9 +94,10 @@ def delete(id:int, session_user: UserLogin = Depends(get_current_active_user), d
         }
     )
 
-@rols.patch("/update/{id}")
+@rols.put("/update/{id}")
 def update(id: int, rol: UpdateRol, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    result = RolClass(db).update(id, rol)
+    rol_inputs = rol.dict(exclude_unset=True)
+    result = RolClass(db).update(id, rol_inputs)
 
     if isinstance(result, str) and (result == "No data found" or result.startswith("Error")):
         return JSONResponse(

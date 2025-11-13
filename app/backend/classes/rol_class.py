@@ -45,14 +45,13 @@ class RolClass:
             error_message = str(e)
             return f"Error: {error_message}"
         
-    def update(self, id, rol):
+    def update(self, id, rol_inputs):
         existing_rol = self.db.query(RolModel).filter(RolModel.id == id).one_or_none()
 
         if not existing_rol:
             return "No data found"
 
-        existing_rol_data = rol.dict(exclude_unset=True)
-        for key, value in existing_rol_data.items():
+        for key, value in rol_inputs.items():
             setattr(existing_rol, key, value)
 
         self.db.commit()

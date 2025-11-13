@@ -11,9 +11,10 @@ settings = APIRouter(
     tags=["Settings"]
 )
 
-@settings.post("/update/{id}")
+@settings.put("/update/{id}")
 def update(id: int, setting_inputs: UpdateSettings, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    result = SettingClass(db).update(id, setting_inputs)
+    settings_data = setting_inputs.dict(exclude_unset=True)
+    result = SettingClass(db).update(id, settings_data)
 
     if isinstance(result, dict) and result.get("status") == "error":
         return JSONResponse(

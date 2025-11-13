@@ -141,7 +141,7 @@ def delete(id:int, session_user: UserLogin = Depends(get_current_active_user), d
 
 @users.put("/update/{id}")
 def update(id: int, user: UpdateUser, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    user_inputs = user.dict()
+    user_inputs = user.dict(exclude_unset=True)
     result = UserClass(db).update(id, user_inputs)
 
     if result == 0:
