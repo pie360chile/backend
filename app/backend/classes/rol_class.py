@@ -98,9 +98,18 @@ class RolClass:
             ).filter(RolModel.id == id).first()
 
             if data_query:
+                # Obtener los permisos asociados al rol
+                permissions_query = self.db.query(
+                    RolPermissionModel.permission_id
+                ).filter(RolPermissionModel.rol_id == id).all()
+                
+                # Extraer solo los IDs de permisos
+                permissions = [perm.permission_id for perm in permissions_query]
+                
                 rol_data = {
                     "id": data_query.id,
                     "rol": data_query.rol,
+                    "permissions": permissions,
                     "added_date": data_query.added_date.strftime("%Y-%m-%d %H:%M:%S") if data_query.added_date else None,
                     "updated_date": data_query.updated_date.strftime("%Y-%m-%d %H:%M:%S") if data_query.updated_date else None
                 }
