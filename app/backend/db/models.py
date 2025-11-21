@@ -506,7 +506,7 @@ class StudentPersonalInfoModel(Base):
     language_usually_used = Column(String(255))
 
 class StudentDocumentModel(Base):
-    __tablename__ = 'student_documents'
+    __tablename__ = 'birth_certificates'
 
     id = Column(Integer, primary_key=True)
     student_id = Column(Integer)

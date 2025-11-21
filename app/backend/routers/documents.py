@@ -159,20 +159,23 @@ async def upload_document(
     Sube un certificado de nacimiento asociado a un estudiante.
     """
     try:
-        # Validar que el archivo sea PDF
-        if not file.filename.endswith('.pdf'):
+        # Validar que el archivo sea PDF o imagen
+        allowed_extensions = ['.pdf', '.jpg', '.jpeg', '.png', '.gif', '.bmp']
+        file_extension = Path(file.filename).suffix.lower()
+        
+        if file_extension not in allowed_extensions:
             return JSONResponse(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 content={
                     "status": 400,
-                    "message": "El archivo debe ser un PDF",
+                    "message": "El archivo debe ser un PDF o una imagen (JPG, PNG, GIF, BMP)",
                     "data": None
                 }
             )
         
         # Generar nombre único para el archivo
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        unique_filename = f"birth_cert_student_{student_id}_{timestamp}_{uuid.uuid4().hex[:8]}.pdf"
+        unique_filename = f"birth_cert_student_{student_id}_{timestamp}_{uuid.uuid4().hex[:8]}{file_extension}"
         remote_path = f"system/students/{unique_filename}"
         
         # Leer el contenido del archivo
