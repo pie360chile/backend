@@ -14,6 +14,7 @@ regions = APIRouter(
 @regions.post("/")
 def index(region: RegionList, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
     result = RegionClass(db).get_all(region_name=region.region_name)
+    print(result)
 
     if isinstance(result, dict) and result.get("status") == "error":
         return JSONResponse(
