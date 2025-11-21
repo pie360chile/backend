@@ -505,6 +505,32 @@ class StudentPersonalInfoModel(Base):
     native_language = Column(String(255))
     language_usually_used = Column(String(255))
 
+class StudentDocumentModel(Base):
+    __tablename__ = 'student_documents'
+
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer)
+    birth_certificate = Column(Text)
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+
+class StudentGuardianModel(Base):
+    __tablename__ = 'student_guardians'
+
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer)
+    family_member_id = Column(Integer)
+    gender_id = Column(Integer)
+    identification_number = Column(String(255))
+    names = Column(String(255))
+    father_lastname = Column(String(255))
+    mother_lastname = Column(String(255))
+    born_date = Column(Date)
+    email = Column(String(255))
+    celphone = Column(String(255))
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+
 class ProfessionalModel(Base):
     __tablename__ = 'professionals'
 

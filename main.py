@@ -31,6 +31,7 @@ from app.backend.routers.students import students
 from app.backend.routers.customers import customers
 from app.backend.routers.professionals import professionals
 from app.backend.routers.packages import packages
+from app.backend.routers.student_guardians import student_guardians
 
 app = FastAPI(root_path="/api")
 application = app
@@ -106,6 +107,7 @@ app.include_router(students)
 app.include_router(customers)
 app.include_router(professionals)
 app.include_router(packages)
+app.include_router(student_guardians)
 
 if __name__ == "__main__":
     # Para aumentar el límite de tamaño de archivo, configurar en el servidor

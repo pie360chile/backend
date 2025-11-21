@@ -180,6 +180,37 @@ class StoreFamilyMember(BaseModel):
 class UpdateFamilyMember(BaseModel):
     family_member: str = None
 
+# Student Guardian schemas
+class StudentGuardianList(BaseModel):
+    page: Optional[int] = None
+    student_id: Optional[int] = None
+    names: Optional[str] = None
+    per_page: int = 10
+
+class StoreStudentGuardian(BaseModel):
+    student_id: int
+    family_member_id: int
+    gender_id: int
+    identification_number: str
+    names: str
+    father_lastname: str
+    mother_lastname: str
+    born_date: str
+    email: str
+    celphone: str
+
+class UpdateStudentGuardian(BaseModel):
+    student_id: Optional[int] = None
+    family_member_id: Optional[int] = None
+    gender_id: Optional[int] = None
+    identification_number: Optional[str] = None
+    names: Optional[str] = None
+    father_lastname: Optional[str] = None
+    mother_lastname: Optional[str] = None
+    born_date: Optional[str] = None
+    email: Optional[str] = None
+    celphone: Optional[str] = None
+
 # News schemas
 class NewsList(BaseModel):
     page: Optional[int] = None
