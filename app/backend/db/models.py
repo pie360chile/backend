@@ -136,6 +136,7 @@ class CustomerModel(Base):
     commune_id = Column(Integer)
     package_id = Column(Integer)
     bill_or_ticket_id = Column(Integer)
+    deleted_status_id = Column(Integer)
     identification_number = Column(String(255))
     names = Column(String(255))
     lastnames = Column(String(255))
@@ -143,6 +144,7 @@ class CustomerModel(Base):
     company_name = Column(String(255))
     phone = Column(String(255))
     email = Column(String(255))
+    license_time = Column(Date)
     added_date = Column(DateTime())
     updated_date = Column(DateTime())
 
@@ -234,6 +236,7 @@ class UserModel(Base):
 
     id = Column(Integer, primary_key=True)
     customer_id = Column(Integer)
+    school_id = Column(Integer)
     rol_id = Column(Integer, ForeignKey('rols.id'))
     deleted_status_id = Column(Integer)
     rut = Column(String(255))
@@ -249,6 +252,7 @@ class RolModel(Base):
 
     id = Column(Integer, primary_key=True)
     customer_id = Column(Integer)
+    school_id = Column(Integer)
     deleted_status_id = Column(Integer)
     rol = Column(String(255))
     added_date = Column(DateTime())
@@ -278,6 +282,7 @@ class TeachingModel(Base):
 
     id = Column(Integer, primary_key=True)
     school_id = Column(Integer)
+    teaching_type_id = Column(Integer)
     teaching_name = Column(String(255))
     added_date = Column(DateTime())
     updated_date = Column(DateTime())
@@ -456,6 +461,7 @@ class SchoolModel(Base):
 
     id = Column(Integer, primary_key=True)
     customer_id = Column(Integer)
+    deleted_status_id = Column(Integer)
     school_name = Column(String(255))
     school_address = Column(String(255))
     director_name = Column(String(255))
@@ -478,9 +484,11 @@ class StudentAcademicInfoModel(Base):
 
     id = Column(Integer, primary_key=True)
     student_id = Column(Integer)
-    special_educational_need_id = Column(String(255))
-    course = Column(String(255))
-    sip_admission_year = Column(String(255))
+    special_educational_need_id = Column(Integer)
+    course_id = Column(Integer)
+    sip_admission_year = Column(Integer)
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
 
 class StudentPersonalInfoModel(Base):
     __tablename__ = 'student_personal_data'
@@ -504,6 +512,8 @@ class StudentPersonalInfoModel(Base):
     email = Column(String(255))
     native_language = Column(String(255))
     language_usually_used = Column(String(255))
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
 
 class StudentDocumentModel(Base):
     __tablename__ = 'birth_certificates'
@@ -537,6 +547,8 @@ class ProfessionalModel(Base):
     id = Column(Integer, primary_key=True)
     school_id = Column(Integer)
     rol_id = Column(Integer)
+    course_id = Column(Integer)
+    teaching_id = Column(Integer)
     identification_number = Column(Text)
     names = Column(String(255))
     lastnames = Column(String(255))
@@ -544,6 +556,17 @@ class ProfessionalModel(Base):
     birth_date = Column(Date)
     address = Column(String(255))
     phone = Column(String(255))
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+
+class ProfessionalTeachingCourseModel(Base):
+    __tablename__ = 'professionals_teachings_courses'
+
+    id = Column(Integer, primary_key=True)
+    professional_id = Column(Integer)
+    teaching_id = Column(Integer)
+    course_id = Column(Integer)
+    deleted_status_id = Column(Integer)
     added_date = Column(DateTime)
     updated_date = Column(DateTime)
 
@@ -555,5 +578,42 @@ class PackageModel(Base):
     package_name = Column(String(255))
     students_per_package = Column(Integer)
     professionals_per_package = Column(Integer)
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+
+class SpecialEducationalNeedModel(Base):
+    __tablename__ = 'special_educational_needs'
+
+    id = Column(Integer, primary_key=True)
+    deleted_status_id = Column(Integer)
+    special_educational_needs = Column(String(255))
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+
+class DocumentTypeModel(Base):
+    __tablename__ = 'document_types'
+
+    id = Column(Integer, primary_key=True)
+    document_type_id = Column(Integer)
+    document = Column(String(255))
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+
+class DocumentModel(Base):
+    __tablename__ = 'documents'
+
+    id = Column(Integer, primary_key=True)
+    document_type_id = Column(Integer)
+    document = Column(String(255))
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+
+class BirthCertificateDocumentModel(Base):
+    __tablename__ = 'birth_certificate_documents'
+
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer)
+    version_id = Column(Integer)
+    birth_certificate = Column(String(255))
     added_date = Column(DateTime)
     updated_date = Column(DateTime)

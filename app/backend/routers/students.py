@@ -24,13 +24,19 @@ def index(student_item: StudentList, session_user: UserLogin = Depends(get_curre
         if isinstance(schools_list, list) and len(schools_list) > 0:
             school_id = schools_list[0].get('id')
     
+    # Si el usuario es profesional y tiene course_id en sesión, forzar ese filtro
+    course_id_to_filter = student_item.course_id
+    if hasattr(session_user, 'course_id') and session_user.course_id:
+        course_id_to_filter = session_user.course_id
+    
     result = StudentClass(db).get_all(
         page=page_value, 
         items_per_page=student_item.per_page,
         school_id=school_id,
         rut=student_item.rut,
         names=student_item.names,
-        identification_number=student_item.identification_number
+        identification_number=student_item.identification_number,
+        course_id=course_id_to_filter
     )
 
     if isinstance(result, dict) and result.get("status") == "error":
@@ -139,11 +145,10 @@ def update(
 ):
     student_inputs = student_item.dict(exclude_unset=True)
     
-    print(f"[DEBUG] Datos recibidos del frontend: {student_inputs}")
-    
-    # Organizar campos: separar rut de personal_data
+    # Organizar campos: separar por tablas
     mapped_inputs = {}
     personal_data = {}
+    academic_info = {}
     
     # Campos que van a personal_data (student_personal_info)
     personal_data_fields = ['names', 'father_lastname', 'mother_lastname', 'social_name', 
@@ -152,10 +157,16 @@ def update(
                            'native_language', 'proficiency_native_language_id', 
                            'language_usually_used', 'proficiency_language_used_id']
     
+    # Campos que van a academic_info (student_academic_data)
+    academic_fields = ['special_educational_need_id', 'course_id', 'sip_admission_year']
+    
     for field_key, value in student_inputs.items():
         # Si el campo va a personal_data
         if field_key in personal_data_fields:
             personal_data[field_key] = value
+        # Si el campo va a academic_info
+        elif field_key in academic_fields:
+            academic_info[field_key] = value
         # Si es identification_number, va directo a la tabla students
         elif field_key == 'identification_number':
             mapped_inputs['identification_number'] = value
@@ -164,7 +175,9 @@ def update(
     if personal_data:
         mapped_inputs['personal_data'] = personal_data
     
-    print(f"[DEBUG] Datos mapeados para la BD: {mapped_inputs}")
+    # Agregar academic_info si hay campos
+    if academic_info:
+        mapped_inputs['academic_info'] = academic_info
     
     result = StudentClass(db).update(id, mapped_inputs)
 

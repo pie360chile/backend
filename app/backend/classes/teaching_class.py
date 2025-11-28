@@ -1,5 +1,5 @@
 from datetime import datetime
-from app.backend.db.models import TeachingModel
+from app.backend.db.models import TeachingModel, ProfessionalTeachingCourseModel
 
 class TeachingClass:
     def __init__(self, db):
@@ -7,9 +7,14 @@ class TeachingClass:
 
     def get_all(self, page=0, items_per_page=10, school_id=None, teaching_name=None):
         try:
+            print(f"========== DEBUG GET_ALL TEACHINGS ==========")
+            print(f"page: {page}, items_per_page: {items_per_page}")
+            print(f"school_id: {school_id}, teaching_name: {teaching_name}")
+            
             query = self.db.query(
                 TeachingModel.id,
                 TeachingModel.school_id,
+                TeachingModel.teaching_type_id,
                 TeachingModel.teaching_name,
                 TeachingModel.added_date,
                 TeachingModel.updated_date
@@ -27,9 +32,13 @@ class TeachingClass:
 
             if page > 0:
                 total_items = query.count()
+                print(f"Total items found: {total_items}")
                 total_pages = (total_items + items_per_page - 1) // items_per_page if total_items > 0 else 0
 
                 if total_items == 0:
+                    print("No teachings found for the criteria")
+                    print("===========================================")
+
                     return {
                         "total_items": 0,
                         "total_pages": 0,
@@ -52,6 +61,7 @@ class TeachingClass:
                 serialized_data = [{
                     "id": teaching.id,
                     "school_id": teaching.school_id,
+                    "teaching_type_id": teaching.teaching_type_id,
                     "teaching_name": teaching.teaching_name,
                     "added_date": teaching.added_date.strftime("%Y-%m-%d %H:%M:%S") if teaching.added_date else None,
                     "updated_date": teaching.updated_date.strftime("%Y-%m-%d %H:%M:%S") if teaching.updated_date else None
@@ -71,6 +81,7 @@ class TeachingClass:
                 serialized_data = [{
                     "id": teaching.id,
                     "school_id": teaching.school_id,
+                    "teaching_type_id": teaching.teaching_type_id,
                     "teaching_name": teaching.teaching_name,
                     "added_date": teaching.added_date.strftime("%Y-%m-%d %H:%M:%S") if teaching.added_date else None,
                     "updated_date": teaching.updated_date.strftime("%Y-%m-%d %H:%M:%S") if teaching.updated_date else None
@@ -88,6 +99,7 @@ class TeachingClass:
             query = self.db.query(
                 TeachingModel.id,
                 TeachingModel.school_id,
+                TeachingModel.teaching_type_id,
                 TeachingModel.teaching_name,
                 TeachingModel.added_date,
                 TeachingModel.updated_date
@@ -104,6 +116,7 @@ class TeachingClass:
             serialized_data = [{
                 "id": teaching.id,
                 "school_id": teaching.school_id,
+                "teaching_type_id": teaching.teaching_type_id,
                 "teaching_name": teaching.teaching_name,
                 "added_date": teaching.added_date.strftime("%Y-%m-%d %H:%M:%S") if teaching.added_date else None,
                 "updated_date": teaching.updated_date.strftime("%Y-%m-%d %H:%M:%S") if teaching.updated_date else None
@@ -123,6 +136,7 @@ class TeachingClass:
                 teaching_data = {
                     "id": data_query.id,
                     "school_id": data_query.school_id,
+                    "teaching_type_id": data_query.teaching_type_id,
                     "teaching_name": data_query.teaching_name,
                     "added_date": data_query.added_date.strftime("%Y-%m-%d %H:%M:%S") if data_query.added_date else None,
                     "updated_date": data_query.updated_date.strftime("%Y-%m-%d %H:%M:%S") if data_query.updated_date else None
@@ -141,6 +155,7 @@ class TeachingClass:
         try:
             new_teaching = TeachingModel(
                 school_id=teaching_inputs.get('school_id'),
+                teaching_type_id=teaching_inputs.get('teaching_type_id'),
                 teaching_name=teaching_inputs['teaching_name'],
                 deleted_status_id=0,
                 added_date=datetime.now(),
@@ -165,6 +180,14 @@ class TeachingClass:
         try:
             data = self.db.query(TeachingModel).filter(TeachingModel.id == id).first()
             if data:
+                # Marcar como eliminado en professionals_teachings_courses
+                self.db.query(ProfessionalTeachingCourseModel).filter(
+                    ProfessionalTeachingCourseModel.teaching_id == id
+                ).update({
+                    "deleted_status_id": 1,
+                    "updated_date": datetime.now()
+                })
+                
                 data.deleted_status_id = 1
                 data.updated_date = datetime.now()
                 self.db.commit()

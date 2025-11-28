@@ -122,6 +122,7 @@ class UserClass:
         user.rol_id = user_inputs['rol_id']
         user.branch_office_id = user_inputs['branch_office_id']
         user.customer_id = user_inputs.get('customer_id')
+        user.school_id = user_inputs.get('school_id')
         user.deleted_status_id = 0
         user.full_name = user_inputs['full_name']
         user.hashed_password = generate_bcrypt_hash(user_inputs['password'])

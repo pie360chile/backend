@@ -144,3 +144,26 @@ def delete(id: int, session_user: UserLogin = Depends(get_current_active_user), 
         }
     )
 
+@nationalities.get("/list")
+def list_all(session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
+    result = NationalitiesClass(db).get_all(page=0, items_per_page=None)
+
+    if isinstance(result, dict) and result.get("status") == "error":
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={
+                "status": 404,
+                "message": result.get("message", "Error retrieving nationalities"),
+                "data": None
+            }
+        )
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "status": 200,
+            "message": "Nationalities list retrieved successfully",
+            "data": result
+        }
+    )
+

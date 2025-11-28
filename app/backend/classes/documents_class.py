@@ -1,12 +1,18 @@
 import uuid
 from pathlib import Path
 import fitz  # PyMuPDF
+from typing import Optional, List, Dict, Any
+from sqlalchemy.orm import Session
+from datetime import datetime
+from app.backend.db.models import DocumentModel, BirthCertificateDocumentModel
+
 
 class DocumentsClass:
-    def __init__(self):
-        pass
+    def __init__(self, db: Session):
+        self.db = db
 
-    def parent_authorization(self, original_file_path: str, student_name: str, output_directory: str = "files/original_student_files"):
+    @staticmethod
+    def parent_authorization(original_file_path: str, student_name: str, output_directory: str = "files/original_student_files"):
         """
         Procesa un documento PDF de autorización de padres, reemplazando [STUDENT_NAMES] con el nombre del estudiante.
         
@@ -100,3 +106,103 @@ class DocumentsClass:
                 "file_path": None
             }
 
+    def get(self, id: int) -> Any:
+        """
+        Obtiene un documento por su ID.
+        """
+        try:
+            document = self.db.query(DocumentModel).filter(
+                DocumentModel.id == id
+            ).first()
+
+            if document:
+                return {
+                    "id": document.id,
+                    "document_type_id": document.document_type_id,
+                    "document": document.document,
+                    "added_date": document.added_date.strftime("%Y-%m-%d %H:%M:%S") if document.added_date else None,
+                    "updated_date": document.updated_date.strftime("%Y-%m-%d %H:%M:%S") if document.updated_date else None
+                }
+            else:
+                return {"status": "error", "message": "No se encontraron datos para el documento especificado."}
+
+        except Exception as e:
+            error_message = str(e)
+            return {"status": "error", "message": error_message}
+
+    def get_all(self, document_type_id: Optional[int] = None) -> Any:
+        """
+        Obtiene la lista de documentos almacenados.
+        """
+        try:
+            query = self.db.query(DocumentModel)
+
+            if document_type_id is not None:
+                query = query.filter(DocumentModel.document_type_id == document_type_id)
+
+            documents = query.order_by(DocumentModel.document.asc()).all()
+
+            return [
+                {
+                    "document_type_id": doc.document_type_id,
+                    "document": doc.document
+                }
+                for doc in documents
+            ]
+
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+
+    def store(self, student_id: int, document_type_id: int, file_path: str) -> Any:
+        """
+        Almacena un documento dependiendo del tipo.
+        Si es tipo 1, se guarda en birth_certificate_documents con control de versiones.
+        """
+        try:
+            if document_type_id == 1:
+                # Buscar la última versión para este estudiante
+                last_version = self.db.query(BirthCertificateDocumentModel).filter(
+                    BirthCertificateDocumentModel.student_id == student_id
+                ).order_by(BirthCertificateDocumentModel.version_id.desc()).first()
+                
+                # Determinar el nuevo version_id
+                if last_version:
+                    new_version_id = last_version.version_id + 1
+                else:
+                    new_version_id = 1
+                
+                # Crear el nuevo registro
+                new_document = BirthCertificateDocumentModel(
+                    student_id=student_id,
+                    version_id=new_version_id,
+                    birth_certificate=file_path,
+                    added_date=datetime.now(),
+                    updated_date=datetime.now()
+                )
+                
+                self.db.add(new_document)
+                self.db.commit()
+                self.db.refresh(new_document)
+                
+                return {
+                    "status": "success",
+                    "message": "Documento creado exitosamente",
+                    "document_id": new_document.id,
+                    "version_id": new_version_id
+                }
+            else:
+                # Para otros tipos de documentos, se puede implementar lógica adicional aquí
+                return {
+                    "status": "error",
+                    "message": f"Tipo de documento {document_type_id} no implementado aún"
+                }
+                
+        except Exception as e:
+            self.db.rollback()
+            return {
+                "status": "error",
+                "message": str(e)
+            }

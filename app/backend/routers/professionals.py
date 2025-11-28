@@ -4,6 +4,7 @@ from app.backend.db.database import get_db
 from sqlalchemy.orm import Session
 from app.backend.schemas import ProfessionalList, StoreProfessional, UpdateProfessional, UserLogin
 from app.backend.classes.professional_class import ProfessionalClass
+from app.backend.classes.school_class import SchoolClass
 from app.backend.auth.auth_user import get_current_active_user
 
 professionals = APIRouter(
@@ -13,8 +14,6 @@ professionals = APIRouter(
 
 @professionals.post("/")
 def index(professional_list: ProfessionalList, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    from app.backend.classes.school_class import SchoolClass
-    
     page_value = 0 if professional_list.page is None else professional_list.page
     
     # Obtener school_id del customer_id de la sesión
@@ -46,17 +45,10 @@ def index(professional_list: ProfessionalList, session_user: UserLogin = Depends
 
 @professionals.post("/store")
 def store(professional: StoreProfessional, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    from app.backend.classes.school_class import SchoolClass
-    
     professional_inputs = professional.dict()
     
-    # Obtener school_id del customer_id de la sesión
-    customer_id = session_user.customer_id if hasattr(session_user, 'customer_id') else None
-    school_id = None
-    if customer_id:
-        schools_list = SchoolClass(db).get_all(page=0, customer_id=customer_id)
-        if isinstance(schools_list, list) and len(schools_list) > 0:
-            school_id = schools_list[0].get('id')
+    # Obtener school_id de la sesión del usuario
+    school_id = session_user.school_id if session_user else None
     
     result = ProfessionalClass(db).store(professional_inputs, school_id=school_id)
 
@@ -128,6 +120,11 @@ def delete(id: int, session_user: UserLogin = Depends(get_current_active_user), 
 @professionals.put("/update/{id}")
 def update(id: int, professional: UpdateProfessional, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
     professional_inputs = professional.dict(exclude_unset=True)
+    
+    # Agregar school_id de la sesión si no viene en el input
+    if 'school_id' not in professional_inputs:
+        professional_inputs['school_id'] = session_user.school_id if session_user else None
+    
     result = ProfessionalClass(db).update(id, professional_inputs)
 
     if isinstance(result, dict) and result.get("status") == "error":

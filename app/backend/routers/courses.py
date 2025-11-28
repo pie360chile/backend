@@ -4,6 +4,8 @@ from app.backend.db.database import get_db
 from sqlalchemy.orm import Session
 from app.backend.schemas import UserLogin, CourseList, StoreCourse, UpdateCourse
 from app.backend.classes.course_class import CourseClass
+from app.backend.classes.school_class import SchoolClass
+from app.backend.db.models import CourseModel
 from app.backend.auth.auth_user import get_current_active_user
 
 courses = APIRouter(
@@ -13,8 +15,6 @@ courses = APIRouter(
 
 @courses.post("/")
 def index(course: CourseList, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    from app.backend.classes.school_class import SchoolClass
-    
     # Obtener school_id del customer_id del usuario en sesión
     customer_id = session_user.customer_id if session_user else None
     school_id = None
@@ -22,6 +22,42 @@ def index(course: CourseList, session_user: UserLogin = Depends(get_current_acti
         schools_list = SchoolClass(db).get_all(page=0, customer_id=customer_id)
         if isinstance(schools_list, list) and len(schools_list) > 0:
             school_id = schools_list[0].get('id')
+    
+    # Si el usuario es profesional y tiene course_id en sesión, filtrar solo ese curso
+    course_id_filter = None
+    if hasattr(session_user, 'course_id') and session_user.course_id:
+        course_id_filter = session_user.course_id
+        # Obtener el curso usando CourseClass para incluir teaching_name y total_students
+        page_value = 0 if course.page is None else course.page
+        all_courses = CourseClass(db).get_all(page=page_value, items_per_page=course.per_page, school_id=school_id)
+        
+        # Filtrar solo el curso del profesional
+        if isinstance(all_courses, list):
+            course_data = [c for c in all_courses if c.get('id') == course_id_filter]
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "status": 200,
+                    "message": "Courses retrieved successfully",
+                    "data": course_data
+                }
+            )
+        elif isinstance(all_courses, dict) and 'data' in all_courses:
+            course_data = [c for c in all_courses['data'] if c.get('id') == course_id_filter]
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "status": 200,
+                    "message": "Courses retrieved successfully",
+                    "data": {
+                        "total_items": len(course_data),
+                        "total_pages": 1 if len(course_data) > 0 else 0,
+                        "current_page": all_courses.get('current_page', 1),
+                        "items_per_page": course.per_page,
+                        "data": course_data
+                    }
+                }
+            )
     
     # Si no hay school_id, devolver array vacío
     if school_id is None:
@@ -66,16 +102,9 @@ def index(course: CourseList, session_user: UserLogin = Depends(get_current_acti
     )
 
 @courses.get("/list")
-def get_all_list(session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    from app.backend.classes.school_class import SchoolClass
-    
-    # Obtener school_id del customer_id del usuario en sesión
-    customer_id = session_user.customer_id if session_user else None
-    school_id = None
-    if customer_id:
-        schools_list = SchoolClass(db).get_all(page=0, customer_id=customer_id)
-        if isinstance(schools_list, list) and len(schools_list) > 0:
-            school_id = schools_list[0].get('id')
+def get_all_list(teaching_id: int = None, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
+    # Obtener school_id del usuario en sesión
+    school_id = session_user.school_id if session_user else None
     
     # Si no hay school_id, devolver array vacío
     if school_id is None:
@@ -88,7 +117,7 @@ def get_all_list(session_user: UserLogin = Depends(get_current_active_user), db:
             }
         )
     
-    result = CourseClass(db).get_all_list(school_id=school_id)
+    result = CourseClass(db).get_all_list(school_id=school_id, teaching_id=teaching_id)
 
     if isinstance(result, dict) and result.get("status") == "error":
         return JSONResponse(
@@ -111,8 +140,6 @@ def get_all_list(session_user: UserLogin = Depends(get_current_active_user), db:
 
 @courses.post("/store")
 def store(course: StoreCourse, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    from app.backend.classes.school_class import SchoolClass
-    
     course_inputs = course.dict()
     
     # Obtener school_id del customer_id del usuario en sesión
@@ -172,8 +199,6 @@ def edit(id: int, session_user: UserLogin = Depends(get_current_active_user), db
 
 @courses.put("/update/{id}")
 def update(id: int, course: UpdateCourse, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    from app.backend.classes.school_class import SchoolClass
-    
     course_inputs = course.dict(exclude_unset=True)
     
     # Obtener school_id del customer_id del usuario en sesión

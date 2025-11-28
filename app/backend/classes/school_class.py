@@ -10,6 +10,7 @@ class SchoolClass:
             query = self.db.query(
                 SchoolModel.id,
                 SchoolModel.customer_id,
+                SchoolModel.deleted_status_id,
                 SchoolModel.school_name,
                 SchoolModel.school_address,
                 SchoolModel.director_name,
@@ -18,6 +19,9 @@ class SchoolClass:
                 SchoolModel.updated_date
             )
 
+            # Filtrar solo registros activos (deleted_status_id = 0)
+            query = query.filter(SchoolModel.deleted_status_id == 0)
+            
             # Aplicar filtros de búsqueda
             if school_name and school_name.strip():
                 query = query.filter(SchoolModel.school_name.like(f"%{school_name.strip()}%"))
@@ -48,6 +52,7 @@ class SchoolClass:
                 serialized_data = [{
                     "id": school.id,
                     "customer_id": school.customer_id,
+                    "deleted_status_id": school.deleted_status_id,
                     "school_name": school.school_name,
                     "school_address": school.school_address,
                     "director_name": school.director_name,
@@ -70,6 +75,7 @@ class SchoolClass:
                 serialized_data = [{
                     "id": school.id,
                     "customer_id": school.customer_id,
+                    "deleted_status_id": school.deleted_status_id,
                     "school_name": school.school_name,
                     "school_address": school.school_address,
                     "director_name": school.director_name,
@@ -84,16 +90,23 @@ class SchoolClass:
             error_message = str(e)
             return {"status": "error", "message": error_message}
     
-    def get(self, customer_id):
+    def get(self, customer_id, school_id=None):
         try:
-            data_query = self.db.query(SchoolModel).filter(
-                SchoolModel.customer_id == customer_id
-            ).first()
+            filters = [
+                SchoolModel.customer_id == customer_id,
+                SchoolModel.deleted_status_id == 0
+            ]
+            
+            if school_id:
+                filters.append(SchoolModel.id == school_id)
+            
+            data_query = self.db.query(SchoolModel).filter(*filters).first()
 
             if data_query:
                 school_data = {
                     "id": data_query.id,
                     "customer_id": data_query.customer_id,
+                    "deleted_status_id": data_query.deleted_status_id,
                     "school_name": data_query.school_name,
                     "school_address": data_query.school_address,
                     "director_name": data_query.director_name,
@@ -115,6 +128,7 @@ class SchoolClass:
         try:
             new_school = SchoolModel(
                 customer_id=school_inputs['customer_id'],
+                deleted_status_id=0,
                 school_name=school_inputs['school_name'],
                 school_address=school_inputs['school_address'],
                 director_name=school_inputs['director_name'],
@@ -141,7 +155,8 @@ class SchoolClass:
         try:
             data = self.db.query(SchoolModel).filter(SchoolModel.id == id).first()
             if data:
-                self.db.delete(data)
+                data.deleted_status_id = 1
+                data.updated_date = datetime.now()
                 self.db.commit()
                 return {"status": "success", "message": "School deleted successfully"}
             else:

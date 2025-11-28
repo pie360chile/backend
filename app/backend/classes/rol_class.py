@@ -1,25 +1,44 @@
 from datetime import datetime
-from app.backend.db.models import RolModel, RolPermissionModel, PermissionModel
+from app.backend.db.models import RolModel, RolPermissionModel, PermissionModel, SchoolModel
+from app.backend.classes.school_class import SchoolClass
 
 class RolClass:
     def __init__(self, db):
         self.db = db
 
-    def get_all(self, page=0, items_per_page=10, customer_id=None, rol=None):
+    def get_all(self, page=0, items_per_page=10, customer_id=None, school_id=None, rol=None):
         try:
+            # Si viene customer_id, obtener el school específico para validar la relación
+            if customer_id and not school_id:
+                school_result = SchoolClass(self.db).get(customer_id=customer_id)
+                # Si no existe el school o no pertenece al customer, retornar vacío
+                if "error" in school_result or "status" in school_result:
+                    if page > 0:
+                        return {
+                            "total_items": 0,
+                            "total_pages": 0,
+                            "current_page": page,
+                            "items_per_page": items_per_page,
+                            "data": []
+                        }
+                    else:
+                        return []
+                
+                school_id = school_result.get('school_data', {}).get('id')
+            
             query = self.db.query(
                 RolModel.id,
                 RolModel.customer_id,
+                RolModel.school_id,
                 RolModel.deleted_status_id,
                 RolModel.rol,
                 RolModel.added_date,
                 RolModel.updated_date
             ).filter(RolModel.deleted_status_id == 0)
-
-            # Filtrar por customer_id si se proporciona
-            if customer_id:
-                query = query.filter(RolModel.customer_id == customer_id)
-
+            
+            if school_id:
+                query = query.filter(RolModel.school_id == school_id)
+            
             # Aplicar filtro de búsqueda si se proporciona rol
             if rol and rol.strip():
                 query = query.filter(RolModel.rol.like(f"%{rol.strip()}%"))
@@ -43,6 +62,8 @@ class RolClass:
 
                 serialized_data = [{
                     "id": rol_item.id,
+                    "customer_id": rol_item.customer_id,
+                    "school_id": rol_item.school_id,
                     "rol": rol_item.rol,
                     "added_date": rol_item.added_date.strftime("%Y-%m-%d %H:%M:%S") if rol_item.added_date else None,
                     "updated_date": rol_item.updated_date.strftime("%Y-%m-%d %H:%M:%S") if rol_item.updated_date else None
@@ -65,6 +86,7 @@ class RolClass:
                 serialized_data = [{
                     "id": rol_item.id,
                     "customer_id": rol_item.customer_id,
+                    "school_id": rol_item.school_id,
                     "rol": rol_item.rol,
                     "added_date": rol_item.added_date.strftime("%Y-%m-%d %H:%M:%S") if rol_item.added_date else None,
                     "updated_date": rol_item.updated_date.strftime("%Y-%m-%d %H:%M:%S") if rol_item.updated_date else None
@@ -81,6 +103,7 @@ class RolClass:
             data_query = self.db.query(
                 RolModel.id,
                 RolModel.customer_id,
+                RolModel.school_id,
                 RolModel.deleted_status_id,
                 RolModel.rol,
                 RolModel.added_date,
@@ -101,6 +124,7 @@ class RolClass:
             rol_data = {
                 "id": data_query.id,
                 "customer_id": data_query.customer_id,
+                "school_id": data_query.school_id,
                 "rol": data_query.rol,
                 "permissions": permissions,
                 "added_date": data_query.added_date.strftime("%Y-%m-%d %H:%M:%S") if data_query.added_date else None,
@@ -116,6 +140,7 @@ class RolClass:
         try:
             new_rol = RolModel(
                 customer_id=rol_inputs.get('customer_id'),
+                school_id=rol_inputs.get('school_id'),
                 rol=rol_inputs['rol'],
                 deleted_status_id=0,
                 added_date=datetime.now(),

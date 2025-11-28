@@ -1,5 +1,6 @@
 from datetime import datetime
-from app.backend.db.models import CourseModel, TeachingModel
+from sqlalchemy import func
+from app.backend.db.models import CourseModel, TeachingModel, ProfessionalTeachingCourseModel, StudentModel, StudentAcademicInfoModel
 
 class CourseClass:
     def __init__(self, db):
@@ -14,9 +15,16 @@ class CourseClass:
                 CourseModel.course_name,
                 CourseModel.added_date,
                 CourseModel.updated_date,
-                TeachingModel.teaching_name
+                TeachingModel.teaching_name,
+                func.count(StudentModel.id).label('total_students')
             ).join(
                 TeachingModel, CourseModel.teaching_id == TeachingModel.id
+            ).outerjoin(
+                StudentAcademicInfoModel, CourseModel.id == StudentAcademicInfoModel.course_id
+            ).outerjoin(
+                StudentModel, 
+                (StudentAcademicInfoModel.student_id == StudentModel.id) & 
+                (StudentModel.deleted_status_id == 0)
             )
 
             # Filtrar por school_id si se proporciona
@@ -31,7 +39,15 @@ class CourseClass:
             if teaching_id is not None:
                 query = query.filter(CourseModel.teaching_id == teaching_id)
 
-            query = query.order_by(CourseModel.id)
+            query = query.group_by(
+                CourseModel.id,
+                CourseModel.school_id,
+                CourseModel.teaching_id,
+                CourseModel.course_name,
+                CourseModel.added_date,
+                CourseModel.updated_date,
+                TeachingModel.teaching_name
+            ).order_by(CourseModel.id)
 
             if page > 0:
                 total_items = query.count()
@@ -62,6 +78,7 @@ class CourseClass:
                     "teaching_id": course.teaching_id,
                     "course_name": course.course_name,
                     "teaching_name": course.teaching_name,
+                    "total_students": course.total_students,
                     "added_date": course.added_date.strftime("%Y-%m-%d %H:%M:%S") if course.added_date else None,
                     "updated_date": course.updated_date.strftime("%Y-%m-%d %H:%M:%S") if course.updated_date else None
                 } for course in data]
@@ -83,6 +100,7 @@ class CourseClass:
                     "teaching_id": course.teaching_id,
                     "course_name": course.course_name,
                     "teaching_name": course.teaching_name,
+                    "total_students": course.total_students,
                     "added_date": course.added_date.strftime("%Y-%m-%d %H:%M:%S") if course.added_date else None,
                     "updated_date": course.updated_date.strftime("%Y-%m-%d %H:%M:%S") if course.updated_date else None
                 } for course in data]
@@ -93,7 +111,7 @@ class CourseClass:
             error_message = str(e)
             return {"status": "error", "message": error_message}
     
-    def get_all_list(self, school_id=None):
+    def get_all_list(self, school_id=None, teaching_id=None):
         """Retorna todos los courses sin paginación ni búsqueda"""
         try:
             query = self.db.query(
@@ -111,6 +129,10 @@ class CourseClass:
             # Filtrar por school_id si se proporciona
             if school_id:
                 query = query.filter(CourseModel.school_id == school_id)
+            
+            # Filtrar por teaching_id si se proporciona
+            if teaching_id:
+                query = query.filter(CourseModel.teaching_id == teaching_id)
 
             query = query.order_by(CourseModel.id)
             
@@ -194,6 +216,14 @@ class CourseClass:
         try:
             data = self.db.query(CourseModel).filter(CourseModel.id == id).first()
             if data:
+                # Marcar como eliminado en professionals_teachings_courses
+                self.db.query(ProfessionalTeachingCourseModel).filter(
+                    ProfessionalTeachingCourseModel.course_id == id
+                ).update({
+                    "deleted_status_id": 1,
+                    "updated_date": datetime.now()
+                })
+                
                 self.db.delete(data)
                 self.db.commit()
                 return {"status": "success", "message": "Course deleted successfully"}

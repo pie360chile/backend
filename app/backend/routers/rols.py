@@ -14,7 +14,7 @@ rols = APIRouter(
 
 @rols.post("/")
 def index(rol_list: RolList, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    # Obtener customer_id del usuario en sesión
+    # Obtener customer_id y school_id del usuario en sesión
     customer_id = session_user.customer_id if session_user else None
     
     page_value = 0 if rol_list.page is None else rol_list.page
@@ -33,10 +33,11 @@ def index(rol_list: RolList, session_user: UserLogin = Depends(get_current_activ
 
 @rols.get("/list")
 def get_all_list(session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    # Obtener customer_id del usuario en sesión
+    # Obtener customer_id y school_id del usuario en sesión
     customer_id = session_user.customer_id if session_user else None
+    school_id = session_user.school_id if session_user else None
     
-    result = RolClass(db).get_all(page=0, customer_id=customer_id)
+    result = RolClass(db).get_all(page=0, customer_id=customer_id, school_id=school_id)
     
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -49,11 +50,13 @@ def get_all_list(session_user: UserLogin = Depends(get_current_active_user), db:
 
 @rols.post("/store")
 def store(rol: Rol, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    # Obtener customer_id del usuario en sesión
+    # Obtener customer_id y school_id del usuario en sesión
     customer_id = session_user.customer_id if session_user else None
+    school_id = session_user.school_id if session_user else None
     
     rol_inputs = rol.dict()
     rol_inputs['customer_id'] = customer_id
+    rol_inputs['school_id'] = school_id
     rol_inputs['deleted_status_id'] = 0
     
     result = RolClass(db).store(rol_inputs)
@@ -136,7 +139,11 @@ def delete(id: int, session_user: UserLogin = Depends(get_current_active_user), 
 
 @rols.put("/update/{id}")
 def update(id: int, rol: UpdateRol, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
+    # Obtener school_id del usuario en sesión
+    school_id = session_user.school_id if session_user else None
+    
     rol_inputs = rol.dict(exclude_unset=True)
+    rol_inputs['school_id'] = school_id
     result = RolClass(db).update(id, rol_inputs)
 
     if isinstance(result, dict) and result.get("status") == "error":

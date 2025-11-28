@@ -6,7 +6,7 @@ class StudentClass:
     def __init__(self, db):
         self.db = db
 
-    def get_all(self, page=0, items_per_page=10, school_id=None, rut=None, names=None, identification_number=None):
+    def get_all(self, page=0, items_per_page=10, school_id=None, rut=None, names=None, identification_number=None, course_id=None):
         try:
             query = self.db.query(
                 StudentModel.id,
@@ -17,7 +17,7 @@ class StudentClass:
                 StudentModel.updated_date,
                 StudentAcademicInfoModel.id.label('academic_id'),
                 StudentAcademicInfoModel.special_educational_need_id,
-                StudentAcademicInfoModel.course,
+                StudentAcademicInfoModel.course_id,
                 StudentAcademicInfoModel.sip_admission_year,
                 StudentPersonalInfoModel.id.label('personal_id'),
                 StudentPersonalInfoModel.region_id,
@@ -58,6 +58,9 @@ class StudentClass:
             
             if identification_number and identification_number.strip():
                 query = query.filter(StudentPersonalInfoModel.identification_number.like(f"%{identification_number.strip()}%"))
+            
+            if course_id:
+                query = query.filter(StudentAcademicInfoModel.course_id == course_id)
 
             query = query.order_by(StudentModel.id.desc())
 
@@ -89,7 +92,7 @@ class StudentClass:
                     "academic_info": {
                         "id": student.academic_id,
                         "special_educational_need_id": student.special_educational_need_id,
-                        "course": student.course,
+                        "course_id": student.course_id,
                         "sip_admission_year": student.sip_admission_year
                     } if student.academic_id else None,
                     "personal_data": {
@@ -135,7 +138,7 @@ class StudentClass:
                     "academic_info": {
                         "id": student.academic_id,
                         "special_educational_need_id": student.special_educational_need_id,
-                        "course": student.course,
+                        "course_id": student.course_id,
                         "sip_admission_year": student.sip_admission_year
                     } if student.academic_id else None,
                     "personal_data": {
@@ -177,7 +180,7 @@ class StudentClass:
                 StudentModel.updated_date,
                 StudentAcademicInfoModel.id.label('academic_id'),
                 StudentAcademicInfoModel.special_educational_need_id,
-                StudentAcademicInfoModel.course,
+                StudentAcademicInfoModel.course_id,
                 StudentAcademicInfoModel.sip_admission_year,
                 StudentPersonalInfoModel.id.label('personal_id'),
                 StudentPersonalInfoModel.region_id,
@@ -219,7 +222,7 @@ class StudentClass:
                     "academic_info": {
                         "id": data_query.academic_id,
                         "special_educational_need_id": data_query.special_educational_need_id,
-                        "course": data_query.course,
+                        "course_id": data_query.course_id,
                         "sip_admission_year": data_query.sip_admission_year
                     } if data_query.academic_id else None,
                     "personal_data": {
@@ -277,6 +280,17 @@ class StudentClass:
                 mother_lastname=student_inputs.get('mother_lastname')
             )
             self.db.add(new_personal)
+
+            # Crear información académica si viene course_id
+            course_id = student_inputs.get('course_id')
+            if course_id:
+                new_academic = StudentAcademicInfoModel(
+                    student_id=new_student.id,
+                    course_id=course_id,
+                    added_date=datetime.now(),
+                    updated_date=datetime.now()
+                )
+                self.db.add(new_academic)
 
             self.db.commit()
 
@@ -340,17 +354,20 @@ class StudentClass:
                     # Actualizar registro existente
                     if 'special_educational_need_id' in academic_info:
                         existing_academic.special_educational_need_id = academic_info['special_educational_need_id']
-                    if 'course' in academic_info:
-                        existing_academic.course = academic_info['course']
+                    if 'course_id' in academic_info:
+                        existing_academic.course_id = academic_info['course_id']
                     if 'sip_admission_year' in academic_info:
                         existing_academic.sip_admission_year = academic_info['sip_admission_year']
+                    existing_academic.updated_date = datetime.now()
                 else:
                     # Crear nuevo registro
                     new_academic = StudentAcademicInfoModel(
                         student_id=id,
                         special_educational_need_id=academic_info.get('special_educational_need_id'),
-                        course=academic_info.get('course'),
-                        sip_admission_year=academic_info.get('sip_admission_year')
+                        course_id=academic_info.get('course_id'),
+                        sip_admission_year=academic_info.get('sip_admission_year'),
+                        added_date=datetime.now(),
+                        updated_date=datetime.now()
                     )
                     self.db.add(new_academic)
 

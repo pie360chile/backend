@@ -117,6 +117,13 @@ class StudentGuardianClass:
 
     def store(self, guardian_inputs):
         try:
+            student_id = guardian_inputs.get('student_id')
+            
+            # Buscar si ya existe un guardian para este estudiante
+            existing_guardian = self.db.query(StudentGuardianModel).filter(
+                StudentGuardianModel.student_id == student_id
+            ).first()
+            
             # Convertir born_date de string a date si viene como string
             born_date = None
             if 'born_date' in guardian_inputs and guardian_inputs['born_date']:
@@ -125,30 +132,62 @@ class StudentGuardianClass:
                 else:
                     born_date = guardian_inputs['born_date']
 
-            new_guardian = StudentGuardianModel(
-                student_id=guardian_inputs.get('student_id'),
-                family_member_id=guardian_inputs.get('family_member_id'),
-                gender_id=guardian_inputs.get('gender_id'),
-                identification_number=guardian_inputs.get('identification_number'),
-                names=guardian_inputs.get('names'),
-                father_lastname=guardian_inputs.get('father_lastname'),
-                mother_lastname=guardian_inputs.get('mother_lastname'),
-                born_date=born_date,
-                email=guardian_inputs.get('email'),
-                celphone=guardian_inputs.get('celphone'),
-                added_date=datetime.now(),
-                updated_date=datetime.now()
-            )
+            if existing_guardian:
+                # Actualizar el guardian existente - solo campos que no estén vacíos
+                if 'family_member_id' in guardian_inputs and guardian_inputs['family_member_id'] is not None:
+                    existing_guardian.family_member_id = guardian_inputs['family_member_id']
+                if 'gender_id' in guardian_inputs and guardian_inputs['gender_id'] is not None:
+                    existing_guardian.gender_id = guardian_inputs['gender_id']
+                if 'identification_number' in guardian_inputs and guardian_inputs['identification_number']:
+                    existing_guardian.identification_number = guardian_inputs['identification_number']
+                if 'names' in guardian_inputs and guardian_inputs['names']:
+                    existing_guardian.names = guardian_inputs['names']
+                if 'father_lastname' in guardian_inputs and guardian_inputs['father_lastname']:
+                    existing_guardian.father_lastname = guardian_inputs['father_lastname']
+                if 'mother_lastname' in guardian_inputs and guardian_inputs['mother_lastname']:
+                    existing_guardian.mother_lastname = guardian_inputs['mother_lastname']
+                if 'born_date' in guardian_inputs and guardian_inputs['born_date']:
+                    existing_guardian.born_date = born_date
+                if 'email' in guardian_inputs and guardian_inputs['email']:
+                    existing_guardian.email = guardian_inputs['email']
+                if 'celphone' in guardian_inputs and guardian_inputs['celphone']:
+                    existing_guardian.celphone = guardian_inputs['celphone']
+                existing_guardian.updated_date = datetime.now()
+                
+                self.db.commit()
+                self.db.refresh(existing_guardian)
+                
+                return {
+                    "status": "success",
+                    "message": "Guardian updated successfully",
+                    "guardian_id": existing_guardian.id
+                }
+            else:
+                # Crear nuevo guardian
+                new_guardian = StudentGuardianModel(
+                    student_id=student_id,
+                    family_member_id=guardian_inputs.get('family_member_id'),
+                    gender_id=guardian_inputs.get('gender_id'),
+                    identification_number=guardian_inputs.get('identification_number'),
+                    names=guardian_inputs.get('names'),
+                    father_lastname=guardian_inputs.get('father_lastname'),
+                    mother_lastname=guardian_inputs.get('mother_lastname'),
+                    born_date=born_date,
+                    email=guardian_inputs.get('email'),
+                    celphone=guardian_inputs.get('celphone'),
+                    added_date=datetime.now(),
+                    updated_date=datetime.now()
+                )
 
-            self.db.add(new_guardian)
-            self.db.commit()
-            self.db.refresh(new_guardian)
+                self.db.add(new_guardian)
+                self.db.commit()
+                self.db.refresh(new_guardian)
 
-            return {
-                "status": "success",
-                "message": "Guardian created successfully",
-                "guardian_id": new_guardian.id
-            }
+                return {
+                    "status": "success",
+                    "message": "Guardian created successfully",
+                    "guardian_id": new_guardian.id
+                }
 
         except Exception as e:
             self.db.rollback()

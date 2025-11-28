@@ -10,6 +10,8 @@ class UserLogin(BaseModel):
     rol_id: Union[int, None]
     rut: Union[int, None]
     branch_office_id: Union[int, None]
+    customer_id: Union[int, None]
+    school_id: Union[int, None]
     full_name: Union[str, None]
     email: Union[str, None]
     phone: Union[str, None]
@@ -109,9 +111,11 @@ class TeachingList(BaseModel):
     per_page: int = 10
 
 class StoreTeaching(BaseModel):
+    teaching_type_id: int
     teaching_name: str
 
 class UpdateTeaching(BaseModel):
+    teaching_type_id: int = None
     teaching_name: str = None
 
 # Course schemas
@@ -167,6 +171,31 @@ class UpdateNativeLanguageProficiency(BaseModel):
 # Documents schemas
 class CreateDocumentRequest(BaseModel):
     student_name: str
+    document_type_id: int
+
+    @classmethod
+    def as_form(
+        cls,
+        student_name: str = Form(...),
+        document_type_id: int = Form(...)
+    ):
+        return cls(
+            student_name=student_name,
+            document_type_id=document_type_id
+        )
+
+class DocumentListRequest(BaseModel):
+    document_type_id: Optional[int] = None
+
+class UploadDocumentRequest(BaseModel):
+    student_id: int
+
+    @classmethod
+    def as_form(
+        cls,
+        student_id: int = Form(...)
+    ):
+        return cls(student_id=student_id)
 
 # Family Member schemas
 class FamilyMemberList(BaseModel):
@@ -189,15 +218,15 @@ class StudentGuardianList(BaseModel):
 
 class StoreStudentGuardian(BaseModel):
     student_id: int
-    family_member_id: int
-    gender_id: int
-    identification_number: str
-    names: str
-    father_lastname: str
-    mother_lastname: str
-    born_date: str
-    email: str
-    celphone: str
+    family_member_id: Optional[int] = None
+    gender_id: Optional[int] = None
+    identification_number: Optional[str] = None
+    names: Optional[str] = None
+    father_lastname: Optional[str] = None
+    mother_lastname: Optional[str] = None
+    born_date: Optional[str] = None
+    email: Optional[str] = None
+    celphone: Optional[str] = None
 
 class UpdateStudentGuardian(BaseModel):
     student_id: Optional[int] = None
@@ -303,12 +332,13 @@ class StudentList(BaseModel):
     rut: Optional[str] = None
     names: Optional[str] = None
     identification_number: Optional[str] = None
+    course_id: Optional[int] = None
     per_page: int = 10
 
 class StudentAcademicInfo(BaseModel):
-    special_educational_need_id: Optional[str] = None
-    course: Optional[str] = None
-    sip_admission_year: Optional[str] = None
+    special_educational_need_id: Optional[int] = None
+    course_id: Optional[int] = None
+    sip_admission_year: Optional[int] = None
 
 class StudentPersonalInfo(BaseModel):
     region_id: Optional[int] = None
@@ -334,6 +364,7 @@ class StoreStudent(BaseModel):
     names: str
     father_lastname: str
     mother_lastname: str
+    course_id: Optional[int] = None
 
 class UpdateStudent(BaseModel):
     # Campos que vienen del frontend ya mapeados a nombres de BD
@@ -345,7 +376,6 @@ class UpdateStudent(BaseModel):
     gender_id: Optional[int] = None
     born_date: Optional[str] = None
     email: Optional[str] = None
-    identification_number: Optional[str] = None
     phone: Optional[str] = None
     address: Optional[str] = None
     region_id: Optional[int] = None
@@ -355,6 +385,10 @@ class UpdateStudent(BaseModel):
     proficiency_native_language_id: Optional[int] = None
     language_usually_used: Optional[str] = None
     proficiency_language_used_id: Optional[int] = None
+    # Campos académicos
+    special_educational_need_id: Optional[int] = None
+    course_id: Optional[int] = None
+    sip_admission_year: Optional[int] = None
 
 # Customer schemas
 class CustomerList(BaseModel):
@@ -377,8 +411,10 @@ class StoreCustomer(BaseModel):
     company_name: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
+    license_time: Optional[date] = None
     password: Optional[str] = None
     rol_id: Optional[int] = None
+    schools: Optional[List[str]] = None
 
 class UpdateCustomer(BaseModel):
     country_id: Optional[int] = None
@@ -393,6 +429,8 @@ class UpdateCustomer(BaseModel):
     company_name: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
+    license_time: Optional[date] = None
+    schools: Optional[List[str]] = None
 
 # Professional schemas
 class ProfessionalList(BaseModel):
@@ -411,6 +449,8 @@ class StoreProfessional(BaseModel):
     phone: str
     rol_id: int
     password: str
+    course_id: Optional[int] = None
+    teaching_id: Optional[int] = None
 
 class UpdateProfessional(BaseModel):
     rol_id: Optional[int] = None
@@ -421,6 +461,8 @@ class UpdateProfessional(BaseModel):
     birth_date: Optional[str] = None
     address: Optional[str] = None
     phone: Optional[str] = None
+    course_id: Optional[int] = None
+    teaching_id: Optional[int] = None
 
 # Package schemas
 class PackageList(BaseModel):
@@ -437,3 +479,29 @@ class UpdatePackage(BaseModel):
     package_name: Optional[str] = None
     students_per_package: Optional[int] = None
     professionals_per_package: Optional[int] = None
+
+# Special Educational Need schemas
+class SpecialEducationalNeedList(BaseModel):
+    page: Optional[int] = None
+    per_page: int = 10
+    special_educational_needs: Optional[str] = None
+
+class StoreSpecialEducationalNeed(BaseModel):
+    special_educational_needs: str
+
+class UpdateSpecialEducationalNeed(BaseModel):
+    special_educational_needs: Optional[str] = None
+
+# Document Type schemas
+class DocumentTypeList(BaseModel):
+    page: Optional[int] = None
+    per_page: int = 10
+    document: Optional[str] = None
+
+class StoreDocumentType(BaseModel):
+    document_type_id: int
+    document: str
+
+class UpdateDocumentType(BaseModel):
+    document_type_id: Optional[int] = None
+    document: Optional[str] = None

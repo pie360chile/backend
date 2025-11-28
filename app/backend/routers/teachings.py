@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.backend.schemas import UserLogin, TeachingList, StoreTeaching, UpdateTeaching
 from app.backend.classes.teaching_class import TeachingClass
 from app.backend.auth.auth_user import get_current_active_user
+from app.backend.classes.school_class import SchoolClass
 
 teachings = APIRouter(
     prefix="/teachings",
@@ -13,15 +14,8 @@ teachings = APIRouter(
 
 @teachings.post("/")
 def index(teaching: TeachingList, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    from app.backend.classes.school_class import SchoolClass
-    
-    # Obtener school_id del customer_id del usuario en sesión
-    customer_id = session_user.customer_id if session_user else None
-    school_id = None
-    if customer_id:
-        schools_list = SchoolClass(db).get_all(page=0, customer_id=customer_id)
-        if isinstance(schools_list, list) and len(schools_list) > 0:
-            school_id = schools_list[0].get('id')
+    # Obtener school_id de la sesión del usuario
+    school_id = session_user.school_id if session_user else None
     
     # Si no hay school_id, devolver array vacío
     if school_id is None:
@@ -66,16 +60,10 @@ def index(teaching: TeachingList, session_user: UserLogin = Depends(get_current_
     )
 
 @teachings.get("/list")
-def get_all_list(session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    from app.backend.classes.school_class import SchoolClass
-    
-    # Obtener school_id del customer_id del usuario en sesión
-    customer_id = session_user.customer_id if session_user else None
-    school_id = None
-    if customer_id:
-        schools_list = SchoolClass(db).get_all(page=0, customer_id=customer_id)
-        if isinstance(schools_list, list) and len(schools_list) > 0:
-            school_id = schools_list[0].get('id')
+def get_all_list(school_id: int = None, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
+    # Si no viene school_id por parámetro, obtenerlo de la sesión del usuario
+    if school_id is None:
+        school_id = session_user.school_id if session_user else None
     
     # Si no hay school_id, devolver array vacío
     if school_id is None:
@@ -111,17 +99,10 @@ def get_all_list(session_user: UserLogin = Depends(get_current_active_user), db:
 
 @teachings.post("/store")
 def store(teaching: StoreTeaching, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    from app.backend.classes.school_class import SchoolClass
-    
     teaching_inputs = teaching.dict()
     
-    # Obtener school_id del customer_id del usuario en sesión
-    customer_id = session_user.customer_id if session_user else None
-    school_id = None
-    if customer_id:
-        schools_list = SchoolClass(db).get_all(page=0, customer_id=customer_id)
-        if isinstance(schools_list, list) and len(schools_list) > 0:
-            school_id = schools_list[0].get('id')
+    # Obtener school_id de la sesión del usuario
+    school_id = session_user.school_id if session_user else None
     
     # Agregar school_id a teaching_inputs
     teaching_inputs['school_id'] = school_id
@@ -172,21 +153,13 @@ def edit(id: int, session_user: UserLogin = Depends(get_current_active_user), db
 
 @teachings.put("/update/{id}")
 def update(id: int, teaching: UpdateTeaching, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    from app.backend.classes.school_class import SchoolClass
-    
     teaching_inputs = teaching.dict(exclude_unset=True)
     
-    # Obtener school_id del customer_id del usuario en sesión
-    customer_id = session_user.customer_id if session_user else None
-    school_id = None
-    if customer_id:
-        schools_list = SchoolClass(db).get_all(page=0, customer_id=customer_id)
-        if isinstance(schools_list, list) and len(schools_list) > 0:
-            school_id = schools_list[0].get('id')
+    # Obtener school_id de la sesión del usuario
+    school_id = session_user.school_id if session_user else None
     
-    # Agregar school_id a teaching_inputs si no está presente
-    if 'school_id' not in teaching_inputs:
-        teaching_inputs['school_id'] = school_id
+    # Agregar school_id a teaching_inputs
+    teaching_inputs['school_id'] = school_id
     
     result = TeachingClass(db).update(id, teaching_inputs)
 

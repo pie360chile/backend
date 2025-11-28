@@ -83,12 +83,13 @@ def store(guardian: StoreStudentGuardian, session_user: UserLogin = Depends(get_
 def edit(student_id: int, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
     result = StudentGuardianClass(db).get(student_id)
 
+    # Si no hay guardian, devolver 200 con data vacía
     if isinstance(result, dict) and (result.get("error") or result.get("status") == "error"):
         return JSONResponse(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=status.HTTP_200_OK,
             content={
-                "status": 404,
-                "message": result.get("error") or result.get("message", "Guardian not found"),
+                "status": 200,
+                "message": "No guardian found for this student",
                 "data": None
             }
         )

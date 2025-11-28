@@ -1,11 +1,15 @@
 from fastapi import APIRouter, status, UploadFile, File, Form, Depends
 from fastapi.responses import JSONResponse, FileResponse
 from app.backend.classes.documents_class import DocumentsClass
-from app.backend.classes.files_class import FileClass
+from app.backend.classes.student_class import StudentClass
 from app.backend.db.database import get_db
-from app.backend.db.models import StudentDocumentModel
 from app.backend.auth.auth_user import get_current_active_user
-from app.backend.schemas import UserLogin
+from app.backend.schemas import (
+    UserLogin,
+    CreateDocumentRequest,
+    DocumentListRequest,
+    UploadDocumentRequest
+)
 from sqlalchemy.orm import Session
 from pathlib import Path
 import tempfile
@@ -21,7 +25,7 @@ documents = APIRouter(
 @documents.post("/create")
 async def create_document(
     file: UploadFile = File(...),
-    student_name: str = Form(...)
+    document_data: CreateDocumentRequest = Depends(CreateDocumentRequest.as_form)
 ):
     """
     Crea un documento procesado a partir de un PDF subido.
@@ -47,7 +51,10 @@ async def create_document(
             temp_file_path = temp_file.name
         
         # Procesar el documento usando el método parent_authorization
-        result = DocumentsClass().parent_authorization(
+        student_name = document_data.student_name
+        document_type_id = document_data.document_type_id
+
+        result = DocumentsClass.parent_authorization(
             original_file_path=temp_file_path,
             student_name=student_name
         )
@@ -67,11 +74,13 @@ async def create_document(
             )
         
         # Devolver el archivo procesado para descarga
-        return FileResponse(
+        response = FileResponse(
             path=result["file_path"],
             filename=result["filename"],
             media_type='application/pdf'
         )
+        response.headers["X-Document-Type-Id"] = str(document_type_id)
+        return response
         
     except Exception as e:
         # Limpiar archivo temporal en caso de error
@@ -90,34 +99,63 @@ async def create_document(
             }
         )
 
-@documents.post("/upload-birth-certificate")
-async def upload_birth_certificate(
-    file: UploadFile = File(...)
+@documents.post("/upload/{student_id}/{document_type_id}")
+async def upload_document(
+    student_id: int,
+    document_type_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
 ):
     """
-    Sube un certificado de nacimiento (solo archivo PDF).
+    Sube un documento (PDF o imagen).
     """
     try:
-        # Validar que el archivo sea PDF
-        if not file.filename.endswith('.pdf'):
+        # Obtener el estudiante usando la clase
+        student_service = StudentClass(db)
+        student_result = student_service.get(student_id)
+        
+        if isinstance(student_result, dict) and (student_result.get("error") or student_result.get("status") == "error"):
             return JSONResponse(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=status.HTTP_404_NOT_FOUND,
                 content={
-                    "status": 400,
-                    "message": "El archivo debe ser un PDF",
+                    "status": 404,
+                    "message": student_result.get("error") or student_result.get("message", "Estudiante no encontrado"),
                     "data": None
                 }
             )
+        
+        student_data = student_result.get("student_data", {})
+        student_identification_number = student_data.get("identification_number") or str(student_id)
+
+        # Obtener el documento usando la clase
+        document = DocumentsClass(db)
+        document_result = document.get(document_type_id)
+        
+        if isinstance(document_result, dict) and document_result.get("status") == "error":
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={
+                    "status": 404,
+                    "message": document_result.get("message", "Documento no encontrado"),
+                    "data": None
+                }
+            )
+        
+        document_id = document_result.get("id")
+        
+        # Obtener la extensión del archivo original
+        file_extension = Path(file.filename).suffix.lower() if file.filename else ''
+        
+        # Limpiar el RUT para que sea válido en nombre de archivo (remover caracteres especiales)
+        clean_rut = student_identification_number.replace('.', '').replace('-', '')
+        
+        # Generar nombre del archivo: document_{identification_number}_{documents.id}
+        unique_filename = f"document_{clean_rut}_{document_id}{file_extension}"
         
         # Crear directorio si no existe
         upload_dir = Path("files/system/students")
         upload_dir.mkdir(parents=True, exist_ok=True)
         
-        # Generar nombre único para el archivo
-        import uuid
-        from datetime import datetime
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        unique_filename = f"birth_cert_{timestamp}_{uuid.uuid4().hex[:8]}.pdf"
         file_path = upload_dir / unique_filename
         
         # Guardar el archivo
@@ -125,93 +163,28 @@ async def upload_birth_certificate(
         with open(file_path, "wb") as f:
             f.write(content)
         
-        return JSONResponse(
-            status_code=status.HTTP_201_CREATED,
-            content={
-                "status": 201,
-                "message": "Certificado de nacimiento subido exitosamente",
-                "data": {
-                    "filename": unique_filename,
-                    "file_path": str(file_path),
-                    "original_filename": file.filename
-                }
-            }
+        # Guardar el registro en la tabla correspondiente usando el método store
+        store_result = document.store(
+            student_id=student_id,
+            document_type_id=document_type_id,
+            file_path=unique_filename
         )
         
-    except Exception as e:
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={
-                "status": 500,
-                "message": f"Error subiendo archivo: {str(e)}",
-                "data": None
-            }
-        )
-
-@documents.post("/upload")
-async def upload_document(
-    student_id: int = Form(...),
-    file: UploadFile = File(...),
-    session_user: UserLogin = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Sube un certificado de nacimiento asociado a un estudiante.
-    """
-    try:
-        # Validar que el archivo sea PDF o imagen
-        allowed_extensions = ['.pdf', '.jpg', '.jpeg', '.png', '.gif', '.bmp']
-        file_extension = Path(file.filename).suffix.lower()
-        
-        if file_extension not in allowed_extensions:
+        if isinstance(store_result, dict) and store_result.get("status") == "error":
+            # Si hay error al guardar el registro, eliminar el archivo
+            if file_path.exists():
+                try:
+                    os.unlink(file_path)
+                except:
+                    pass
             return JSONResponse(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 content={
-                    "status": 400,
-                    "message": "El archivo debe ser un PDF o una imagen (JPG, PNG, GIF, BMP)",
+                    "status": 500,
+                    "message": store_result.get("message", "Error guardando registro del documento"),
                     "data": None
                 }
             )
-        
-        # Generar nombre único para el archivo
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        unique_filename = f"birth_cert_student_{student_id}_{timestamp}_{uuid.uuid4().hex[:8]}{file_extension}"
-        remote_path = f"system/students/{unique_filename}"
-        
-        # Leer el contenido del archivo
-        content = await file.read()
-        
-        # Usar FileClass para guardar el archivo
-        file_class = FileClass(db)
-        file_class.temporal_upload(content, remote_path)
-        
-        # Obtener la URL del archivo
-        file_url = file_class.get(remote_path)
-        
-        # Buscar si ya existe un documento para este estudiante
-        existing_doc = db.query(StudentDocumentModel).filter(
-            StudentDocumentModel.student_id == student_id
-        ).first()
-        
-        if existing_doc:
-            # Actualizar el registro existente
-            existing_doc.birth_certificate = file_url
-            existing_doc.updated_date = datetime.now()
-            db.commit()
-            db.refresh(existing_doc)
-            document_id = existing_doc.id
-        else:
-            # Crear nuevo registro
-            new_doc = StudentDocumentModel(
-                student_id=student_id,
-                birth_certificate=file_url,
-                added_date=datetime.now(),
-                updated_date=datetime.now()
-            )
-            db.add(new_doc)
-            db.commit()
-            db.refresh(new_doc)
-            document_id = new_doc.id
         
         return JSONResponse(
             status_code=status.HTTP_201_CREATED,
@@ -219,10 +192,12 @@ async def upload_document(
                 "status": 201,
                 "message": "Documento subido exitosamente",
                 "data": {
-                    "id": document_id,
+                    "id": store_result.get("document_id"),
+                    "version_id": store_result.get("version_id"),
                     "student_id": student_id,
+                    "document_type_id": document_type_id,
                     "filename": unique_filename,
-                    "file_url": file_url,
+                    "file_path": str(file_path),
                     "original_filename": file.filename
                 }
             }
@@ -235,6 +210,48 @@ async def upload_document(
             content={
                 "status": 500,
                 "message": f"Error subiendo archivo: {str(e)}",
+                "data": None
+            }
+        )
+
+@documents.post("/list")
+async def list_documents(
+    filters: DocumentListRequest,
+    session_user: UserLogin = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Lista los documentos configurados, devolviendo solo document_type_id y document.
+    """
+    try:
+        documents = DocumentsClass(db)
+        data = documents.get_all(filters.document_type_id)
+
+        if isinstance(data, dict) and data.get("status") == "error":
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={
+                    "status": 500,
+                    "message": data.get("message", "Error listando documentos"),
+                    "data": None
+                }
+            )
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "status": 200,
+                "message": "Documentos encontrados" if data else "No hay documentos registrados",
+                "data": data
+            }
+        )
+
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "status": 500,
+                "message": f"Error listando documentos: {str(e)}",
                 "data": None
             }
         )

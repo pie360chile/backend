@@ -1,5 +1,5 @@
 from datetime import datetime
-from app.backend.db.models import ProfessionalModel, UserModel, SchoolModel
+from app.backend.db.models import ProfessionalModel, UserModel, SchoolModel, ProfessionalTeachingCourseModel, RolModel
 from app.backend.auth.auth_user import generate_bcrypt_hash
 import json
 
@@ -13,6 +13,8 @@ class ProfessionalClass:
                 ProfessionalModel.id,
                 ProfessionalModel.school_id,
                 ProfessionalModel.rol_id,
+                ProfessionalModel.course_id,
+                ProfessionalModel.teaching_id,
                 ProfessionalModel.identification_number,
                 ProfessionalModel.names,
                 ProfessionalModel.lastnames,
@@ -21,7 +23,10 @@ class ProfessionalClass:
                 ProfessionalModel.address,
                 ProfessionalModel.phone,
                 ProfessionalModel.added_date,
-                ProfessionalModel.updated_date
+                ProfessionalModel.updated_date,
+                RolModel.rol.label('rol_name')
+            ).outerjoin(
+                RolModel, ProfessionalModel.rol_id == RolModel.id
             )
 
             # Filtrar por school_id si se proporciona
@@ -56,6 +61,7 @@ class ProfessionalClass:
                     "id": professional.id,
                     "school_id": professional.school_id,
                     "rol_id": professional.rol_id,
+                    "rol_name": professional.rol_name,
                     "identification_number": professional.identification_number,
                     "names": professional.names,
                     "lastnames": professional.lastnames,
@@ -85,6 +91,9 @@ class ProfessionalClass:
                     "id": professional.id,
                     "school_id": professional.school_id,
                     "rol_id": professional.rol_id,
+                    "rol_name": professional.rol_name,
+                    "course_id": professional.course_id,
+                    "teaching_id": professional.teaching_id,
                     "identification_number": professional.identification_number,
                     "names": professional.names,
                     "lastnames": professional.lastnames,
@@ -111,6 +120,8 @@ class ProfessionalClass:
                     "id": data_query.id,
                     "school_id": data_query.school_id,
                     "rol_id": data_query.rol_id,
+                    "course_id": data_query.course_id,
+                    "teaching_id": data_query.teaching_id,
                     "identification_number": data_query.identification_number,
                     "names": data_query.names,
                     "lastnames": data_query.lastnames,
@@ -145,6 +156,8 @@ class ProfessionalClass:
             new_professional = ProfessionalModel(
                 school_id=school_id,
                 rol_id=professional_inputs.get('rol_id'),
+                course_id=professional_inputs.get('course_id'),
+                teaching_id=professional_inputs.get('teaching_id'),
                 identification_number=professional_inputs.get('identification_number'),
                 names=professional_inputs.get('names'),
                 lastnames=professional_inputs.get('lastnames'),
@@ -170,6 +183,7 @@ class ProfessionalClass:
             full_name = f"{professional_inputs.get('names')} {professional_inputs.get('lastnames')}"
             new_user = UserModel(
                 customer_id=customer_id,
+                school_id=school_id,
                 rol_id=professional_inputs.get('rol_id'),
                 deleted_status_id=0,
                 rut=professional_inputs.get('identification_number'),
@@ -182,6 +196,20 @@ class ProfessionalClass:
             )
 
             self.db.add(new_user)
+            self.db.flush()
+
+            # Crear registro en professionals_teachings_courses solo si ambos teaching_id Y course_id no son vacíos
+            if professional_inputs.get('teaching_id') and professional_inputs.get('course_id'):
+                new_ptc = ProfessionalTeachingCourseModel(
+                    professional_id=new_professional.id,
+                    teaching_id=professional_inputs.get('teaching_id'),
+                    course_id=professional_inputs.get('course_id'),
+                    deleted_status_id=0,
+                    added_date=datetime.now(),
+                    updated_date=datetime.now()
+                )
+                self.db.add(new_ptc)
+
             self.db.commit()
             self.db.refresh(new_professional)
             self.db.refresh(new_user)
@@ -201,6 +229,14 @@ class ProfessionalClass:
         try:
             data = self.db.query(ProfessionalModel).filter(ProfessionalModel.id == id).first()
             if data:
+                # Marcar como eliminado en professionals_teachings_courses
+                self.db.query(ProfessionalTeachingCourseModel).filter(
+                    ProfessionalTeachingCourseModel.professional_id == id
+                ).update({
+                    "deleted_status_id": 1,
+                    "updated_date": datetime.now()
+                })
+                
                 self.db.delete(data)
                 self.db.commit()
                 return {"status": "success", "message": "Professional deleted successfully"}
@@ -219,11 +255,67 @@ class ProfessionalClass:
             if not existing_professional:
                 return {"status": "error", "message": "No data found"}
 
+            # Guardar valores para actualizar user
+            identification_number = professional_inputs.get('identification_number', existing_professional.identification_number)
+            names = professional_inputs.get('names', existing_professional.names)
+            lastnames = professional_inputs.get('lastnames', existing_professional.lastnames)
+            email = professional_inputs.get('email', existing_professional.email)
+            phone = professional_inputs.get('phone', existing_professional.phone)
+            rol_id = professional_inputs.get('rol_id', existing_professional.rol_id)
+
             for key, value in professional_inputs.items():
                 if value is not None:
                     setattr(existing_professional, key, value)
 
             existing_professional.updated_date = datetime.now()
+
+            # Actualizar usuario correspondiente
+            existing_user = self.db.query(UserModel).filter(
+                UserModel.rut == identification_number
+            ).first()
+
+            if existing_user:
+                existing_user.full_name = f"{names} {lastnames}"
+                existing_user.email = email
+                existing_user.phone = phone
+                existing_user.rol_id = rol_id
+                existing_user.school_id = professional_inputs.get('school_id', existing_user.school_id)
+                existing_user.updated_date = datetime.now()
+
+            # Actualizar professionals_teachings_courses
+            teaching_id = professional_inputs.get('teaching_id')
+            course_id = professional_inputs.get('course_id')
+            
+            # Buscar registro existente
+            existing_ptc = self.db.query(ProfessionalTeachingCourseModel).filter(
+                ProfessionalTeachingCourseModel.professional_id == id,
+                ProfessionalTeachingCourseModel.deleted_status_id == 0
+            ).first()
+            
+            # Si ambos teaching_id Y course_id tienen valor (no vacíos), actualizar o crear
+            if teaching_id and course_id:
+                if existing_ptc:
+                    # Actualizar existente
+                    existing_ptc.teaching_id = teaching_id
+                    existing_ptc.course_id = course_id
+                    existing_ptc.updated_date = datetime.now()
+                else:
+                    # Crear nuevo registro
+                    new_ptc = ProfessionalTeachingCourseModel(
+                        professional_id=id,
+                        teaching_id=teaching_id,
+                        course_id=course_id,
+                        deleted_status_id=0,
+                        added_date=datetime.now(),
+                        updated_date=datetime.now()
+                    )
+                    self.db.add(new_ptc)
+            else:
+                # Si alguno de los dos está vacío (cambió a coordinador u otro rol sin curso/enseñanza)
+                # y existe un registro, marcarlo como eliminado
+                if existing_ptc:
+                    existing_ptc.deleted_status_id = 1
+                    existing_ptc.updated_date = datetime.now()
 
             self.db.commit()
             self.db.refresh(existing_professional)

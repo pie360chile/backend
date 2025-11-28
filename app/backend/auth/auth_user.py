@@ -14,6 +14,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 def get_current_user(token: str = Depends(oauth2_scheme)):
     try:
         decoded_token = jwt.decode(token, os.environ['SECRET_KEY'], algorithms=[os.environ['ALGORITHM']])
+
         username = decoded_token.get("sub")
         if username is None:
             raise HTTPException(status_code=401, detail="Could not validate credentials", headers={"WWW-Authenticate": "Bearer"})
@@ -24,6 +25,19 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
 
     if user is None:
         raise HTTPException(status_code=401, detail="Could not validate credentials", headers={"WWW-Authenticate": "Bearer"})
+    
+    # Sobrescribir con los datos del token que pueden haber cambiado (como school_id al seleccionar escuela)
+    if 'rol_id' in decoded_token:
+        user.rol_id = decoded_token['rol_id']
+    if 'customer_id' in decoded_token:
+        user.customer_id = decoded_token['customer_id']
+    if 'school_id' in decoded_token:
+        user.school_id = decoded_token['school_id']
+    if 'teaching_id' in decoded_token:
+        user.teaching_id = decoded_token['teaching_id']
+    if 'course_id' in decoded_token:
+        user.course_id = decoded_token['course_id']
+
     return user
     
 def get_current_active_user(current_user: UserModel = Depends(get_current_user)):

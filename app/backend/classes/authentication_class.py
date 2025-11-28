@@ -21,8 +21,6 @@ class AuthenticationClass:
 
         response_data = json.loads(user)
 
-        print(response_data)
-
         if not self.verify_password(password, response_data["user_data"]["hashed_password"]):
             raise HTTPException(status_code=401, detail="Could not validate credentials", headers={"WWW-Authenticate": "Bearer"})
         
@@ -51,7 +49,6 @@ class AuthenticationClass:
 
         existing_user_data = user_inputs.dict(exclude_unset=True)
         for key, value in existing_user_data.items():
-            print(key, value)
             if key == 'hashed_password':
                 value = self.generate_bcrypt_hash(value)
             if hasattr(existing_user, key):
