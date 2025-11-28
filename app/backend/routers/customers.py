@@ -200,6 +200,7 @@ def edit(id: int, session_user: UserLogin = Depends(get_current_active_user), db
         }
     )
 
+@customers.delete("/{id}")
 @customers.delete("/delete/{id}")
 def delete(id: int, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
     result = CustomerClass(db).delete(id)
