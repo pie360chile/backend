@@ -1,5 +1,5 @@
 from app.backend.db.database import Base
-from sqlalchemy import Column, Integer, String, DateTime, Date, ForeignKey, Float, Boolean, Text, Numeric
+from sqlalchemy import Column, Integer, String, DateTime, Date, Time, ForeignKey, Float, Boolean, Text, Numeric
 from datetime import datetime
 
 class AccountTypeModel(Base):
@@ -615,5 +615,39 @@ class BirthCertificateDocumentModel(Base):
     student_id = Column(Integer)
     version_id = Column(Integer)
     birth_certificate = Column(String(255))
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+
+class MessageModel(Base):
+    __tablename__ = 'messages'
+
+    id = Column(Integer, primary_key=True)
+    customer_id = Column(Integer)
+    message_type_id = Column(Integer)
+    response_id = Column(Integer)
+    message_response_id = Column(Integer)
+    deleted_status_id = Column(Integer)
+    subject = Column(String(255))
+    message = Column(String(255))
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+
+class ActionIncidentModel(Base):
+    __tablename__ = 'actions_incidents'
+
+    id = Column(Integer, primary_key=True)
+    school_id = Column(Integer)
+    student_id = Column(Integer)
+    professional_id = Column(Integer)
+    action_incident_type_id = Column(Integer)
+    status_id = Column(Integer)
+    deleted_status_id = Column(Integer)
+    title = Column(String(255))
+    incident_date = Column(DateTime)
+    incident_time = Column(Time)
+    background = Column(Text)
+    conduct = Column(Text)
+    consequences = Column(Text)
+    recommendations = Column(Text)
     added_date = Column(DateTime)
     updated_date = Column(DateTime)

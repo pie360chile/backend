@@ -73,6 +73,32 @@ def index(student_item: StudentList, session_user: UserLogin = Depends(get_curre
         }
     )
 
+@students.post("/totals")
+def totals(session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
+    customer_id = session_user.customer_id if session_user else None
+    school_id = session_user.school_id if session_user else None
+    rol_id = session_user.rol_id if session_user else None
+    result = StudentClass(db).get_totals(customer_id=customer_id, school_id=school_id, rol_id=rol_id)
+
+    if isinstance(result, dict) and result.get("status") == "error":
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "status": 500,
+                "message": result.get("message", "Error getting totals"),
+                "data": None
+            }
+        )
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "status": 200,
+            "message": "Students totals retrieved successfully",
+            "data": result
+        }
+    )
+
 @students.post("/store")
 def store(
     student_item: StoreStudent,

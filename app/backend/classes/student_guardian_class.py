@@ -256,3 +256,30 @@ class StudentGuardianClass:
             self.db.rollback()
             error_message = str(e)
             return {"status": "error", "message": error_message}
+    
+    def get_totals(self, customer_id=None, school_id=None, rol_id=None):
+        try:
+            from app.backend.db.models import StudentModel, SchoolModel
+            
+            query = self.db.query(StudentGuardianModel)
+            
+            # Si rol_id = 1 (administrador), devolver todos sin filtrar
+            # Si es rol_id = 2, filtrar por customer_id
+            # Si es cualquier otro rol, filtrar por school_id
+            if rol_id == 2 and customer_id:
+                query = query.join(StudentModel, StudentGuardianModel.student_id == StudentModel.id)
+                query = query.join(SchoolModel, StudentModel.school_id == SchoolModel.id)
+                query = query.filter(StudentModel.deleted_status_id == 0)
+                query = query.filter(SchoolModel.customer_id == customer_id)
+            elif rol_id not in [1, 2] and school_id:
+                query = query.join(StudentModel, StudentGuardianModel.student_id == StudentModel.id)
+                query = query.filter(StudentModel.deleted_status_id == 0)
+                query = query.filter(StudentModel.school_id == school_id)
+            
+            total = query.count()
+            
+            return {"total": total}
+
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+

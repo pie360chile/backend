@@ -1,8 +1,8 @@
-from app.backend.db.models import UserModel
+from app.backend.db.models import UserModel, CustomerModel
 from fastapi import HTTPException
 from app.backend.auth.auth_user import pwd_context
 from app.backend.classes.user_class import UserClass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from typing import Union
 import os
 from jose import jwt
@@ -23,6 +23,15 @@ class AuthenticationClass:
 
         if not self.verify_password(password, response_data["user_data"]["hashed_password"]):
             raise HTTPException(status_code=401, detail="Could not validate credentials", headers={"WWW-Authenticate": "Bearer"})
+        
+        # Verificar licencia del customer si el usuario tiene customer_id (excepto rol_id 1)
+        rol_id = response_data["user_data"].get("rol_id")
+        customer_id = response_data["user_data"].get("customer_id")
+        if customer_id and rol_id != 1:
+            customer = self.db.query(CustomerModel).filter(CustomerModel.id == customer_id).first()
+            if customer and customer.license_time:
+                if customer.license_time < date.today():
+                    raise HTTPException(status_code=403, detail="La licencia ha expirado. Debe renovarla")
         
         return response_data
         

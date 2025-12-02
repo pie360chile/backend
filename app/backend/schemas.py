@@ -505,3 +505,57 @@ class StoreDocumentType(BaseModel):
 class UpdateDocumentType(BaseModel):
     document_type_id: Optional[int] = None
     document: Optional[str] = None
+
+# Message schemas
+class MessageList(BaseModel):
+    page: Optional[int] = None
+    per_page: int = 10
+    subject: Optional[str] = None
+    message_type_id: Optional[int] = None
+
+class StoreMessage(BaseModel):
+    message_type_id: int
+    response_id: Optional[int] = None
+    message_response_id: Optional[int] = None
+    subject: str
+    message: str
+
+class UpdateMessage(BaseModel):
+    message_type_id: Optional[int] = None
+    response_id: Optional[int] = None
+    message_response_id: Optional[int] = None
+    subject: Optional[str] = None
+    message: Optional[str] = None
+
+# Action Incident schemas
+class ActionIncidentList(BaseModel):
+    page: Optional[int] = None
+    per_page: int = 10
+    student_id: Optional[int] = None
+    title: Optional[str] = None
+
+class StoreActionIncident(BaseModel):
+    student_id: int
+    professional_id: Optional[int] = None
+    action_incident_type_id: int
+    status_id: Optional[int] = None
+    title: str
+    incident_date: Optional[str] = None
+    incident_time: Optional[str] = None
+    background: Optional[str] = None
+    conduct: Optional[str] = None
+    consequences: Optional[str] = None
+    recommendations: Optional[str] = None
+
+class UpdateActionIncident(BaseModel):
+    student_id: Optional[int] = None
+    professional_id: Optional[int] = None
+    action_incident_type_id: Optional[int] = None
+    status_id: Optional[int] = None
+    title: Optional[str] = None
+    incident_date: Optional[str] = None
+    incident_time: Optional[str] = None
+    background: Optional[str] = None
+    conduct: Optional[str] = None
+    consequences: Optional[str] = None
+    recommendations: Optional[str] = None

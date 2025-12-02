@@ -325,3 +325,26 @@ class ProfessionalClass:
         except Exception as e:
             self.db.rollback()
             return {"status": "error", "message": str(e)}
+    
+    def get_totals(self, customer_id=None, school_id=None, rol_id=None):
+        try:
+            from app.backend.db.models import SchoolModel
+            
+            query = self.db.query(ProfessionalModel)
+            
+            # Si rol_id = 1 (administrador), devolver todos sin filtrar
+            # Si es rol_id = 2, filtrar por customer_id
+            # Si es cualquier otro rol, filtrar por school_id
+            if rol_id == 2 and customer_id:
+                query = query.join(SchoolModel, ProfessionalModel.school_id == SchoolModel.id)
+                query = query.filter(SchoolModel.customer_id == customer_id)
+            elif rol_id not in [1, 2] and school_id:
+                query = query.filter(ProfessionalModel.school_id == school_id)
+            
+            total = query.count()
+            
+            return {"total": total}
+
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+

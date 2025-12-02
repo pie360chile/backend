@@ -6,11 +6,7 @@ class TeachingClass:
         self.db = db
 
     def get_all(self, page=0, items_per_page=10, school_id=None, teaching_name=None):
-        try:
-            print(f"========== DEBUG GET_ALL TEACHINGS ==========")
-            print(f"page: {page}, items_per_page: {items_per_page}")
-            print(f"school_id: {school_id}, teaching_name: {teaching_name}")
-            
+        try:        
             query = self.db.query(
                 TeachingModel.id,
                 TeachingModel.school_id,
