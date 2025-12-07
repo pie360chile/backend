@@ -46,6 +46,7 @@ class StudentClass:
             ).filter(StudentModel.deleted_status_id == 0)
 
             # Filtrar por school_id si se proporciona
+            print(f"DEBUG Students - school_id: {school_id}, course_id: {course_id}")
             if school_id:
                 query = query.filter(StudentModel.school_id == school_id)
 
@@ -61,6 +62,7 @@ class StudentClass:
             
             if course_id:
                 query = query.filter(StudentAcademicInfoModel.course_id == course_id)
+                print(f"DEBUG Students - Filtering by course_id: {course_id}")
 
             query = query.order_by(StudentModel.id.desc())
 
@@ -69,6 +71,7 @@ class StudentClass:
                     page = 1
 
                 total_items = query.count()
+                print(f"DEBUG Students - Total items found: {total_items}")
                 total_pages = (total_items + items_per_page - 1) // items_per_page if items_per_page else 0
 
                 if total_items == 0 or total_pages == 0 or page > total_pages:

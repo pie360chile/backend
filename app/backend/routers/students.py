@@ -6,6 +6,7 @@ from app.backend.schemas import UserLogin, StudentList, StoreStudent, UpdateStud
 from app.backend.classes.student_class import StudentClass
 from app.backend.auth.auth_user import get_current_active_user
 from app.backend.classes.school_class import SchoolClass
+from app.backend.db.models import ProfessionalModel, ProfessionalTeachingCourseModel
 
 students = APIRouter(
     prefix="/students",
@@ -18,16 +19,12 @@ def index(student_item: StudentList, session_user: UserLogin = Depends(get_curre
     
     # Obtener school_id del customer_id del usuario en sesión
     customer_id = session_user.customer_id if session_user else None
-    school_id = None
-    if customer_id:
+    school_id = session_user.school_id if session_user else None
+    
+    if customer_id and not school_id:
         schools_list = SchoolClass(db).get_all(page=0, customer_id=customer_id)
         if isinstance(schools_list, list) and len(schools_list) > 0:
             school_id = schools_list[0].get('id')
-    
-    # Si el usuario es profesional y tiene course_id en sesión, forzar ese filtro
-    course_id_to_filter = student_item.course_id
-    if hasattr(session_user, 'course_id') and session_user.course_id:
-        course_id_to_filter = session_user.course_id
     
     result = StudentClass(db).get_all(
         page=page_value, 
@@ -36,7 +33,7 @@ def index(student_item: StudentList, session_user: UserLogin = Depends(get_curre
         rut=student_item.rut,
         names=student_item.names,
         identification_number=student_item.identification_number,
-        course_id=course_id_to_filter
+        course_id=student_item.course_id
     )
 
     if isinstance(result, dict) and result.get("status") == "error":

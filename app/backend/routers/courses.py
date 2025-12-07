@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.backend.schemas import UserLogin, CourseList, StoreCourse, UpdateCourse
 from app.backend.classes.course_class import CourseClass
 from app.backend.classes.school_class import SchoolClass
-from app.backend.db.models import CourseModel
+from app.backend.db.models import CourseModel, ProfessionalModel, ProfessionalTeachingCourseModel
 from app.backend.auth.auth_user import get_current_active_user
 
 courses = APIRouter(
@@ -17,23 +17,42 @@ courses = APIRouter(
 def index(course: CourseList, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
     # Obtener school_id del customer_id del usuario en sesión
     customer_id = session_user.customer_id if session_user else None
-    school_id = None
-    if customer_id:
+    school_id = session_user.school_id if session_user else None
+    
+    if customer_id and not school_id:
         schools_list = SchoolClass(db).get_all(page=0, customer_id=customer_id)
         if isinstance(schools_list, list) and len(schools_list) > 0:
             school_id = schools_list[0].get('id')
     
-    # Si el usuario es profesional y tiene course_id en sesión, filtrar solo ese curso
-    course_id_filter = None
-    if hasattr(session_user, 'course_id') and session_user.course_id:
-        course_id_filter = session_user.course_id
-        # Obtener el curso usando CourseClass para incluir teaching_name y total_students
-        page_value = 0 if course.page is None else course.page
-        all_courses = CourseClass(db).get_all(page=page_value, items_per_page=course.per_page, school_id=school_id)
+    # Si el usuario es profesional, buscar sus cursos en professionals_teachings_courses
+    professional_course_ids = []
+    if session_user.rut:
+        # Buscar el profesional por rut
+        professional = db.query(ProfessionalModel).filter(
+            ProfessionalModel.identification_number == session_user.rut
+        ).first()
         
-        # Filtrar solo el curso del profesional
+        if professional:
+            # Buscar los cursos asignados al profesional
+            ptc_records = db.query(ProfessionalTeachingCourseModel).filter(
+                ProfessionalTeachingCourseModel.professional_id == professional.id,
+                ProfessionalTeachingCourseModel.deleted_status_id == 0
+            ).all()
+            
+            professional_course_ids = [ptc.course_id for ptc in ptc_records]
+            print(f"DEBUG - Professional ID: {professional.id}, Course IDs: {professional_course_ids}")
+
+    # Si el profesional tiene cursos asignados, filtrar solo esos cursos
+    if professional_course_ids:
+        page_value = 0 if course.page is None else course.page
+        # NO filtrar por school_id cuando es profesional, ya que sus cursos pueden estar en cualquier escuela
+        all_courses = CourseClass(db).get_all(page=page_value, items_per_page=course.per_page, school_id=None)
+        print(f"DEBUG - All courses type: {type(all_courses)}, Content: {all_courses if isinstance(all_courses, list) else 'dict'}")
+
+        # Filtrar solo los cursos del profesional
         if isinstance(all_courses, list):
-            course_data = [c for c in all_courses if c.get('id') == course_id_filter]
+            course_data = [c for c in all_courses if c.get('id') in professional_course_ids]
+            print(f"DEBUG - Filtered list: {course_data}")
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
                 content={
@@ -43,7 +62,11 @@ def index(course: CourseList, session_user: UserLogin = Depends(get_current_acti
                 }
             )
         elif isinstance(all_courses, dict) and 'data' in all_courses:
-            course_data = [c for c in all_courses['data'] if c.get('id') == course_id_filter]
+            available_course_ids = [c.get('id') for c in all_courses['data']]
+            print(f"DEBUG - Available course IDs in data: {available_course_ids}")
+            print(f"DEBUG - Looking for course IDs: {professional_course_ids}")
+            course_data = [c for c in all_courses['data'] if c.get('id') in professional_course_ids]
+            print(f"DEBUG - Filtered dict data: {course_data}")
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
                 content={
