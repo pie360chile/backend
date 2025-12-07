@@ -13,14 +13,16 @@ class FaqClass:
             if question:
                 query = query.filter(FaqModel.question.like(f'%{question}%'))
 
-            # Ordenar por fecha de creación descendente
-            query = query.order_by(FaqModel.added_date.desc())
+            # Ordenar por ID descendente (más reciente primero)
+            query = query.order_by(FaqModel.id.desc())
 
             # Contar total de registros
             total_items = query.count()
 
-            # Aplicar paginación
-            offset = page * items_per_page
+            # Aplicar paginación (page comienza en 1, no en 0)
+            if page is None or page < 1:
+                page = 1
+            offset = (page - 1) * items_per_page
             faqs = query.offset(offset).limit(items_per_page).all()
 
             if not faqs:
