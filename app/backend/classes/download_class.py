@@ -5,9 +5,13 @@ class DownloadClass:
     def __init__(self, db):
         self.db = db
 
-    def get_all(self, page=0, items_per_page=10, title=None):
+    def get_all(self, page=0, items_per_page=10, title=None, download_type_id=None):
         try:
             query = self.db.query(DownloadModel)
+
+            # Filtrar por download_type_id si se proporciona
+            if download_type_id is not None:
+                query = query.filter(DownloadModel.download_type_id == download_type_id)
 
             # Filtrar por título si se proporciona
             if title:
@@ -41,8 +45,12 @@ class DownloadClass:
             for download in downloads:
                 download_dict = {
                     "id": download.id,
+                    "download_type_id": download.download_type_id,
                     "title": download.title,
+                    "description": download.description,
                     "url": download.url,
+                    "tag": download.tag,
+                    "quantity": download.quantity,
                     "added_date": download.added_date.strftime('%Y-%m-%d %H:%M:%S') if download.added_date else None,
                     "updated_date": download.updated_date.strftime('%Y-%m-%d %H:%M:%S') if download.updated_date else None
                 }
@@ -76,8 +84,12 @@ class DownloadClass:
 
             download_dict = {
                 "id": download.id,
+                "download_type_id": download.download_type_id,
                 "title": download.title,
+                "description": download.description,
                 "url": download.url,
+                "tag": download.tag,
+                "quantity": download.quantity,
                 "added_date": download.added_date.strftime('%Y-%m-%d %H:%M:%S') if download.added_date else None,
                 "updated_date": download.updated_date.strftime('%Y-%m-%d %H:%M:%S') if download.updated_date else None
             }
@@ -93,8 +105,12 @@ class DownloadClass:
     def store(self, download_data):
         try:
             new_download = DownloadModel(
+                download_type_id=download_data.get('download_type_id'),
                 title=download_data.get('title'),
+                description=download_data.get('description'),
                 url=download_data.get('url'),
+                tag=download_data.get('tag'),
+                quantity=download_data.get('quantity'),
                 added_date=datetime.now(),
                 updated_date=datetime.now()
             )
@@ -131,11 +147,23 @@ class DownloadClass:
                 }
 
             # Actualizar campos
+            if download_data.get('download_type_id') is not None:
+                download.download_type_id = download_data.get('download_type_id')
+            
             if download_data.get('title') is not None:
                 download.title = download_data.get('title')
             
+            if download_data.get('description') is not None:
+                download.description = download_data.get('description')
+            
             if download_data.get('url') is not None:
                 download.url = download_data.get('url')
+            
+            if download_data.get('tag') is not None:
+                download.tag = download_data.get('tag')
+            
+            if download_data.get('quantity') is not None:
+                download.quantity = download_data.get('quantity')
 
             download.updated_date = datetime.now()
 

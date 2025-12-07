@@ -684,8 +684,12 @@ class DownloadModel(Base):
     __tablename__ = 'downloads'
 
     id = Column(Integer, primary_key=True)
+    download_type_id = Column(Integer)
     title = Column(String(255))
+    description = Column(Text)
     url = Column(String(255))
+    tag = Column(String(255))
+    quantity = Column(String(255))
     added_date = Column(DateTime)
     updated_date = Column(DateTime)
 
@@ -703,5 +707,24 @@ class CareerTypeModel(Base):
 
     id = Column(Integer, primary_key=True)
     career_type = Column(String(255))
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+
+class FaqModel(Base):
+    __tablename__ = 'faqs'
+
+    id = Column(Integer, primary_key=True)
+    question = Column(Text)
+    answer = Column(Text)
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+
+class SettingCompanyModel(Base):
+    __tablename__ = 'company_settings'
+
+    id = Column(Integer, primary_key=True)
+    company_email = Column(String(255))
+    company_phone = Column(String(255))
+    company_whatsapp = Column(String(255))
     added_date = Column(DateTime)
     updated_date = Column(DateTime)

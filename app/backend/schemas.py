@@ -594,14 +594,23 @@ class DownloadList(BaseModel):
     page: Optional[int] = None
     per_page: int = 10
     title: Optional[str] = None
+    download_type_id: Optional[int] = None
 
 class StoreDownload(BaseModel):
+    download_type_id: int
     title: str
+    description: Optional[str] = None
     url: str
+    tag: Optional[str] = None
+    quantity: Optional[str] = None
 
 class UpdateDownload(BaseModel):
+    download_type_id: Optional[int] = None
     title: Optional[str] = None
+    description: Optional[str] = None
     url: Optional[str] = None
+    tag: Optional[str] = None
+    quantity: Optional[str] = None
 
 # Video schemas
 class VideoList(BaseModel):
@@ -628,3 +637,32 @@ class StoreCareerType(BaseModel):
 
 class UpdateCareerType(BaseModel):
     career_type: Optional[str] = None
+
+# FAQ schemas
+class FaqList(BaseModel):
+    page: Optional[int] = None
+    per_page: int = 10
+    question: Optional[str] = None
+
+class StoreFaq(BaseModel):
+    question: str
+    answer: str
+
+class UpdateFaq(BaseModel):
+    question: Optional[str] = None
+    answer: Optional[str] = None
+
+# Settings schemas  
+class SettingList(BaseModel):
+    page: Optional[int] = None
+    per_page: int = 10
+
+class StoreSetting(BaseModel):
+    company_email: str
+    company_phone: str
+    company_whatsapp: str
+
+class UpdateSetting(BaseModel):
+    company_email: Optional[str] = None
+    company_phone: Optional[str] = None
+    company_whatsapp: Optional[str] = None
