@@ -14,19 +14,9 @@ class SettingModel(Base):
     __tablename__ = 'settings'
 
     id = Column(Integer, primary_key=True)
-    tax_value = Column(String(255))
-    identification_number = Column(String(255))
-    account_type = Column(String(255))
-    account_number = Column(String(255))
-    account_name = Column(String(255))
-    account_email = Column(String(255))
-    bank = Column(String(255))
-    delivery_cost = Column(Integer)
-    simplefactura_token = Column(Text())
-    shop_address = Column(String(255))
-    payment_card_url = Column(String(255))
-    prepaid_discount = Column(Integer)
-    phone = Column(String(255))
+    company_email = Column(String(255))
+    company_phone = Column(String(255))
+    company_whatsapp = Column(String(255))
     updated_date = Column(DateTime())
 
 class ShoppingModel(Base):
@@ -716,15 +706,5 @@ class FaqModel(Base):
     id = Column(Integer, primary_key=True)
     question = Column(Text)
     answer = Column(Text)
-    added_date = Column(DateTime)
-    updated_date = Column(DateTime)
-
-class SettingCompanyModel(Base):
-    __tablename__ = 'company_settings'
-
-    id = Column(Integer, primary_key=True)
-    company_email = Column(String(255))
-    company_phone = Column(String(255))
-    company_whatsapp = Column(String(255))
     added_date = Column(DateTime)
     updated_date = Column(DateTime)

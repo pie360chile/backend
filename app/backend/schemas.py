@@ -91,18 +91,21 @@ class UpdatePermission(BaseModel):
 
 # Settings schemas
 class UpdateSettings(BaseModel):
-    tax_value: int
-    identification_number: str
-    account_type: str
-    account_number: str
-    account_name: str
-    account_email: str
-    bank: str
-    delivery_cost: int
-    shop_address: str
-    payment_card_url: str
-    prepaid_discount: Optional[int] = 0
-    phone: str
+    tax_value: int = None
+    identification_number: str = None
+    account_type: str = None
+    account_number: str = None
+    account_name: str = None
+    account_email: str = None
+    bank: str = None
+    delivery_cost: int = None
+    shop_address: str = None
+    payment_card_url: str = None
+    prepaid_discount: Optional[int] = None
+    phone: str = None
+    company_email: Optional[str] = None
+    company_phone: Optional[str] = None
+    company_whatsapp: Optional[str] = None
 
 # Teaching schemas
 class TeachingList(BaseModel):
@@ -651,18 +654,3 @@ class StoreFaq(BaseModel):
 class UpdateFaq(BaseModel):
     question: Optional[str] = None
     answer: Optional[str] = None
-
-# Settings schemas  
-class SettingList(BaseModel):
-    page: Optional[int] = None
-    per_page: int = 10
-
-class StoreSetting(BaseModel):
-    company_email: str
-    company_phone: str
-    company_whatsapp: str
-
-class UpdateSetting(BaseModel):
-    company_email: Optional[str] = None
-    company_phone: Optional[str] = None
-    company_whatsapp: Optional[str] = None

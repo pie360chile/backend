@@ -57,39 +57,3 @@ def edit(id: int, db: Session = Depends(get_db)):
             "data": result
         }
     )
-
-@settings.get("/get_token")
-def get_token(db: Session = Depends(get_db)):
-    result = SettingClass(db).get_simplefactura_token()
-
-    if isinstance(result, dict) and result.get("error"):
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={
-                "status": 500,
-                "message": result.get("error", "Error getting token"),
-                "data": None
-            }
-        )
-
-    return JSONResponse(
-        status_code=status.HTTP_200_OK,
-        content={
-            "status": 200,
-            "message": "Token retrieved successfully",
-            "data": {"token": result}
-        }
-    )
-
-@settings.get("/validate_token")
-def validate_token(db: Session = Depends(get_db)):
-    result = SettingClass(db).validate_token()
-
-    return JSONResponse(
-        status_code=status.HTTP_200_OK,
-        content={
-            "status": 200,
-            "message": "Token validation completed",
-            "data": {"valid": result == 1, "result": result}
-        }
-    )
