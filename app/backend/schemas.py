@@ -570,28 +570,6 @@ class UpdateActionIncident(BaseModel):
     recommendations: Optional[str] = None
 
 # Meeting schemas
-class MeetingList(BaseModel):
-    page: Optional[int] = None
-    per_page: int = 10
-    schedule_id: Optional[int] = None
-    names: Optional[str] = None
-
-class StoreMeeting(BaseModel):
-    schedule_id: int
-    names: str
-    lastnames: str
-    email: str
-    celphone: Optional[str] = None
-    reason: Optional[str] = None
-
-class UpdateMeeting(BaseModel):
-    schedule_id: Optional[int] = None
-    names: Optional[str] = None
-    lastnames: Optional[str] = None
-    email: Optional[str] = None
-    celphone: Optional[str] = None
-    reason: Optional[str] = None
-
 # Download schemas
 class DownloadList(BaseModel):
     page: Optional[int] = None
@@ -661,9 +639,11 @@ class ContactList(BaseModel):
     per_page: int = 10
     names: Optional[str] = None
     subject_type_id: Optional[int] = None
+    schedule_type_id: Optional[int] = None
 
 class StoreContact(BaseModel):
     subject_type_id: int
+    schedule_type_id: int
     names: str
     lastnames: str
     email: str
@@ -672,6 +652,7 @@ class StoreContact(BaseModel):
 
 class UpdateContact(BaseModel):
     subject_type_id: Optional[int] = None
+    schedule_type_id: Optional[int] = None
     names: Optional[str] = None
     lastnames: Optional[str] = None
     email: Optional[str] = None

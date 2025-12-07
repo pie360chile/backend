@@ -36,7 +36,6 @@ from app.backend.routers.special_educational_needs import special_educational_ne
 from app.backend.routers.document_types import document_types
 from app.backend.routers.messages import messages
 from app.backend.routers.actions_incidents import actions_incidents
-from app.backend.routers.meetings import meetings
 from app.backend.routers.downloads import downloads
 from app.backend.routers.videos import videos
 from app.backend.routers.career_types import career_types
@@ -122,7 +121,6 @@ app.include_router(special_educational_needs)
 app.include_router(document_types)
 app.include_router(messages)
 app.include_router(actions_incidents)
-app.include_router(meetings)
 app.include_router(downloads)
 app.include_router(videos)
 app.include_router(career_types)

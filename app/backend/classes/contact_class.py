@@ -5,7 +5,7 @@ class ContactClass:
     def __init__(self, db):
         self.db = db
 
-    def get_all(self, page=0, items_per_page=10, names=None, subject_type_id=None):
+    def get_all(self, page=0, items_per_page=10, names=None, subject_type_id=None, schedule_type_id=None):
         try:
             query = self.db.query(ContactModel)
 
@@ -15,6 +15,9 @@ class ContactClass:
             
             if subject_type_id:
                 query = query.filter(ContactModel.subject_type_id == subject_type_id)
+            
+            if schedule_type_id:
+                query = query.filter(ContactModel.schedule_type_id == schedule_type_id)
 
             # Ordenar por fecha de creación descendente
             query = query.order_by(ContactModel.added_date.desc())
@@ -45,6 +48,7 @@ class ContactClass:
                 contact_dict = {
                     "id": contact.id,
                     "subject_type_id": contact.subject_type_id,
+                    "schedule_type_id": contact.schedule_type_id,
                     "names": contact.names,
                     "lastnames": contact.lastnames,
                     "email": contact.email,
@@ -84,6 +88,7 @@ class ContactClass:
             contact_dict = {
                 "id": contact.id,
                 "subject_type_id": contact.subject_type_id,
+                "schedule_type_id": contact.schedule_type_id,
                 "names": contact.names,
                 "lastnames": contact.lastnames,
                 "email": contact.email,
@@ -105,6 +110,7 @@ class ContactClass:
         try:
             new_contact = ContactModel(
                 subject_type_id=contact_data.get('subject_type_id'),
+                schedule_type_id=contact_data.get('schedule_type_id'),
                 names=contact_data.get('names'),
                 lastnames=contact_data.get('lastnames'),
                 email=contact_data.get('email'),
@@ -148,6 +154,9 @@ class ContactClass:
             # Actualizar campos
             if contact_data.get('subject_type_id') is not None:
                 contact.subject_type_id = contact_data.get('subject_type_id')
+            
+            if contact_data.get('schedule_type_id') is not None:
+                contact.schedule_type_id = contact_data.get('schedule_type_id')
             
             if contact_data.get('names') is not None:
                 contact.names = contact_data.get('names')

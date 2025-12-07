@@ -644,19 +644,6 @@ class ActionIncidentModel(Base):
     added_date = Column(DateTime)
     updated_date = Column(DateTime)
 
-class MeetingModel(Base):
-    __tablename__ = 'meetings'
-
-    id = Column(Integer, primary_key=True)
-    schedule_id = Column(Integer)
-    names = Column(String(255))
-    lastnames = Column(String(255))
-    email = Column(String(255))
-    celphone = Column(String(255))
-    reason = Column(Text)
-    added_date = Column(DateTime)
-    updated_date = Column(DateTime)
-
 class ScheduleModel(Base):
     __tablename__ = 'schedules'
 
@@ -714,6 +701,7 @@ class ContactModel(Base):
 
     id = Column(Integer, primary_key=True)
     subject_type_id = Column(Integer)
+    schedule_type_id = Column(Integer)
     names = Column(String(255))
     lastnames = Column(String(255))
     email = Column(String(255))

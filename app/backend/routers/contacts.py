@@ -22,7 +22,8 @@ async def get_contacts(
             page=request.page,
             items_per_page=request.per_page,
             names=request.names,
-            subject_type_id=request.subject_type_id
+            subject_type_id=request.subject_type_id,
+            schedule_type_id=request.schedule_type_id
         )
         
         if result.get("status") == "error":
@@ -58,6 +59,7 @@ async def store_contact(
     try:
         contact_data = {
             "subject_type_id": request.subject_type_id,
+            "schedule_type_id": request.schedule_type_id,
             "names": request.names,
             "lastnames": request.lastnames,
             "email": request.email,
@@ -87,6 +89,9 @@ async def update_contact(
         
         if request.subject_type_id is not None:
             contact_data["subject_type_id"] = request.subject_type_id
+        
+        if request.schedule_type_id is not None:
+            contact_data["schedule_type_id"] = request.schedule_type_id
         
         if request.names is not None:
             contact_data["names"] = request.names
