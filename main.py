@@ -41,6 +41,7 @@ from app.backend.routers.downloads import downloads
 from app.backend.routers.videos import videos
 from app.backend.routers.career_types import career_types
 from app.backend.routers.faqs import faqs
+from app.backend.routers.contacts import contacts
 
 app = FastAPI(root_path="/api")
 application = app
@@ -126,6 +127,7 @@ app.include_router(downloads)
 app.include_router(videos)
 app.include_router(career_types)
 app.include_router(faqs)
+app.include_router(contacts)
 
 if __name__ == "__main__":
     # Para aumentar el límite de tamaño de archivo, configurar en el servidor

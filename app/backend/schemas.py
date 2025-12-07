@@ -654,3 +654,26 @@ class StoreFaq(BaseModel):
 class UpdateFaq(BaseModel):
     question: Optional[str] = None
     answer: Optional[str] = None
+
+# Contact schemas
+class ContactList(BaseModel):
+    page: Optional[int] = None
+    per_page: int = 10
+    names: Optional[str] = None
+    subject_type_id: Optional[int] = None
+
+class StoreContact(BaseModel):
+    subject_type_id: int
+    names: str
+    lastnames: str
+    email: str
+    celphone: Optional[str] = None
+    message: str
+
+class UpdateContact(BaseModel):
+    subject_type_id: Optional[int] = None
+    names: Optional[str] = None
+    lastnames: Optional[str] = None
+    email: Optional[str] = None
+    celphone: Optional[str] = None
+    message: Optional[str] = None

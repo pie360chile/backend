@@ -708,3 +708,16 @@ class FaqModel(Base):
     answer = Column(Text)
     added_date = Column(DateTime)
     updated_date = Column(DateTime)
+
+class ContactModel(Base):
+    __tablename__ = 'contacts'
+
+    id = Column(Integer, primary_key=True)
+    subject_type_id = Column(Integer)
+    names = Column(String(255))
+    lastnames = Column(String(255))
+    email = Column(String(255))
+    celphone = Column(String(255))
+    message = Column(Text)
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
