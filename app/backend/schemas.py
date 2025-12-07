@@ -456,8 +456,8 @@ class StoreProfessional(BaseModel):
     phone: str
     rol_id: int
     password: str
-    course_id: Optional[int] = None
-    teaching_id: Optional[int] = None
+    course_id: Optional[List[int]] = None
+    teaching_id: Optional[List[int]] = None
     career_type_id: Optional[int] = None
 
 class UpdateProfessional(BaseModel):
@@ -469,8 +469,8 @@ class UpdateProfessional(BaseModel):
     birth_date: Optional[str] = None
     address: Optional[str] = None
     phone: Optional[str] = None
-    course_id: Optional[int] = None
-    teaching_id: Optional[int] = None
+    course_id: Optional[List[int]] = None
+    teaching_id: Optional[List[int]] = None
     career_type_id: Optional[int] = None
 
 # Package schemas

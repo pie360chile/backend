@@ -156,12 +156,19 @@ class ProfessionalClass:
                 except:
                     pass
 
+            # Obtener el primer elemento de los arrays para guardar en professionals
+            teaching_ids = professional_inputs.get('teaching_id', [])
+            course_ids = professional_inputs.get('course_id', [])
+            
+            first_teaching_id = teaching_ids[0] if teaching_ids and len(teaching_ids) > 0 else None
+            first_course_id = course_ids[0] if course_ids and len(course_ids) > 0 else None
+
             # Crear el profesional
             new_professional = ProfessionalModel(
                 school_id=school_id,
                 rol_id=professional_inputs.get('rol_id'),
-                course_id=professional_inputs.get('course_id'),
-                teaching_id=professional_inputs.get('teaching_id'),
+                course_id=first_course_id,
+                teaching_id=first_teaching_id,
                 career_type_id=professional_inputs.get('career_type_id'),
                 identification_number=professional_inputs.get('identification_number'),
                 names=professional_inputs.get('names'),
@@ -203,17 +210,19 @@ class ProfessionalClass:
             self.db.add(new_user)
             self.db.flush()
 
-            # Crear registro en professionals_teachings_courses solo si ambos teaching_id Y course_id no son vacíos
-            if professional_inputs.get('teaching_id') and professional_inputs.get('course_id'):
-                new_ptc = ProfessionalTeachingCourseModel(
-                    professional_id=new_professional.id,
-                    teaching_id=professional_inputs.get('teaching_id'),
-                    course_id=professional_inputs.get('course_id'),
-                    deleted_status_id=0,
-                    added_date=datetime.now(),
-                    updated_date=datetime.now()
-                )
-                self.db.add(new_ptc)
+            # Crear registros en professionals_teachings_courses para cada combinación
+            if teaching_ids and course_ids:
+                for teaching_id in teaching_ids:
+                    for course_id in course_ids:
+                        new_ptc = ProfessionalTeachingCourseModel(
+                            professional_id=new_professional.id,
+                            teaching_id=teaching_id,
+                            course_id=course_id,
+                            deleted_status_id=0,
+                            added_date=datetime.now(),
+                            updated_date=datetime.now()
+                        )
+                        self.db.add(new_ptc)
 
             self.db.commit()
             self.db.refresh(new_professional)
@@ -288,39 +297,39 @@ class ProfessionalClass:
                 existing_user.updated_date = datetime.now()
 
             # Actualizar professionals_teachings_courses
-            teaching_id = professional_inputs.get('teaching_id')
-            course_id = professional_inputs.get('course_id')
+            teaching_ids = professional_inputs.get('teaching_id', [])
+            course_ids = professional_inputs.get('course_id', [])
             
-            # Buscar registro existente
-            existing_ptc = self.db.query(ProfessionalTeachingCourseModel).filter(
-                ProfessionalTeachingCourseModel.professional_id == id,
-                ProfessionalTeachingCourseModel.deleted_status_id == 0
-            ).first()
+            # Actualizar el primer elemento en la tabla professionals si hay arrays
+            if teaching_ids and len(teaching_ids) > 0:
+                existing_professional.teaching_id = teaching_ids[0]
+            if course_ids and len(course_ids) > 0:
+                existing_professional.course_id = course_ids[0]
             
-            # Si ambos teaching_id Y course_id tienen valor (no vacíos), actualizar o crear
-            if teaching_id and course_id:
-                if existing_ptc:
-                    # Actualizar existente
-                    existing_ptc.teaching_id = teaching_id
-                    existing_ptc.course_id = course_id
-                    existing_ptc.updated_date = datetime.now()
-                else:
-                    # Crear nuevo registro
-                    new_ptc = ProfessionalTeachingCourseModel(
-                        professional_id=id,
-                        teaching_id=teaching_id,
-                        course_id=course_id,
-                        deleted_status_id=0,
-                        added_date=datetime.now(),
-                        updated_date=datetime.now()
-                    )
-                    self.db.add(new_ptc)
-            else:
-                # Si alguno de los dos está vacío (cambió a coordinador u otro rol sin curso/enseñanza)
-                # y existe un registro, marcarlo como eliminado
-                if existing_ptc:
-                    existing_ptc.deleted_status_id = 1
-                    existing_ptc.updated_date = datetime.now()
+            # Si se proporcionan teaching_ids y course_ids, actualizar la tabla de relaciones
+            if teaching_ids is not None and course_ids is not None:
+                # Marcar todos los registros existentes como eliminados
+                self.db.query(ProfessionalTeachingCourseModel).filter(
+                    ProfessionalTeachingCourseModel.professional_id == id,
+                    ProfessionalTeachingCourseModel.deleted_status_id == 0
+                ).update({
+                    "deleted_status_id": 1,
+                    "updated_date": datetime.now()
+                }, synchronize_session=False)
+                
+                # Crear nuevos registros para cada combinación
+                if teaching_ids and course_ids:
+                    for teaching_id in teaching_ids:
+                        for course_id in course_ids:
+                            new_ptc = ProfessionalTeachingCourseModel(
+                                professional_id=id,
+                                teaching_id=teaching_id,
+                                course_id=course_id,
+                                deleted_status_id=0,
+                                added_date=datetime.now(),
+                                updated_date=datetime.now()
+                            )
+                            self.db.add(new_ptc)
 
             self.db.commit()
             self.db.refresh(existing_professional)
