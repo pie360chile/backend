@@ -28,6 +28,12 @@ def index(course: CourseList, session_user: UserLogin = Depends(get_current_acti
     professional_course_ids = []
     if session_user.rut:
         # Buscar el profesional por rut
+        print(f"DEBUG - Buscando profesional con RUT: '{session_user.rut}'")
+        all_professionals = db.query(ProfessionalModel).filter(
+            ProfessionalModel.identification_number == session_user.rut
+        ).all()
+        print(f"DEBUG - Profesionales encontrados: {[(p.id, p.identification_number, p.names) for p in all_professionals]}")
+        
         professional = db.query(ProfessionalModel).filter(
             ProfessionalModel.identification_number == session_user.rut
         ).first()
@@ -39,20 +45,20 @@ def index(course: CourseList, session_user: UserLogin = Depends(get_current_acti
                 ProfessionalTeachingCourseModel.deleted_status_id == 0
             ).all()
             
+            print(f"DEBUG - Professional ID: {professional.id}, PTC records: {[(r.id, r.teaching_id, r.course_id, r.deleted_status_id) for r in ptc_records]}")
+            
             professional_course_ids = [ptc.course_id for ptc in ptc_records]
-            print(f"DEBUG - Professional ID: {professional.id}, Course IDs: {professional_course_ids}")
+            print(f"DEBUG - Extracted course IDs: {professional_course_ids}")
 
     # Si el profesional tiene cursos asignados, filtrar solo esos cursos
     if professional_course_ids:
         page_value = 0 if course.page is None else course.page
         # NO filtrar por school_id cuando es profesional, ya que sus cursos pueden estar en cualquier escuela
         all_courses = CourseClass(db).get_all(page=page_value, items_per_page=course.per_page, school_id=None)
-        print(f"DEBUG - All courses type: {type(all_courses)}, Content: {all_courses if isinstance(all_courses, list) else 'dict'}")
 
         # Filtrar solo los cursos del profesional
         if isinstance(all_courses, list):
             course_data = [c for c in all_courses if c.get('id') in professional_course_ids]
-            print(f"DEBUG - Filtered list: {course_data}")
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
                 content={
@@ -63,10 +69,7 @@ def index(course: CourseList, session_user: UserLogin = Depends(get_current_acti
             )
         elif isinstance(all_courses, dict) and 'data' in all_courses:
             available_course_ids = [c.get('id') for c in all_courses['data']]
-            print(f"DEBUG - Available course IDs in data: {available_course_ids}")
-            print(f"DEBUG - Looking for course IDs: {professional_course_ids}")
             course_data = [c for c in all_courses['data'] if c.get('id') in professional_course_ids]
-            print(f"DEBUG - Filtered dict data: {course_data}")
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
                 content={

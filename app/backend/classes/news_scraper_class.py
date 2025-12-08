@@ -34,7 +34,6 @@ class NewsScraperClass:
             mes = meses.get(mes_str, 1)
             
             result = datetime(anio, mes, dia)
-            print(f"DEBUG - Fecha parseada: '{date_str}' -> día={dia}, mes={mes} ({mes_str}), año={anio} -> resultado={result}")
             
             return result
         except Exception as e:

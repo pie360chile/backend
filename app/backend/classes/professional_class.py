@@ -13,8 +13,6 @@ class ProfessionalClass:
                 ProfessionalModel.id,
                 ProfessionalModel.school_id,
                 ProfessionalModel.rol_id,
-                ProfessionalModel.course_id,
-                ProfessionalModel.teaching_id,
                 ProfessionalModel.career_type_id,
                 ProfessionalModel.identification_number,
                 ProfessionalModel.names,
@@ -94,8 +92,6 @@ class ProfessionalClass:
                     "school_id": professional.school_id,
                     "rol_id": professional.rol_id,
                     "rol_name": professional.rol_name,
-                    "course_id": professional.course_id,
-                    "teaching_id": professional.teaching_id,
                     "career_type_id": professional.career_type_id,
                     "identification_number": professional.identification_number,
                     "names": professional.names,
@@ -156,19 +152,14 @@ class ProfessionalClass:
                 except:
                     pass
 
-            # Obtener el primer elemento de los arrays para guardar en professionals
+            # Obtener los arrays para crear registros en professionals_teachings_courses
             teaching_ids = professional_inputs.get('teaching_id', [])
             course_ids = professional_inputs.get('course_id', [])
-            
-            first_teaching_id = teaching_ids[0] if teaching_ids and len(teaching_ids) > 0 else None
-            first_course_id = course_ids[0] if course_ids and len(course_ids) > 0 else None
 
             # Crear el profesional
             new_professional = ProfessionalModel(
                 school_id=school_id,
                 rol_id=professional_inputs.get('rol_id'),
-                course_id=first_course_id,
-                teaching_id=first_teaching_id,
                 career_type_id=professional_inputs.get('career_type_id'),
                 identification_number=professional_inputs.get('identification_number'),
                 names=professional_inputs.get('names'),
@@ -299,12 +290,6 @@ class ProfessionalClass:
             # Actualizar professionals_teachings_courses
             teaching_ids = professional_inputs.get('teaching_id', [])
             course_ids = professional_inputs.get('course_id', [])
-            
-            # Actualizar el primer elemento en la tabla professionals si hay arrays
-            if teaching_ids and len(teaching_ids) > 0:
-                existing_professional.teaching_id = teaching_ids[0]
-            if course_ids and len(course_ids) > 0:
-                existing_professional.course_id = course_ids[0]
             
             # Si se proporcionan teaching_ids y course_ids, actualizar la tabla de relaciones
             if teaching_ids is not None and course_ids is not None:

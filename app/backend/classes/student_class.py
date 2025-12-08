@@ -45,9 +45,9 @@ class StudentClass:
                 StudentModel.id == StudentPersonalInfoModel.student_id
             ).filter(StudentModel.deleted_status_id == 0)
 
-            # Filtrar por school_id si se proporciona
-            print(f"DEBUG Students - school_id: {school_id}, course_id: {course_id}")
-            if school_id:
+            # Filtrar por school_id solo si NO se proporciona course_id
+            # Si hay course_id, el profesional debe ver todos los estudiantes de ese curso sin importar la escuela
+            if school_id and not course_id:
                 query = query.filter(StudentModel.school_id == school_id)
 
             # Aplicar filtros de búsqueda
@@ -62,7 +62,6 @@ class StudentClass:
             
             if course_id:
                 query = query.filter(StudentAcademicInfoModel.course_id == course_id)
-                print(f"DEBUG Students - Filtering by course_id: {course_id}")
 
             query = query.order_by(StudentModel.id.desc())
 
@@ -71,7 +70,6 @@ class StudentClass:
                     page = 1
 
                 total_items = query.count()
-                print(f"DEBUG Students - Total items found: {total_items}")
                 total_pages = (total_items + items_per_page - 1) // items_per_page if items_per_page else 0
 
                 if total_items == 0 or total_pages == 0 or page > total_pages:
@@ -327,8 +325,6 @@ class StudentClass:
 
     def update(self, id, student_inputs):
         try:
-            print(f"[DEBUG StudentClass.update] ID: {id}, Inputs: {student_inputs}")
-            
             existing_student = self.db.query(StudentModel).filter(
                 StudentModel.id == id
             ).one_or_none()
@@ -377,14 +373,12 @@ class StudentClass:
             # Actualizar información personal
             if 'personal_data' in student_inputs and student_inputs['personal_data']:
                 personal_data = student_inputs['personal_data']
-                print(f"[DEBUG] Actualizando personal_data: {personal_data}")
                 
                 existing_personal = self.db.query(StudentPersonalInfoModel).filter(
                     StudentPersonalInfoModel.student_id == id
                 ).first()
 
                 if existing_personal:
-                    print(f"[DEBUG] Encontrado registro personal existente con ID: {existing_personal.id}")
                     # Actualizar registro existente
                     if 'region_id' in personal_data:
                         existing_personal.region_id = personal_data['region_id']
@@ -420,10 +414,7 @@ class StudentClass:
                         existing_personal.native_language = personal_data['native_language']
                     if 'language_usually_used' in personal_data:
                         existing_personal.language_usually_used = personal_data['language_usually_used']
-                    
-                    print(f"[DEBUG] Campos actualizados en personal_data")
                 else:
-                    print(f"[DEBUG] No existe registro personal, creando uno nuevo")
                     # Crear nuevo registro
                     new_personal = StudentPersonalInfoModel(
                         student_id=id,
@@ -446,13 +437,9 @@ class StudentClass:
                         language_usually_used=personal_data.get('language_usually_used')
                     )
                     self.db.add(new_personal)
-            else:
-                print(f"[DEBUG] No hay personal_data en student_inputs")
 
             self.db.commit()
             self.db.refresh(existing_student)
-            
-            print(f"[DEBUG] Commit exitoso, estudiante actualizado")
 
             return {"status": "success", "message": "Student updated successfully"}
 
