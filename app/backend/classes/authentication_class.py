@@ -8,6 +8,9 @@ import os
 from jose import jwt
 import json
 import bcrypt
+from argon2 import PasswordHasher
+
+argon2_hasher = PasswordHasher()
 
 class AuthenticationClass:
     def __init__(self, db):
@@ -36,7 +39,12 @@ class AuthenticationClass:
         return response_data
         
     def verify_password(self, plain_password, hashed_password):
-        return pwd_context.verify(plain_password, hashed_password)
+        """
+        Verifica una contraseña contra un hash.
+        Soporta tanto Argon2 como bcrypt.
+        """
+        from app.backend.auth.auth_user import verify_password
+        return verify_password(plain_password, hashed_password)
     
     def create_token(self, data: dict, time_expire: Union[datetime, None] = None):
         data_copy = data.copy()
@@ -59,7 +67,9 @@ class AuthenticationClass:
         existing_user_data = user_inputs.dict(exclude_unset=True)
         for key, value in existing_user_data.items():
             if key == 'hashed_password':
-                value = self.generate_bcrypt_hash(value)
+                # Solo hashear si no es ya un hash (no empieza con $2)
+                if not (isinstance(value, str) and value.startswith('$2')):
+                    value = self.generate_bcrypt_hash(value)
             if hasattr(existing_user, key):
                 setattr(existing_user, key, value)
 
@@ -68,10 +78,26 @@ class AuthenticationClass:
         return 1
         
     def generate_bcrypt_hash(self, input_string):
-        encoded_string = input_string.encode('utf-8')
-
-        salt = bcrypt.gensalt()
-
-        hashed_string = bcrypt.hashpw(encoded_string, salt)
-
-        return hashed_string
+        """
+        Genera un hash de contraseña usando Argon2 (sin límite de 72 bytes).
+        Si el input ya es un hash, lo devuelve directamente.
+        """
+        # Si ya es un hash (empieza con $2 para bcrypt o $argon2 para Argon2), devolverlo directamente
+        if isinstance(input_string, str) and (input_string.startswith('$2') or input_string.startswith('$argon2')):
+            return input_string
+        
+        # Usar Argon2 que no tiene límite de 72 bytes
+        try:
+            hashed_string = argon2_hasher.hash(input_string)
+            return hashed_string
+        except Exception as e:
+            # Fallback a bcrypt si Argon2 falla (para compatibilidad)
+            if len(input_string) > 72:
+                import hashlib
+                sha256_hash = hashlib.sha256(input_string.encode('utf-8')).hexdigest()
+                input_string = sha256_hash
+            
+            encoded_string = input_string.encode('utf-8')
+            salt = bcrypt.gensalt()
+            hashed_string = bcrypt.hashpw(encoded_string, salt)
+            return hashed_string.decode('utf-8')

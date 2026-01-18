@@ -206,7 +206,8 @@ class UserClass:
                 return {"status": "error", "message": "Current password is required to change password"}
             
             # Verificar que el current_password coincida con el hashed_password
-            if not pwd_context.verify(form_data['current_password'], user.hashed_password):
+            from app.backend.auth.auth_user import verify_password
+            if not verify_password(form_data['current_password'], user.hashed_password):
                 return {"status": "error", "message": "Current password is incorrect"}
             
             # Actualizar la contraseña

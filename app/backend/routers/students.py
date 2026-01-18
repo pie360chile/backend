@@ -6,7 +6,7 @@ from app.backend.schemas import UserLogin, StudentList, StoreStudent, UpdateStud
 from app.backend.classes.student_class import StudentClass
 from app.backend.auth.auth_user import get_current_active_user
 from app.backend.classes.school_class import SchoolClass
-from app.backend.db.models import ProfessionalModel, ProfessionalTeachingCourseModel
+from app.backend.db.models import ProfessionalModel, ProfessionalTeachingCourseModel, CourseModel, SchoolModel
 
 students = APIRouter(
     prefix="/students",
@@ -149,6 +149,35 @@ def edit(id: int, session_user: UserLogin = Depends(get_current_active_user), db
                 "data": None
             }
         )
+
+    # Obtener nombre del curso y nombre del colegio
+    student_data = result.get("student_data", {}) if isinstance(result, dict) else {}
+    academic_info = student_data.get("academic_info", {}) if student_data else {}
+    course_id = academic_info.get("course_id") if academic_info else None
+    school_id = student_data.get("school_id") if student_data else None
+    
+    course_name = None
+    school_name = None
+    
+    # Obtener nombre del curso
+    if course_id:
+        course = db.query(CourseModel).filter(CourseModel.id == course_id).first()
+        if course:
+            course_name = course.course_name
+    
+    # Obtener nombre del colegio
+    if school_id:
+        school = db.query(SchoolModel).filter(SchoolModel.id == school_id).first()
+        if school:
+            school_name = school.school_name
+    
+    # Agregar course_name y school_name al resultado
+    if isinstance(result, dict) and result.get("student_data"):
+        if result["student_data"].get("academic_info"):
+            result["student_data"]["academic_info"]["course_name"] = course_name
+        else:
+            result["student_data"]["academic_info"] = {"course_name": course_name}
+        result["student_data"]["school_name"] = school_name
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,

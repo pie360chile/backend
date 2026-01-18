@@ -2,6 +2,37 @@ from app.backend.db.database import Base
 from sqlalchemy import Column, Integer, String, DateTime, Date, Time, ForeignKey, Float, Boolean, Text, Numeric
 from datetime import datetime
 
+class AIConversationModel(Base):
+    __tablename__ = 'ai_conversations'
+    
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer)  # ID del usuario que hace la consulta
+    session_id = Column(String(255))  # ID de sesión para agrupar conversaciones
+    previous_response_id = Column(String(255), nullable=True)  # ID de respuesta anterior de OpenAI
+    input_text = Column(Text)  # Texto de entrada del usuario
+    instruction = Column(Text, nullable=True)  # Instrucción proporcionada
+    response_text = Column(Text)  # Respuesta de OpenAI
+    model = Column(String(255))  # Modelo usado (ej: gpt-4o-mini)
+    tokens_used = Column(Integer, nullable=True)  # Tokens consumidos
+    feedback = Column(Text, nullable=True)  # Feedback del usuario sobre la respuesta
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+
+class KnowledgeDocumentModel(Base):
+    __tablename__ = 'knowledge_documents'
+    
+    id = Column(Integer, primary_key=True)
+    title = Column(String(255))  # Título del documento
+    content = Column(Text)  # Contenido del documento
+    document_type = Column(String(100), nullable=True)  # Tipo: normativa, manual, procedimiento, etc.
+    category = Column(String(100), nullable=True)  # Categoría: PIE, NEE, evaluación, etc.
+    source = Column(String(255), nullable=True)  # Fuente del documento
+    extra_metadata = Column('metadata', Text, nullable=True)  # JSON con metadatos adicionales (mapeado a 'metadata' en BD)
+    chroma_id = Column(String(255), nullable=True)  # ID en ChromaDB
+    is_active = Column(Boolean, default=True)  # Si está activo
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+
 class AccountTypeModel(Base):
     __tablename__ = 'account_types'
 
@@ -233,7 +264,7 @@ class UserModel(Base):
     full_name = Column(String(255))
     email = Column(String(255))
     phone = Column(String(255))
-    hashed_password = Column(String(255))
+    hashed_password = Column(Text)
     added_date = Column(DateTime())
     updated_date = Column(DateTime())
 
@@ -528,6 +559,7 @@ class StudentGuardianModel(Base):
     born_date = Column(Date)
     email = Column(String(255))
     celphone = Column(String(255))
+    city = Column(String(255))
     added_date = Column(DateTime)
     updated_date = Column(DateTime)
 
@@ -603,7 +635,6 @@ class BirthCertificateDocumentModel(Base):
 
     id = Column(Integer, primary_key=True)
     student_id = Column(Integer)
-    version_id = Column(Integer)
     birth_certificate = Column(String(255))
     added_date = Column(DateTime)
     updated_date = Column(DateTime)
@@ -705,5 +736,65 @@ class ContactModel(Base):
     email = Column(String(255))
     celphone = Column(String(255))
     message = Column(Text)
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+
+class FolderModel(Base):
+    __tablename__ = 'folders'
+
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer)
+    document_id = Column(Integer)
+    version_id = Column(Integer)
+    detail_id = Column(Integer)
+    file = Column(String(255))
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+
+class HealthEvaluationModel(Base):
+    __tablename__ = 'health_evaluations'
+
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer)
+    gender_id = Column(Integer)
+    nationality_id = Column(Integer)
+    consultation_reason_id = Column(Integer)
+    profesional_id = Column(Integer)
+    procedence_id = Column(Integer)
+    # Identificación del/la estudiante
+    full_name = Column(String(255))
+    identification_number = Column(String(255))
+    born_date = Column(Date)
+    age = Column(Integer)
+    native_language = Column(String(255))
+    language_usually_used = Column(String(255))
+    # Motivo de consulta
+    consultation_reason_detail = Column(Text)
+    # Identificación del profesional - médico
+    professional_identification_number = Column(String(255))
+    professional_registration_number = Column(String(255))
+    professional_specialty = Column(String(255))
+    procedence_other = Column(String(255))
+    professional_contact = Column(String(255))
+    evaluation_date = Column(Date)
+    reevaluation_date = Column(Date)
+    # Valoración del estado de salud general
+    general_assessment = Column(Text)
+    # Diagnóstico
+    diagnosis = Column(Text)
+    # Indicaciones
+    indications = Column(Text)
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+
+class EventModel(Base):
+    __tablename__ = 'events'
+    
+    id = Column(Integer, primary_key=True)
+    title = Column(String(255))
+    color = Column(String(255))
+    start_date = Column(DateTime)
+    end_date = Column(DateTime)
+    description = Column(Text)
     added_date = Column(DateTime)
     updated_date = Column(DateTime)

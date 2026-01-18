@@ -57,6 +57,43 @@ def list_professionals(session_user: UserLogin = Depends(get_current_active_user
         }
     )
 
+@professionals.get("/list")
+def get_all_list(session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
+    # Obtener school_id del usuario en sesión
+    school_id = session_user.school_id if session_user else None
+    
+    # Si no hay school_id, devolver array vacío
+    if school_id is None:
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "status": 200,
+                "message": "Professionals list retrieved successfully",
+                "data": []
+            }
+        )
+    
+    result = ProfessionalClass(db).get_all(page=0, school_id=school_id)
+
+    if isinstance(result, dict) and result.get("status") == "error":
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={
+                "status": 404,
+                "message": result.get("message", "Error"),
+                "data": None
+            }
+        )
+    
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "status": 200,
+            "message": "Professionals list retrieved successfully",
+            "data": result
+        }
+    )
+
 @professionals.post("/totals")
 def totals(session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
     customer_id = session_user.customer_id if session_user else None

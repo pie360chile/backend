@@ -234,6 +234,7 @@ class StoreStudentGuardian(BaseModel):
     born_date: Optional[str] = None
     email: Optional[str] = None
     celphone: Optional[str] = None
+    city: Optional[str] = None
 
 class UpdateStudentGuardian(BaseModel):
     student_id: Optional[int] = None
@@ -246,6 +247,7 @@ class UpdateStudentGuardian(BaseModel):
     born_date: Optional[str] = None
     email: Optional[str] = None
     celphone: Optional[str] = None
+    city: Optional[str] = None
 
 # News schemas
 class NewsList(BaseModel):
@@ -658,3 +660,52 @@ class UpdateContact(BaseModel):
     email: Optional[str] = None
     celphone: Optional[str] = None
     message: Optional[str] = None
+
+# Health Evaluation schemas
+class StoreHealthEvaluation(BaseModel):
+    student_id: Optional[int] = None
+    gender_id: Optional[int] = None
+    nationality_id: Optional[int] = None
+    consultation_reason_id: Optional[int] = None
+    profesional_id: Optional[int] = None
+    procedence_id: Optional[int] = None
+    full_name: Optional[str] = None
+    identification_number: Optional[str] = None
+    born_date: Optional[str] = None
+    age: Optional[int] = None
+    native_language: Optional[str] = None
+    language_usually_used: Optional[str] = None
+    consultation_reason_detail: Optional[str] = None
+    professional_identification_number: Optional[str] = None
+    professional_registration_number: Optional[str] = None
+    professional_specialty: Optional[str] = None
+    procedence_other: Optional[str] = None
+    professional_contact: Optional[str] = None
+    evaluation_date: Optional[str] = None
+    reevaluation_date: Optional[str] = None
+    general_assessment: Optional[str] = None
+    diagnosis: Optional[str] = None
+    indications: Optional[str] = None
+
+# Event schemas
+class EventList(BaseModel):
+    page: Optional[int] = None
+    per_page: int = 10
+
+class StoreEvent(BaseModel):
+    title: str
+    color: Optional[str] = None
+    start_date: datetime
+    end_date: datetime
+    description: Optional[str] = None
+
+class UpdateEvent(BaseModel):
+    title: Optional[str] = None
+    color: Optional[str] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    description: Optional[str] = None
+
+class KnowledgeDocumentList(BaseModel):
+    page: Optional[int] = None
+    per_page: int = 10

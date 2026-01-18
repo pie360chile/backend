@@ -49,6 +49,7 @@ class StudentGuardianClass:
                     "born_date": guardian.born_date.strftime("%Y-%m-%d") if guardian.born_date else None,
                     "email": guardian.email,
                     "celphone": guardian.celphone,
+                    "city": guardian.city,
                     "added_date": guardian.added_date.strftime("%Y-%m-%d %H:%M:%S") if guardian.added_date else None,
                     "updated_date": guardian.updated_date.strftime("%Y-%m-%d %H:%M:%S") if guardian.updated_date else None
                 } for guardian in data]
@@ -76,6 +77,7 @@ class StudentGuardianClass:
                     "born_date": guardian.born_date.strftime("%Y-%m-%d") if guardian.born_date else None,
                     "email": guardian.email,
                     "celphone": guardian.celphone,
+                    "city": guardian.city,
                     "added_date": guardian.added_date.strftime("%Y-%m-%d %H:%M:%S") if guardian.added_date else None,
                     "updated_date": guardian.updated_date.strftime("%Y-%m-%d %H:%M:%S") if guardian.updated_date else None
                 } for guardian in data]
@@ -105,6 +107,7 @@ class StudentGuardianClass:
                     "born_date": guardian.born_date.strftime("%Y-%m-%d") if guardian.born_date else None,
                     "email": guardian.email,
                     "celphone": guardian.celphone,
+                    "city": guardian.city,
                     "added_date": guardian.added_date.strftime("%Y-%m-%d %H:%M:%S") if guardian.added_date else None,
                     "updated_date": guardian.updated_date.strftime("%Y-%m-%d %H:%M:%S") if guardian.updated_date else None
                 }
@@ -152,6 +155,8 @@ class StudentGuardianClass:
                     existing_guardian.email = guardian_inputs['email']
                 if 'celphone' in guardian_inputs and guardian_inputs['celphone']:
                     existing_guardian.celphone = guardian_inputs['celphone']
+                if 'city' in guardian_inputs and guardian_inputs['city']:
+                    existing_guardian.city = guardian_inputs['city']
                 existing_guardian.updated_date = datetime.now()
                 
                 self.db.commit()
@@ -175,6 +180,7 @@ class StudentGuardianClass:
                     born_date=born_date,
                     email=guardian_inputs.get('email'),
                     celphone=guardian_inputs.get('celphone'),
+                    city=guardian_inputs.get('city'),
                     added_date=datetime.now(),
                     updated_date=datetime.now()
                 )
@@ -227,6 +233,8 @@ class StudentGuardianClass:
                 existing_guardian.email = guardian_inputs['email']
             if 'celphone' in guardian_inputs:
                 existing_guardian.celphone = guardian_inputs['celphone']
+            if 'city' in guardian_inputs:
+                existing_guardian.city = guardian_inputs['city']
 
             existing_guardian.updated_date = datetime.now()
 
