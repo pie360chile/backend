@@ -28,13 +28,14 @@ class UpdatePassWord(BaseModel):
 # User schemas
 class User(BaseModel):
     rol_id: int
-    branch_office_id: Union[int, None]
-    customer_id: Union[int, None] = None
-    rut: str
-    full_name: str
+    branch_office_id: Optional[int] = None
+    customer_id: Optional[int] = None
+    rut: Optional[str] = None
+    full_name: Optional[str] = None
+    fullname: Optional[str] = None  # Alias para full_name (se mapeará en el router)
     email: str
     password: str
-    phone: str
+    phone: Optional[str] = None
 
 class UpdateUser(BaseModel):
     rol_id: int = None
@@ -709,3 +710,310 @@ class UpdateEvent(BaseModel):
 class KnowledgeDocumentList(BaseModel):
     page: Optional[int] = None
     per_page: int = 10
+
+class BankDescriptionList(BaseModel):
+    page: Optional[int] = None
+    per_page: int = 10
+    school_id: int
+    document_id: int
+    question_number: int
+
+class StoreBankDescription(BaseModel):
+    school_id: int
+    document_id: int
+    question_number: int
+    bank_description: str
+
+class UpdateBankDescription(BaseModel):
+    school_id: Optional[int] = None
+    document_id: Optional[int] = None
+    question_number: Optional[int] = None
+    bank_description: Optional[str] = None
+
+# Progress Status Students schemas (Documento 18)
+class ProgressStatusStudentList(BaseModel):
+    page: Optional[int] = None
+    per_page: int = 10
+    student_id: Optional[int] = None
+    school_id: Optional[int] = None
+
+class StoreProgressStatusStudent(BaseModel):
+    version_id: Optional[int] = None
+    student_id: Optional[int] = None
+    school_id: Optional[int] = None
+    document_id: Optional[int] = 18  # Siempre 18 para progress status
+    nee_id: Optional[int] = None
+    course_id: Optional[int] = None
+    guardian_relationship_id: Optional[int] = None
+    period_id: Optional[int] = None
+    responsible_professionals: Optional[str] = None  # IDs de profesionales separados por comas: "1,2,3"
+    progress_date: Optional[str] = None  # Formato: "YYYY-MM-DD"
+    
+    # II. Estado de avance por área
+    pedagogical_language: Optional[str] = None
+    pedagogical_mathematics: Optional[str] = None
+    psychopedagogical: Optional[str] = None
+    speech_therapy: Optional[str] = None
+    psychological: Optional[str] = None
+    kinesiology: Optional[str] = None
+    occupational_therapy: Optional[str] = None
+    deaf_co_educator: Optional[str] = None
+    
+    # III. Síntesis, comentarios u observaciones
+    synthesis_comments: Optional[str] = None
+    
+    # IV. Sugerencias
+    suggestions_family: Optional[str] = None
+    suggestions_establishment: Optional[str] = None
+    
+    # Archivo adjunto
+    file: Optional[str] = None
+
+class UpdateProgressStatusStudent(BaseModel):
+    version_id: Optional[int] = None
+    student_id: Optional[int] = None
+    school_id: Optional[int] = None
+    document_id: Optional[int] = None
+    nee_id: Optional[int] = None
+    course_id: Optional[int] = None
+    guardian_relationship_id: Optional[int] = None
+    period_id: Optional[int] = None
+    responsible_professionals: Optional[List[int]] = None
+    progress_date: Optional[str] = None
+    
+    # II. Estado de avance por área
+    pedagogical_language: Optional[str] = None
+    pedagogical_mathematics: Optional[str] = None
+    psychopedagogical: Optional[str] = None
+    speech_therapy: Optional[str] = None
+    psychological: Optional[str] = None
+    kinesiology: Optional[str] = None
+    occupational_therapy: Optional[str] = None
+    deaf_co_educator: Optional[str] = None
+    
+    # III. Síntesis, comentarios u observaciones
+    synthesis_comments: Optional[str] = None
+    
+    # IV. Sugerencias
+    suggestions_family: Optional[str] = None
+    suggestions_establishment: Optional[str] = None
+    
+    # Archivo adjunto
+    file: Optional[str] = None
+
+# Individual Support Plans schemas (Plan de Apoyo Individual - Documento 22)
+class IndividualSupportPlanProfessionalSchema(BaseModel):
+    professional_id: Optional[int] = None
+    career_type_id: Optional[int] = None
+    registration_number: Optional[str] = None
+    days_hours: Optional[str] = None
+    from_date: Optional[str] = None  # Formato: "YYYY-MM-DD"
+    to_date: Optional[str] = None  # Formato: "YYYY-MM-DD"
+    support_modality: Optional[str] = None
+
+class StoreIndividualSupportPlan(BaseModel):
+    student_id: Optional[int] = None
+    document_type_id: Optional[int] = None
+    school_id: Optional[int] = None
+    period_id: Optional[int] = None
+    
+    # I. Identificación del/la estudiante
+    student_full_name: Optional[str] = None
+    student_identification_number: Optional[str] = None
+    student_born_date: Optional[str] = None  # Formato: "YYYY-MM-DD"
+    student_age: Optional[str] = None
+    student_nee_id: Optional[int] = None
+    student_school: Optional[str] = None
+    student_course_id: Optional[int] = None
+    elaboration_date: Optional[str] = None  # Formato: "YYYY-MM-DD"
+    
+    # II. Fortalezas del/la estudiante
+    social_affective_strengths: Optional[str] = None
+    cognitive_strengths: Optional[str] = None
+    curricular_strengths: Optional[str] = None
+    family_strengths: Optional[str] = None
+    
+    # III. Propuesta de intervención - Ed. Diferencial
+    intervention_ed_diferencial: Optional[str] = None  # Objetivos separados por comas
+    intervention_ed_diferencial_strategies: Optional[str] = None
+    
+    # III. Propuesta de intervención - Psicopedagogía
+    intervention_psicopedagogia: Optional[str] = None  # Objetivos separados por comas
+    intervention_psicopedagogia_strategies: Optional[str] = None
+    
+    # III. Propuesta de intervención - Fonoaudiología
+    intervention_fonoaudiologia: Optional[str] = None  # Objetivos separados por comas
+    intervention_fonoaudiologia_strategies: Optional[str] = None
+    
+    # III. Propuesta de intervención - Psicología
+    intervention_psicologia: Optional[str] = None  # Objetivos separados por comas
+    intervention_psicologia_strategies: Optional[str] = None
+    
+    # III. Propuesta de intervención - Terapia ocupacional
+    intervention_terapia_ocupacional: Optional[str] = None  # Objetivos separados por comas
+    intervention_terapia_ocupacional_strategies: Optional[str] = None
+    
+    # III. Propuesta de intervención - Kinesiología
+    intervention_kinesiologia: Optional[str] = None  # Objetivos separados por comas
+    intervention_kinesiologia_strategies: Optional[str] = None
+    
+    # III. Propuesta de intervención - Co-educador sordo
+    intervention_coeducador_sordo: Optional[str] = None  # Objetivos separados por comas
+    intervention_coeducador_sordo_strategies: Optional[str] = None
+    
+    # III. Propuesta de intervención - Int. lengua de señas
+    intervention_int_lengua_senas: Optional[str] = None  # Objetivos separados por comas
+    intervention_int_lengua_senas_strategies: Optional[str] = None
+    
+    # IV. Seguimiento del PAI
+    follow_up_pai: Optional[str] = None
+    
+    # Profesionales asociados
+    professionals: Optional[List[IndividualSupportPlanProfessionalSchema]] = None
+
+class UpdateIndividualSupportPlan(BaseModel):
+    student_id: Optional[int] = None
+    document_type_id: Optional[int] = None
+    school_id: Optional[int] = None
+    period_id: Optional[int] = None
+    
+    # I. Identificación del/la estudiante
+    student_full_name: Optional[str] = None
+    student_identification_number: Optional[str] = None
+    student_born_date: Optional[str] = None  # Formato: "YYYY-MM-DD"
+    student_age: Optional[str] = None
+    student_nee_id: Optional[int] = None
+    student_school: Optional[str] = None
+    student_course_id: Optional[int] = None
+    elaboration_date: Optional[str] = None  # Formato: "YYYY-MM-DD"
+    
+    # II. Fortalezas del/la estudiante
+    social_affective_strengths: Optional[str] = None
+    cognitive_strengths: Optional[str] = None
+    curricular_strengths: Optional[str] = None
+    family_strengths: Optional[str] = None
+    
+    # III. Propuesta de intervención - Ed. Diferencial
+    intervention_ed_diferencial: Optional[str] = None
+    intervention_ed_diferencial_strategies: Optional[str] = None
+    
+    # III. Propuesta de intervención - Psicopedagogía
+    intervention_psicopedagogia: Optional[str] = None
+    intervention_psicopedagogia_strategies: Optional[str] = None
+    
+    # III. Propuesta de intervención - Fonoaudiología
+    intervention_fonoaudiologia: Optional[str] = None
+    intervention_fonoaudiologia_strategies: Optional[str] = None
+    
+    # III. Propuesta de intervención - Psicología
+    intervention_psicologia: Optional[str] = None
+    intervention_psicologia_strategies: Optional[str] = None
+    
+    # III. Propuesta de intervención - Terapia ocupacional
+    intervention_terapia_ocupacional: Optional[str] = None
+    intervention_terapia_ocupacional_strategies: Optional[str] = None
+    
+    # III. Propuesta de intervención - Kinesiología
+    intervention_kinesiologia: Optional[str] = None
+    intervention_kinesiologia_strategies: Optional[str] = None
+    
+    # III. Propuesta de intervención - Co-educador sordo
+    intervention_coeducador_sordo: Optional[str] = None
+    intervention_coeducador_sordo_strategies: Optional[str] = None
+    
+    # III. Propuesta de intervención - Int. lengua de señas
+    intervention_int_lengua_senas: Optional[str] = None
+    intervention_int_lengua_senas_strategies: Optional[str] = None
+    
+    # IV. Seguimiento del PAI
+    follow_up_pai: Optional[str] = None
+    
+    # Profesionales asociados
+    professionals: Optional[List[IndividualSupportPlanProfessionalSchema]] = None
+
+class IndividualSupportPlanList(BaseModel):
+    page: Optional[int] = None
+    per_page: int = 10
+    student_id: Optional[int] = None
+    school_id: Optional[int] = None
+
+# Audit schemas
+class StoreAudit(BaseModel):
+    user_id: int
+    rol_id: Optional[int] = None
+
+class AuditList(BaseModel):
+    page: Optional[int] = None
+    per_page: int = 10
+    user_id: Optional[int] = None
+
+# Progress Status Individual Support schemas (Estado de avance PAI - Documento 19)
+class PaiObjectiveSchema(BaseModel):
+    id: Optional[int] = None
+    number: Optional[int] = None
+    description: Optional[str] = None
+    progress_level: Optional[str] = None
+
+class StoreProgressStatusIndividualSupport(BaseModel):
+    student_id: Optional[int] = None
+    school_id: Optional[int] = None
+    document_type_id: Optional[int] = 19  # Siempre 19 para progress status individual support
+    
+    # I. Identificación del/la estudiante
+    student_full_name: Optional[str] = None
+    student_identification_number: Optional[str] = None
+    student_born_date: Optional[str] = None  # Formato: "YYYY-MM-DD"
+    student_age: Optional[str] = None
+    student_nee_id: Optional[int] = None
+    student_school: Optional[str] = None
+    student_course_id: Optional[int] = None
+    
+    # Fecha y periodo
+    progress_date: Optional[str] = None  # Formato: "YYYY-MM-DD"
+    period_id: Optional[int] = None  # 1=1er Trimestre, 2=2do Trimestre, 3=1er Semestre, 4=2do Semestre
+    
+    # Apoderado/a
+    guardian_relationship_id: Optional[int] = None
+    guardian_name: Optional[str] = None
+    
+    # Profesionales responsables
+    responsible_professionals: Optional[str] = None  # IDs de profesionales separados por comas: "1,2,3"
+    
+    # PAI seleccionado y objetivos
+    selected_pai_id: Optional[int] = None
+    pai_objectives: Optional[List[PaiObjectiveSchema]] = None
+
+class UpdateProgressStatusIndividualSupport(BaseModel):
+    student_id: Optional[int] = None
+    school_id: Optional[int] = None
+    document_type_id: Optional[int] = None
+    
+    # I. Identificación del/la estudiante
+    student_full_name: Optional[str] = None
+    student_identification_number: Optional[str] = None
+    student_born_date: Optional[str] = None
+    student_age: Optional[str] = None
+    student_nee_id: Optional[int] = None
+    student_school: Optional[str] = None
+    student_course_id: Optional[int] = None
+    
+    # Fecha y periodo
+    progress_date: Optional[str] = None
+    period_id: Optional[int] = None
+    
+    # Apoderado/a
+    guardian_relationship_id: Optional[int] = None
+    guardian_name: Optional[str] = None
+    
+    # Profesionales responsables
+    responsible_professionals: Optional[str] = None
+    
+    # PAI seleccionado y objetivos
+    selected_pai_id: Optional[int] = None
+    pai_objectives: Optional[List[PaiObjectiveSchema]] = None
+
+class ProgressStatusIndividualSupportList(BaseModel):
+    page: Optional[int] = None
+    per_page: int = 10
+    student_id: Optional[int] = None
+    school_id: Optional[int] = None

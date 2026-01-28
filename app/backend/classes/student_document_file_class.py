@@ -264,13 +264,14 @@ class FolderClass:
             all_documents = []
             missing_documents = []
             
-            # Primero, obtener TODOS los document_id que pertenecen a este document_type_id con su información
+            # Primero, obtener TODOS los document_id que pertenecen a este document_type_id con su información (solo no eliminados)
             document_records = self.db.query(
                 DocumentModel.id,
                 DocumentModel.document,
                 DocumentModel.document_type_id
             ).filter(
-                DocumentModel.document_type_id == document_type_id
+                DocumentModel.document_type_id == document_type_id,
+                DocumentModel.deleted_date.is_(None)
             ).all()
             
             # Convertir a lista de IDs e información
@@ -308,9 +309,10 @@ class FolderClass:
                             FolderModel.file.isnot(None)  # Solo si tiene archivo
                         ).order_by(FolderModel.version_id.desc()).first()
                         
-                        # Obtener el document_name desde la tabla documents
+                        # Obtener el document_name desde la tabla documents (solo no eliminados)
                         doc_info = self.db.query(DocumentModel).filter(
-                            DocumentModel.id == document_id
+                            DocumentModel.id == document_id,
+                            DocumentModel.deleted_date.is_(None)
                         ).first()
                         document_name = doc_info.document if doc_info else "Certificado de Nacimiento"
                         
@@ -343,9 +345,10 @@ class FolderClass:
                             FolderModel.file.isnot(None)  # Solo si tiene archivo
                         ).order_by(FolderModel.version_id.desc()).first()
                         
-                        # Obtener el document_name desde la tabla documents
+                        # Obtener el document_name desde la tabla documents (solo no eliminados)
                         doc_info = self.db.query(DocumentModel).filter(
-                            DocumentModel.id == document_id
+                            DocumentModel.id == document_id,
+                            DocumentModel.deleted_date.is_(None)
                         ).first()
                         document_name = doc_info.document if doc_info else "Evaluación de Salud"
                         
@@ -389,6 +392,7 @@ class FolderClass:
                     ).filter(
                         FolderModel.student_id == student_id,
                         FolderModel.document_id == document_id,
+                        DocumentModel.deleted_date.is_(None),  # Solo documentos no eliminados
                         FolderModel.file.isnot(None)  # Solo documentos con archivo
                     ).order_by(
                         FolderModel.version_id.desc()

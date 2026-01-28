@@ -3,8 +3,24 @@ from fastapi.responses import JSONResponse, FileResponse
 from app.backend.classes.documents_class import DocumentsClass
 from app.backend.classes.student_class import StudentClass
 from app.backend.classes.health_evaluation_class import HealthEvaluationClass
+from app.backend.classes.progress_status_student_class import ProgressStatusStudentClass
+from app.backend.classes.student_guardian_class import StudentGuardianClass
+from app.backend.classes.individual_support_plan_class import IndividualSupportPlanClass
 from app.backend.db.database import get_db
-from app.backend.db.models import FolderModel
+from app.backend.db.models import (
+    FolderModel,
+    DocumentModel,
+    GenderModel,
+    NationalityModel,
+    ProfessionalModel,
+    FamilyMemberModel,
+    CourseModel,
+    SchoolModel,
+    StudentAcademicInfoModel,
+    StudentPersonalInfoModel,
+    CommuneModel,
+    SpecialEducationalNeedModel
+)
 from app.backend.auth.auth_user import get_current_active_user
 from app.backend.schemas import (
     UserLogin,
@@ -16,8 +32,9 @@ from sqlalchemy.orm import Session
 from pathlib import Path
 import tempfile
 import os
-from datetime import datetime
+from datetime import datetime, date
 import uuid
+from shutil import move
 
 documents = APIRouter(
     prefix="/documents",
@@ -129,10 +146,10 @@ async def upload_document(
         student_data = student_result.get("student_data", {})
         student_identification_number = student_data.get("identification_number") or str(student_id)
 
-        # Obtener el documento por document_id para obtener su document_type_id
-        from app.backend.db.models import DocumentModel
+        # Obtener el documento por document_id para obtener su document_type_id (solo no eliminados)
         document = db.query(DocumentModel).filter(
-            DocumentModel.id == document_id
+            DocumentModel.id == document_id,
+            DocumentModel.deleted_date.is_(None)
         ).first()
         
         if not document:
@@ -363,8 +380,6 @@ async def generate_document(
                 )
             
             # Obtener datos adicionales de las tablas relacionadas
-            from app.backend.db.models import GenderModel, NationalityModel, ProfessionalModel
-            
             # Obtener género
             gender_name = ""
             if evaluation_data.get("gender_id"):
@@ -381,17 +396,60 @@ async def generate_document(
             
             # Obtener datos del profesional
             professional_fullname = ""
+            professional_specialty_name = ""
             if evaluation_data.get("profesional_id"):
                 professional = db.query(ProfessionalModel).filter(ProfessionalModel.id == evaluation_data.get("profesional_id")).first()
                 if professional:
                     professional_fullname = f"{professional.names or ''} {professional.lastnames or ''}".strip()
+                    # Obtener el nombre de la especialidad desde career_type_id
+                    if professional.career_type_id:
+                        from app.backend.db.models import CareerTypeModel
+                        career_type = db.query(CareerTypeModel).filter(CareerTypeModel.id == professional.career_type_id).first()
+                        if career_type and career_type.career_type:
+                            professional_specialty_name = career_type.career_type
+            
+            # Si professional_specialty es un ID, intentar obtener el nombre
+            if not professional_specialty_name and evaluation_data.get("professional_specialty"):
+                try:
+                    # Si es un número, es un ID
+                    specialty_id = int(evaluation_data.get("professional_specialty"))
+                    from app.backend.db.models import CareerTypeModel
+                    career_type = db.query(CareerTypeModel).filter(CareerTypeModel.id == specialty_id).first()
+                    if career_type and career_type.career_type:
+                        professional_specialty_name = career_type.career_type
+                except (ValueError, TypeError):
+                    # Si no es un número, usar el valor directamente
+                    professional_specialty_name = str(evaluation_data.get("professional_specialty", ""))
             
             # Agregar datos adicionales al evaluation_data
             evaluation_data["gender_name"] = gender_name
             evaluation_data["nationality_name"] = nationality_name
             evaluation_data["professional_fullname"] = professional_fullname
+            evaluation_data["professional_specialty_name"] = professional_specialty_name
             
-            # Generar el documento PDF
+            # Fecha de nacimiento desde BD: si no viene en la evaluación, tomar del estudiante (student_personal_data)
+            if not evaluation_data.get("born_date") and evaluation_data.get("student_id"):
+                student_personal = db.query(StudentPersonalInfoModel).filter(
+                    StudentPersonalInfoModel.student_id == evaluation_data["student_id"]
+                ).first()
+                if student_personal and student_personal.born_date:
+                    # born_date en student_personal_data es String; normalizar a YYYY-MM-DD
+                    bd_val = student_personal.born_date
+                    if hasattr(bd_val, "strftime"):
+                        evaluation_data["born_date"] = bd_val.strftime("%Y-%m-%d")
+                    else:
+                        evaluation_data["born_date"] = str(bd_val).strip()[:10]
+                    # Recalcular edad si no venía en la evaluación
+                    if evaluation_data.get("age") is None:
+                        try:
+                            bd_str = evaluation_data["born_date"][:10]
+                            bd = datetime.strptime(bd_str, "%Y-%m-%d").date()
+                            today = date.today()
+                            evaluation_data["age"] = today.year - bd.year - ((today.month, today.day) < (bd.month, bd.day))
+                        except Exception:
+                            pass
+            
+            # Generar el documento PDF usando pypdf para rellenar campos AcroForm
             result = DocumentsClass.generate_health_evaluation_pdf(
                 template_path=str(template_path),
                 evaluation_data=evaluation_data,
@@ -409,64 +467,250 @@ async def generate_document(
                     }
                 )
             
-            # Guardar el documento generado en folders con document_id = 4
-            try:
-                generated_file = Path(result["file_path"])
+            # Retornar el archivo PDF generado (solo descarga, no se guarda en folders)
+            return FileResponse(
+                path=result["file_path"],
+                filename=result["filename"],
+                media_type='application/pdf'
+            )
+        
+        # Si document_id = 18, generar documento de estado de avance (progress_status_students)
+        if document_id == 18:
+            # Buscar el estado de avance más reciente para este estudiante
+            progress_status_service = ProgressStatusStudentClass(db)
+            progress_statuses = progress_status_service.get_all(student_id=student_id)
+            
+            if not progress_statuses or len(progress_statuses) == 0:
+                return JSONResponse(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    content={
+                        "status": 404,
+                        "message": "No se encontró estado de avance para este estudiante",
+                        "data": None
+                    }
+                )
+            
+            # Obtener el más reciente (primero de la lista)
+            progress_status_data = progress_statuses[0]
+            
+            # Eliminar id y version_id (no van en el PDF)
+            progress_status_data.pop("id", None)
+            progress_status_data.pop("version_id", None)
+            
+            # Obtener datos adicionales del estudiante
+            student_data = student_result.get("student_data", {}) if isinstance(student_result, dict) else {}
+            personal_data = student_data.get("personal_data", {})
+            student_name = personal_data.get("names", "") or ""
+            student_lastname = f"{personal_data.get('father_lastname', '')} {personal_data.get('mother_lastname', '')}".strip()
+            student_fullname = f"{student_name} {student_lastname}".strip()
+            student_rut = personal_data.get("identification_number", "") or ""
+            
+            # Calcular edad del estudiante
+            student_age = ""
+            born_date_str = personal_data.get("born_date", "")
+            if born_date_str:
+                try:
+                    # Intentar diferentes formatos de fecha
+                    born_date = None
+                    for date_format in ["%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d", "%d-%m-%Y"]:
+                        try:
+                            born_date = datetime.strptime(born_date_str, date_format).date()
+                            break
+                        except:
+                            continue
+                    
+                    if born_date:
+                        # Calcular edad hasta la fecha del estado de avance o fecha actual
+                        reference_date = datetime.now().date()
+                        if progress_status_data.get("progress_date"):
+                            try:
+                                progress_date_str = progress_status_data.get("progress_date")
+                                reference_date = datetime.strptime(progress_date_str, "%Y-%m-%d").date()
+                            except:
+                                pass
+                        
+                        # Calcular años y meses
+                        years = reference_date.year - born_date.year
+                        months = reference_date.month - born_date.month
+                        if months < 0:
+                            years -= 1
+                            months += 12
+                        elif months == 0 and reference_date.day < born_date.day:
+                            years -= 1
+                            months = 11
+                        
+                        if years > 0:
+                            if months > 0:
+                                student_age = f"{years} año{'s' if years != 1 else ''} y {months} mes{'es' if months != 1 else ''}"
+                            else:
+                                student_age = f"{years} año{'s' if years != 1 else ''}"
+                        elif months > 0:
+                            student_age = f"{months} mes{'es' if months != 1 else ''}"
+                except Exception as e:
+                    pass
+            
+            # Agregar datos del estudiante al progress_status_data
+            progress_status_data["student_fullname"] = student_fullname
+            progress_status_data["student_name"] = student_name
+            progress_status_data["student_lastname"] = student_lastname
+            progress_status_data["student_age"] = student_age
+            progress_status_data["student_rut"] = student_rut
+            
+            # Convertir IDs a valores reales
+            # school_id -> nombre de la escuela
+            if progress_status_data.get("school_id"):
+                school = db.query(SchoolModel).filter(SchoolModel.id == progress_status_data["school_id"]).first()
+                progress_status_data["school_name"] = school.school_name if school and school.school_name else ""
+                progress_status_data.pop("school_id", None)
+            
+            # nee_id -> nombre de la necesidad educativa especial
+            if progress_status_data.get("nee_id"):
+                nee = db.query(SpecialEducationalNeedModel).filter(SpecialEducationalNeedModel.id == progress_status_data["nee_id"]).first()
+                progress_status_data["nee_name"] = nee.special_educational_needs if nee and nee.special_educational_needs else ""
+                progress_status_data.pop("nee_id", None)
+            
+            # course_id -> nombre del curso
+            if progress_status_data.get("course_id"):
+                course = db.query(CourseModel).filter(CourseModel.id == progress_status_data["course_id"]).first()
+                progress_status_data["course_name"] = course.course_name if course and course.course_name else ""
+                progress_status_data.pop("course_id", None)
+            
+            # responsible_professionals -> convertir IDs a nombres (formato: "1,2,3")
+            if progress_status_data.get("responsible_professionals"):
+                professional_ids_str = str(progress_status_data["responsible_professionals"])
+                if professional_ids_str:
+                    try:
+                        professional_ids = [int(id.strip()) for id in professional_ids_str.split(",") if id.strip().isdigit()]
+                        professional_names = []
+                        for prof_id in professional_ids:
+                            professional = db.query(ProfessionalModel).filter(ProfessionalModel.id == prof_id).first()
+                            if professional:
+                                fullname = f"{professional.names or ''} {professional.lastnames or ''}".strip()
+                                if fullname:
+                                    professional_names.append(fullname)
+                        progress_status_data["responsible_professionals_names"] = ", ".join(professional_names) if professional_names else ""
+                    except Exception as e:
+                        progress_status_data["responsible_professionals_names"] = ""
+                progress_status_data.pop("responsible_professionals", None)
+            
+            # Generar el documento PDF desde cero (sin template)
+            result = DocumentsClass.generate_document_pdf(
+                document_id=document_id,
+                document_data=progress_status_data,
+                db=db,
+                template_path=None,  # Siempre generar desde cero para documento 18
+                output_directory="files/system/students"
+            )
+            
+            if result["status"] == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    content={
+                        "status": 500,
+                        "message": result.get("message", "Error generando documento"),
+                        "data": None
+                    }
+                )
+            
+            # Retornar el archivo PDF generado
+            return FileResponse(
+                path=result["file_path"],
+                filename=result["filename"],
+                media_type='application/pdf'
+            )
+        
+        # Si document_id = 22, generar documento de Plan de Apoyo Individual
+        if document_id == 22:
+            # Buscar el Plan de Apoyo Individual más reciente para este estudiante
+            isp_service = IndividualSupportPlanClass(db)
+            isp_result = isp_service.get_by_student_id(student_id)
+            
+            if isinstance(isp_result, dict) and isp_result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    content={
+                        "status": 404,
+                        "message": "No se encontró Plan de Apoyo Individual para este estudiante",
+                        "data": None
+                    }
+                )
+            
+            # Preparar datos para el PDF
+            isp_data = isp_result.copy()
+            
+            # Eliminar campos que no van en el PDF
+            isp_data.pop("id", None)
+            isp_data.pop("added_date", None)
+            isp_data.pop("updated_date", None)
+            
+            # Convertir IDs a valores reales
+            # school_id -> nombre de la escuela
+            if isp_data.get("school_id"):
+                school = db.query(SchoolModel).filter(SchoolModel.id == isp_data["school_id"]).first()
+                if school and school.school_name:
+                    isp_data["student_school"] = school.school_name
+                isp_data.pop("school_id", None)
+            
+            # student_nee_id -> nombre de la necesidad educativa especial
+            if isp_data.get("student_nee_id"):
+                nee = db.query(SpecialEducationalNeedModel).filter(SpecialEducationalNeedModel.id == isp_data["student_nee_id"]).first()
+                if nee and nee.special_educational_needs:
+                    isp_data["nee_name"] = nee.special_educational_needs
+                isp_data.pop("student_nee_id", None)
+            
+            # student_course_id -> nombre del curso
+            if isp_data.get("student_course_id"):
+                course = db.query(CourseModel).filter(CourseModel.id == isp_data["student_course_id"]).first()
+                if course and course.course_name:
+                    isp_data["course_name"] = course.course_name
+                isp_data.pop("student_course_id", None)
+            
+            # Procesar profesionales: obtener nombres y especialidades
+            professionals = isp_data.get("professionals", [])
+            if professionals:
+                processed_professionals = []
+                for prof in professionals:
+                    professional_id = prof.get("professional_id")
+                    career_type_id = prof.get("career_type_id")
+                    
+                    professional_name = ""
+                    if professional_id:
+                        professional = db.query(ProfessionalModel).filter(ProfessionalModel.id == professional_id).first()
+                        if professional:
+                            professional_name = f"{professional.names or ''} {professional.lastnames or ''}".strip()
+                    
+                    career_type_name = ""
+                    if career_type_id:
+                        from app.backend.db.models import CareerTypeModel
+                        career_type = db.query(CareerTypeModel).filter(CareerTypeModel.id == career_type_id).first()
+                        if career_type:
+                            career_type_name = career_type.career_type
+                    
+                    processed_prof = prof.copy()
+                    processed_prof["professional_name"] = professional_name
+                    processed_prof["career_type_name"] = career_type_name
+                    processed_professionals.append(processed_prof)
                 
-                if generated_file.exists():
-                    # Generar fecha y hora en formato YYYYMMDDHHMMSS
-                    date_hour = datetime.now().strftime("%Y%m%d%H%M%S")
-                    
-                    # Obtener el document_type_id del documento (document_id = 4)
-                    document_data = document_result if isinstance(document_result, dict) else {}
-                    document_type_id = document_data.get("document_type_id")
-                    
-                    # Generar nombre del archivo: {student_id}_{document_id}_{document_type_id}_{date_hour}
-                    file_extension = generated_file.suffix
-                    health_eval_document_id = 4
-                    unique_filename = f"{student_id}_{health_eval_document_id}_{document_type_id}_{date_hour}{file_extension}"
-                    
-                    # Renombrar el archivo generado al nombre único
-                    system_file_path = Path("files/system/students") / unique_filename
-                    system_file_path.parent.mkdir(parents=True, exist_ok=True)
-                    
-                    # Mover/renombrar el archivo
-                    from shutil import move
-                    move(generated_file, system_file_path)
-                    
-                    # Actualizar el resultado con la nueva ruta
-                    result["file_path"] = str(system_file_path)
-                    result["filename"] = unique_filename
-                    
-                    # Buscar la última versión para este estudiante y documento (document_id = 4)
-                    last_version = db.query(FolderModel).filter(
-                        FolderModel.student_id == student_id,
-                        FolderModel.document_id == health_eval_document_id
-                    ).order_by(FolderModel.version_id.desc()).first()
-                    
-                    # Determinar el nuevo version_id
-                    if last_version:
-                        new_version_id = last_version.version_id + 1
-                    else:
-                        new_version_id = 1
-                    
-                    # Crear el nuevo registro en folders con document_id = 4
-                    new_folder = FolderModel(
-                        student_id=student_id,
-                        document_id=health_eval_document_id,  # document_id = 4 para health_evaluation
-                        version_id=new_version_id,
-                        detail_id=evaluation_id,  # detail_id es el ID de la evaluación de salud
-                        file=unique_filename,
-                        added_date=datetime.now(),
-                        updated_date=datetime.now()
-                    )
-                    
-                    db.add(new_folder)
-                    db.commit()
-                    db.refresh(new_folder)
-            except Exception as e:
-                # Si falla el guardado en folders, continuar de todos modos
-                print(f"Error guardando health_evaluation en folders: {str(e)}")
+                isp_data["professionals"] = processed_professionals
+            
+            # Generar el documento PDF desde cero (sin template)
+            result = DocumentsClass.generate_document_pdf(
+                document_id=document_id,
+                document_data=isp_data,
+                db=db,
+                template_path=None,  # Siempre generar desde cero para documento 22
+                output_directory="files/system/students"
+            )
+            
+            if result["status"] == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    content={
+                        "status": 500,
+                        "message": result.get("message", "Error generando documento"),
+                        "data": None
+                    }
+                )
             
             # Retornar el archivo PDF generado
             return FileResponse(
@@ -478,6 +722,9 @@ async def generate_document(
         # Obtener datos del estudiante
         student_data = student_result.get("student_data", {}) if isinstance(student_result, dict) else {}
         student_name = student_data.get("full_name") or student_data.get("names") or f"Estudiante {student_id}"
+        
+        # Obtener document_type_id del documento
+        document_type_id = document_result.get("document_type_id") if isinstance(document_result, dict) else None
         
         # Lógica específica por document_id
         # Si document_id = 2, usar parent_authorization
@@ -507,9 +754,6 @@ async def generate_document(
                 )
             
             # Obtener datos adicionales del estudiante y guardián
-            from app.backend.classes.student_guardian_class import StudentGuardianClass
-            from app.backend.db.models import FamilyMemberModel, CourseModel, SchoolModel, StudentAcademicInfoModel, CommuneModel
-            
             # Obtener nombre completo del estudiante
             student_data = student_result.get("student_data", {}) if isinstance(student_result, dict) else {}
             personal_data = student_data.get("personal_data", {})
@@ -590,7 +834,6 @@ async def generate_document(
                         city = commune.commune or ""
             
             # Obtener día, mes y año actual
-            from datetime import datetime
             now = datetime.now()
             day = str(now.day)
             
@@ -656,7 +899,6 @@ async def generate_document(
                     system_file_path.parent.mkdir(parents=True, exist_ok=True)
                     
                     # Mover/renombrar el archivo
-                    from shutil import move
                     move(generated_file, system_file_path)
                     
                     # Actualizar el resultado con la nueva ruta
@@ -704,17 +946,39 @@ async def generate_document(
                 media_type='application/pdf'
             )
         
-        # Para otros document_id, buscar template y usar lógica genérica o específica según corresponda
-        document_name = document_result.get("document", "") if isinstance(document_result, dict) else ""
+        # Para otros document_id, usar la función general
+        document_name = document_result.get("document", "") if isinstance(document_result, dict) else {}
+        document_type_id = document_result.get("document_type_id") if isinstance(document_result, dict) else None
+        
+        # Obtener datos del estudiante
+        student_data = student_result.get("student_data", {}) if isinstance(student_result, dict) else {}
+        personal_data = student_data.get("personal_data", {})
+        student_name = personal_data.get("names", "") or ""
+        student_lastname = f"{personal_data.get('father_lastname', '')} {personal_data.get('mother_lastname', '')}".strip()
+        student_fullname = f"{student_name} {student_lastname}".strip()
+        
+        # Preparar datos del documento
+        document_data = {
+            "student_id": student_id,
+            "student_fullname": student_fullname,
+            "student_name": student_name,
+            "student_lastname": student_lastname,
+            "document_id": document_id,
+            "document_name": document_name,
+            "document_title": document_name or f"Documento {document_id}"
+        }
         
         # Buscar template PDF - intentar diferentes formatos de nombre
         possible_template_names = [
             f"document_{document_id}.pdf",
-            f"document_{document_id}_{document_type_id}.pdf",
-            f"{document_name.replace(' ', '_')}.pdf",
+            f"document_{document_id}_{document_type_id}.pdf" if document_type_id else None,
+            f"{document_name.replace(' ', '_')}.pdf" if document_name else None,
             f"template_{document_id}.pdf",
-            f"FU_{document_name.replace(' ', '_').upper()}.pdf"
+            f"FU_{document_name.replace(' ', '_').upper()}.pdf" if document_name else None
         ]
+        
+        # Filtrar None
+        possible_template_names = [name for name in possible_template_names if name]
         
         template_path = None
         for template_name in possible_template_names:
@@ -723,35 +987,30 @@ async def generate_document(
                 template_path = test_path
                 break
         
-        # Si no se encuentra template, retornar error informativo
-        if not template_path:
+        # Generar el documento PDF usando la función general
+        result = DocumentsClass.generate_document_pdf(
+            document_id=document_id,
+            document_data=document_data,
+            db=db,
+            template_path=str(template_path) if template_path else None,
+            output_directory="files/system/students"
+        )
+        
+        if result["status"] == "error":
             return JSONResponse(
-                status_code=status.HTTP_404_NOT_FOUND,
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 content={
-                    "status": 404,
-                    "message": f"No se encontró template PDF para document_id {document_id}. Buscando templates con nombres: {', '.join(possible_template_names)}",
-                    "data": {
-                        "student_id": student_id,
-                        "document_id": document_id,
-                        "document_name": document_name,
-                        "note": "Para document_id específicos, implementar método de generación correspondiente"
-                    }
+                    "status": 500,
+                    "message": result.get("message", "Error generando documento"),
+                    "data": None
                 }
             )
         
-        # Por ahora, para otros tipos, retornar error indicando que necesita implementación específica
-        return JSONResponse(
-            status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            content={
-                "status": 501,
-                "message": f"Generación de PDF para document_id {document_id} aún no implementada. Se requiere método específico para este tipo de documento.",
-                "data": {
-                    "student_id": student_id,
-                    "document_id": document_id,
-                    "document_name": document_name,
-                    "template_found": str(template_path)
-                }
-            }
+        # Retornar el archivo PDF generado
+        return FileResponse(
+            path=result["file_path"],
+            filename=result["filename"],
+            media_type='application/pdf'
         )
         
     except Exception as e:
@@ -830,10 +1089,10 @@ async def inspect_pdf_template(
                 content={
                     "status": 500,
                     "message": result.get("message", "Error inspeccionando template PDF"),
-                    "data": None
-                }
-            )
-        
+                "data": None
+            }
+        )
+
         return JSONResponse(
             status_code=status.HTTP_200_OK,
             content={

@@ -47,7 +47,7 @@ class UserClass:
                     "rol_id": user.rol_id,
                     "email": user.email,
                     "phone": user.phone,
-                    "added_date": user.added_date
+                    "added_date": user.added_date.strftime("%Y-%m-%d %H:%M:%S") if user.added_date else None
                 } for user in data]
 
                 return {
@@ -68,7 +68,7 @@ class UserClass:
                     "rol_id": user.rol_id,
                     "email": user.email,
                     "phone": user.phone,
-                    "added_date": user.added_date
+                    "added_date": user.added_date.strftime("%Y-%m-%d %H:%M:%S") if user.added_date else None
                 } for user in data]
 
                 return serialized_data
@@ -125,26 +125,28 @@ class UserClass:
             return f"Error: {error_message}"  
     
     def store(self, user_inputs):
-        user = UserModel()
-        user.rut = user_inputs['rut']
-        user.rol_id = user_inputs['rol_id']
-        user.branch_office_id = user_inputs['branch_office_id']
-        user.customer_id = user_inputs.get('customer_id')
-        user.school_id = user_inputs.get('school_id')
-        user.deleted_status_id = 0
-        user.full_name = user_inputs['full_name']
-        user.hashed_password = generate_bcrypt_hash(user_inputs['password'])
-        user.email = user_inputs['email']
-        user.phone = user_inputs['phone']
-        user.added_date = datetime.now()
-        user.updated_date = datetime.now()
-
-        self.db.add(user)
         try:
-            self.db.commit()
+            user = UserModel()
+            user.rut = user_inputs.get('rut')
+            user.rol_id = user_inputs['rol_id']
+            user.branch_office_id = user_inputs.get('branch_office_id')
+            user.customer_id = user_inputs.get('customer_id')
+            user.school_id = user_inputs.get('school_id')
+            user.deleted_status_id = 0
+            user.full_name = user_inputs.get('full_name') or ''
+            user.hashed_password = generate_bcrypt_hash(user_inputs['password'])
+            user.email = user_inputs['email']
+            user.phone = user_inputs.get('phone')
+            user.added_date = datetime.now()
+            user.updated_date = datetime.now()
 
-            return 1
+            self.db.add(user)
+            self.db.commit()
+            self.db.refresh(user)
+
+            return user.id
         except Exception as e:
+            self.db.rollback()
             return 0
     
     def store_login(self, user_inputs):

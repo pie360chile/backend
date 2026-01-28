@@ -7,6 +7,7 @@ from app.backend.classes.authentication_class import AuthenticationClass
 from app.backend.classes.rol_class import RolClass
 from app.backend.classes.school_class import SchoolClass
 from app.backend.classes.user_class import UserClass
+from app.backend.classes.audit_class import AuditClass
 from app.backend.auth.auth_user import get_current_active_user
 from app.backend.db.models import ProfessionalModel, ProfessionalTeachingCourseModel, SchoolModel
 from datetime import timedelta
@@ -91,6 +92,16 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         }
         token = AuthenticationClass(db).create_token(token_data, token_expires)
         expires_in_seconds = token_expires.total_seconds()
+
+        # Guardar registro de auditoría (login)
+        try:
+            AuditClass(db).store(
+                user_id=user["user_data"]["id"],
+                rol_id=user_rol_id
+            )
+        except Exception as audit_error:
+            # No fallar el login si hay error en auditoría, solo loguear
+            print(f"Error guardando registro de auditoría: {str(audit_error)}")
 
         data = {
             "access_token": token,

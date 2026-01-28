@@ -56,24 +56,24 @@ async def store_health_evaluation(
             }
         )
 
-@health_evaluations.get("/{id}")
+@health_evaluations.get("/{student_id}")
 async def get_health_evaluation(
-    id: int,
+    student_id: int,
     db: Session = Depends(get_db)
 ):
     """
-    Obtiene una evaluación de salud por su ID.
+    Obtiene la evaluación de salud más reciente para un estudiante por su student_id.
     """
     try:
         health_evaluation_service = HealthEvaluationClass(db)
-        result = health_evaluation_service.get(id)
+        result = health_evaluation_service.get_by_student_id(student_id)
 
         if isinstance(result, dict) and result.get("status") == "error":
             return JSONResponse(
                 status_code=status.HTTP_404_NOT_FOUND,
                 content={
                     "status": 404,
-                    "message": result.get("message", "Evaluación de salud no encontrada"),
+                    "message": result.get("message", "Evaluación de salud no encontrada para este estudiante"),
                     "data": None
                 }
             )

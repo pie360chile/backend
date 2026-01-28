@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, UploadFile, File
 from fastapi.responses import JSONResponse
 from app.backend.db.database import get_db
 from sqlalchemy.orm import Session
@@ -7,6 +7,8 @@ from app.backend.classes.student_class import StudentClass
 from app.backend.auth.auth_user import get_current_active_user
 from app.backend.classes.school_class import SchoolClass
 from app.backend.db.models import ProfessionalModel, ProfessionalTeachingCourseModel, CourseModel, SchoolModel
+from pathlib import Path
+from datetime import datetime
 
 students = APIRouter(
     prefix="/students",
@@ -297,3 +299,85 @@ def delete(id: int, session_user: UserLogin = Depends(get_current_active_user), 
             "data": result
         }
     )
+
+@students.post("/photo/{student_id}")
+async def upload_photo(
+    student_id: int,
+    file: UploadFile = File(...),
+    session_user: UserLogin = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Sube una foto para un estudiante específico.
+    Guarda la foto en files/system/students.
+    """
+    try:
+        # Obtener el estudiante usando la clase
+        student_service = StudentClass(db)
+        student_result = student_service.get(student_id)
+        
+        if isinstance(student_result, dict) and (student_result.get("error") or student_result.get("status") == "error"):
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={
+                    "status": 404,
+                    "message": student_result.get("error") or student_result.get("message", "Estudiante no encontrado"),
+                    "data": None
+                }
+            )
+        
+        # Obtener la extensión del archivo original
+        file_extension = Path(file.filename).suffix.lower() if file.filename else ''
+        
+        # Validar que sea una imagen
+        allowed_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp']
+        if file_extension not in allowed_extensions:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={
+                    "status": 400,
+                    "message": f"Tipo de archivo no permitido. Extensiones permitidas: {', '.join(allowed_extensions)}",
+                    "data": None
+                }
+            )
+        
+        # Generar fecha y hora en formato YYYYMMDDHHMMSS
+        date_hour = datetime.now().strftime("%Y%m%d%H%M%S")
+        
+        # Generar nombre del archivo: {student_id}_photo_{date_hour}{extension}
+        unique_filename = f"{student_id}_1_1_{date_hour}{file_extension}"
+        
+        # Crear directorio si no existe
+        upload_dir = Path("files/system/students")
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        
+        file_path = upload_dir / unique_filename
+        
+        # Guardar el archivo
+        content = await file.read()
+        with open(file_path, "wb") as f:
+            f.write(content)
+        
+        return JSONResponse(
+            status_code=status.HTTP_201_CREATED,
+            content={
+                "status": 201,
+                "message": "Foto subida exitosamente",
+                "data": {
+                    "student_id": student_id,
+                    "filename": unique_filename,
+                    "file_path": str(file_path),
+                    "file_size": len(content)
+                }
+            }
+        )
+        
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "status": 500,
+                "message": f"Error subiendo foto: {str(e)}",
+                "data": None
+            }
+        )

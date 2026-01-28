@@ -38,6 +38,11 @@ def index(user: UserList, session_user: UserLogin = Depends(get_current_active_u
 @users.post("/store")
 def store(user:User, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
     user_inputs = user.dict()
+    # Mapear fullname a full_name si viene fullname
+    if 'fullname' in user_inputs and user_inputs.get('fullname') and not user_inputs.get('full_name'):
+        user_inputs['full_name'] = user_inputs['fullname']
+    # Eliminar fullname del diccionario para evitar conflictos
+    user_inputs.pop('fullname', None)
     result = UserClass(db).store(user_inputs)
 
     if result == 0:

@@ -629,6 +629,7 @@ class DocumentModel(Base):
     document = Column(String(255))
     added_date = Column(DateTime)
     updated_date = Column(DateTime)
+    deleted_date = Column(DateTime, nullable=True)
 
 class BirthCertificateDocumentModel(Base):
     __tablename__ = 'birth_certificate_documents'
@@ -798,3 +799,183 @@ class EventModel(Base):
     description = Column(Text)
     added_date = Column(DateTime)
     updated_date = Column(DateTime)
+
+class BankDescriptionModel(Base):
+    __tablename__ = 'bank_descriptions'
+    
+    id = Column(Integer, primary_key=True)
+    school_id = Column(Integer, nullable=True)
+    document_id = Column(Integer, nullable=True)
+    question_number = Column(Integer, nullable=True)
+    bank_description = Column(String(255), nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+
+class ProgressStatusStudentModel(Base):
+    __tablename__ = 'progress_status_students'
+    
+    id = Column(Integer, primary_key=True)
+    version_id = Column(Integer, nullable=True)
+    student_id = Column(Integer, nullable=False)
+    school_id = Column(Integer, nullable=False)
+    document_id = Column(Integer, nullable=False, default=18)
+    nee_id = Column(Integer, nullable=True)
+    course_id = Column(Integer, nullable=True)
+    guardian_relationship_id = Column(Integer, nullable=True)
+    period_id = Column(Integer, nullable=True)
+    responsible_professionals = Column(Text, nullable=True)  # JSON almacenado como Text
+    progress_date = Column(Date, nullable=True)
+    
+    # II. Estado de avance por área
+    pedagogical_language = Column(Text, nullable=True)
+    pedagogical_mathematics = Column(Text, nullable=True)
+    psychopedagogical = Column(Text, nullable=True)
+    speech_therapy = Column(Text, nullable=True)
+    psychological = Column(Text, nullable=True)
+    kinesiology = Column(Text, nullable=True)
+    occupational_therapy = Column(Text, nullable=True)
+    deaf_co_educator = Column(Text, nullable=True)
+    
+    # III. Síntesis, comentarios u observaciones
+    synthesis_comments = Column(Text, nullable=True)
+    
+    # IV. Sugerencias
+    suggestions_family = Column(Text, nullable=True)
+    suggestions_establishment = Column(Text, nullable=True)
+    
+    # Archivo adjunto
+    file = Column(String(500), nullable=True)
+    
+    # Campos de auditoría
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class IndividualSupportPlanModel(Base):
+    __tablename__ = 'individual_support_plans'
+    
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer, nullable=True)
+    document_type_id = Column(Integer, nullable=True)
+    school_id = Column(Integer, nullable=True)
+    period_id = Column(Integer, nullable=True)
+    
+    # I. Identificación del/la estudiante
+    student_full_name = Column(String(255), nullable=True)
+    student_identification_number = Column(String(50), nullable=True)
+    student_born_date = Column(Date, nullable=True)
+    student_age = Column(String(10), nullable=True)
+    student_nee_id = Column(Integer, nullable=True)
+    student_school = Column(String(255), nullable=True)
+    student_course_id = Column(Integer, nullable=True)
+    elaboration_date = Column(Date, nullable=True)
+    
+    # II. Fortalezas del/la estudiante
+    social_affective_strengths = Column(Text, nullable=True)
+    cognitive_strengths = Column(Text, nullable=True)
+    curricular_strengths = Column(Text, nullable=True)
+    family_strengths = Column(Text, nullable=True)
+    
+    # III. Propuesta de intervención - Ed. Diferencial
+    intervention_ed_diferencial = Column(Text, nullable=True)  # Objetivos separados por comas
+    intervention_ed_diferencial_strategies = Column(Text, nullable=True)
+    
+    # III. Propuesta de intervención - Psicopedagogía
+    intervention_psicopedagogia = Column(Text, nullable=True)  # Objetivos separados por comas
+    intervention_psicopedagogia_strategies = Column(Text, nullable=True)
+    
+    # III. Propuesta de intervención - Fonoaudiología
+    intervention_fonoaudiologia = Column(Text, nullable=True)  # Objetivos separados por comas
+    intervention_fonoaudiologia_strategies = Column(Text, nullable=True)
+    
+    # III. Propuesta de intervención - Psicología
+    intervention_psicologia = Column(Text, nullable=True)  # Objetivos separados por comas
+    intervention_psicologia_strategies = Column(Text, nullable=True)
+    
+    # III. Propuesta de intervención - Terapia ocupacional
+    intervention_terapia_ocupacional = Column(Text, nullable=True)  # Objetivos separados por comas
+    intervention_terapia_ocupacional_strategies = Column(Text, nullable=True)
+    
+    # III. Propuesta de intervención - Kinesiología
+    intervention_kinesiologia = Column(Text, nullable=True)  # Objetivos separados por comas
+    intervention_kinesiologia_strategies = Column(Text, nullable=True)
+    
+    # III. Propuesta de intervención - Co-educador sordo
+    intervention_coeducador_sordo = Column(Text, nullable=True)  # Objetivos separados por comas
+    intervention_coeducador_sordo_strategies = Column(Text, nullable=True)
+    
+    # III. Propuesta de intervención - Int. lengua de señas
+    intervention_int_lengua_senas = Column(Text, nullable=True)  # Objetivos separados por comas
+    intervention_int_lengua_senas_strategies = Column(Text, nullable=True)
+    
+    # IV. Seguimiento del PAI
+    follow_up_pai = Column(Text, nullable=True)
+    
+    # Campos de auditoría
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class IndividualSupportPlanProfessionalModel(Base):
+    __tablename__ = 'individual_support_plan_professionals'
+    
+    id = Column(Integer, primary_key=True)
+    individual_support_plan_id = Column(Integer, nullable=False)
+    professional_id = Column(Integer, nullable=False)
+    career_type_id = Column(Integer, nullable=True)
+    registration_number = Column(String(100), nullable=True)
+    days_hours = Column(String(255), nullable=True)  # Días y horarios de apoyo
+    from_date = Column(Date, nullable=True)
+    to_date = Column(Date, nullable=True)
+    support_modality = Column(String(255), nullable=True)
+    
+    # Campos de auditoría
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class AuditModel(Base):
+    __tablename__ = 'audits'
+    
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    rol_id = Column(Integer, ForeignKey('rols.id'), nullable=True)
+    added_date = Column(DateTime, nullable=True, default=datetime.utcnow)
+    updated_date = Column(DateTime, nullable=True, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class ProgressStatusIndividualSupportModel(Base):
+    __tablename__ = 'progress_status_individual_supports'
+    
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer, nullable=False)
+    school_id = Column(Integer, nullable=True)
+    document_type_id = Column(Integer, nullable=True)  # Documento 19 - Estado de avance PAI
+    
+    # I. Identificación del/la estudiante
+    student_full_name = Column(String(255), nullable=True)
+    student_identification_number = Column(String(50), nullable=True)
+    student_born_date = Column(Date, nullable=True)
+    student_age = Column(String(10), nullable=True)
+    student_nee_id = Column(Integer, nullable=True)
+    student_school = Column(String(255), nullable=True)
+    student_course_id = Column(Integer, nullable=True)
+    
+    # Fecha y periodo
+    progress_date = Column(Date, nullable=True)  # Fecha estado de avance
+    period_id = Column(Integer, nullable=True)  # 1=1er Trimestre, 2=2do Trimestre, 3=1er Semestre, 4=2do Semestre
+    
+    # Apoderado/a
+    guardian_relationship_id = Column(Integer, nullable=True)  # Relación con el/la estudiante (family_member_id)
+    guardian_name = Column(String(255), nullable=True)
+    
+    # Profesionales responsables
+    responsible_professionals = Column(String(500), nullable=True)  # IDs de profesionales separados por coma
+    
+    # PAI seleccionado y objetivos
+    selected_pai_id = Column(Integer, nullable=True)  # ID del Plan de Apoyo Individual (individual_support_plans.id)
+    pai_objectives = Column(Text, nullable=True)  # JSON Array [{id, number, description, progress_level}]
+    
+    # Campos de auditoría
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)

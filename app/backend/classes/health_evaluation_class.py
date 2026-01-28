@@ -53,6 +53,51 @@ class HealthEvaluationClass:
             error_message = str(e)
             return {"status": "error", "message": error_message}
 
+    def get_by_student_id(self, student_id: int) -> Any:
+        """
+        Obtiene la evaluación de salud más reciente para un estudiante por su student_id.
+        """
+        try:
+            evaluation = self.db.query(HealthEvaluationModel).filter(
+                HealthEvaluationModel.student_id == student_id
+            ).order_by(HealthEvaluationModel.id.desc()).first()
+
+            if evaluation:
+                return {
+                    "id": evaluation.id,
+                    "student_id": evaluation.student_id,
+                    "gender_id": evaluation.gender_id,
+                    "nationality_id": evaluation.nationality_id,
+                    "consultation_reason_id": evaluation.consultation_reason_id,
+                    "profesional_id": evaluation.profesional_id,
+                    "procedence_id": evaluation.procedence_id,
+                    "full_name": evaluation.full_name,
+                    "identification_number": evaluation.identification_number,
+                    "born_date": evaluation.born_date.strftime("%Y-%m-%d") if evaluation.born_date else None,
+                    "age": evaluation.age,
+                    "native_language": evaluation.native_language,
+                    "language_usually_used": evaluation.language_usually_used,
+                    "consultation_reason_detail": evaluation.consultation_reason_detail,
+                    "professional_identification_number": evaluation.professional_identification_number,
+                    "professional_registration_number": evaluation.professional_registration_number,
+                    "professional_specialty": evaluation.professional_specialty,
+                    "procedence_other": evaluation.procedence_other,
+                    "professional_contact": evaluation.professional_contact,
+                    "evaluation_date": evaluation.evaluation_date.strftime("%Y-%m-%d") if evaluation.evaluation_date else None,
+                    "reevaluation_date": evaluation.reevaluation_date.strftime("%Y-%m-%d") if evaluation.reevaluation_date else None,
+                    "general_assessment": evaluation.general_assessment,
+                    "diagnosis": evaluation.diagnosis,
+                    "indications": evaluation.indications,
+                    "added_date": evaluation.added_date.strftime("%Y-%m-%d %H:%M:%S") if evaluation.added_date else None,
+                    "updated_date": evaluation.updated_date.strftime("%Y-%m-%d %H:%M:%S") if evaluation.updated_date else None
+                }
+            else:
+                return {"status": "error", "message": "No se encontró evaluación de salud para este estudiante."}
+
+        except Exception as e:
+            error_message = str(e)
+            return {"status": "error", "message": error_message}
+
     def get_all(self, student_id: Optional[int] = None) -> Any:
         """
         Obtiene la lista de evaluaciones de salud almacenadas.

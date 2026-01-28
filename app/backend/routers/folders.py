@@ -111,10 +111,11 @@ async def upload_document(
                 }
             )
 
-        # Obtener document_type_id desde document_id
+        # Obtener document_type_id desde document_id (solo documentos no eliminados)
         from app.backend.db.models import DocumentModel
         document_info = db.query(DocumentModel).filter(
-            DocumentModel.id == document_id
+            DocumentModel.id == document_id,
+            DocumentModel.deleted_date.is_(None)
         ).first()
         
         if not document_info:

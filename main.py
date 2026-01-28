@@ -46,6 +46,11 @@ from app.backend.routers.folders import folders
 from app.backend.routers.health_evaluations import health_evaluations
 from app.backend.routers.artificial_intelligence import artificial_intelligence
 from app.backend.routers.events import events
+from app.backend.routers.bank_descriptions import bank_descriptions
+from app.backend.routers.progress_status_students import progress_status_students
+from app.backend.routers.individual_support_plans import individual_support_plans
+from app.backend.routers.progress_status_individual_supports import progress_status_individual_supports
+from app.backend.routers.audits import audits
 
 app = FastAPI(root_path="/api")
 application = app
@@ -136,6 +141,11 @@ app.include_router(folders)
 app.include_router(health_evaluations)
 app.include_router(artificial_intelligence)
 app.include_router(events)
+app.include_router(bank_descriptions)
+app.include_router(progress_status_students)
+app.include_router(individual_support_plans)
+app.include_router(progress_status_individual_supports)
+app.include_router(audits)
 
 if __name__ == "__main__":
     # Para aumentar el límite de tamaño de archivo, configurar en el servidor
