@@ -110,6 +110,15 @@ class DocumentsClass:
                     output_directory=output_directory
                 )
             
+            # Si es documento 8 (Informe Fonoaudiológico), usar función específica
+            if document_id == 8:
+                return DocumentsClass._generate_fonoaudiological_report_from_scratch(
+                    document_id=document_id,
+                    report_data=document_data,
+                    db=db,
+                    output_directory=output_directory
+                )
+            
             # Si hay template_path, usar método de sustitución
             if template_path:
                 # Si no se proporcionan tag_replacements, generar automáticamente desde document_data
@@ -2818,6 +2827,234 @@ class DocumentsClass:
             return {
                 "status": "error",
                 "message": f"Error generando PDF desde cero: {str(e)}",
+                "filename": None,
+                "file_path": None
+            }
+
+    @staticmethod
+    def _escape_html_for_paragraph(s: Optional[str]) -> str:
+        """Escapa caracteres HTML para usar en ReportLab Paragraph."""
+        if s is None or not isinstance(s, str):
+            return ""
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+    @staticmethod
+    def _generate_fonoaudiological_report_from_scratch(
+        document_id: int,
+        report_data: Dict[str, Any],
+        db: Optional[Session] = None,
+        output_directory: str = "files/system/students"
+    ) -> Dict[str, Any]:
+        """
+        Genera un PDF de Informe Fonoaudiológico (Documento 8) desde cero usando ReportLab.
+        Mismo estilo que PAI y Estado de Avance.
+        """
+        try:
+            if not REPORTLAB_AVAILABLE:
+                return {
+                    "status": "error",
+                    "message": "ReportLab no está instalado. Instala con: pip install reportlab",
+                    "filename": None,
+                    "file_path": None
+                }
+
+            student_name = report_data.get("student_full_name", "estudiante").replace(" ", "_")
+            unique_filename = f"informe_fonoaudologico_{student_name}_{uuid.uuid4().hex[:8]}.pdf"
+            output_file = Path(output_directory) / unique_filename
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+
+            doc = SimpleDocTemplate(
+                str(output_file),
+                pagesize=A4,
+                rightMargin=2.5*cm,
+                leftMargin=2.5*cm,
+                topMargin=3*cm,
+                bottomMargin=2.5*cm
+            )
+            elements = []
+            styles = getSampleStyleSheet()
+
+            title_style = ParagraphStyle(
+                'CustomTitle',
+                parent=styles['Heading1'],
+                fontSize=16,
+                textColor=colors.HexColor('#000000'),
+                spaceAfter=25,
+                spaceBefore=15,
+                alignment=TA_CENTER,
+                fontName='Helvetica-Bold'
+            )
+            section_style = ParagraphStyle(
+                'SectionStyle',
+                parent=styles['Normal'],
+                fontSize=12,
+                textColor=colors.HexColor('#000000'),
+                spaceAfter=12,
+                spaceBefore=15,
+                fontName='Helvetica-Bold',
+                alignment=TA_LEFT,
+                backColor=colors.HexColor('#E8E8E8'),
+                borderPadding=6
+            )
+            subtitle_style = ParagraphStyle(
+                'Subtitle',
+                parent=styles['Normal'],
+                fontSize=10,
+                textColor=colors.HexColor('#000000'),
+                spaceAfter=6,
+                spaceBefore=10,
+                fontName='Helvetica-Bold'
+            )
+            normal_style = ParagraphStyle(
+                'CustomNormal',
+                parent=styles['Normal'],
+                fontSize=10,
+                textColor=colors.HexColor('#000000'),
+                alignment=TA_LEFT,
+                leading=12,
+                spaceAfter=4
+            )
+            label_style = ParagraphStyle(
+                'LabelStyle',
+                parent=styles['Normal'],
+                fontSize=10,
+                textColor=colors.HexColor('#000000'),
+                alignment=TA_LEFT,
+                fontName='Helvetica-Bold',
+                backColor=colors.HexColor('#F5F5F5'),
+                borderPadding=4
+            )
+
+            def get_value(key: str, default: str = "") -> str:
+                v = report_data.get(key)
+                if v is None:
+                    return default
+                return str(v).strip() if v else default
+
+            def format_date(date_val) -> str:
+                if not date_val:
+                    return ""
+                try:
+                    if isinstance(date_val, str):
+                        dt = datetime.strptime(date_val, "%Y-%m-%d").date()
+                        return dt.strftime("%d-%m-%Y")
+                    return ""
+                except Exception:
+                    return str(date_val) if date_val else ""
+
+            def add_section(title: str):
+                elements.append(Paragraph(title, section_style))
+                elements.append(Spacer(1, 0.2*inch))
+
+            def add_text_block(label: str, text: str):
+                if not text:
+                    return
+                elements.append(Paragraph(f"<b>{label}</b>", subtitle_style))
+                elements.append(Paragraph(DocumentsClass._escape_html_for_paragraph(text), normal_style))
+                elements.append(Spacer(1, 0.15*inch))
+
+            # Título
+            elements.append(Paragraph("Informe Fonoaudiológico (informal)", title_style))
+            elements.append(Spacer(1, 0.4*inch))
+
+            # I. IDENTIFICACIÓN DEL/LA ESTUDIANTE
+            # Orden: Nombre, RUT, Fecha nacimiento, Establecimiento ID, Curso, Profesional/es responsable/s, Fecha Informe, Tipo
+            add_section("I. Identificación del/la estudiante")
+            student_fullname = get_value("student_full_name", "")
+            student_rut = get_value("student_identification_number", "")
+            student_born = format_date(get_value("student_born_date", ""))
+            establishment = get_value("establishment_id", "")
+            course_name = get_value("course_name", "")
+            prof_names = get_value("responsible_professionals_names", "")
+            report_date = format_date(get_value("report_date", ""))
+            type_id = report_data.get("type_id")
+            type_label = "Ingreso" if type_id == 1 else ("Reevaluación" if type_id == 2 else get_value("type_label", ""))
+
+            id_data = []
+            id_spans = []
+
+            def _add_row(lbl: str, val: str):
+                if not val:
+                    return
+                r = len(id_data)
+                id_data.append([Paragraph(f"<b>{lbl}</b>", label_style), ""])
+                id_spans.append(('SPAN', (0, r), (1, r)))
+                id_data.append([Paragraph(DocumentsClass._escape_html_for_paragraph(val), normal_style), ""])
+                id_spans.append(('SPAN', (0, r + 1), (1, r + 1)))
+
+            _add_row("Nombre", student_fullname)
+            _add_row("RUT", student_rut)
+            _add_row("Fecha de nacimiento", student_born)
+            _add_row("Establecimiento ID", establishment)
+            _add_row("Curso", course_name)
+            _add_row("Profesional/es responsable/s", prof_names)
+            _add_row("Fecha de Informe", report_date)
+            _add_row("Tipo", type_label)
+
+            if id_data:
+                tbl = Table(id_data, colWidths=[7.5*cm, 7.5*cm])
+                tbl.setStyle(TableStyle([
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 8),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+                    ('TOPPADDING', (0, 0), (-1, -1), 8),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),
+                ] + id_spans))
+                elements.append(tbl)
+            elements.append(Spacer(1, 0.3*inch))
+
+            # II. DESARROLLO DEL INFORME
+            add_section("II. Desarrollo del Informe")
+            add_text_block("Motivo de la evaluación", get_value("reason_evaluation", ""))
+            add_text_block("Instrumentos de evaluación utilizado", get_value("evaluation_instruments", ""))
+            add_text_block("Antecedentes relevantes", get_value("relevant_background", ""))
+            add_text_block("Conductas observadas durante la evaluación", get_value("behaviors_observed", ""))
+
+            # III. ANÁLISIS DE ÁREAS
+            add_section("III. Análisis de áreas")
+            add_text_block("Estructuras y funciones orofaciales y auditivas", get_value("orofacial_auditory", ""))
+            add_text_block("Nivel fonológico", get_value("phonological_level", ""))
+            add_text_block("Nivel morfosintáctico", get_value("morphosyntactic_level", ""))
+            add_text_block("Nivel semántico", get_value("semantic_level", ""))
+            add_text_block("Nivel pragmático", get_value("pragmatic_level", ""))
+            add_text_block("Observaciones adicionales", get_value("additional_observations", ""))
+
+            # IV. SÍNTESIS DIAGNÓSTICA Y/O CONCLUSIONES
+            add_section("IV. Síntesis diagnóstica y/o conclusiones")
+            diag = get_value("diagnostic_synthesis", "")
+            if diag:
+                add_text_block("Síntesis diagnóstica y/o conclusiones", diag)
+
+            # V. SUGERENCIAS
+            sug_fam = get_value("suggestions_family", "")
+            sug_est = get_value("suggestions_establishment", "")
+            if sug_fam or sug_est:
+                add_section("V. Sugerencias")
+                if sug_fam:
+                    add_text_block("Sugerencias a la familia", sug_fam)
+                if sug_est:
+                    add_text_block("Sugerencias al establecimiento", sug_est)
+
+            doc.build(elements)
+            return {
+                "status": "success",
+                "message": "PDF generado exitosamente",
+                "filename": unique_filename,
+                "file_path": str(output_file)
+            }
+        except ImportError:
+            return {
+                "status": "error",
+                "message": "ReportLab no está instalado. Instala con: pip install reportlab",
+                "filename": None,
+                "file_path": None
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Error generando informe fonoaudiológico: {str(e)}",
                 "filename": None,
                 "file_path": None
             }

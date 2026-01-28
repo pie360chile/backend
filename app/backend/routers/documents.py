@@ -6,6 +6,7 @@ from app.backend.classes.health_evaluation_class import HealthEvaluationClass
 from app.backend.classes.progress_status_student_class import ProgressStatusStudentClass
 from app.backend.classes.student_guardian_class import StudentGuardianClass
 from app.backend.classes.individual_support_plan_class import IndividualSupportPlanClass
+from app.backend.classes.fonoaudiological_report_class import FonoaudiologicalReportClass
 from app.backend.db.database import get_db
 from app.backend.db.models import (
     FolderModel,
@@ -32,6 +33,7 @@ from sqlalchemy.orm import Session
 from pathlib import Path
 import tempfile
 import os
+import json
 from datetime import datetime, date
 import uuid
 from shutil import move
@@ -713,6 +715,93 @@ async def generate_document(
                 )
             
             # Retornar el archivo PDF generado
+            return FileResponse(
+                path=result["file_path"],
+                filename=result["filename"],
+                media_type='application/pdf'
+            )
+        
+        # Si document_id = 8, generar Informe Fonoaudiológico desde cero
+        if document_id == 8:
+            fono_service = FonoaudiologicalReportClass(db)
+            fono_result = fono_service.get_by_student_id(student_id)
+            
+            if isinstance(fono_result, dict) and fono_result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    content={
+                        "status": 404,
+                        "message": "No se encontró informe fonoaudiológico para este estudiante",
+                        "data": None
+                    }
+                )
+            
+            report_data = fono_result.copy()
+            report_data.pop("id", None)
+            report_data.pop("added_date", None)
+            report_data.pop("updated_date", None)
+            
+            # course_id -> nombre del curso
+            if report_data.get("course_id"):
+                course = db.query(CourseModel).filter(CourseModel.id == report_data["course_id"]).first()
+                if course and course.course_name:
+                    report_data["course_name"] = course.course_name
+                report_data.pop("course_id", None)
+            else:
+                report_data["course_name"] = ""
+            
+            # establishment_id: si es numérico, opcionalmente resolver a nombre; si no, usar tal cual
+            estab = report_data.get("establishment_id")
+            if estab is not None and str(estab).strip().isdigit():
+                try:
+                    sid = int(estab)
+                    school = db.query(SchoolModel).filter(SchoolModel.id == sid).first()
+                    if school and school.school_name:
+                        report_data["establishment_id"] = school.school_name
+                except (ValueError, TypeError):
+                    pass
+            
+            # responsible_professionals: list de IDs -> nombres
+            rp = report_data.get("responsible_professionals")
+            if rp is not None:
+                ids = rp if isinstance(rp, list) else []
+                if isinstance(rp, str):
+                    try:
+                        ids = json.loads(rp)
+                    except Exception:
+                        ids = []
+                names = []
+                for pid in ids:
+                    try:
+                        prof_id = int(pid)
+                        professional = db.query(ProfessionalModel).filter(ProfessionalModel.id == prof_id).first()
+                        if professional:
+                            fn = f"{professional.names or ''} {professional.lastnames or ''}".strip()
+                            if fn:
+                                names.append(fn)
+                    except (ValueError, TypeError):
+                        pass
+                report_data["responsible_professionals_names"] = ", ".join(names) if names else ""
+            report_data.pop("responsible_professionals", None)
+            
+            result = DocumentsClass.generate_document_pdf(
+                document_id=8,
+                document_data=report_data,
+                db=db,
+                template_path=None,
+                output_directory="files/system/students"
+            )
+            
+            if result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    content={
+                        "status": 500,
+                        "message": result.get("message", "Error generando informe fonoaudiológico"),
+                        "data": None
+                    }
+                )
+            
             return FileResponse(
                 path=result["file_path"],
                 filename=result["filename"],

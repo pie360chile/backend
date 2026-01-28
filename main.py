@@ -50,6 +50,7 @@ from app.backend.routers.bank_descriptions import bank_descriptions
 from app.backend.routers.progress_status_students import progress_status_students
 from app.backend.routers.individual_support_plans import individual_support_plans
 from app.backend.routers.progress_status_individual_supports import progress_status_individual_supports
+from app.backend.routers.fonoaudiological_reports import fonoaudiological_reports
 from app.backend.routers.audits import audits
 
 app = FastAPI(root_path="/api")
@@ -145,6 +146,7 @@ app.include_router(bank_descriptions)
 app.include_router(progress_status_students)
 app.include_router(individual_support_plans)
 app.include_router(progress_status_individual_supports)
+app.include_router(fonoaudiological_reports)
 app.include_router(audits)
 
 if __name__ == "__main__":

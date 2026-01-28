@@ -1017,3 +1017,59 @@ class ProgressStatusIndividualSupportList(BaseModel):
     per_page: int = 10
     student_id: Optional[int] = None
     school_id: Optional[int] = None
+
+# Fonoaudiological Report schemas (Informe fonoaudiológico - Documento 8)
+class StoreFonoaudiologicalReport(BaseModel):
+    student_id: Optional[int] = None
+    document_type_id: Optional[int] = 8
+    student_full_name: Optional[str] = None
+    student_identification_number: Optional[str] = None
+    student_born_date: Optional[str] = None  # "YYYY-MM-DD"
+    establishment_id: Optional[str] = None
+    course_id: Optional[int] = None
+    responsible_professionals: Optional[List[int]] = None  # JSON: IDs de profesionales
+    report_date: Optional[str] = None  # "YYYY-MM-DD"
+    type_id: Optional[int] = None  # 1=Ingreso, 2=Reevaluación
+    reason_evaluation: Optional[str] = None
+    evaluation_instruments: Optional[str] = None
+    relevant_background: Optional[str] = None
+    behaviors_observed: Optional[str] = None
+    orofacial_auditory: Optional[str] = None
+    phonological_level: Optional[str] = None
+    morphosyntactic_level: Optional[str] = None
+    semantic_level: Optional[str] = None
+    pragmatic_level: Optional[str] = None
+    additional_observations: Optional[str] = None
+    diagnostic_synthesis: Optional[str] = None
+    suggestions_family: Optional[str] = None
+    suggestions_establishment: Optional[str] = None
+
+class UpdateFonoaudiologicalReport(BaseModel):
+    student_id: Optional[int] = None
+    document_type_id: Optional[int] = None
+    student_full_name: Optional[str] = None
+    student_identification_number: Optional[str] = None
+    student_born_date: Optional[str] = None
+    establishment_id: Optional[str] = None
+    course_id: Optional[int] = None
+    responsible_professionals: Optional[List[int]] = None
+    report_date: Optional[str] = None
+    type_id: Optional[int] = None
+    reason_evaluation: Optional[str] = None
+    evaluation_instruments: Optional[str] = None
+    relevant_background: Optional[str] = None
+    behaviors_observed: Optional[str] = None
+    orofacial_auditory: Optional[str] = None
+    phonological_level: Optional[str] = None
+    morphosyntactic_level: Optional[str] = None
+    semantic_level: Optional[str] = None
+    pragmatic_level: Optional[str] = None
+    additional_observations: Optional[str] = None
+    diagnostic_synthesis: Optional[str] = None
+    suggestions_family: Optional[str] = None
+    suggestions_establishment: Optional[str] = None
+
+class FonoaudiologicalReportList(BaseModel):
+    page: Optional[int] = None
+    per_page: int = 10
+    student_id: Optional[int] = None

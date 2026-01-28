@@ -979,3 +979,34 @@ class ProgressStatusIndividualSupportModel(Base):
     added_date = Column(DateTime, nullable=True)
     updated_date = Column(DateTime, nullable=True)
     deleted_date = Column(DateTime, nullable=True)
+
+class FonoaudiologicalReportModel(Base):
+    __tablename__ = 'fonoaudiological_report'
+    
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer, nullable=False)
+    document_type_id = Column(Integer, nullable=True)  # 8
+    student_full_name = Column(String(255), nullable=True)
+    student_identification_number = Column(String(50), nullable=True)
+    student_born_date = Column(Date, nullable=True)
+    establishment_id = Column(String(255), nullable=True)  # Nombre o ID del establecimiento
+    course_id = Column(Integer, nullable=True)
+    responsible_professionals = Column(Text, nullable=True)  # JSON: IDs de profesionales responsables
+    report_date = Column(Date, nullable=True)
+    type_id = Column(Integer, nullable=True)  # 1=Ingreso, 2=Reevaluación (tinyint)
+    reason_evaluation = Column(Text, nullable=True)
+    evaluation_instruments = Column(Text, nullable=True)
+    relevant_background = Column(Text, nullable=True)
+    behaviors_observed = Column(Text, nullable=True)
+    orofacial_auditory = Column(Text, nullable=True)
+    phonological_level = Column(Text, nullable=True)
+    morphosyntactic_level = Column(Text, nullable=True)
+    semantic_level = Column(Text, nullable=True)
+    pragmatic_level = Column(Text, nullable=True)
+    additional_observations = Column(Text, nullable=True)
+    diagnostic_synthesis = Column(Text, nullable=True)
+    suggestions_family = Column(Text, nullable=True)
+    suggestions_establishment = Column(Text, nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
