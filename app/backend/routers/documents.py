@@ -7,6 +7,7 @@ from app.backend.classes.progress_status_student_class import ProgressStatusStud
 from app.backend.classes.student_guardian_class import StudentGuardianClass
 from app.backend.classes.individual_support_plan_class import IndividualSupportPlanClass
 from app.backend.classes.fonoaudiological_report_class import FonoaudiologicalReportClass
+from app.backend.classes.school_integration_program_exit_certificate_class import SchoolIntegrationProgramExitCertificateClass
 from app.backend.db.database import get_db
 from app.backend.db.models import (
     FolderModel,
@@ -20,7 +21,8 @@ from app.backend.db.models import (
     StudentAcademicInfoModel,
     StudentPersonalInfoModel,
     CommuneModel,
-    SpecialEducationalNeedModel
+    SpecialEducationalNeedModel,
+    StudentGuardianModel,
 )
 from app.backend.auth.auth_user import get_current_active_user
 from app.backend.schemas import (
@@ -806,6 +808,111 @@ async def generate_document(
                 path=result["file_path"],
                 filename=result["filename"],
                 media_type='application/pdf'
+            )
+        
+        # Si document_id = 23, generar Certificado de egreso PIE desde cero
+        if document_id == 23:
+            cert_service = SchoolIntegrationProgramExitCertificateClass(db)
+            cert_result = cert_service.get_by_student_id(student_id)
+            if isinstance(cert_result, dict) and cert_result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    content={
+                        "status": 404,
+                        "message": "No se encontró certificado de egreso PIE para este estudiante",
+                        "data": None,
+                    },
+                )
+            cert_data = cert_result.copy()
+            cert_data.pop("id", None)
+            cert_data.pop("added_date", None)
+            cert_data.pop("updated_date", None)
+            cert_data.pop("document_description", None)
+
+            student_data = student_result.get("student_data", {}) if isinstance(student_result, dict) else {}
+            personal = student_data.get("personal_data") or {}
+            academic = student_data.get("academic_info") or {}
+            _fn = f"{personal.get('names') or ''} {personal.get('father_lastname') or ''} {personal.get('mother_lastname') or ''}".strip()
+            cert_data["student_full_name"] = _fn if _fn else f"Estudiante {student_id}"
+            cert_data["student_rut"] = personal.get("identification_number") or student_data.get("identification_number") or ""
+
+            school_id = student_data.get("school_id")
+            if school_id:
+                school = db.query(SchoolModel).filter(SchoolModel.id == school_id).first()
+                cert_data["establishment_name"] = school.school_name if school and school.school_name else ""
+            else:
+                cert_data["establishment_name"] = ""
+            course_id = academic.get("course_id")
+            if course_id:
+                course = db.query(CourseModel).filter(CourseModel.id == course_id).first()
+                cert_data["course_name"] = course.course_name if course and course.course_name else "Sin curso"
+            else:
+                cert_data["course_name"] = "Sin curso"
+            nee_id = academic.get("special_educational_need_id")
+            if nee_id:
+                nee = db.query(SpecialEducationalNeedModel).filter(SpecialEducationalNeedModel.id == nee_id).first()
+                cert_data["nee_name"] = nee.special_educational_needs if nee and nee.special_educational_needs else ""
+            else:
+                cert_data["nee_name"] = ""
+
+            prof_id = cert_data.get("professional_id")
+            if prof_id:
+                prof = db.query(ProfessionalModel).filter(ProfessionalModel.id == prof_id).first()
+                if prof:
+                    cert_data["professional_fullname"] = f"{prof.names or ''} {prof.lastnames or ''}".strip()
+                    cert_data["professional_rut"] = prof.identification_number or ""
+                    _career = (cert_data.get("professional_career") or "").strip()
+                    if _career:
+                        cert_data["professional_role"] = _career
+                    elif prof.career_type_id:
+                        from app.backend.db.models import CareerTypeModel
+                        ct = db.query(CareerTypeModel).filter(CareerTypeModel.id == prof.career_type_id).first()
+                        cert_data["professional_role"] = ct.career_type if ct and ct.career_type else ""
+                    else:
+                        cert_data["professional_role"] = ""
+                else:
+                    cert_data["professional_fullname"] = cert_data["professional_rut"] = cert_data["professional_role"] = ""
+            else:
+                cert_data["professional_fullname"] = cert_data["professional_rut"] = cert_data["professional_role"] = ""
+            cert_data.pop("professional_id", None)
+            cert_data.pop("professional_certification_number", None)
+            cert_data.pop("professional_career", None)
+
+            guardian_id = cert_data.get("guardian_id")
+            g = None
+            if guardian_id:
+                g = db.query(StudentGuardianModel).filter(StudentGuardianModel.id == guardian_id).first()
+            if not g:
+                g = db.query(StudentGuardianModel).filter(
+                    StudentGuardianModel.student_id == student_id
+                ).order_by(StudentGuardianModel.id.desc()).first()
+            if g:
+                cert_data["guardian_fullname"] = f"{g.names or ''} {g.father_lastname or ''} {g.mother_lastname or ''}".strip()
+                cert_data["guardian_rut"] = g.identification_number or ""
+            else:
+                cert_data["guardian_fullname"] = cert_data["guardian_rut"] = ""
+            cert_data.pop("guardian_id", None)
+
+            result = DocumentsClass.generate_document_pdf(
+                document_id=23,
+                document_data=cert_data,
+                db=db,
+                template_path=None,
+                output_directory="files/system/students",
+            )
+            if result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    content={
+                        "status": 500,
+                        "message": result.get("message", "Error generando certificado de egreso PIE"),
+                        "data": None,
+                    },
+                )
+            return FileResponse(
+                path=result["file_path"],
+                filename=result["filename"],
+                media_type="application/pdf",
             )
         
         # Obtener datos del estudiante

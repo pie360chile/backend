@@ -51,6 +51,7 @@ from app.backend.routers.progress_status_students import progress_status_student
 from app.backend.routers.individual_support_plans import individual_support_plans
 from app.backend.routers.progress_status_individual_supports import progress_status_individual_supports
 from app.backend.routers.fonoaudiological_reports import fonoaudiological_reports
+from app.backend.routers.school_integration_program_exit_certificates import school_integration_program_exit_certificates
 from app.backend.routers.audits import audits
 
 app = FastAPI(root_path="/api")
@@ -147,6 +148,7 @@ app.include_router(progress_status_students)
 app.include_router(individual_support_plans)
 app.include_router(progress_status_individual_supports)
 app.include_router(fonoaudiological_reports)
+app.include_router(school_integration_program_exit_certificates)
 app.include_router(audits)
 
 if __name__ == "__main__":

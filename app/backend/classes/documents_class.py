@@ -119,6 +119,15 @@ class DocumentsClass:
                     output_directory=output_directory
                 )
             
+            # Si es documento 23 (Certificado de egreso PIE), usar función específica
+            if document_id == 23:
+                return DocumentsClass._generate_school_integration_exit_certificate_from_scratch(
+                    document_id=document_id,
+                    cert_data=document_data,
+                    db=db,
+                    output_directory=output_directory
+                )
+            
             # Si hay template_path, usar método de sustitución
             if template_path:
                 # Si no se proporcionan tag_replacements, generar automáticamente desde document_data
@@ -3005,6 +3014,9 @@ class DocumentsClass:
                 elements.append(tbl)
             elements.append(Spacer(1, 0.3*inch))
 
+            # Salto de página antes de la sección II
+            elements.append(PageBreak())
+
             # II. DESARROLLO DEL INFORME
             add_section("II. Desarrollo del Informe")
             add_text_block("Motivo de la evaluación", get_value("reason_evaluation", ""))
@@ -3055,6 +3067,155 @@ class DocumentsClass:
             return {
                 "status": "error",
                 "message": f"Error generando informe fonoaudiológico: {str(e)}",
+                "filename": None,
+                "file_path": None
+            }
+
+    @staticmethod
+    def _generate_school_integration_exit_certificate_from_scratch(
+        document_id: int,
+        cert_data: Dict[str, Any],
+        db: Optional[Session] = None,
+        output_directory: str = "files/system/students"
+    ) -> Dict[str, Any]:
+        """
+        Genera el PDF del Certificado de egreso PIE (Documento 23) desde cero.
+        Formato: título, declaración con profesional/estudiante/nee, apoderado, firma del profesional.
+        """
+        try:
+            if not REPORTLAB_AVAILABLE:
+                return {
+                    "status": "error",
+                    "message": "ReportLab no está instalado. Instala con: pip install reportlab",
+                    "filename": None,
+                    "file_path": None
+                }
+            def g(k: str, d: str = "") -> str:
+                v = cert_data.get(k)
+                if v is None:
+                    return d
+                return str(v).strip() if v else d
+
+            student_name = g("student_full_name", "estudiante").replace(" ", "_")
+            unique_filename = f"certificado_egreso_pie_{student_name}_{uuid.uuid4().hex[:8]}.pdf"
+            output_file = Path(output_directory) / unique_filename
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+
+            doc = SimpleDocTemplate(
+                str(output_file),
+                pagesize=A4,
+                rightMargin=2.5*cm,
+                leftMargin=2.5*cm,
+                topMargin=3*cm,
+                bottomMargin=2.5*cm
+            )
+            elements = []
+            styles = getSampleStyleSheet()
+
+            title_style = ParagraphStyle(
+                'CertTitle',
+                parent=styles['Heading1'],
+                fontSize=20,
+                textColor=colors.HexColor('#000000'),
+                spaceAfter=28,
+                spaceBefore=18,
+                alignment=TA_CENTER,
+                fontName='Helvetica-Bold'
+            )
+            normal_style = ParagraphStyle(
+                'CertNormal',
+                parent=styles['Normal'],
+                fontSize=12,
+                textColor=colors.HexColor('#000000'),
+                alignment=TA_JUSTIFY,
+                leading=17,
+                spaceAfter=10
+            )
+            center_style = ParagraphStyle(
+                'CertCenter',
+                parent=styles['Normal'],
+                fontSize=12,
+                textColor=colors.HexColor('#000000'),
+                alignment=TA_CENTER,
+                leading=14,
+                spaceAfter=4
+            )
+
+            prof_name = DocumentsClass._escape_html_for_paragraph(g("professional_fullname", ""))
+            prof_rut = DocumentsClass._escape_html_for_paragraph(g("professional_rut", ""))
+            prof_role = DocumentsClass._escape_html_for_paragraph(g("professional_role", ""))
+            st_name = DocumentsClass._escape_html_for_paragraph(g("student_full_name", ""))
+            st_rut = DocumentsClass._escape_html_for_paragraph(g("student_rut", ""))
+            course = DocumentsClass._escape_html_for_paragraph(g("course_name", "Sin curso"))
+            establishment = DocumentsClass._escape_html_for_paragraph(g("establishment_name", ""))
+            nee = DocumentsClass._escape_html_for_paragraph(g("nee_name", ""))
+            guardian_name = DocumentsClass._escape_html_for_paragraph(g("guardian_fullname", ""))
+            guardian_rut = DocumentsClass._escape_html_for_paragraph(g("guardian_rut", ""))
+
+            if not prof_name:
+                prof_name = "________________"
+            if not prof_rut:
+                prof_rut = "________________"
+            if not prof_role:
+                prof_role = "________________"
+            if not st_name:
+                st_name = "________________"
+            if not st_rut:
+                st_rut = "________________"
+            if not establishment:
+                establishment = "________________"
+            if not nee:
+                nee = "________________"
+            if not guardian_name:
+                guardian_name = "________________"
+            if not guardian_rut:
+                guardian_rut = "________________"
+
+            elements.append(Paragraph("Certificado de egreso PIE", title_style))
+            elements.append(Spacer(1, 0.5*inch))
+
+            decl = (
+                f'Por medio de este documento, el/la profesional <b>{prof_name}</b>, RUT <b>{prof_rut}</b>, '
+                f'con cargo de <b>{prof_role}</b>, certifica que, luego del proceso de revaluación diagnóstica '
+                f'integral realizado según lo indicado por el Decreto 170, el/la estudiante <b>{st_name}</b> '
+                f'RUT <b>{st_rut}</b> quien cursa <b>{course}</b> en el establecimiento <b>{establishment}</b>, '
+                f'ha superado su Necesidad Educativa Especial (NEE) asociada a <b>{nee}</b> por lo que se '
+                f'considera su egreso del Programa de Integración Escolar PIE.'
+            )
+            elements.append(Paragraph(decl, normal_style))
+            elements.append(Spacer(1, 0.4*inch))
+
+            ack = (
+                f'En tanto, el apoderado {guardian_name}, RUT {guardian_rut} '
+                f'queda en total conocimiento de esta información.'
+            )
+            elements.append(Paragraph(ack, normal_style))
+            elements.append(Spacer(1, 0.6*inch))
+
+            elements.append(Paragraph("_________________________", center_style))
+            elements.append(Spacer(1, 0.1*inch))
+            elements.append(Paragraph(prof_name, center_style))
+            elements.append(Paragraph(prof_rut, center_style))
+            elements.append(Paragraph(prof_role, center_style))
+
+            doc.build(elements)
+            return {
+                "status": "success",
+                "message": "PDF generado exitosamente",
+                "filename": unique_filename,
+                "file_path": str(output_file)
+            }
+        except ImportError:
+            return {
+                "status": "error",
+                "message": "ReportLab no está instalado. Instala con: pip install reportlab",
+                "filename": None,
+                "file_path": None
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Error generando certificado de egreso PIE: {str(e)}",
                 "filename": None,
                 "file_path": None
             }

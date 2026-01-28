@@ -1073,3 +1073,25 @@ class FonoaudiologicalReportList(BaseModel):
     page: Optional[int] = None
     per_page: int = 10
     student_id: Optional[int] = None
+
+# School Integration Program Exit Certificate
+class StoreSchoolIntegrationProgramExitCertificate(BaseModel):
+    student_id: Optional[int] = None
+    professional_id: Optional[int] = None
+    document_description: Optional[str] = None
+    professional_certification_number: Optional[str] = None
+    professional_career: Optional[str] = None
+    guardian_id: Optional[int] = None
+
+class UpdateSchoolIntegrationProgramExitCertificate(BaseModel):
+    student_id: Optional[int] = None
+    professional_id: Optional[int] = None
+    document_description: Optional[str] = None
+    professional_certification_number: Optional[str] = None
+    professional_career: Optional[str] = None
+    guardian_id: Optional[int] = None
+
+class SchoolIntegrationProgramExitCertificateList(BaseModel):
+    page: Optional[int] = None
+    per_page: int = 10
+    student_id: Optional[int] = None

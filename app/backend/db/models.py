@@ -1010,3 +1010,15 @@ class FonoaudiologicalReportModel(Base):
     added_date = Column(DateTime, nullable=True)
     updated_date = Column(DateTime, nullable=True)
     deleted_date = Column(DateTime, nullable=True)
+
+class SchoolIntegrationProgramExitCertificateModel(Base):
+    __tablename__ = 'school_integration_program_exit_certificate'
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer, nullable=True)
+    professional_id = Column(Integer, nullable=True)
+    document_description = Column(String(255), nullable=True)
+    professional_certification_number = Column(String(255), nullable=True)
+    professional_career = Column(String(255), nullable=True)
+    guardian_id = Column(Integer, nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
