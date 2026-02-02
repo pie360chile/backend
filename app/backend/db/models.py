@@ -974,6 +974,11 @@ class ProgressStatusIndividualSupportModel(Base):
     # PAI seleccionado y objetivos
     selected_pai_id = Column(Integer, nullable=True)  # ID del Plan de Apoyo Individual (individual_support_plans.id)
     pai_objectives = Column(Text, nullable=True)  # JSON Array [{id, number, description, progress_level}]
+    pai_observations = Column(Text, nullable=True)
+    
+    # Sugerencias
+    suggestions_family = Column(Text, nullable=True)
+    suggestions_establishment = Column(Text, nullable=True)
     
     # Campos de auditoría
     added_date = Column(DateTime, nullable=True)

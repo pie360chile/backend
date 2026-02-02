@@ -982,6 +982,11 @@ class StoreProgressStatusIndividualSupport(BaseModel):
     # PAI seleccionado y objetivos
     selected_pai_id: Optional[int] = None
     pai_objectives: Optional[List[PaiObjectiveSchema]] = None
+    pai_observations: Optional[str] = None
+
+    # Sugerencias
+    suggestions_family: Optional[str] = None
+    suggestions_establishment: Optional[str] = None
 
 class UpdateProgressStatusIndividualSupport(BaseModel):
     student_id: Optional[int] = None
@@ -1011,6 +1016,11 @@ class UpdateProgressStatusIndividualSupport(BaseModel):
     # PAI seleccionado y objetivos
     selected_pai_id: Optional[int] = None
     pai_objectives: Optional[List[PaiObjectiveSchema]] = None
+    pai_observations: Optional[str] = None
+
+    # Sugerencias
+    suggestions_family: Optional[str] = None
+    suggestions_establishment: Optional[str] = None
 
 class ProgressStatusIndividualSupportList(BaseModel):
     page: Optional[int] = None

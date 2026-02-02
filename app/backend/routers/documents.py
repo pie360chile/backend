@@ -4,6 +4,7 @@ from app.backend.classes.documents_class import DocumentsClass
 from app.backend.classes.student_class import StudentClass
 from app.backend.classes.health_evaluation_class import HealthEvaluationClass
 from app.backend.classes.progress_status_student_class import ProgressStatusStudentClass
+from app.backend.classes.progress_status_individual_support_class import ProgressStatusIndividualSupportClass
 from app.backend.classes.student_guardian_class import StudentGuardianClass
 from app.backend.classes.individual_support_plan_class import IndividualSupportPlanClass
 from app.backend.classes.fonoaudiological_report_class import FonoaudiologicalReportClass
@@ -44,6 +45,117 @@ documents = APIRouter(
     prefix="/documents",
     tags=["Documents"]
 )
+
+
+@documents.get("/debug/doc19/{student_id}")
+async def debug_doc19_data(
+    student_id: int,
+    db: Session = Depends(get_db),
+):
+    """Devuelve los datos que se enviarían al PDF del documento 19 (para depurar)."""
+    try:
+        student_service = StudentClass(db)
+        student_result = student_service.get(student_id)
+        if isinstance(student_result, dict) and (student_result.get("error") or student_result.get("status") == "error"):
+            return JSONResponse(status_code=404, content={"error": "Estudiante no encontrado"})
+        ps_service = ProgressStatusIndividualSupportClass(db)
+        ps_result = ps_service.get_by_student_id(student_id)
+        if isinstance(ps_result, dict) and ps_result.get("status") == "error":
+            return JSONResponse(status_code=404, content={"error": "No hay progress_status_individual_support para este estudiante"})
+        ps_data = ps_result.copy()
+        ps_data.pop("id", None)
+        ps_data.pop("added_date", None)
+        ps_data.pop("updated_date", None)
+        student_data = student_result.get("student_data", {}) if isinstance(student_result, dict) else {}
+        personal = student_data.get("personal_data") or {}
+        academic = student_data.get("academic_info") or {}
+        if not (ps_data.get("student_full_name") or "").strip():
+            _fn = f"{personal.get('names') or ''} {personal.get('father_lastname') or ''} {personal.get('mother_lastname') or ''}".strip()
+            ps_data["student_full_name"] = _fn if _fn else f"Estudiante {student_id}"
+        if not (ps_data.get("student_identification_number") or "").strip():
+            ps_data["student_identification_number"] = personal.get("identification_number") or student_data.get("identification_number") or ""
+        if not (ps_data.get("student_born_date") or "").strip() and personal.get("born_date"):
+            ps_data["student_born_date"] = personal.get("born_date")
+        if not (ps_data.get("student_age") or "").strip() and personal.get("born_date"):
+            try:
+                born = datetime.strptime(str(personal.get("born_date")), "%Y-%m-%d").date()
+                ref = datetime.now().date()
+                if ps_data.get("progress_date"):
+                    try:
+                        ref = datetime.strptime(str(ps_data["progress_date"]), "%Y-%m-%d").date()
+                    except Exception:
+                        pass
+                years = ref.year - born.year
+                months = ref.month - born.month
+                if months < 0:
+                    years -= 1
+                    months += 12
+                ps_data["student_age"] = f"{years} año{'s' if years != 1 else ''}" if years > 0 else f"{months} mes{'es' if months != 1 else ''}"
+            except Exception:
+                pass
+        if not ps_data.get("school_id") and not (ps_data.get("student_school") or "").strip():
+            sid = student_data.get("school_id")
+            if sid:
+                ps_data["school_id"] = sid
+        if not ps_data.get("student_course_id") and academic.get("course_id"):
+            ps_data["student_course_id"] = academic.get("course_id")
+        if not ps_data.get("student_nee_id") and academic.get("special_educational_need_id"):
+            ps_data["student_nee_id"] = academic.get("special_educational_need_id")
+        if not ps_data.get("guardian_relationship_id"):
+            g_first = db.query(StudentGuardianModel).filter(StudentGuardianModel.student_id == student_id).order_by(StudentGuardianModel.id.desc()).first()
+            if g_first:
+                ps_data["guardian_relationship_id"] = g_first.id
+        if ps_data.get("school_id"):
+            school = db.query(SchoolModel).filter(SchoolModel.id == ps_data["school_id"]).first()
+            if school and school.school_name:
+                ps_data["student_school"] = school.school_name
+            ps_data.pop("school_id", None)
+        if not (ps_data.get("student_school") or "").strip() and student_data.get("school_id"):
+            school = db.query(SchoolModel).filter(SchoolModel.id == student_data["school_id"]).first()
+            if school and school.school_name:
+                ps_data["student_school"] = school.school_name
+        course_id = ps_data.get("student_course_id")
+        if course_id:
+            course = db.query(CourseModel).filter(CourseModel.id == course_id).first()
+            ps_data["course_name"] = course.course_name if course and course.course_name else ""
+        else:
+            ps_data["course_name"] = ""
+        ps_data.pop("student_course_id", None)
+        nee_id = ps_data.get("student_nee_id")
+        if nee_id:
+            nee = db.query(SpecialEducationalNeedModel).filter(SpecialEducationalNeedModel.id == nee_id).first()
+            ps_data["nee_name"] = nee.special_educational_needs if nee and nee.special_educational_needs else ""
+        else:
+            ps_data["nee_name"] = ""
+        ps_data.pop("student_nee_id", None)
+        guardian_id = ps_data.get("guardian_relationship_id")
+        if guardian_id:
+            g = db.query(StudentGuardianModel).filter(StudentGuardianModel.id == guardian_id).first()
+            if g:
+                ps_data["guardian_fullname"] = f"{g.names or ''} {g.father_lastname or ''} {g.mother_lastname or ''}".strip()
+                ps_data["guardian_rut"] = g.identification_number or ""
+                if g.family_member_id:
+                    fm = db.query(FamilyMemberModel).filter(FamilyMemberModel.id == g.family_member_id).first()
+                    ps_data["guardian_relationship"] = fm.family_member if fm and fm.family_member else ""
+                else:
+                    ps_data["guardian_relationship"] = ""
+            else:
+                ps_data["guardian_fullname"] = ps_data.get("guardian_name") or ""
+                ps_data["guardian_rut"] = ""
+                ps_data["guardian_relationship"] = ""
+        else:
+            ps_data["guardian_fullname"] = ps_data.get("guardian_name") or ""
+            ps_data["guardian_rut"] = ""
+            ps_data["guardian_relationship"] = ""
+        ps_data.pop("guardian_relationship_id", None)
+        ps_data.pop("guardian_name", None)
+        period_labels = {1: "1er Trimestre", 2: "2do Trimestre", 3: "1er Semestre", 4: "2do Semestre"}
+        pid = ps_data.get("period_id")
+        ps_data["period_label"] = period_labels.get(pid) if pid is not None else ""
+        return JSONResponse(status_code=200, content={"data": ps_data})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
 
 @documents.post("/create")
 async def create_document(
@@ -478,7 +590,7 @@ async def generate_document(
                 media_type='application/pdf'
             )
         
-        # Si document_id = 18, generar documento de estado de avance (progress_status_students)
+        # Si document_id = 18, generar documento de estado de avance (progress_status_students) desde cero
         if document_id == 18:
             # Buscar el estado de avance más reciente para este estudiante
             progress_status_service = ProgressStatusStudentClass(db)
@@ -621,6 +733,163 @@ async def generate_document(
                 path=result["file_path"],
                 filename=result["filename"],
                 media_type='application/pdf'
+            )
+        
+        # Si document_id = 19, generar documento Estado de Avance PAI desde progress_status_individual_support
+        if document_id == 19:
+            ps_service = ProgressStatusIndividualSupportClass(db)
+            ps_result = ps_service.get_by_student_id(student_id)
+            if isinstance(ps_result, dict) and ps_result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    content={
+                        "status": 404,
+                        "message": "No se encontró estado de avance PAI para este estudiante",
+                        "data": None,
+                    },
+                )
+            ps_data = ps_result.copy()
+            ps_data.pop("id", None)
+            ps_data.pop("added_date", None)
+            ps_data.pop("updated_date", None)
+
+            # Completar datos faltantes desde student_data (estudiante, apoderado, escuela, curso, NEE)
+            student_data = student_result.get("student_data", {}) if isinstance(student_result, dict) else {}
+            personal = student_data.get("personal_data") or {}
+            academic = student_data.get("academic_info") or {}
+            if not (ps_data.get("student_full_name") or "").strip():
+                _fn = f"{personal.get('names') or ''} {personal.get('father_lastname') or ''} {personal.get('mother_lastname') or ''}".strip()
+                ps_data["student_full_name"] = _fn if _fn else f"Estudiante {student_id}"
+            if not (ps_data.get("student_identification_number") or "").strip():
+                ps_data["student_identification_number"] = personal.get("identification_number") or student_data.get("identification_number") or ""
+            if not (ps_data.get("student_born_date") or "").strip() and personal.get("born_date"):
+                ps_data["student_born_date"] = personal.get("born_date")
+            if not (ps_data.get("student_age") or "").strip() and personal.get("born_date"):
+                try:
+                    born = datetime.strptime(str(personal.get("born_date")), "%Y-%m-%d").date()
+                    ref = datetime.now().date()
+                    if ps_data.get("progress_date"):
+                        try:
+                            ref = datetime.strptime(str(ps_data["progress_date"]), "%Y-%m-%d").date()
+                        except Exception:
+                            pass
+                    years = ref.year - born.year
+                    months = ref.month - born.month
+                    if months < 0:
+                        years -= 1
+                        months += 12
+                    ps_data["student_age"] = f"{years} año{'s' if years != 1 else ''}" if years > 0 else f"{months} mes{'es' if months != 1 else ''}"
+                except Exception:
+                    pass
+            if not ps_data.get("school_id") and not (ps_data.get("student_school") or "").strip():
+                sid = student_data.get("school_id")
+                if sid:
+                    ps_data["school_id"] = sid
+            if not ps_data.get("student_course_id") and academic.get("course_id"):
+                ps_data["student_course_id"] = academic.get("course_id")
+            if not ps_data.get("student_nee_id") and academic.get("special_educational_need_id"):
+                ps_data["student_nee_id"] = academic.get("special_educational_need_id")
+            if not ps_data.get("guardian_relationship_id"):
+                g_first = db.query(StudentGuardianModel).filter(
+                    StudentGuardianModel.student_id == student_id
+                ).order_by(StudentGuardianModel.id.desc()).first()
+                if g_first:
+                    ps_data["guardian_relationship_id"] = g_first.id
+
+            # school_id -> nombre del establecimiento (si no hay student_school, resolver desde school_id)
+            if ps_data.get("school_id"):
+                school = db.query(SchoolModel).filter(SchoolModel.id == ps_data["school_id"]).first()
+                if school and school.school_name:
+                    ps_data["student_school"] = school.school_name
+                ps_data.pop("school_id", None)
+            if not (ps_data.get("student_school") or "").strip() and student_data.get("school_id"):
+                school = db.query(SchoolModel).filter(SchoolModel.id == student_data["school_id"]).first()
+                if school and school.school_name:
+                    ps_data["student_school"] = school.school_name
+
+            # student_course_id -> nombre del curso
+            course_id = ps_data.get("student_course_id")
+            if course_id:
+                course = db.query(CourseModel).filter(CourseModel.id == course_id).first()
+                ps_data["course_name"] = course.course_name if course and course.course_name else ""
+            else:
+                ps_data["course_name"] = ""
+            ps_data.pop("student_course_id", None)
+
+            # student_nee_id -> nombre NEE
+            nee_id = ps_data.get("student_nee_id")
+            if nee_id:
+                nee = db.query(SpecialEducationalNeedModel).filter(SpecialEducationalNeedModel.id == nee_id).first()
+                ps_data["nee_name"] = nee.special_educational_needs if nee and nee.special_educational_needs else ""
+            else:
+                ps_data["nee_name"] = ""
+            ps_data.pop("student_nee_id", None)
+
+            # guardian_relationship_id -> apoderado completo desde student_guardians
+            guardian_id = ps_data.get("guardian_relationship_id")
+            if guardian_id:
+                g = db.query(StudentGuardianModel).filter(StudentGuardianModel.id == guardian_id).first()
+                if g:
+                    ps_data["guardian_fullname"] = f"{g.names or ''} {g.father_lastname or ''} {g.mother_lastname or ''}".strip()
+                    ps_data["guardian_rut"] = g.identification_number or ""
+                    if g.family_member_id:
+                        fm = db.query(FamilyMemberModel).filter(FamilyMemberModel.id == g.family_member_id).first()
+                        ps_data["guardian_relationship"] = fm.family_member if fm and fm.family_member else ""
+                    else:
+                        ps_data["guardian_relationship"] = ""
+                else:
+                    ps_data["guardian_fullname"] = ps_data.get("guardian_name") or ""
+                    ps_data["guardian_rut"] = ""
+                    ps_data["guardian_relationship"] = ""
+            else:
+                ps_data["guardian_fullname"] = ps_data.get("guardian_name") or ""
+                ps_data["guardian_rut"] = ""
+                ps_data["guardian_relationship"] = ""
+            ps_data.pop("guardian_relationship_id", None)
+            ps_data.pop("guardian_name", None)
+
+            # responsible_professionals (IDs separados por coma) -> nombres
+            rp = ps_data.get("responsible_professionals")
+            if rp:
+                ids_str = str(rp).strip()
+                ids = [int(x.strip()) for x in ids_str.split(",") if x.strip().isdigit()]
+                names = []
+                for pid in ids:
+                    prof = db.query(ProfessionalModel).filter(ProfessionalModel.id == pid).first()
+                    if prof:
+                        fn = f"{prof.names or ''} {prof.lastnames or ''}".strip()
+                        if fn:
+                            names.append(fn)
+                ps_data["responsible_professionals_names"] = ", ".join(names) if names else ""
+            else:
+                ps_data["responsible_professionals_names"] = ""
+            ps_data.pop("responsible_professionals", None)
+
+            # period_label: 1=1er Trimestre, 2=2do Trimestre, 3=1er Semestre, 4=2do Semestre
+            period_labels = {1: "1er Trimestre", 2: "2do Trimestre", 3: "1er Semestre", 4: "2do Semestre"}
+            pid = ps_data.get("period_id")
+            ps_data["period_label"] = period_labels.get(pid) if pid is not None else ""
+
+            result = DocumentsClass.generate_document_pdf(
+                document_id=19,
+                document_data=ps_data,
+                db=db,
+                template_path=None,
+                output_directory="files/system/students",
+            )
+            if result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    content={
+                        "status": 500,
+                        "message": result.get("message", "Error generando estado de avance PAI"),
+                        "data": None,
+                    },
+                )
+            return FileResponse(
+                path=result["file_path"],
+                filename=result["filename"],
+                media_type="application/pdf",
             )
         
         # Si document_id = 22, generar documento de Plan de Apoyo Individual

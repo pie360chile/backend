@@ -47,6 +47,9 @@ class ProgressStatusIndividualSupportClass:
                     "responsible_professionals": progress_status.responsible_professionals,
                     "selected_pai_id": progress_status.selected_pai_id,
                     "pai_objectives": pai_objectives,
+                    "pai_observations": progress_status.pai_observations,
+                    "suggestions_family": progress_status.suggestions_family,
+                    "suggestions_establishment": progress_status.suggestions_establishment,
                     "added_date": progress_status.added_date.strftime("%Y-%m-%d %H:%M:%S") if progress_status.added_date else None,
                     "updated_date": progress_status.updated_date.strftime("%Y-%m-%d %H:%M:%S") if progress_status.updated_date else None
                 }
@@ -95,6 +98,9 @@ class ProgressStatusIndividualSupportClass:
                     "responsible_professionals": progress_status.responsible_professionals,
                     "selected_pai_id": progress_status.selected_pai_id,
                     "pai_objectives": pai_objectives,
+                    "pai_observations": progress_status.pai_observations,
+                    "suggestions_family": progress_status.suggestions_family,
+                    "suggestions_establishment": progress_status.suggestions_establishment,
                     "added_date": progress_status.added_date.strftime("%Y-%m-%d %H:%M:%S") if progress_status.added_date else None,
                     "updated_date": progress_status.updated_date.strftime("%Y-%m-%d %H:%M:%S") if progress_status.updated_date else None
                 }
@@ -152,6 +158,9 @@ class ProgressStatusIndividualSupportClass:
                     "responsible_professionals": ps.responsible_professionals,
                     "selected_pai_id": ps.selected_pai_id,
                     "pai_objectives": pai_objectives,
+                    "pai_observations": ps.pai_observations,
+                    "suggestions_family": ps.suggestions_family,
+                    "suggestions_establishment": ps.suggestions_establishment,
                     "added_date": ps.added_date.strftime("%Y-%m-%d %H:%M:%S") if ps.added_date else None,
                     "updated_date": ps.updated_date.strftime("%Y-%m-%d %H:%M:%S") if ps.updated_date else None
                 })
@@ -260,6 +269,12 @@ class ProgressStatusIndividualSupportClass:
                     existing.selected_pai_id = data.get('selected_pai_id')
                 if 'pai_objectives' in data:
                     existing.pai_objectives = pai_objectives_json
+                if 'pai_observations' in data:
+                    existing.pai_observations = data.get('pai_observations')
+                if 'suggestions_family' in data:
+                    existing.suggestions_family = data.get('suggestions_family')
+                if 'suggestions_establishment' in data:
+                    existing.suggestions_establishment = data.get('suggestions_establishment')
                 
                 existing.updated_date = datetime.now()
                 
@@ -291,6 +306,9 @@ class ProgressStatusIndividualSupportClass:
                 responsible_professionals=data.get('responsible_professionals'),
                 selected_pai_id=data.get('selected_pai_id'),
                 pai_objectives=pai_objectives_json,
+                pai_observations=data.get('pai_observations'),
+                suggestions_family=data.get('suggestions_family'),
+                suggestions_establishment=data.get('suggestions_establishment'),
                 added_date=datetime.now(),
                 updated_date=datetime.now()
             )
@@ -387,6 +405,12 @@ class ProgressStatusIndividualSupportClass:
                     progress_status.pai_objectives = json.dumps(objectives_list)
                 elif isinstance(pai_objectives, str):
                     progress_status.pai_objectives = pai_objectives
+            if 'pai_observations' in data:
+                progress_status.pai_observations = data.get('pai_observations')
+            if 'suggestions_family' in data:
+                progress_status.suggestions_family = data.get('suggestions_family')
+            if 'suggestions_establishment' in data:
+                progress_status.suggestions_establishment = data.get('suggestions_establishment')
 
             progress_status.updated_date = datetime.now()
 

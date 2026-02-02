@@ -83,16 +83,16 @@ class DocumentsClass:
             dict: Diccionario con status, message, filename y file_path
         """
         try:
-            # Si es documento 19 (Estado de Avance), usar función específica
+            # Si es documento 19 (Estado de Avance PAI - progress_status_individual_support), usar función específica
             if document_id == 19:
-                return DocumentsClass._generate_progress_status_from_scratch(
+                return DocumentsClass._generate_progress_status_individual_support_from_scratch(
                     document_id=document_id,
-                    progress_status_data=document_data,
+                    ps_data=document_data,
                     db=db,
                     output_directory=output_directory
                 )
             
-            # Si es documento 18 (Estado de Avance), usar función específica
+            # Si es documento 18 (Estado de Avance - progress_status_students), usar función específica
             if document_id == 18:
                 return DocumentsClass._generate_progress_status_from_scratch(
                     document_id=document_id,
@@ -2268,21 +2268,17 @@ class DocumentsClass:
             # Crear tabla con formato vertical (2 columnas de ancho)
             if identification_data:
                 identification_table = Table(identification_data, colWidths=[7.5*cm, 7.5*cm])
-                # Estilos base
                 table_style = [
                     ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                     ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                    ('LEFTPADDING', (0, 0), (-1, -1), 8),
-                    ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 10),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 10),
                     ('TOPPADDING', (0, 0), (-1, -1), 8),
                     ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-                    ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),  # Bordes sutiles
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),
                 ]
-                # Agregar estilos de unión de celdas (solo para NEE - horizontal)
-                table_style.extend(spans)
                 identification_table.setStyle(TableStyle(table_style))
                 elements.append(identification_table)
-            
             
             elements.append(Spacer(1, 0.3*inch))
             
@@ -2369,6 +2365,267 @@ class DocumentsClass:
             return {
                 "status": "error",
                 "message": f"Error generando PDF desde cero: {str(e)}",
+                "filename": None,
+                "file_path": None
+            }
+
+    @staticmethod
+    def _generate_progress_status_individual_support_from_scratch(
+        document_id: int,
+        ps_data: Dict[str, Any],
+        db: Optional[Session] = None,
+        output_directory: str = "files/system/students"
+    ) -> Dict[str, Any]:
+        """
+        Genera un PDF de Estado de Avance PAI (documento 19) desde cero usando ReportLab.
+        Datos desde progress_status_individual_support.
+        """
+        try:
+            if not REPORTLAB_AVAILABLE:
+                return {
+                    "status": "error",
+                    "message": "ReportLab no está instalado. Instala con: pip install reportlab",
+                    "filename": None,
+                    "file_path": None
+                }
+
+            student_name = ps_data.get("student_full_name", "estudiante").replace(" ", "_")
+            unique_filename = f"estado_avance_pai_{student_name}_{uuid.uuid4().hex[:8]}.pdf"
+            output_file = Path(output_directory) / unique_filename
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+
+            # Márgenes ajustados para mejor distribución
+            doc = SimpleDocTemplate(
+                str(output_file),
+                pagesize=A4,
+                rightMargin=2*cm,
+                leftMargin=2*cm,
+                topMargin=2*cm,
+                bottomMargin=2*cm
+            )
+            elements = []
+            styles = getSampleStyleSheet()
+
+            title_style = ParagraphStyle(
+                'CertTitle19',
+                parent=styles['Heading1'],
+                fontSize=14,
+                textColor=colors.HexColor('#000000'),
+                spaceAfter=18,
+                spaceBefore=8,
+                alignment=TA_CENTER,
+                fontName='Helvetica-Bold'
+            )
+            section_style = ParagraphStyle(
+                'CertSection19',
+                parent=styles['Normal'],
+                fontSize=11,
+                textColor=colors.HexColor('#000000'),
+                spaceAfter=8,
+                spaceBefore=12,
+                fontName='Helvetica-Bold',
+                alignment=TA_LEFT,
+                backColor=colors.HexColor('#E8E8E8'),
+                borderPadding=8
+            )
+            subtitle_style = ParagraphStyle(
+                'CertSubtitle19',
+                parent=styles['Normal'],
+                fontSize=10,
+                textColor=colors.HexColor('#000000'),
+                spaceAfter=4,
+                spaceBefore=8,
+                fontName='Helvetica-Bold'
+            )
+            normal_style = ParagraphStyle(
+                'CertNormal19',
+                parent=styles['Normal'],
+                fontSize=10,
+                textColor=colors.HexColor('#000000'),
+                alignment=TA_LEFT,
+                leading=13,
+                spaceAfter=2
+            )
+            label_style = ParagraphStyle(
+                'CertLabel19',
+                parent=styles['Normal'],
+                fontSize=10,
+                textColor=colors.HexColor('#000000'),
+                alignment=TA_LEFT,
+                fontName='Helvetica-Bold',
+                backColor=colors.HexColor('#F0F0F0'),
+                borderPadding=5
+            )
+
+            def get_value(key: str, default: str = "") -> str:
+                v = ps_data.get(key)
+                if v is None:
+                    return default
+                return str(v).strip() if v else default
+
+            def format_date(date_str: Optional[str]) -> str:
+                if not date_str:
+                    return ""
+                try:
+                    if isinstance(date_str, str):
+                        date_obj = datetime.strptime(date_str, "%Y-%m-%d").date()
+                        return date_obj.strftime("%d/%m/%Y")
+                    return ""
+                except Exception:
+                    return str(date_str) if date_str else ""
+
+            elements.append(Paragraph("ESTADO DE AVANCE PAI", title_style))
+            elements.append(Spacer(1, 0.4*inch))
+
+            # I. IDENTIFICACIÓN DEL ESTUDIANTE (solo esta sección por ahora)
+            elements.append(Paragraph("I. IDENTIFICACIÓN DEL ESTUDIANTE", section_style))
+            elements.append(Spacer(1, 0.2*inch))
+
+            student_fullname = get_value("student_full_name", "")
+            student_rut = get_value("student_identification_number", "")
+            student_age = get_value("student_age", "")
+            student_born_date = format_date(get_value("student_born_date", ""))
+            progress_date = format_date(get_value("progress_date", ""))
+            period_label = get_value("period_label", "")
+            school_name = get_value("student_school", "")
+            course_name = get_value("course_name", "")
+            nee_name = get_value("nee_name", "")
+            guardian_fullname = get_value("guardian_fullname", "")
+            guardian_rut = get_value("guardian_rut", "")
+            guardian_relationship = get_value("guardian_relationship", "")
+
+            # Formato: una fila por campo, [Etiqueta | Valor]. Columnas amplias para evitar corte de texto.
+            identification_data = []
+            spans = []
+            col_label = 5*cm
+            col_value = 11*cm
+
+            def _row(label: str, value: str):
+                identification_data.append([
+                    Paragraph(f"<b>{label}</b>", label_style),
+                    Paragraph(DocumentsClass._escape_html_for_paragraph(value or "—"), normal_style)
+                ])
+
+            _row("RUT:", student_rut)
+            _row("Nombre:", student_fullname)
+            _row("Fecha de Nacimiento:", student_born_date)
+            _row("Edad:", str(student_age) if student_age else "")
+            _row("Fecha Estado Avance:", progress_date)
+            _row("Período:", period_label)
+            _row("Establecimiento Educacional:", school_name)
+            _row("Curso:", course_name)
+            # NEE: ocupa todo el ancho
+            identification_data.append([
+                Paragraph("<b>Necesidad Educativa Especial (NEE):</b>", label_style),
+                Paragraph(DocumentsClass._escape_html_for_paragraph(nee_name or "—"), normal_style)
+            ])
+            _row("Relación con Estudiante:", guardian_relationship)
+            _row("Apoderado/Guardián:", guardian_fullname)
+            _row("RUT Apoderado:", guardian_rut)
+
+            if identification_data:
+                identification_table = Table(identification_data, colWidths=[col_label, col_value])
+                table_style = [
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 10),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+                    ('TOPPADDING', (0, 0), (-1, -1), 8),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),
+                ]
+                if spans:
+                    table_style.extend(spans)
+                identification_table.setStyle(TableStyle(table_style))
+                elements.append(identification_table)
+
+            elements.append(Spacer(1, 0.3*inch))
+
+            # II. PROFESIONALES RESPONSABLES
+            elements.append(Paragraph("II. PROFESIONALES RESPONSABLES", section_style))
+            elements.append(Spacer(1, 0.15*inch))
+            responsible = get_value("responsible_professionals_names", "")
+            if responsible:
+                elements.append(Paragraph(DocumentsClass._escape_html_for_paragraph(responsible), normal_style))
+            else:
+                elements.append(Paragraph("No se registra información en esta sección.", normal_style))
+            elements.append(Spacer(1, 0.3*inch))
+
+            # III. OBJETIVOS PAI Y NIVEL DE AVANCE
+            elements.append(Paragraph("III. OBJETIVOS PAI Y NIVEL DE AVANCE", section_style))
+            elements.append(Spacer(1, 0.2*inch))
+            pai_objectives = ps_data.get("pai_objectives")
+            obj_list = []
+            if pai_objectives:
+                obj_list = pai_objectives if isinstance(pai_objectives, list) else []
+                if isinstance(pai_objectives, str):
+                    try:
+                        import json
+                        obj_list = json.loads(pai_objectives)
+                    except Exception:
+                        obj_list = []
+            obj_list_valid = [o for o in obj_list if isinstance(o, dict) and (o.get("description") or o.get("progress_level"))]
+            if obj_list_valid:
+                for idx, obj in enumerate(obj_list_valid):
+                    num = obj.get("number") or (idx + 1)
+                    desc = obj.get("description") or ""
+                    level = obj.get("progress_level") or ""
+                    elements.append(Paragraph(f"<b>Objetivo {num}:</b>", subtitle_style))
+                    if desc:
+                        elements.append(Paragraph(DocumentsClass._escape_html_for_paragraph(desc), normal_style))
+                    if level:
+                        elements.append(Paragraph(f"<b>Nivel de avance:</b> {DocumentsClass._escape_html_for_paragraph(level)}", normal_style))
+                    if idx < len(obj_list_valid) - 1:
+                        elements.append(Spacer(1, 0.15*inch))
+            else:
+                elements.append(Paragraph("No se registra información en esta sección.", normal_style))
+            elements.append(Spacer(1, 0.3*inch))
+
+            # IV. OBSERVACIONES PAI
+            elements.append(Paragraph("IV. OBSERVACIONES PAI", section_style))
+            elements.append(Spacer(1, 0.15*inch))
+            pai_observations = get_value("pai_observations", "")
+            if pai_observations:
+                elements.append(Paragraph(DocumentsClass._escape_html_for_paragraph(pai_observations), normal_style))
+            else:
+                elements.append(Paragraph("No se registra información en esta sección.", normal_style))
+            elements.append(Spacer(1, 0.3*inch))
+
+            # V. SUGERENCIAS
+            elements.append(Paragraph("V. SUGERENCIAS", section_style))
+            elements.append(Spacer(1, 0.15*inch))
+            suggestions_family = get_value("suggestions_family", "")
+            suggestions_establishment = get_value("suggestions_establishment", "")
+            if suggestions_family or suggestions_establishment:
+                if suggestions_family:
+                    elements.append(Paragraph("<b>a) Sugerencias a la familia:</b>", subtitle_style))
+                    elements.append(Paragraph(DocumentsClass._escape_html_for_paragraph(suggestions_family), normal_style))
+                    elements.append(Spacer(1, 0.2*inch))
+                if suggestions_establishment:
+                    elements.append(Paragraph("<b>b) Sugerencias al establecimiento educacional:</b>", subtitle_style))
+                    elements.append(Paragraph(DocumentsClass._escape_html_for_paragraph(suggestions_establishment), normal_style))
+                    elements.append(Spacer(1, 0.2*inch))
+            else:
+                elements.append(Paragraph("No se registra información en esta sección.", normal_style))
+
+            doc.build(elements)
+            return {
+                "status": "success",
+                "message": "PDF generado exitosamente desde cero",
+                "filename": unique_filename,
+                "file_path": str(output_file)
+            }
+        except ImportError:
+            return {
+                "status": "error",
+                "message": "ReportLab no está instalado. Instala con: pip install reportlab",
+                "filename": None,
+                "file_path": None
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Error generando PDF Estado de Avance PAI: {str(e)}",
                 "filename": None,
                 "file_path": None
             }
