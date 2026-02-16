@@ -1,4 +1,9 @@
 /files
 files
+# No ignorar original_files / original_student_files (que sí suban)
+!files/original_files/
+!files/original_files/**
+!files/original_student_files/
+!files/original_student_files/**
 .env
 .pie360backend
