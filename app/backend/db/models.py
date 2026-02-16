@@ -788,6 +788,134 @@ class HealthEvaluationModel(Base):
     added_date = Column(DateTime)
     updated_date = Column(DateTime)
 
+class FamilyReportModel(Base):
+    __tablename__ = 'family_reports'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    student_id = Column(Integer, nullable=False)
+    document_type_id = Column(Integer, nullable=False, default=7)
+    version = Column(Integer, nullable=False, default=1)
+    added_date = Column(DateTime, default=datetime.utcnow)
+    updated_date = Column(DateTime, onupdate=datetime.utcnow)
+
+    student_full_name = Column(String(255), nullable=True)
+    student_identification_number = Column(String(20), nullable=True)
+    student_social_name = Column(String(255), nullable=True)
+    student_born_date = Column(Date, nullable=True)
+    student_age = Column(String(50), nullable=True)
+    student_course = Column(String(100), nullable=True)
+    student_school = Column(String(255), nullable=True)
+
+    professional_id = Column(Integer, nullable=True)
+    professional_identification_number = Column(String(20), nullable=True)
+    professional_social_name = Column(String(255), nullable=True)
+    professional_role = Column(String(255), nullable=True)
+    professional_phone = Column(String(50), nullable=True)
+    professional_email = Column(String(255), nullable=True)
+
+    report_delivery_date = Column(Date, nullable=True)
+    receiver_full_name = Column(String(255), nullable=True)
+    receiver_identification_number = Column(String(20), nullable=True)
+    receiver_social_name = Column(String(255), nullable=True)
+    receiver_phone = Column(String(50), nullable=True)
+    receiver_email = Column(String(255), nullable=True)
+    receiver_relationship = Column(String(255), nullable=True)
+    receiver_presence_of = Column(String(255), nullable=True)
+    guardian_type = Column(String(20), nullable=True)  # 'primary', 'substitute'
+    has_power_of_attorney = Column(String(10), nullable=True)  # 'yes', 'no'
+    evaluation_type = Column(String(20), nullable=True)  # 'admission', 'revaluation'
+    evaluation_date = Column(Date, nullable=True)
+    applied_instruments = Column(Text, nullable=True)
+    diagnosis = Column(Text, nullable=True)
+    pedagogical_strengths = Column(Text, nullable=True)
+    pedagogical_support_needs = Column(Text, nullable=True)
+    social_affective_strengths = Column(Text, nullable=True)
+    social_affective_support_needs = Column(Text, nullable=True)
+    health_strengths = Column(Text, nullable=True)
+    health_support_needs = Column(Text, nullable=True)
+    collaborative_work = Column(Text, nullable=True)
+    home_support = Column(Text, nullable=True)
+    agreements_commitments = Column(Text, nullable=True)
+    evaluation_date_1 = Column(Date, nullable=True)
+    evaluation_date_2 = Column(Date, nullable=True)
+    evaluation_date_3 = Column(Date, nullable=True)
+
+
+class InterconsultationModel(Base):
+    __tablename__ = 'interconsultations'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    student_id = Column(Integer, nullable=False)
+    document_type_id = Column(Integer, nullable=False, default=24)
+
+    # I. Identificación del/la estudiante
+    full_name = Column(String(255), nullable=True)
+    gender_id = Column(Integer, nullable=True)
+    identification_number = Column(String(32), nullable=True)
+    born_date = Column(Date, nullable=True)
+    age = Column(String(16), nullable=True)
+    nationality_id = Column(Integer, nullable=True)
+    native_language = Column(String(128), nullable=True)
+    language_usually_used = Column(String(128), nullable=True)
+    address = Column(String(512), nullable=True)
+    region_id = Column(Integer, nullable=True)
+    commune_id = Column(Integer, nullable=True)
+    city = Column(String(128), nullable=True)
+    responsible_id = Column(Integer, nullable=True)
+    contact_phone = Column(String(32), nullable=True)
+    contact_email = Column(String(128), nullable=True)
+    educational_establishment = Column(String(255), nullable=True)
+    course_level = Column(String(64), nullable=True)
+    program_type_id = Column(Integer, nullable=True)
+    establishment_address = Column(String(512), nullable=True)
+    establishment_commune = Column(String(128), nullable=True)
+    establishment_phone = Column(String(32), nullable=True)
+    establishment_email = Column(String(128), nullable=True)
+
+    # II. Motivo de la interconsulta
+    additional_information_id = Column(Integer, nullable=True)
+    question_to_answer = Column(Text, nullable=True)
+    attached_documents = Column(Text, nullable=True)
+    referring_professional = Column(Text, nullable=True)
+
+    # III. Resultados
+    reception_date = Column(Date, nullable=True)
+    evaluation_summary = Column(Text, nullable=True)
+    indications_support = Column(Text, nullable=True)
+
+    # IV. Identificación del profesional que evalúa
+    professional_id = Column(Integer, nullable=True)
+    professional_identification_number = Column(String(32), nullable=True)
+    professional_registration_number = Column(String(64), nullable=True)
+    professional_specialty = Column(String(128), nullable=True)
+    procedence_id = Column(Integer, nullable=True)
+    procedence_other = Column(String(255), nullable=True)
+    professional_contact_phone = Column(String(32), nullable=True)
+    evaluation_date = Column(Date, nullable=True)
+    required_new_control_id = Column(Integer, nullable=True)
+    new_control_date = Column(Date, nullable=True)
+
+    added_date = Column(DateTime, default=datetime.utcnow)
+    updated_date = Column(DateTime, onupdate=datetime.utcnow)
+
+
+class GuardianAttendanceCertificateModel(Base):
+    """Document 25 - Certificado de asistencia del apoderado (Ley TEA)."""
+    __tablename__ = "guardian_attendance_certificate"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    student_id = Column(Integer, nullable=False)
+    document_type_id = Column(Integer, nullable=False, default=25)
+
+    professional_id = Column(Integer, nullable=True, comment="Responsible professional for the certificate")
+    certificate_date = Column(Date, nullable=True, comment="Certificate date")
+    start_time = Column(Time, nullable=True, comment="Start time (guardian attendance)")
+    end_time = Column(Time, nullable=True, comment="End time (guardian attendance)")
+
+    added_date = Column(DateTime, default=datetime.utcnow)
+    updated_date = Column(DateTime, onupdate=datetime.utcnow)
+
+
 class EventModel(Base):
     __tablename__ = 'events'
     
@@ -1027,3 +1155,224 @@ class SchoolIntegrationProgramExitCertificateModel(Base):
     guardian_id = Column(Integer, nullable=True)
     added_date = Column(DateTime, nullable=True)
     updated_date = Column(DateTime, nullable=True)
+
+
+# Anamnesis (documento tipo 3)
+class AnamnesisModel(Base):
+    __tablename__ = 'anamnesis'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    student_id = Column(Integer, nullable=False)
+    version = Column(Integer, nullable=False, default=1)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    # Sección 1
+    student_full_name = Column(String(255), nullable=True)
+    gender_id = Column(Integer, nullable=True)
+    born_date = Column(Date, nullable=True)
+    age = Column(String(50), nullable=True)
+    nationality_id = Column(Integer, nullable=True)
+    address = Column(String(500), nullable=True)
+    phone = Column(String(50), nullable=True)
+    native_language = Column(String(100), nullable=True)
+    native_language_domain = Column(Text, nullable=True)  # JSON
+    language_used = Column(String(100), nullable=True)
+    language_used_domain = Column(Text, nullable=True)  # JSON
+    current_schooling = Column(String(100), nullable=True)
+    school_name = Column(String(255), nullable=True)
+    # Sección 4
+    interview_reason = Column(Text, nullable=True)
+    # Sección 5
+    diagnosis_has = Column(Integer, nullable=True)  # 1=Sí, 2=No
+    diagnosis_detail = Column(Text, nullable=True)
+    specialists = Column(Text, nullable=True)  # JSON
+    first_year_notes = Column(Text, nullable=True)
+    birth_type_id = Column(Integer, nullable=True)
+    birth_reason = Column(String(255), nullable=True)
+    birth_medical_assistance = Column(Integer, nullable=True)
+    birth_weight = Column(String(50), nullable=True)
+    birth_height = Column(String(50), nullable=True)
+    first_year_conditions = Column(Text, nullable=True)  # JSON
+    first_year_periodic_health_checkups = Column(Integer, nullable=True)
+    first_year_vaccines = Column(Integer, nullable=True)
+    first_year_observations = Column(Text, nullable=True)
+    # 5.2
+    sm_head_control = Column(String(100), nullable=True)
+    sm_sits_alone = Column(String(100), nullable=True)
+    sm_walks_without_support = Column(String(100), nullable=True)
+    sm_first_words = Column(String(100), nullable=True)
+    sm_first_phrases = Column(String(100), nullable=True)
+    sm_dresses_alone = Column(String(100), nullable=True)
+    sm_bladder_day = Column(String(100), nullable=True)
+    sm_bladder_night = Column(String(100), nullable=True)
+    sm_bowel_day = Column(String(100), nullable=True)
+    sm_bowel_night = Column(String(100), nullable=True)
+    sm_observations_1 = Column(Text, nullable=True)
+    sm_motor_activity = Column(String(50), nullable=True)
+    sm_muscle_tone = Column(String(50), nullable=True)
+    sm_walking_stability = Column(Integer, nullable=True)
+    sm_frequent_falls = Column(Integer, nullable=True)
+    sm_lateral_dominance = Column(String(10), nullable=True)
+    sm_fine_grab = Column(Integer, nullable=True)
+    sm_fine_grip = Column(Integer, nullable=True)
+    sm_fine_pinch = Column(Integer, nullable=True)
+    sm_fine_draw = Column(Integer, nullable=True)
+    sm_fine_write = Column(Integer, nullable=True)
+    sm_fine_thread = Column(Integer, nullable=True)
+    sm_cog_reacts_familiar = Column(Integer, nullable=True)
+    sm_cog_demands_company = Column(Integer, nullable=True)
+    sm_cog_smiles_babbles = Column(Integer, nullable=True)
+    sm_cog_manipulates_explores = Column(Integer, nullable=True)
+    sm_cog_understands_prohibitions = Column(Integer, nullable=True)
+    sm_cog_poor_eye_hand = Column(Integer, nullable=True)
+    sm_observations_2 = Column(Text, nullable=True)
+    # 5.3
+    vision_interested_stimuli = Column(Integer, nullable=True)
+    vision_irritated_eyes = Column(Integer, nullable=True)
+    vision_headaches = Column(Integer, nullable=True)
+    vision_squints = Column(Integer, nullable=True)
+    vision_follows_movement = Column(Integer, nullable=True)
+    vision_abnormal_movements = Column(Integer, nullable=True)
+    vision_erroneous_behaviors = Column(Integer, nullable=True)
+    vision_diagnosis = Column(Integer, nullable=True)
+    hearing_interested_stimuli = Column(Integer, nullable=True)
+    hearing_recognizes_voices = Column(Integer, nullable=True)
+    hearing_turns_head = Column(Integer, nullable=True)
+    hearing_ears_to_tv = Column(Integer, nullable=True)
+    hearing_covers_ears = Column(Integer, nullable=True)
+    hearing_earaches = Column(Integer, nullable=True)
+    hearing_pronunciation_adequate = Column(Integer, nullable=True)
+    hearing_diagnosis = Column(Integer, nullable=True)
+    vision_hearing_observations = Column(Text, nullable=True)
+    # 5.4
+    language_communication_method = Column(String(50), nullable=True)
+    language_communication_other = Column(String(255), nullable=True)
+    language_exp_babbles = Column(Integer, nullable=True)
+    language_exp_vocalizes_gestures = Column(Integer, nullable=True)
+    language_exp_emits_words = Column(Integer, nullable=True)
+    language_exp_emits_phrases = Column(Integer, nullable=True)
+    language_exp_relates_experiences = Column(Integer, nullable=True)
+    language_exp_clear_pronunciation = Column(Integer, nullable=True)
+    language_comp_identifies_objects = Column(Integer, nullable=True)
+    language_comp_identifies_people = Column(Integer, nullable=True)
+    language_comp_understands_abstract = Column(Integer, nullable=True)
+    language_comp_responds_coherently = Column(Integer, nullable=True)
+    language_comp_follows_simple_instructions = Column(Integer, nullable=True)
+    language_comp_follows_complex_instructions = Column(Integer, nullable=True)
+    language_comp_follows_group_instructions = Column(Integer, nullable=True)
+    language_comp_understands_stories = Column(Integer, nullable=True)
+    language_oral_loss = Column(Text, nullable=True)
+    language_observations = Column(Text, nullable=True)
+    # 5.5
+    social_relates_spontaneously = Column(Integer, nullable=True)
+    social_explains_behaviors = Column(Integer, nullable=True)
+    social_participates_groups = Column(Integer, nullable=True)
+    social_prefers_individual = Column(Integer, nullable=True)
+    social_echolalic_language = Column(Integer, nullable=True)
+    social_difficulty_adapting = Column(Integer, nullable=True)
+    social_relates_collaboratively = Column(Integer, nullable=True)
+    social_respects_social_norms = Column(Integer, nullable=True)
+    social_respects_school_norms = Column(Integer, nullable=True)
+    social_shows_humor = Column(Integer, nullable=True)
+    social_stereotyped_movements = Column(Integer, nullable=True)
+    social_frequent_tantrums = Column(Integer, nullable=True)
+    social_reaction_lights = Column(String(50), nullable=True)
+    social_reaction_sounds = Column(String(50), nullable=True)
+    social_reaction_strange_people = Column(String(50), nullable=True)
+    social_observations = Column(Text, nullable=True)
+    # 5.6
+    health_vaccines_up_to_date = Column(Integer, nullable=True)
+    health_epilepsy = Column(Integer, nullable=True)
+    health_heart_problems = Column(Integer, nullable=True)
+    health_paraplegia = Column(Integer, nullable=True)
+    health_hearing_loss = Column(Integer, nullable=True)
+    health_vision_loss = Column(Integer, nullable=True)
+    health_motor_disorder = Column(Integer, nullable=True)
+    health_bronchorespiratory = Column(Integer, nullable=True)
+    health_infectious_disease = Column(Integer, nullable=True)
+    health_emotional_disorder = Column(Integer, nullable=True)
+    health_behavioral_disorder = Column(Integer, nullable=True)
+    health_other = Column(Integer, nullable=True)
+    health_other_specify = Column(String(255), nullable=True)
+    health_problems_treatment = Column(Text, nullable=True)
+    health_diet = Column(String(50), nullable=True)
+    health_diet_other = Column(String(255), nullable=True)
+    health_weight = Column(String(50), nullable=True)
+    health_sleep_pattern = Column(String(50), nullable=True)
+    health_sleep_insomnia = Column(Integer, default=0)
+    health_sleep_nightmares = Column(Integer, default=0)
+    health_sleep_terrors = Column(Integer, default=0)
+    health_sleep_sleepwalking = Column(Integer, default=0)
+    health_sleep_good_mood = Column(Integer, default=0)
+    health_sleep_hours = Column(String(50), nullable=True)
+    health_sleeps_alone = Column(String(50), nullable=True)
+    health_sleeps_specify = Column(String(255), nullable=True)
+    health_mood_behavior = Column(String(255), nullable=True)
+    health_mood_other = Column(String(255), nullable=True)
+    health_current_observations = Column(Text, nullable=True)
+    # Sección 6
+    family_health_history = Column(Text, nullable=True)
+    family_health_observations = Column(Text, nullable=True)
+    # Sección 7
+    school_entry_age = Column(String(50), nullable=True)
+    attended_kindergarten = Column(Integer, nullable=True)
+    schools_count = Column(String(50), nullable=True)
+    teaching_modality = Column(String(50), nullable=True)
+    changes_reason = Column(Text, nullable=True)
+    repeated_grade = Column(Integer, nullable=True)
+    repeated_courses = Column(String(255), nullable=True)
+    repeated_reason = Column(Text, nullable=True)
+    current_level = Column(String(100), nullable=True)
+    learning_difficulty = Column(Integer, nullable=True)
+    participation_difficulty = Column(Integer, nullable=True)
+    disruptive_behavior = Column(Integer, nullable=True)
+    attends_regularly = Column(Integer, nullable=True)
+    attends_gladly = Column(Integer, nullable=True)
+    family_support_homework = Column(Integer, nullable=True)
+    friends = Column(Integer, nullable=True)
+    family_attitude = Column(String(500), nullable=True)
+    performance_assessment = Column(String(50), nullable=True)
+    performance_reasons = Column(String(500), nullable=True)
+    response_difficulties = Column(Text, nullable=True)  # JSON
+    response_difficulties_other = Column(String(255), nullable=True)
+    response_success = Column(Text, nullable=True)  # JSON
+    response_success_other = Column(String(255), nullable=True)
+    rewards = Column(Text, nullable=True)  # JSON
+    rewards_other = Column(String(255), nullable=True)
+    supporters = Column(Text, nullable=True)  # JSON
+    supporters_other_professionals = Column(Text, nullable=True)
+    expectations = Column(String(50), nullable=True)
+    environment = Column(String(50), nullable=True)
+    final_comments = Column(Text, nullable=True)
+
+
+class AnamnesisInformantModel(Base):
+    __tablename__ = 'anamnesis_informants'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    anamnesis_id = Column(Integer, nullable=False)
+    sort_order = Column(Integer, default=0)
+    name = Column(String(255), nullable=True)
+    relationship = Column(String(100), nullable=True)
+    presence = Column(String(255), nullable=True)
+    interview_date = Column(Date, nullable=True)
+
+
+class AnamnesisInterviewerModel(Base):
+    __tablename__ = 'anamnesis_interviewers'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    anamnesis_id = Column(Integer, nullable=False)
+    sort_order = Column(Integer, default=0)
+    professional_id = Column(Integer, nullable=True)
+    role = Column(String(100), nullable=True)
+    interview_date = Column(Date, nullable=True)
+
+
+class AnamnesisHouseholdMemberModel(Base):
+    __tablename__ = 'anamnesis_household_members'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    anamnesis_id = Column(Integer, nullable=False)
+    sort_order = Column(Integer, default=0)
+    name = Column(String(255), nullable=True)
+    relationship = Column(String(100), nullable=True)
+    age = Column(String(50), nullable=True)
+    schooling = Column(String(100), nullable=True)
+    occupation = Column(String(255), nullable=True)

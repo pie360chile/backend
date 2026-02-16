@@ -23,7 +23,8 @@ async def store_individual_support_plan(
     """
     try:
         isp_service = IndividualSupportPlanClass(db)
-        result = isp_service.store(isp_data.dict())
+        data = isp_data.model_dump() if hasattr(isp_data, "model_dump") else isp_data.dict()
+        result = isp_service.store(data)
 
         if isinstance(result, dict) and result.get("status") == "error":
             return JSONResponse(
@@ -240,7 +241,8 @@ async def update_individual_support_plan(
     """
     try:
         isp_service = IndividualSupportPlanClass(db)
-        result = isp_service.update(id, isp_data.dict(exclude_unset=True))
+        data = isp_data.model_dump(exclude_unset=True) if hasattr(isp_data, "model_dump") else isp_data.dict(exclude_unset=True)
+        result = isp_service.update(id, data)
 
         if isinstance(result, dict) and result.get("status") == "error":
             return JSONResponse(

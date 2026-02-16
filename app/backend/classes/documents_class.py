@@ -128,6 +128,15 @@ class DocumentsClass:
                     output_directory=output_directory
                 )
             
+            # Si es documento 25 (Certificado Ley TEA - acompañamiento apoderado), usar función específica
+            if document_id == 25:
+                return DocumentsClass._generate_tea_certificate_from_scratch(
+                    document_id=document_id,
+                    cert_data=document_data,
+                    db=db,
+                    output_directory=output_directory
+                )
+            
             # Si hay template_path, usar método de sustitución
             if template_path:
                 # Si no se proporcionan tag_replacements, generar automáticamente desde document_data
@@ -1319,15 +1328,6 @@ class DocumentsClass:
                         elif field_name == "M":
                             form_data[field_name] = "/Yes" if gender_marker == "M" else "/Off"
             
-            # Log: campos detectados del PDF y valores de BD
-            print(f"--- Campos del PDF detectados: {list(form_fields.keys())}")
-            print(f"--- native_language en BD: '{evaluation_data.get('native_language', '')}'")
-            print(f"--- language_usually_used en BD: '{evaluation_data.get('language_usually_used', '')}'")
-            print("--- PDF Health Evaluation: campo -> valor ---")
-            for fn, val in sorted(form_data.items()):
-                print(f"Campo: {fn} -> Valor: {val}")
-            print("---")
-            
             # Rellenar los campos del formulario y hacerlos de solo lectura
             if form_data:
                 # Separar campos de texto, radio buttons y checkboxes
@@ -1643,6 +1643,919 @@ class DocumentsClass:
             return {
                 "status": "error",
                 "message": f"Error generando PDF: {str(e)}",
+                "filename": None,
+                "file_path": None
+            }
+
+    @staticmethod
+    def generate_anamnesis_pdf(
+        template_path: str,
+        anamnesis_data: Dict[str, Any],
+        db: Optional[Session] = None,
+        output_directory: str = "files/system/students"
+    ) -> Dict[str, Any]:
+        """
+        Genera un PDF de anamnesis rellenando campos de formulario AcroForm.
+        Usa pypdf para leer y rellenar los campos del formulario.
+        Template: anamnesis_student.pdf en files/original_student_files/
+        Al final marca los campos como solo lectura (quita el formulario editable).
+        """
+        if not PYPDF_AVAILABLE:
+            return {
+                "status": "error",
+                "message": "pypdf no está instalado. Instálelo con: pip install pypdf",
+                "filename": None,
+                "file_path": None
+            }
+        try:
+            import json as _json
+            template_file = Path(template_path)
+            if not template_file.exists():
+                return {"status": "error", "message": "Template PDF no encontrado", "filename": None, "file_path": None}
+            if template_file.suffix.lower() != '.pdf':
+                return {"status": "error", "message": "El template debe ser un archivo PDF", "filename": None, "file_path": None}
+
+            student_name = (anamnesis_data.get("student_full_name") or "estudiante").replace(" ", "_")
+            unique_filename = f"anamnesis_{student_name}_{uuid.uuid4().hex[:8]}.pdf"
+            output_file = Path(output_directory) / unique_filename
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+
+            reader = PdfReader(template_file)
+            writer = PdfWriter()
+            for page in reader.pages:
+                writer.add_page(page)
+
+            try:
+                reader_root = reader.trailer.get("/Root", {})
+                if "/AcroForm" in reader_root:
+                    from pypdf.generic import DictionaryObject
+                    if not hasattr(writer, '_root_object') or writer._root_object is None:
+                        writer._root_object = DictionaryObject()
+                        for key, value in reader_root.items():
+                            if key != "/AcroForm":
+                                writer._root_object[NameObject(key)] = value
+                    try:
+                        writer._root_object[NameObject("/AcroForm")] = reader_root["/AcroForm"].clone(writer, force_duplicate=True)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+            def format_date(val) -> str:
+                if not val:
+                    return ""
+                try:
+                    if isinstance(val, str):
+                        dt = datetime.strptime(val.strip()[:10], "%Y-%m-%d")
+                        return dt.strftime("%d/%m/%Y")
+                    if hasattr(val, 'strftime'):
+                        return val.strftime("%d/%m/%Y")
+                    return str(val)
+                except Exception:
+                    return str(val) if val else ""
+
+            def to_str(val) -> str:
+                if val is None:
+                    return ""
+                if isinstance(val, (list, dict)):
+                    try:
+                        return _json.dumps(val, ensure_ascii=False)
+                    except Exception:
+                        return str(val)
+                return str(val).strip() if val else ""
+
+            def get_val(key: str, fmt_date: bool = False) -> str:
+                v = anamnesis_data.get(key)
+                if v is None:
+                    return ""
+                return format_date(v) if fmt_date else to_str(v)
+
+            # Obtener campos del formulario
+            form_fields = {}
+            try:
+                if reader.get_form_text_fields():
+                    form_fields.update(reader.get_form_text_fields())
+                root = reader.trailer.get("/Root", {})
+                if "/AcroForm" in root and "/Fields" in root["/AcroForm"]:
+                    def extract_names(fl):
+                        for ref in fl:
+                            obj = ref.get_object()
+                            if "/Kids" in obj:
+                                extract_names(obj["/Kids"])
+                            if "/T" in obj and obj["/T"]:
+                                form_fields[obj["/T"]] = None
+                    extract_names(root["/AcroForm"]["/Fields"])
+                for page in reader.pages:
+                    if "/Annots" in page:
+                        for annot in page["/Annots"]:
+                            a = annot.get_object()
+                            if "/FT" in a and "/T" in a and a.get("/T"):
+                                form_fields[a["/T"]] = None
+            except Exception:
+                pass
+
+            # Resolver género (gender_id -> texto)
+            d = anamnesis_data
+            gender_name = ""
+            if db and d.get("gender_id"):
+                try:
+                    from app.backend.db.models import GenderModel
+                    g = db.query(GenderModel).filter(GenderModel.id == d.get("gender_id")).first()
+                    if g and g.gender:
+                        gender_name = g.gender.strip()
+                except Exception:
+                    pass
+            if not gender_name:
+                gender_name = anamnesis_data.get("gender_name") or ""
+
+            # Pares: nombre campo PDF (reales del formulario) -> valor
+            nombre_val = get_val("student_full_name")
+            fecha_nac_val = format_date(d.get("born_date"))
+            _addr, _ph = get_val("address"), get_val("phone")
+
+            # Calcular años y meses de edad
+            age_years = ""
+            age_months = ""
+            if d.get("born_date"):
+                try:
+                    from datetime import date as _date
+                    bd = None
+                    if isinstance(d.get("born_date"), str):
+                        bd = datetime.strptime(str(d.get("born_date"))[:10], "%Y-%m-%d").date()
+                    elif hasattr(d.get("born_date"), "strftime"):
+                        bd = d.get("born_date")
+                    if bd:
+                        hoy = _date.today()
+                        total_meses = (hoy.year - bd.year) * 12 + (hoy.month - bd.month)
+                        if hoy.day < bd.day:
+                            total_meses -= 1
+                        age_years = str(total_meses // 12)
+                        age_months = str(total_meses % 12)
+                except Exception:
+                    pass
+            if not age_years and d.get("age"):
+                age_years = str(d.get("age"))
+
+            # Resolver país (nationality_id -> nombre)
+            country_name = ""
+            if db and d.get("nationality_id"):
+                try:
+                    from app.backend.db.models import NationalityModel
+                    n = db.query(NationalityModel).filter(NationalityModel.id == d.get("nationality_id")).first()
+                    if n and n.nationality:
+                        country_name = n.nationality.strip()
+                except Exception:
+                    pass
+            if not country_name:
+                country_name = d.get("nationality_name") or ""
+
+            # Sexo: F o M para checkboxes sex_w / sex_m
+            is_female = "femenino" in gender_name.lower() or "f" == gender_name.strip().lower()
+            is_male = "masculino" in gender_name.lower() or "m" == gender_name.strip().lower()
+
+            # Grado dominio: ["understand","speak","read","write"] (también acepta legacy comprende,habla,lee,escribe)
+            nd = d.get("native_language_domain") or []
+            ud = d.get("language_used_domain") or []
+            if isinstance(nd, str):
+                try:
+                    nd = _json.loads(nd) if nd else []
+                except Exception:
+                    nd = []
+            if isinstance(ud, str):
+                try:
+                    ud = _json.loads(ud) if ud else []
+                except Exception:
+                    ud = []
+
+            def _has(arr, *keys):
+                """Retorna Yes si alguno de keys está en arr. keys: ("understand","comprende") para compat."""
+                if not arr:
+                    return "Off"
+                for key in keys:
+                    if isinstance(arr, list):
+                        for x in arr:
+                            v = x.get("value", x) if isinstance(x, dict) else x
+                            if str(v).lower().strip() == str(key).lower():
+                                return "Yes"
+                        if key in arr:
+                            return "Yes"
+                    elif isinstance(arr, dict):
+                        if arr.get(key) or arr.get(str(key).capitalize()):
+                            return "Yes"
+                return "Off"
+
+            field_mapping = {
+                "full_name": nombre_val,
+                "student_full_name": nombre_val,
+                "birth_day": fecha_nac_val,
+                "born_date": fecha_nac_val,
+                "sex_f": "Yes" if is_female else "Off",
+                "sex_m": "Yes" if is_male else "Off",
+                "years": age_years,
+                "months": age_months,
+                "country": country_name,
+                "address": get_val("address"),
+                "phone": get_val("phone"),
+                "domicilio": get_val("address"),
+                "telefono": get_val("phone"),
+                "Domicilio actual": get_val("address"),
+                "Teléfono": get_val("phone"),
+                "domicilio_actual": get_val("address"),
+                "direccion": get_val("address"),
+                "Address": get_val("address"),
+                "Phone": get_val("phone"),
+                "Telefono": get_val("phone"),
+                "celular": get_val("phone"),
+                "mother_language": get_val("native_language"),
+                "used_language": get_val("language_used"),
+                "course": get_val("current_schooling"),
+                "school": get_val("school_name"),
+                "nombre": nombre_val,
+                "sexo": gender_name,
+                "fecha_nacimiento": fecha_nac_val,
+                "ml_o_1": _has(nd, "understand", "comprende"),
+                "ml_o_01": _has(nd, "understand", "comprende"),
+                "comprende": _has(nd, "understand", "comprende"),
+                "ml_o_2": _has(nd, "speak", "habla"),
+                "ml_o 2": _has(nd, "speak", "habla"),
+                "ml_o_02": _has(nd, "speak", "habla"),
+                "habla": _has(nd, "speak", "habla"),
+                "mlo2": _has(nd, "speak", "habla"),
+                "ml_o_3": _has(nd, "read", "lee"),
+                "ml_o_4": _has(nd, "write", "escribe"),
+                "lengua_materna_comprende": _has(nd, "understand", "comprende"),
+                "lengua_materna_habla": _has(nd, "speak", "habla"),
+                "lengua_materna_lee": _has(nd, "read", "lee"),
+                "lengua_materna_escribe": _has(nd, "write", "escribe"),
+                "grado_dominio_comprende": _has(nd, "understand", "comprende"),
+                "grado_dominio_habla": _has(nd, "speak", "habla"),
+                "grado_dominio_lee": _has(nd, "read", "lee"),
+                "grado_dominio_escribe": _has(nd, "write", "escribe"),
+                "grado_dominio_ml_comprende": _has(nd, "understand", "comprende"),
+                "grado_dominio_ml_habla": _has(nd, "speak", "habla"),
+                "grado_dominio_ml_lee": _has(nd, "read", "lee"),
+                "grado_dominio_ml_escribe": _has(nd, "write", "escribe"),
+                "ul_o_1": _has(ud, "understand", "comprende"),
+                "ul_o_2": _has(ud, "speak", "habla"),
+                "ul_o_3": _has(ud, "read", "lee"),
+                "ul_o_4": _has(ud, "write", "escribe"),
+                "ul_comprende": _has(ud, "understand", "comprende"),
+                "ul_habla": _has(ud, "speak", "habla"),
+                "ul_lee": _has(ud, "read", "lee"),
+                "ul_escribe": _has(ud, "write", "escribe"),
+                "grado_dominio_ul_comprende": _has(ud, "understand", "comprende"),
+                "grado_dominio_ul_habla": _has(ud, "speak", "habla"),
+                "grado_dominio_ul_lee": _has(ud, "read", "lee"),
+                "grado_dominio_ul_escribe": _has(ud, "write", "escribe"),
+                "used_comprende": _has(ud, "understand", "comprende"),
+                "used_habla": _has(ud, "speak", "habla"),
+                "used_lee": _has(ud, "read", "lee"),
+                "used_escribe": _has(ud, "write", "escribe"),
+                "age": get_val("age"),
+                "Edad": get_val("age"),
+                "gender_id": get_val("gender_id"),
+                "address": get_val("address"),
+                "phone": get_val("phone"),
+                "native_language": get_val("native_language"),
+                "language_used": get_val("language_used"),
+                "current_schooling": get_val("current_schooling"),
+                "school_name": get_val("school_name"),
+                "interview_reason": get_val("interview_reason"),
+                "problem_definition": get_val("interview_reason"),
+                "Motivo de la entrevista": get_val("interview_reason"),
+                "Motivo entrevista": get_val("interview_reason"),
+                "diagnosis_detail": get_val("diagnosis_detail"),
+                "diagnosisdetail": get_val("diagnosis_detail"),
+                "Detalle diagnóstico": get_val("diagnosis_detail"),
+                "specialists": get_val("specialists"),
+            }
+            # Sección 5: Especialistas por área (desde specialists dict o list)
+            _spec_raw = d.get("specialists")
+            _spec = _spec_raw
+            if isinstance(_spec_raw, str):
+                try:
+                    _spec = _json.loads(_spec_raw) if _spec_raw else {}
+                except Exception:
+                    _spec = {}
+            if isinstance(_spec, list):
+                _name_to_key = {
+                    "pediatra": "pediatrics", "pediatría": "pediatrics", "pediatrics": "pediatrics",
+                    "kinesiología": "kinesiology", "kinesiology": "kinesiology",
+                    "genética": "genetic", "genetic": "genetic",
+                    "fonoaudiología": "speech_therapy", "speech_therapy": "speech_therapy",
+                    "neurología": "neurology", "neurology": "neurology",
+                    "psicología": "psychology", "psychology": "psychology",
+                    "psiquiatría": "psychiatry", "psychiatry": "psychiatry",
+                    "psicopedagogía": "educational_psychology", "psychopedagogia": "educational_psychology",
+                    "terapia ocupacional": "occupational_therapy", "occupational_therapy": "occupational_therapy",
+                    "otro": "another_health", "another_health": "another_health",
+                }
+                _spec_dict = {}
+                for _item in _spec:
+                    if isinstance(_item, dict):
+                        _sval = _item.get("status") or _item.get("detail") or _item.get("value") or _item.get("text") or ""
+                        _name = (_item.get("name") or _item.get("specialty") or _item.get("speciality") or _item.get("area") or "").strip().lower()
+                        _skey = _name_to_key.get(_name) or _name.replace(" ", "_").replace("á", "a").replace("í", "i").replace("ó", "o").replace("ú", "u").replace("é", "e")
+                        if not _skey:
+                            continue
+                        if _skey in _name_to_key:
+                            _skey = _name_to_key[_skey]
+                        _spec_dict[_skey] = _sval
+                _spec = _spec_dict
+            _spec_keys = ("pediatrics", "kinesiology", "genetic", "speech_therapy", "neurology",
+                         "psychology", "psychiatry", "educational_psychology", "occupational_therapy", "another_health")
+            _spec_aliases = {
+                "pediatrics": ("pediatrics", "pediatria", "pediatría"),
+                "kinesiology": ("kinesiology", "kinesiologia", "kinesiología"),
+                "genetic": ("genetic", "genetico", "genético"),
+                "speech_therapy": ("speech_therapy", "fonoaudiologia", "fonoaudiología"),
+                "neurology": ("neurology", "neurologia", "neurología"),
+                "psychology": ("psychology", "psicologia", "psicología"),
+                "psychiatry": ("psychiatry", "psiquiatria", "psiquiatría"),
+                "educational_psychology": ("educational_psychology", "psychopedagogia", "psychopedagogía", "psicopedagogia"),
+                "occupational_therapy": ("occupational_therapy", "terapia_ocupacional"),
+                "another_health": ("another_health", "otro", "other"),
+            }
+            if isinstance(_spec, dict):
+                for _sk in _spec_keys:
+                    v = None
+                    for _alias in _spec_aliases.get(_sk, (_sk,)):
+                        v = _spec.get(_alias) or _spec.get(_alias.replace("_", " ").title())
+                        if v is not None:
+                            break
+                    field_mapping[_sk] = to_str(v) if v is not None else ""
+                for _sk, _aliases in _spec_aliases.items():
+                    _v = field_mapping.get(_sk, "")
+                    for _al in _aliases:
+                        field_mapping[_al] = _v
+            else:
+                for _sk in _spec_keys:
+                    field_mapping[_sk] = ""
+                for _sk, _aliases in _spec_aliases.items():
+                    for _al in _aliases:
+                        field_mapping[_al] = ""
+            field_mapping.update({
+                "first_year_notes": get_val("first_year_notes"),
+                "birth_type_id": get_val("birth_type_id"),
+                "birth_reason": get_val("birth_reason"),
+                "anotherbirthreason": "" if d.get("birth_type_id") == 1 else (get_val("birth_reason") or ""),
+                "birth_weight": get_val("birth_weight"),
+                "birth_height": get_val("birth_height"),
+                "birthheight": get_val("birth_height"),
+                "talla_nacimiento": get_val("birth_height"),
+                "first_year_observations": get_val("first_year_observations"),
+                "sm_head_control": get_val("sm_head_control"),
+                "sm_sits_alone": get_val("sm_sits_alone"),
+                "sm_walks_without_support": get_val("sm_walks_without_support"),
+                "sm_first_words": get_val("sm_first_words"),
+                "sm_first_phrases": get_val("sm_first_phrases"),
+                "sm_dresses_alone": get_val("sm_dresses_alone"),
+                "sm_bladder_day": get_val("sm_bladder_day"),
+                "sm_bladder_night": get_val("sm_bladder_night"),
+                "sm_bowel_day": get_val("sm_bowel_day"),
+                "sm_bowel_night": get_val("sm_bowel_night"),
+                "sm_observations_1": get_val("sm_observations_1"),
+                "sm_motor_activity": get_val("sm_motor_activity"),
+                "sm_muscle_tone": get_val("sm_muscle_tone"),
+                "sm_lateral_dominance": get_val("sm_lateral_dominance"),
+                "sm_observations_2": get_val("sm_observations_2"),
+                "vision_hearing_observations": get_val("vision_hearing_observations"),
+                "language_communication_method": get_val("language_communication_method"),
+                "language_communication_other": get_val("language_communication_other"),
+                "language_oral_loss": get_val("language_oral_loss"),
+                "language_observations": get_val("language_observations"),
+                "social_observations": get_val("social_observations"),
+                "health_problems_treatment": get_val("health_problems_treatment"),
+                "health_diet": get_val("health_diet"),
+                "health_diet_other": get_val("health_diet_other"),
+                "health_weight": get_val("health_weight"),
+                "health_sleep_pattern": get_val("health_sleep_pattern"),
+                "health_sleep_hours": get_val("health_sleep_hours"),
+                "health_sleeps_alone": get_val("health_sleeps_alone"),
+                "health_sleeps_specify": get_val("health_sleeps_specify"),
+                "health_mood_behavior": get_val("health_mood_behavior"),
+                "health_mood_other": get_val("health_mood_other"),
+                "health_current_observations": get_val("health_current_observations"),
+                "family_health_history": get_val("family_health_history"),
+                "family_health_observations": get_val("family_health_observations"),
+                "school_entry_age": get_val("school_entry_age"),
+                "schools_count": get_val("schools_count"),
+                "teaching_modality": get_val("teaching_modality"),
+                "changes_reason": get_val("changes_reason"),
+                "repeated_courses": get_val("repeated_courses"),
+                "repeated_reason": get_val("repeated_reason"),
+                "current_level": get_val("current_level"),
+                "family_attitude": get_val("family_attitude"),
+                "performance_assessment": get_val("performance_assessment"),
+                "performance_reasons": get_val("performance_reasons"),
+                "response_difficulties_other": get_val("response_difficulties_other"),
+                "response_success_other": get_val("response_success_other"),
+                "rewards_other": get_val("rewards_other"),
+                "supporters_other_professionals": get_val("supporters_other_professionals"),
+                "native_language_domain": get_val("native_language_domain"),
+                "language_used_domain": get_val("language_used_domain"),
+                "first_year_conditions": get_val("first_year_conditions"),
+                "response_difficulties": get_val("response_difficulties"),
+                "response_success": get_val("response_success"),
+                "rewards": get_val("rewards"),
+                "supporters": get_val("supporters"),
+                "expectations": get_val("expectations"),
+                "environment": get_val("environment"),
+                "nationality_id": get_val("nationality_id"),
+            })
+            # Informantes, entrevistadores, miembros del hogar como texto
+            def _join_informants():
+                lst = d.get("informants") or []
+                return "; ".join(
+                    f"{x.get('name', '')} ({x.get('relationship', '')}) - {x.get('presence', '')}"
+                    for x in lst if isinstance(x, dict)
+                )
+            def _join_interviewers():
+                lst = d.get("interviewers") or []
+                return "; ".join(
+                    f"{x.get('role', '')}" for x in lst if isinstance(x, dict)
+                )
+            def _join_household():
+                lst = d.get("household_members") or []
+                return "; ".join(
+                    f"{x.get('name', '')} ({x.get('relationship', '')}) - {x.get('age', '')} - {x.get('schooling', '')}"
+                    for x in lst if isinstance(x, dict)
+                )
+            field_mapping["informants"] = _join_informants()
+            field_mapping["Informantes"] = _join_informants()
+            # Informantes individuales (sección 2): Fecha entrevista, Nombre, Relación, En presencia de
+            inf_list = d.get("informants") or []
+            for i in range(4):
+                idx = i + 1
+                inf = inf_list[i] if i < len(inf_list) and isinstance(inf_list[i], dict) else {}
+                date_val = format_date(inf.get("interview_date"))
+                name_val = to_str(inf.get("name"))
+                rel_val = to_str(inf.get("relationship"))
+                pres_val = to_str(inf.get("presence"))
+                field_mapping[f"informant_interview_date_{idx}"] = date_val
+                field_mapping[f"informant_interview_name_{idx}"] = name_val
+                field_mapping[f"informant_relation_with_student_{idx}"] = rel_val
+                field_mapping[f"informant_presence_{idx}"] = pres_val
+                field_mapping[f"informant_{idx}_interview_date"] = date_val
+                field_mapping[f"informant_{idx}_name"] = name_val
+                field_mapping[f"informant_{idx}_relation"] = rel_val
+                field_mapping[f"informant_{idx}_presence"] = pres_val
+                field_mapping[f"inf{idx}_fecha"] = date_val
+                field_mapping[f"inf{idx}_nombre"] = name_val
+                field_mapping[f"inf{idx}_relacion"] = rel_val
+                field_mapping[f"inf{idx}_presencia"] = pres_val
+                field_mapping[f"informante_{idx}_fecha"] = date_val
+                field_mapping[f"informante_{idx}_nombre"] = name_val
+                field_mapping[f"informante_{idx}_relacion"] = rel_val
+                field_mapping[f"informante_{idx}_presencia"] = pres_val
+            _interviewers_str = _join_interviewers()
+            field_mapping["interviewers"] = _interviewers_str
+            field_mapping["Entrevistadores"] = _interviewers_str
+            # Sección 3: Entrevistadores individuales (fecha, nombre, rol/cargo)
+            int_list = d.get("interviewers") or []
+            for i in range(4):
+                idx = i + 1
+                int_item = int_list[i] if i < len(int_list) and isinstance(int_list[i], dict) else {}
+                int_date = format_date(int_item.get("interview_date"))
+                int_name = to_str(int_item.get("name") or int_item.get("role"))
+                int_role = to_str(int_item.get("role"))
+                field_mapping[f"identification_interview_date_{idx}"] = int_date
+                field_mapping[f"identification_interview_name_{idx}"] = int_name
+                field_mapping[f"job_position_{idx}"] = int_role
+            field_mapping["household_members"] = _join_household()
+            field_mapping["Miembros del hogar"] = _join_household()
+            # Checkboxes 1=Sí -> /Yes, otro -> /Off
+            _ck = (
+                "diagnosis_has", "birth_medical_assistance", "first_year_periodic_health_checkups", "first_year_vaccines",
+                "sm_walking_stability", "sm_frequent_falls", "vision_interested_stimuli", "vision_irritated_eyes",
+                "vision_headaches", "vision_squints", "vision_follows_movement", "vision_abnormal_movements",
+                "vision_erroneous_behaviors", "vision_diagnosis", "hearing_interested_stimuli", "hearing_recognizes_voices",
+                "hearing_turns_head", "hearing_ears_to_tv", "hearing_covers_ears", "hearing_earaches",
+                "hearing_pronunciation_adequate", "hearing_diagnosis", "health_vaccines_up_to_date", "health_epilepsy",
+                "health_heart_problems", "health_paraplegia", "health_hearing_loss", "health_vision_loss",
+                "health_motor_disorder", "health_bronchorespiratory", "health_infectious_disease", "health_emotional_disorder",
+                "health_behavioral_disorder", "health_other", "health_sleep_insomnia", "health_sleep_nightmares",
+                "health_sleep_terrors", "health_sleep_sleepwalking", "health_sleep_good_mood", "attended_kindergarten",
+                "learning_difficulty", "participation_difficulty", "disruptive_behavior", "attends_regularly",
+                "attends_gladly", "family_support_homework", "friends",
+                "language_exp_babbles", "language_exp_vocalizes_gestures", "language_exp_emits_words",
+                "language_exp_emits_phrases", "language_exp_relates_experiences", "language_exp_clear_pronunciation",
+                "language_comp_identifies_objects", "language_comp_identifies_people", "language_comp_understands_abstract",
+                "language_comp_responds_coherently", "language_comp_follows_simple_instructions",
+                "language_comp_follows_complex_instructions", "language_comp_follows_group_instructions",
+                "language_comp_understands_stories", "social_relates_spontaneously", "social_explains_behaviors",
+                "social_participates_groups", "social_prefers_individual", "social_echolalic_language",
+                "social_difficulty_adapting", "social_relates_collaboratively", "social_respects_social_norms",
+                "social_respects_school_norms", "social_shows_humor", "social_stereotyped_movements",
+                "social_frequent_tantrums", "sm_fine_grab", "sm_fine_grip", "sm_fine_pinch", "sm_fine_draw",
+                "sm_fine_write", "sm_fine_thread", "sm_cog_reacts_familiar", "sm_cog_demands_company",
+                "sm_cog_smiles_babbles", "sm_cog_manipulates_explores", "sm_cog_understands_prohibitions",
+                "sm_cog_poor_eye_hand",
+            )
+            for k in _ck:
+                v = d.get(k)
+                if v is not None:
+                    field_mapping[k] = "Yes" if v == 1 else "Off"
+            # Diagnóstico previo: pdhy (Sí), pdhn (No) - Yes para activar (igual que sex_f/sex_m)
+            _dh = d.get("diagnosis_has")
+            field_mapping["pdhy"] = "Yes" if _dh == 1 else "Off"
+            field_mapping["pdhn"] = "Yes" if _dh == 2 else "Off"
+            # Tipo de parto: birth_type_id 1=normal, 2=cesárea, 3=asistido, 4=fórceps
+            _bt = d.get("birth_type_id")
+            field_mapping["normal_birth"] = "Yes" if _bt == 1 else "Off"
+            field_mapping["normalbirth"] = "Yes" if _bt == 1 else "Off"
+            field_mapping["cesarean"] = "Yes" if _bt == 2 else "Off"
+            field_mapping["assisted"] = "Yes" if _bt == 3 else "Off"
+            field_mapping["forceps"] = "Yes" if _bt == 4 else "Off"
+            # Asistencia médica en el parto: birth_medical_assistance 1=Sí, 2=No
+            _bma = d.get("birth_medical_assistance")
+            field_mapping["birth_assistant_y"] = "Yes" if _bma == 1 else "Off"
+            field_mapping["birth_assistant_n"] = "Yes" if _bma == 2 else "Off"
+            # Desnutrición (first_year_conditions.desnutricion) 1=Sí, 2=No
+            _fyc = d.get("first_year_conditions") or {}
+            if isinstance(_fyc, str):
+                try:
+                    _fyc = _json.loads(_fyc) if _fyc else {}
+                except Exception:
+                    _fyc = {}
+            _des = _fyc.get("desnutricion") if isinstance(_fyc, dict) else None
+            _des_y = "Yes" if _des == 1 else "Off"
+            _des_n = "Yes" if _des == 2 else "Off"
+            field_mapping["dy"] = _des_y
+            field_mapping["dn"] = _des_n
+            _obs = _fyc.get("obesidad") if isinstance(_fyc, dict) else None
+            _obs_y, _obs_n = "Yes" if _obs == 1 else "Off", "Yes" if _obs == 2 else "Off"
+            field_mapping["obesityy"] = _obs_y
+            field_mapping["obesityn"] = _obs_n
+            _hf = _fyc.get("fiebre_alta") if isinstance(_fyc, dict) else None
+            _hf_y, _hf_n = "Yes" if _hf == 1 else "Off", "Yes" if _hf == 2 else "Off"
+            field_mapping["hfy"] = _hf_y
+            field_mapping["hfn"] = _hf_n
+            _sz = _fyc.get("convulsiones") if isinstance(_fyc, dict) else None
+            _sz_y, _sz_n = "Yes" if _sz == 1 else "Off", "Yes" if _sz == 2 else "Off"
+            field_mapping["seizuresy"] = _sz_y
+            field_mapping["seizuresn"] = _sz_n
+            _hosp = _fyc.get("hospitalizaciones") if isinstance(_fyc, dict) else None
+            _hosp_y, _hosp_n = "Yes" if _hosp == 1 else "Off", "Yes" if _hosp == 2 else "Off"
+            field_mapping["hospitalizationsy"] = _hosp_y
+            field_mapping["hospitalizationsn"] = _hosp_n
+            _inj = _fyc.get("traumatismos") if isinstance(_fyc, dict) else None
+            _inj_y, _inj_n = "Yes" if _inj == 1 else "Off", "Yes" if _inj == 2 else "Off"
+            field_mapping["injuy"] = _inj_y
+            field_mapping["injun"] = _inj_n
+            _intox = _fyc.get("intoxicacion") if isinstance(_fyc, dict) else None
+            _intox_y, _intox_n = "Yes" if _intox == 1 else "Off", "Yes" if _intox == 2 else "Off"
+            field_mapping["iny"] = _intox_y
+            field_mapping["inn"] = _intox_n
+            _asma = _fyc.get("asma") if isinstance(_fyc, dict) else None
+            _asma_y, _asma_n = "Yes" if _asma == 1 else "Off", "Yes" if _asma == 2 else "Off"
+            field_mapping["ay"] = _asma_y
+            field_mapping["an"] = _asma_n
+            _resp = _fyc.get("enfermedad_respiratoria") if isinstance(_fyc, dict) else None
+            _resp_y, _resp_n = "Yes" if _resp == 1 else "Off", "Yes" if _resp == 2 else "Off"
+            field_mapping["riy"] = _resp_y
+            field_mapping["rin"] = _resp_n
+            _enc = _fyc.get("encefalitis") if isinstance(_fyc, dict) else None
+            _enc_y, _enc_n = "Yes" if _enc == 1 else "Off", "Yes" if _enc == 2 else "Off"
+            field_mapping["encpy"] = _enc_y
+            field_mapping["encpn"] = _enc_n
+            _men = _fyc.get("meningitis") if isinstance(_fyc, dict) else None
+            _men_y, _men_n = "Yes" if _men == 1 else "Off", "Yes" if _men == 2 else "Off"
+            field_mapping["mgy"] = _men_y
+            field_mapping["mgn"] = _men_n
+            _otro_txt = (_fyc.get("otras") if isinstance(_fyc, dict) else None) or d.get("first_year_conditions_other_specify")
+            field_mapping["otro"] = to_str(_otro_txt) if _otro_txt else ""
+            _otro = _fyc.get("otro") if isinstance(_fyc, dict) else None
+            _otro_y, _otro_n = "Yes" if _otro == 1 else "Off", "Yes" if _otro == 2 else "Off"
+            field_mapping["oy"] = _otro_y
+            field_mapping["on"] = _otro_n
+
+            # Construir form_data: solo incluir campos que existen en el PDF
+            form_data = {}
+            norm_map = {k.strip().lower(): k for k in field_mapping.keys()}
+            pdf_field_names = list(form_fields.keys())
+            for fn in form_fields.keys():
+                val = None
+                if fn in field_mapping:
+                    val = field_mapping[fn]
+                elif fn.strip().lower() in norm_map:
+                    val = field_mapping[norm_map[fn.strip().lower()]]
+                if val is None and "." in fn:
+                    short = fn.split(".")[-1].strip()
+                    if short in field_mapping:
+                        val = field_mapping[short]
+                    elif short.strip().lower() in norm_map:
+                        val = field_mapping[norm_map[short.strip().lower()]]
+                if val is None:
+                    fl = fn.strip().lower()
+                    if ("nombre" in fl and "completo" in fl) or ("nombre" in fl and "apellido" in fl and "2" not in fn) or fl == "nombre":
+                        val = get_val("student_full_name")
+                    elif "sexo" in fl or "genero" in fl or "género" in fl:
+                        val = gender_name
+                    elif ("fecha" in fl and "nacimiento" in fl) or fl == "bd" or fl == "fecha_nacimiento":
+                        val = format_date(d.get("born_date"))
+                    elif "domicilio" in fl or "direccion" in fl or "address" in fl or "dirección" in fl:
+                        val = get_val("address")
+                    elif "telefono" in fl or "teléfono" in fl or "phone" in fl or "celular" in fl:
+                        val = get_val("phone")
+                    elif "informant" in fl or "informante" in fl or "inf" in fl:
+                        import re
+                        m = re.search(r'[_\s]?(\d)[_\s]', fn) or re.search(r'(\d)\s*$', fn)
+                        idx_match = int(m.group(1)) if m and m.group(1).isdigit() else 1
+                        inf = (d.get("informants") or [{}])[idx_match - 1] if idx_match <= 4 else {}
+                        inf = inf if isinstance(inf, dict) else {}
+                        if "date" in fl or "fecha" in fl:
+                            val = format_date(inf.get("interview_date"))
+                        elif "name" in fl or "nombre" in fl:
+                            val = to_str(inf.get("name"))
+                        elif "relation" in fl or "relacion" in fl or "relación" in fl:
+                            val = to_str(inf.get("relationship"))
+                        elif "presence" in fl or "presencia" in fl:
+                            val = to_str(inf.get("presence"))
+                    elif "motivo" in fl and "entrevista" in fl:
+                        val = get_val("interview_reason")
+                    elif ("antecedentes" in fl and ("embarazo" in fl or "parto" in fl)) or "first_year_notes" in fl:
+                        val = get_val("first_year_notes")
+                    elif ("birth" in fl and "height" in fl) or ("talla" in fl and ("nacimiento" in fl or "birth" in fl or "parto" in fl)) or fl == "birth_height":
+                        val = get_val("birth_height")
+                    elif "edad" in fl or fl == "age":
+                        val = get_val("age")
+                    elif "direccion" in fl or "dirección" in fl:
+                        val = get_val("address")
+                    elif "telefono" in fl or "teléfono" in fl:
+                        val = get_val("phone")
+                    elif "lengua" in fl and "materna" in fl:
+                        if "comprende" in fl or "comp" in fl:
+                            val = _has(nd, "comprende")
+                        elif "habla" in fl:
+                            val = _has(nd, "habla")
+                        elif "lee" in fl and "escribe" not in fl:
+                            val = _has(nd, "lee")
+                        elif "escribe" in fl:
+                            val = _has(nd, "escribe")
+                        else:
+                            val = get_val("native_language")
+                    elif ("ml_o" in fl or "ml_o" in fn) and "ul" not in fl:
+                        if "1" in fl and "2" not in fl and "3" not in fl and "4" not in fl:
+                            val = _has(nd, "comprende")
+                        elif "2" in fl or "02" in fl:
+                            val = _has(nd, "habla")
+                        elif "3" in fl:
+                            val = _has(nd, "lee")
+                        elif "4" in fl:
+                            val = _has(nd, "escribe")
+                    elif ("comprende" in fl or "habla" in fl or "lee" in fl or "escribe" in fl) and ("ml" in fl or "materna" in fl):
+                        if "comprende" in fl or "comp" in fl:
+                            val = _has(nd, "comprende")
+                        elif "habla" in fl:
+                            val = _has(nd, "habla")
+                        elif "lee" in fl and "escribe" not in fl:
+                            val = _has(nd, "lee")
+                        elif "escribe" in fl:
+                            val = _has(nd, "escribe")
+                    elif ("grado" in fl and "dominio" in fl) or "grado_dominio" in fl:
+                        if "ul" in fl or "uso" in fl or "lengua_uso" in fl:
+                            if "comprende" in fl or "comp" in fl:
+                                val = _has(ud, "comprende")
+                            elif "habla" in fl:
+                                val = _has(ud, "habla")
+                            elif "lee" in fl and "escribe" not in fl:
+                                val = _has(ud, "lee")
+                            elif "escribe" in fl:
+                                val = _has(ud, "escribe")
+                        else:
+                            if "comprende" in fl or "comp" in fl:
+                                val = _has(nd, "comprende")
+                            elif "habla" in fl:
+                                val = _has(nd, "habla")
+                            elif "lee" in fl and "escribe" not in fl:
+                                val = _has(nd, "lee")
+                            elif "escribe" in fl:
+                                val = _has(nd, "escribe")
+                    elif fl in ("pediatrics", "kinesiology", "genetic", "speech_therapy", "neurology",
+                               "psychology", "psychiatry", "educational_psychology", "occupational_therapy", "another_health"):
+                        val = field_mapping.get(fl, "")
+                    elif "pediatrics" in fl or "pediatri" in fl:
+                        val = field_mapping.get("pediatrics", "")
+                    elif "kinesiology" in fl or "kinesiolog" in fl:
+                        val = field_mapping.get("kinesiology", "")
+                    elif "genetic" in fl:
+                        val = field_mapping.get("genetic", "")
+                    elif "speech_therapy" in fl or "fonoaudiolog" in fl:
+                        val = field_mapping.get("speech_therapy", "")
+                    elif "neurology" in fl or "neurolog" in fl:
+                        val = field_mapping.get("neurology", "")
+                    elif "psychology" in fl and "educational" not in fl and "psychiatry" not in fl:
+                        val = field_mapping.get("psychology", "")
+                    elif "psychiatry" in fl or "psiquiatr" in fl:
+                        val = field_mapping.get("psychiatry", "")
+                    elif "educational_psychology" in fl or "psychopedagog" in fl:
+                        val = field_mapping.get("educational_psychology", "")
+                    elif "occupational_therapy" in fl or "terapia ocupacional" in fl:
+                        val = field_mapping.get("occupational_therapy", "")
+                    elif "another_health" in fl or ("otro" in fl and ("especialista" in fl or "health" in fl)):
+                        val = field_mapping.get("another_health", "")
+                    elif "traumat" in fl or "injuries" in fl:
+                        val = field_mapping.get("injuy") if fl.endswith("y") or "_y" in fl else field_mapping.get("injun")
+                    elif "intox" in fl or "poison" in fl:
+                        val = field_mapping.get("iny") if fl.endswith("y") or "_y" in fl else field_mapping.get("inn")
+                    elif "asma" in fl and ("y" in fl or "n" in fl):
+                        val = field_mapping.get("ay") if fl.endswith("y") or "_y" in fl else field_mapping.get("an")
+                    elif "encefal" in fl and ("y" in fl or "n" in fl):
+                        val = field_mapping.get("encpy") if fl.endswith("y") or "_y" in fl else field_mapping.get("encpn")
+                    elif "lengua" in fl and "uso" in fl:
+                        if "comprende" in fl or "comp" in fl:
+                            val = _has(ud, "comprende")
+                        elif "habla" in fl:
+                            val = _has(ud, "habla")
+                        elif "lee" in fl and "escribe" not in fl:
+                            val = _has(ud, "lee")
+                        elif "escribe" in fl:
+                            val = _has(ud, "escribe")
+                        else:
+                            val = get_val("language_used")
+                if val is not None:
+                    if val in ("/Off", "/Yes", "Off", "Yes"):
+                        form_data[fn] = val
+                    elif isinstance(val, str):
+                        form_data[fn] = val
+            _ck_vals = ("/Yes", "/Off", "Yes", "Off")
+            _ck_matched = [k for k, v in form_data.items() if v in _ck_vals]
+            _spec_matched = [k for k in form_data if any(x in k.lower() for x in ("pediatrics", "kinesiology", "genetic", "speech", "neurology", "psychology", "psychiatry", "psychopedagog", "occupational", "another_health"))]
+            _gd_matched = [k for k in form_data if "grado" in k.lower() or "dominio" in k.lower() or "ml_o_" in k or "ul_o_" in k or "comprende" in k.lower() or "habla" in k.lower()]
+
+            if form_data:
+                text_f = {k: v for k, v in form_data.items() if v not in _ck_vals}
+                cb_f = {k: v for k, v in form_data.items() if v in _ck_vals}
+                text_norm = {k.strip().lower(): (k, v) for k, v in text_f.items()}
+                cb_norm = {k.strip().lower(): v for k, v in cb_f.items()}
+
+                def get_t(n):
+                    if n in text_f:
+                        return text_f[n]
+                    nlow = n.strip().lower()
+                    if nlow in text_norm:
+                        return text_norm[nlow][1]
+                    if "." in n:
+                        short = n.split(".")[-1].strip()
+                        if short in text_f:
+                            return text_f[short]
+                        if short.lower() in text_norm:
+                            return text_norm[short.lower()][1]
+                    for k, v in text_f.items():
+                        if k.lower() in nlow or nlow in k.lower():
+                            return v
+                    return None
+
+                def get_c(n):
+                    v = cb_f.get(n) or cb_norm.get((n or "").strip().lower())
+                    if v is not None:
+                        return v
+                    short = n.split(".")[-1].strip() if "." in n else n
+                    v = cb_f.get(short) or cb_norm.get(short.lower())
+                    if v is not None:
+                        return v
+                    nnorm = (n or "").strip().lower().replace(" ", "_").replace("-", "_")
+                    v = cb_f.get(nnorm) or cb_norm.get(nnorm)
+                    if v is not None:
+                        return v
+                    nlow = (n or "").strip().lower()
+                    for k in cb_f:
+                        if nlow in k.lower() or k.lower() in nlow or (short and short.lower() in k.lower()):
+                            return cb_f[k]
+                        knorm = k.lower().replace(" ", "_").replace("-", "_")
+                        if nnorm in knorm or knorm in nnorm:
+                            return cb_f[k]
+                    return None
+
+                try:
+                    if hasattr(writer, '_root_object') and writer._root_object and "/AcroForm" in writer._root_object:
+                        writer._root_object["/AcroForm"][NameObject("/NeedAppearances")] = BooleanObject(True)
+                except Exception:
+                    pass
+
+                for page_num in range(len(writer.pages)):
+                    page = writer.pages[page_num]
+                    if "/Annots" not in page:
+                        continue
+                    for annot_ref in page["/Annots"]:
+                        try:
+                            a = annot_ref.get_object()
+                            fn = str(a.get("/T", "") or "").strip()
+                            ft = str(a.get("/FT", "") or "").strip()
+                            if not fn and "/Parent" in a:
+                                try:
+                                    parent = a["/Parent"].get_object()
+                                    fn = str(parent.get("/T", "") or "").strip()
+                                    ft = ft or str(parent.get("/FT", "") or "").strip()
+                                except Exception:
+                                    pass
+                            if not fn or not ft:
+                                continue
+                            if ft == "/Tx":
+                                v = get_t(fn)
+                                if v is not None:
+                                    val_str = TextStringObject(str(v))
+                                    a[NameObject("/V")] = val_str
+                                    if "/Parent" in a:
+                                        try:
+                                            parent = a["/Parent"].get_object()
+                                            parent[NameObject("/V")] = val_str
+                                        except Exception:
+                                            pass
+                            elif ft == "/Btn":
+                                cv = get_c(fn)
+                                if cv is not None:
+                                    v_btn = NameObject("/Yes" if cv in ("/Yes", "Yes") else "/Off")
+                                    a[NameObject("/V")] = v_btn
+                                    a[NameObject("/AS")] = v_btn
+                                    if "/Parent" in a:
+                                        try:
+                                            parent = a["/Parent"].get_object()
+                                            parent[NameObject("/V")] = v_btn
+                                            parent[NameObject("/AS")] = v_btn
+                                        except Exception:
+                                            pass
+                            if fn in form_data:
+                                a[NameObject("/Ff")] = NumberObject(int(a.get("/Ff", 0)) | 1)
+                        except Exception:
+                            continue
+
+                # Actualizar también en AcroForm /Fields (algunos visores leen de ahí)
+                try:
+                    if hasattr(writer, '_root_object') and writer._root_object and "/AcroForm" in writer._root_object:
+                        acro = writer._root_object["/AcroForm"]
+                        if "/Fields" in acro and acro["/Fields"]:
+                            def set_text_in_fields(fl):
+                                if not fl:
+                                    return
+                                for ref in fl:
+                                    try:
+                                        obj = ref.get_object()
+                                        if "/Kids" in obj and obj["/Kids"]:
+                                            set_text_in_fields(obj["/Kids"])
+                                        if "/T" in obj and "/FT" in obj:
+                                            fn = str(obj["/T"]).strip() if obj["/T"] else ""
+                                            ft = str(obj["/FT"]).strip() if obj["/FT"] else ""
+                                            if ft == "/Tx":
+                                                v = get_t(fn)
+                                                if v is not None:
+                                                    obj[NameObject("/V")] = TextStringObject(str(v))
+                                            elif ft == "/Btn":
+                                                cv = get_c(fn)
+                                                if cv is not None:
+                                                    v_btn = NameObject("/Yes" if cv in ("/Yes", "Yes") else "/Off")
+                                                    obj[NameObject("/V")] = v_btn
+                                                    obj[NameObject("/AS")] = v_btn
+                                    except Exception:
+                                        continue
+                            set_text_in_fields(acro["/Fields"])
+                except Exception:
+                    pass
+
+                # Marcar campos rellenados como solo lectura (quitar formulario editable)
+                try:
+                    if hasattr(writer, '_root_object') and writer._root_object and "/AcroForm" in writer._root_object:
+                        acro = writer._root_object["/AcroForm"]
+                        if "/Fields" in acro and acro["/Fields"] and isinstance(acro["/Fields"], list):
+                            def process_readonly(fl):
+                                if not fl:
+                                    return
+                                for ref in fl:
+                                    try:
+                                        if ref is None:
+                                            continue
+                                        obj = ref.get_object()
+                                        if "/Kids" in obj and obj["/Kids"]:
+                                            process_readonly(obj["/Kids"])
+                                        if "/T" in obj:
+                                            fn = str(obj["/T"]).strip() if obj["/T"] else ""
+                                            if fn in form_data:
+                                                if "/Ff" in obj:
+                                                    obj[NameObject("/Ff")] = NumberObject(int(obj["/Ff"]) | 1)
+                                                else:
+                                                    obj[NameObject("/Ff")] = NumberObject(1)
+                                    except Exception:
+                                        continue
+                            process_readonly(acro["/Fields"])
+                except Exception:
+                    pass
+
+            with open(output_file, "wb") as f:
+                writer.write(f)
+
+            return {
+                "status": "success",
+                "message": "PDF de anamnesis generado exitosamente",
+                "filename": unique_filename,
+                "file_path": str(output_file)
+            }
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return {
+                "status": "error",
+                "message": f"Error generando PDF de anamnesis: {str(e)}",
                 "filename": None,
                 "file_path": None
             }
@@ -3478,6 +4391,156 @@ class DocumentsClass:
             }
 
     @staticmethod
+    def _generate_tea_certificate_from_scratch(
+        document_id: int,
+        cert_data: Dict[str, Any],
+        db: Optional[Session] = None,
+        output_directory: str = "files/system/students"
+    ) -> Dict[str, Any]:
+        """
+        Genera el PDF del Certificado Ley TEA (Documento 25) desde cero.
+        Certificado para respaldar la salida del apoderado del trabajo (Ley N°21.545 / artículo 66 quinquies Código del Trabajo).
+        """
+        try:
+            if not REPORTLAB_AVAILABLE:
+                return {
+                    "status": "error",
+                    "message": "ReportLab no está instalado. Instala con: pip install reportlab",
+                    "filename": None,
+                    "file_path": None
+                }
+            def g(k: str, d: str = "") -> str:
+                v = cert_data.get(k)
+                if v is None:
+                    return d
+                return str(v).strip() if v else d
+
+            student_name = g("student_full_name", "estudiante").replace(" ", "_")
+            unique_filename = f"certificado_ley_tea_{student_name}_{uuid.uuid4().hex[:8]}.pdf"
+            output_file = Path(output_directory) / unique_filename
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+
+            doc = SimpleDocTemplate(
+                str(output_file),
+                pagesize=A4,
+                rightMargin=2.5*cm,
+                leftMargin=2.5*cm,
+                topMargin=2.5*cm,
+                bottomMargin=2.5*cm
+            )
+            elements = []
+            styles = getSampleStyleSheet()
+
+            title_style = ParagraphStyle(
+                'TeaCertTitle',
+                parent=styles['Heading1'],
+                fontSize=16,
+                textColor=colors.HexColor('#000000'),
+                spaceAfter=20,
+                spaceBefore=12,
+                alignment=TA_CENTER,
+                fontName='Helvetica-Bold'
+            )
+            normal_style = ParagraphStyle(
+                'TeaCertNormal',
+                parent=styles['Normal'],
+                fontSize=11,
+                textColor=colors.HexColor('#000000'),
+                alignment=TA_JUSTIFY,
+                leading=16,
+                spaceAfter=12
+            )
+
+            establishment = DocumentsClass._escape_html_for_paragraph(g("establishment_name", ""))
+            guardian_name = DocumentsClass._escape_html_for_paragraph(g("guardian_fullname", ""))
+            guardian_rut = DocumentsClass._escape_html_for_paragraph(g("guardian_rut", ""))
+            st_name = DocumentsClass._escape_html_for_paragraph(g("student_full_name", ""))
+            course = DocumentsClass._escape_html_for_paragraph(g("course_name", ""))
+            nee_name = DocumentsClass._escape_html_for_paragraph(g("nee_name", ""))
+            attendance_date = DocumentsClass._escape_html_for_paragraph(g("attendance_date", ""))
+            attendance_time = DocumentsClass._escape_html_for_paragraph(g("attendance_time", ""))
+
+            if not establishment:
+                establishment = "________________"
+            if not guardian_name:
+                guardian_name = "________________"
+            if not guardian_rut:
+                guardian_rut = "________________"
+            if not st_name:
+                st_name = "________________"
+            if not course:
+                course = "________________"
+            if not nee_name:
+                nee_name = "________________"
+            if not attendance_date:
+                attendance_date = "________________"
+            if not attendance_time:
+                attendance_time = "________________"
+
+            elements.append(Paragraph("Certificado de asistencia del apoderado", title_style))
+            elements.append(Spacer(1, 0.4*inch))
+
+            p1 = (
+                f'Por medio del presente certificado, y en el marco de la Ley N°21.545, conocida como Ley TEA, '
+                f'el establecimiento educacional <b>{establishment}</b> informa que <b>{guardian_name}</b>, '
+                f'RUT <b>{guardian_rut}</b>, apoderado/a de <b>{st_name}</b>, matriculado/a en <b>{course}</b>, '
+                f'quien posee diagnóstico de <b>{nee_name}</b>.'
+            )
+            elements.append(Paragraph(p1, normal_style))
+            elements.append(Spacer(1, 0.2*inch))
+
+            p2 = (
+                f'Se confirma que el/la apoderado/a antes mencionado/a asistió al establecimiento el día '
+                f'<b>{attendance_date}</b>, en el horario de <b>{attendance_time}</b>, en el contexto de apoyo al/la '
+                f'estudiante o de participación en coordinación con el equipo educativo, de acuerdo al Protocolo '
+                f'de Desregulación Emocional y Conductual y al artículo 66 quinquies del Código del Trabajo.'
+            )
+            elements.append(Paragraph(p2, normal_style))
+            elements.append(Spacer(1, 0.2*inch))
+
+            p3 = (
+                'El presente certificado tiene por objeto respaldar y justificar su salida desde el lugar de trabajo ante el empleador.'
+            )
+            elements.append(Paragraph(p3, normal_style))
+            elements.append(Spacer(1, 0.2*inch))
+
+            p4 = (
+                '"Los padres, madres o cuidadores de personas con trastorno del espectro autista tendrán derecho a '
+                'ausentarse de sus labores para acompañar a la persona de la cual son responsables en las atenciones '
+                'que requiera, sin que ello pueda significar una disminución de sus remuneraciones ni el no pago de '
+                'las mismas, conforme al artículo 66 quinquies del Código del Trabajo."'
+            )
+            elements.append(Paragraph(p4, normal_style))
+            elements.append(Spacer(1, 0.2*inch))
+
+            p5 = (
+                'Se extiende el presente documento a solicitud del/la interesado/a, para los fines que estime pertinentes.'
+            )
+            elements.append(Paragraph(p5, normal_style))
+
+            doc.build(elements)
+            return {
+                "status": "success",
+                "message": "PDF generado exitosamente",
+                "filename": unique_filename,
+                "file_path": str(output_file)
+            }
+        except ImportError:
+            return {
+                "status": "error",
+                "message": "ReportLab no está instalado. Instala con: pip install reportlab",
+                "filename": None,
+                "file_path": None
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Error generando certificado Ley TEA: {str(e)}",
+                "filename": None,
+                "file_path": None
+            }
+
+    @staticmethod
     def generate_health_evaluation_document(
         template_path: str,
         evaluation_data: Dict[str, Any],
@@ -4212,4 +5275,229 @@ class DocumentsClass:
                 "status": "error",
                 "message": f"Error inspeccionando template: {str(e)}",
                 "fields": []
+            }
+
+    @staticmethod
+    def fill_docx_form(
+        template_path: str,
+        replacements: Dict[str, str],
+        output_path: str,
+        remove_literal_strings: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Rellena un formulario DOCX reemplazando etiquetas/placeholders.
+        Soporta: {etiqueta}, [etiqueta], <<etiqueta>>, {{etiqueta}}, CONTENT CONTROLS por tag.
+        Si remove_literal_strings está definido, se eliminan esas cadenas del texto (ej. placeholder "Haz clic o pulse aquí...").
+        """
+        try:
+            doc = Document(template_path)
+
+            def replace_in_text(text: str) -> str:
+                result = text
+                for tag, value in replacements.items():
+                    val = str(value) if value is not None else ""
+                    result = result.replace(f"{{{tag}}}", val)
+                    result = result.replace(f"[{tag}]", val)
+                    result = result.replace(f"<<{tag}>>", val)
+                    result = result.replace(f"{{{{{tag}}}}}", val)
+                return result
+
+            def process_paragraph(para):
+                full_text = para.text
+                new_text = replace_in_text(full_text)
+                if full_text != new_text:
+                    para.clear()
+                    para.add_run(new_text)
+
+            for paragraph in doc.paragraphs:
+                process_paragraph(paragraph)
+
+            for table in doc.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        for para in cell.paragraphs:
+                            process_paragraph(para)
+
+            for section in doc.sections:
+                for header_footer in (section.header, section.first_page_header, section.footer, section.first_page_footer):
+                    if header_footer is not None:
+                        for para in header_footer.paragraphs:
+                            process_paragraph(para)
+                        if hasattr(header_footer, "tables"):
+                            for tbl in header_footer.tables:
+                                for row in tbl.rows:
+                                    for cell in row.cells:
+                                        for para in cell.paragraphs:
+                                            process_paragraph(para)
+
+            if DOCX_EXTRA_AVAILABLE:
+                try:
+                    from docx.oxml.ns import qn
+                    from docx.oxml import OxmlElement
+                    W14_NS = "http://schemas.microsoft.com/office/word/2010/wordml"
+                    W14_CHECKED_ATTR = f"{{{W14_NS}}}val"
+                    CHK_SYMBOL_CHECKED = "\u2611"   # ☑
+                    CHK_SYMBOL_UNCHECKED = "\u2610"  # ☐
+
+                    def _set_checkbox_checked(sdt, sdtPr, checked: bool):
+                        """Activa o desactiva un checkbox content control (w14:checkbox)."""
+                        checkbox = None
+                        for child in sdtPr:
+                            if child.tag == f"{{{W14_NS}}}checkbox" or child.tag.endswith("}checkbox"):
+                                checkbox = child
+                                break
+                        if checkbox is None:
+                            return False
+                        check_el = None
+                        for child in checkbox:
+                            if child.tag == f"{{{W14_NS}}}checked" or child.tag.endswith("}checked"):
+                                check_el = child
+                                break
+                        val_str = "1" if checked else "0"
+                        if check_el is not None:
+                            check_el.set(W14_CHECKED_ATTR, val_str)
+                        else:
+                            from docx.oxml import parse_xml
+                            check_el = parse_xml(
+                                f'<w14:checked xmlns:w14="{W14_NS}" w14:val="{val_str}"/>'
+                            )
+                            checkbox.append(check_el)
+                        # Actualizar también el texto visible en sdtContent (Word lo usa para mostrar)
+                        symbol = CHK_SYMBOL_CHECKED if checked else CHK_SYMBOL_UNCHECKED
+                        sdtContent = sdt.find(qn("w:sdtContent"))
+                        if sdtContent is not None:
+                            wt_list = list(sdtContent.iter(qn("w:t")))
+                            if wt_list:
+                                wt_list[0].text = symbol
+                            else:
+                                for p in sdtContent.iter(qn("w:p")):
+                                    w_r = p.find(qn("w:r"))
+                                    if w_r is not None:
+                                        wt = w_r.find(qn("w:t"))
+                                        if wt is not None:
+                                            wt.text = symbol
+                                        break
+                        return True
+
+                    def process_sdt_body(parent):
+                        for sdt in parent.iter(qn("w:sdt")):
+                            sdtPr = sdt.find(qn("w:sdtPr"))
+                            if sdtPr is None:
+                                continue
+                            tag_el = sdtPr.find(qn("w:tag"))
+                            if tag_el is None:
+                                continue
+                            tag_val = (tag_el.get(qn("w:val")) or "").strip()
+                            if not tag_val:
+                                continue
+                            # Coincidencia insensible a mayúsculas para que Document_1 = document_1
+                            rkey = next((k for k in replacements if k.strip().lower() == tag_val.strip().lower()), None)
+                            if rkey is None:
+                                continue
+                            val = str(replacements.get(rkey, "") or "").strip()
+                            is_checked = bool(val and val not in ("0", "false", "no", "off"))
+
+                            # Si es checkbox content control (w14:checkbox), activar/desactivar
+                            if _set_checkbox_checked(sdt, sdtPr, is_checked):
+                                continue
+
+                            # Campos de texto: si valor vacío, desenvolver el control para que no salga formulario editable
+                            sdtContent = sdt.find(qn("w:sdtContent"))
+                            if sdtContent is not None and not val:
+                                for wt in sdtContent.iter(qn("w:t")):
+                                    wt.text = ""
+                                parent = sdt.getparent()
+                                if parent is not None:
+                                    idx = parent.index(sdt)
+                                    children = list(sdtContent)
+                                    parent.remove(sdt)
+                                    for i, child in enumerate(children):
+                                        parent.insert(idx + i, child)
+                                continue
+
+                            # Reemplazo de texto normal cuando hay valor
+                            if sdtContent is not None:
+                                wt_list = list(sdtContent.iter(qn("w:t")))
+                                if wt_list:
+                                    for i, wt in enumerate(wt_list):
+                                        wt.text = val if i == 0 else ""
+                                else:
+                                    w_r = sdtContent.find(qn("w:r"))
+                                    if w_r is not None:
+                                        wt_el = w_r.find(qn("w:t"))
+                                        if wt_el is not None:
+                                            wt_el.text = val
+                                        else:
+                                            new_t = OxmlElement("w:t")
+                                            if val:
+                                                new_t.text = val
+                                            new_t.set(qn("xml:space"), "preserve")
+                                            w_r.append(new_t)
+                                    else:
+                                        for p in sdtContent.iter(qn("w:p")):
+                                            w_r = p.find(qn("w:r"))
+                                            if w_r is not None:
+                                                wt_el = w_r.find(qn("w:t"))
+                                                if wt_el is not None:
+                                                    wt_el.text = val
+                                                else:
+                                                    new_t = OxmlElement("w:t")
+                                                    if val:
+                                                        new_t.text = val
+                                                    new_t.set(qn("xml:space"), "preserve")
+                                                    w_r.append(new_t)
+                                                break
+                    process_sdt_body(doc.element.body)
+                    for section in doc.sections:
+                        for hf in (section.header, section.footer):
+                            if hf is not None and hasattr(hf, "_element"):
+                                process_sdt_body(hf._element)
+                except Exception:
+                    pass
+
+            # Eliminar cadenas literales (ej. placeholder) cuando Procedencia no es Otro
+            if remove_literal_strings:
+                def _strip_literal(para):
+                    text = para.text
+                    new_text = text
+                    for s in remove_literal_strings:
+                        if s:
+                            new_text = new_text.replace(s, "")
+                    if new_text != text:
+                        para.clear()
+                        if new_text:
+                            para.add_run(new_text)
+                for para in doc.paragraphs:
+                    _strip_literal(para)
+                for table in doc.tables:
+                    for row in table.rows:
+                        for cell in row.cells:
+                            for para in cell.paragraphs:
+                                _strip_literal(para)
+                for section in doc.sections:
+                    for hf in (section.header, section.first_page_header, section.footer, section.first_page_footer):
+                        if hf is not None:
+                            for para in hf.paragraphs:
+                                _strip_literal(para)
+                            if hasattr(hf, "tables"):
+                                for tbl in hf.tables:
+                                    for row in tbl.rows:
+                                        for cell in row.cells:
+                                            for para in cell.paragraphs:
+                                                _strip_literal(para)
+
+            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+            doc.save(output_path)
+            return {
+                "status": "success",
+                "message": "Documento DOCX rellenado correctamente",
+                "file_path": output_path,
+                "filename": Path(output_path).name,
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": str(e),
+                "file_path": None,
+                "filename": None,
             }

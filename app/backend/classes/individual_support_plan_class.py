@@ -112,34 +112,12 @@ class IndividualSupportPlanClass:
                 # Asegurar que la sesión esté sincronizada con la base de datos
                 self.db.expire_all()
                 
-                # Debug: imprimir el id del plan
-                print(f"DEBUG - Buscando profesionales para individual_support_plan_id: {isp.id}")
-                
-                # Obtener profesionales asociados usando una consulta directa
-                # Consulta directa para verificar
-                result = self.db.execute(
-                    text("SELECT id, individual_support_plan_id, professional_id, deleted_date FROM individual_support_plan_professionals WHERE individual_support_plan_id = :plan_id"),
-                    {"plan_id": isp.id}
-                )
-                raw_results = result.fetchall()
-                print(f"DEBUG - Consulta SQL directa - Total registros: {len(raw_results)}")
-                for row in raw_results:
-                    print(f"DEBUG - SQL Directo - ID: {row[0]}, plan_id: {row[1]}, professional_id: {row[2]}, deleted_date: {row[3]}")
-                
                 # Obtener profesionales asociados usando ORM
                 all_professionals = self.db.query(IndividualSupportPlanProfessionalModel).filter(
                     IndividualSupportPlanProfessionalModel.individual_support_plan_id == isp.id
                 ).all()
-                
-                print(f"DEBUG - Total profesionales encontrados (ORM, sin filtrar): {len(all_professionals)}")
-                for p in all_professionals:
-                    print(f"DEBUG - ORM - Profesional ID: {p.id}, individual_support_plan_id: {p.individual_support_plan_id}, deleted_date: {p.deleted_date}, deleted_date type: {type(p.deleted_date)}")
-                
                 # Filtrar en Python los que no están eliminados
-                # Verificar tanto None como valores vacíos
                 professionals = [p for p in all_professionals if p.deleted_date is None or (hasattr(p.deleted_date, '__bool__') and not bool(p.deleted_date))]
-                
-                print(f"DEBUG - Profesionales después de filtrar: {len(professionals)}")
                 
                 professionals_list = []
                 for prof in professionals:
@@ -319,16 +297,20 @@ class IndividualSupportPlanClass:
             student_id = isp_data.get('student_id')
             school_id = isp_data.get('school_id')
             document_type_id = isp_data.get('document_type_id')
+            period_id = isp_data.get('period_id')
             
             # Buscar si ya existe un registro con estos criterios
             existing_isp = None
             if student_id is not None and school_id is not None and document_type_id is not None:
-                existing_isp = self.db.query(IndividualSupportPlanModel).filter(
+                q = self.db.query(IndividualSupportPlanModel).filter(
                     IndividualSupportPlanModel.student_id == student_id,
                     IndividualSupportPlanModel.school_id == school_id,
                     IndividualSupportPlanModel.document_type_id == document_type_id,
                     IndividualSupportPlanModel.deleted_date == None
-                ).first()
+                )
+                if period_id is not None:
+                    q = q.filter(IndividualSupportPlanModel.period_id == period_id)
+                existing_isp = q.first()
             
             # Si existe un registro, hacer update
             if existing_isp:
@@ -339,8 +321,7 @@ class IndividualSupportPlanClass:
                     existing_isp.document_type_id = isp_data.get('document_type_id')
                 if 'school_id' in isp_data:
                     existing_isp.school_id = isp_data.get('school_id')
-                if 'period_id' in isp_data:
-                    existing_isp.period_id = isp_data.get('period_id')
+                existing_isp.period_id = isp_data.get('period_id')
                 if 'student_full_name' in isp_data:
                     existing_isp.student_full_name = isp_data.get('student_full_name')
                 if 'student_identification_number' in isp_data:

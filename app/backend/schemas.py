@@ -663,6 +663,213 @@ class UpdateContact(BaseModel):
     message: Optional[str] = None
 
 # Health Evaluation schemas
+class StoreFamilyReport(BaseModel):
+    student_id: Optional[int] = None
+    document_type_id: Optional[int] = 7
+    version: Optional[int] = 1
+    student_full_name: Optional[str] = None
+    student_identification_number: Optional[str] = None
+    student_social_name: Optional[str] = None
+    student_born_date: Optional[str] = None
+    student_age: Optional[str] = None
+    student_course: Optional[str] = None
+    student_school: Optional[str] = None
+    professional_id: Optional[int] = None
+    professional_identification_number: Optional[str] = None
+    professional_social_name: Optional[str] = None
+    professional_role: Optional[str] = None
+    professional_phone: Optional[str] = None
+    professional_email: Optional[str] = None
+    report_delivery_date: Optional[str] = None
+    receiver_full_name: Optional[str] = None
+    receiver_identification_number: Optional[str] = None
+    receiver_social_name: Optional[str] = None
+    receiver_phone: Optional[str] = None
+    receiver_email: Optional[str] = None
+    receiver_relationship: Optional[str] = None
+    receiver_presence_of: Optional[str] = None
+    guardian_type: Optional[str] = None  # 'primary', 'substitute'
+    has_power_of_attorney: Optional[str] = None  # 'yes', 'no'
+    evaluation_type: Optional[str] = None  # 'admission', 'revaluation'
+    evaluation_date: Optional[str] = None
+    applied_instruments: Optional[str] = None
+    diagnosis: Optional[str] = None
+    pedagogical_strengths: Optional[str] = None
+    pedagogical_support_needs: Optional[str] = None
+    social_affective_strengths: Optional[str] = None
+    social_affective_support_needs: Optional[str] = None
+    health_strengths: Optional[str] = None
+    health_support_needs: Optional[str] = None
+    collaborative_work: Optional[str] = None
+    home_support: Optional[str] = None
+    agreements_commitments: Optional[str] = None
+    evaluation_date_1: Optional[str] = None
+    evaluation_date_2: Optional[str] = None
+    evaluation_date_3: Optional[str] = None
+
+
+class UpdateFamilyReport(BaseModel):
+    student_id: Optional[int] = None
+    document_type_id: Optional[int] = None
+    version: Optional[int] = None
+    student_full_name: Optional[str] = None
+    student_identification_number: Optional[str] = None
+    student_social_name: Optional[str] = None
+    student_born_date: Optional[str] = None
+    student_age: Optional[str] = None
+    student_course: Optional[str] = None
+    student_school: Optional[str] = None
+    professional_id: Optional[int] = None
+    professional_identification_number: Optional[str] = None
+    professional_social_name: Optional[str] = None
+    professional_role: Optional[str] = None
+    professional_phone: Optional[str] = None
+    professional_email: Optional[str] = None
+    report_delivery_date: Optional[str] = None
+    receiver_full_name: Optional[str] = None
+    receiver_identification_number: Optional[str] = None
+    receiver_social_name: Optional[str] = None
+    receiver_phone: Optional[str] = None
+    receiver_email: Optional[str] = None
+    receiver_relationship: Optional[str] = None
+    receiver_presence_of: Optional[str] = None
+    guardian_type: Optional[str] = None
+    has_power_of_attorney: Optional[str] = None
+    evaluation_type: Optional[str] = None
+    evaluation_date: Optional[str] = None
+    applied_instruments: Optional[str] = None
+    diagnosis: Optional[str] = None
+    pedagogical_strengths: Optional[str] = None
+    pedagogical_support_needs: Optional[str] = None
+    social_affective_strengths: Optional[str] = None
+    social_affective_support_needs: Optional[str] = None
+    health_strengths: Optional[str] = None
+    health_support_needs: Optional[str] = None
+    collaborative_work: Optional[str] = None
+    home_support: Optional[str] = None
+    agreements_commitments: Optional[str] = None
+    evaluation_date_1: Optional[str] = None
+    evaluation_date_2: Optional[str] = None
+    evaluation_date_3: Optional[str] = None
+
+
+class FamilyReportList(BaseModel):
+    page: Optional[int] = None
+    per_page: int = 10
+
+
+class StoreInterconsultation(BaseModel):
+    student_id: int
+    document_type_id: Optional[int] = 24
+    full_name: Optional[str] = None
+    gender_id: Optional[int] = None
+    identification_number: Optional[str] = None
+    born_date: Optional[str] = None
+    age: Optional[str] = None
+    nationality_id: Optional[int] = None
+    native_language: Optional[str] = None
+    language_usually_used: Optional[str] = None
+    address: Optional[str] = None
+    region_id: Optional[int] = None
+    commune_id: Optional[int] = None
+    city: Optional[str] = None
+    responsible_id: Optional[int] = None
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
+    educational_establishment: Optional[str] = None
+    course_level: Optional[str] = None
+    program_type_id: Optional[int] = None
+    establishment_address: Optional[str] = None
+    establishment_commune: Optional[str] = None
+    establishment_phone: Optional[str] = None
+    establishment_email: Optional[str] = None
+    additional_information_id: Optional[int] = None
+    question_to_answer: Optional[str] = None
+    attached_documents: Optional[str] = None
+    referring_professional: Optional[str] = None
+    reception_date: Optional[str] = None
+    evaluation_summary: Optional[str] = None
+    indications_support: Optional[str] = None
+    professional_id: Optional[int] = None
+    professional_identification_number: Optional[str] = None
+    professional_registration_number: Optional[str] = None
+    professional_specialty: Optional[str] = None
+    procedence_id: Optional[int] = None
+    procedence_other: Optional[str] = None
+    professional_contact_phone: Optional[str] = None
+    evaluation_date: Optional[str] = None
+    required_new_control_id: Optional[int] = None
+    new_control_date: Optional[str] = None
+
+
+class UpdateInterconsultation(BaseModel):
+    student_id: Optional[int] = None
+    document_type_id: Optional[int] = None
+    full_name: Optional[str] = None
+    gender_id: Optional[int] = None
+    identification_number: Optional[str] = None
+    born_date: Optional[str] = None
+    age: Optional[str] = None
+    nationality_id: Optional[int] = None
+    native_language: Optional[str] = None
+    language_usually_used: Optional[str] = None
+    address: Optional[str] = None
+    region_id: Optional[int] = None
+    commune_id: Optional[int] = None
+    city: Optional[str] = None
+    responsible_id: Optional[int] = None
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
+    educational_establishment: Optional[str] = None
+    course_level: Optional[str] = None
+    program_type_id: Optional[int] = None
+    establishment_address: Optional[str] = None
+    establishment_commune: Optional[str] = None
+    establishment_phone: Optional[str] = None
+    establishment_email: Optional[str] = None
+    additional_information_id: Optional[int] = None
+    question_to_answer: Optional[str] = None
+    attached_documents: Optional[str] = None
+    referring_professional: Optional[str] = None
+    reception_date: Optional[str] = None
+    evaluation_summary: Optional[str] = None
+    indications_support: Optional[str] = None
+    professional_id: Optional[int] = None
+    professional_identification_number: Optional[str] = None
+    professional_registration_number: Optional[str] = None
+    professional_specialty: Optional[str] = None
+    procedence_id: Optional[int] = None
+    procedence_other: Optional[str] = None
+    professional_contact_phone: Optional[str] = None
+    evaluation_date: Optional[str] = None
+    required_new_control_id: Optional[int] = None
+    new_control_date: Optional[str] = None
+
+
+class InterconsultationList(BaseModel):
+    page: Optional[int] = None
+    per_page: int = 10
+
+
+class StoreGuardianAttendanceCertificate(BaseModel):
+    """Document 25 - Certificado de asistencia del apoderado (Ley TEA)."""
+    student_id: int
+    document_type_id: Optional[int] = 25
+    professional_id: Optional[int] = None
+    certificate_date: Optional[str] = None  # YYYY-MM-DD
+    start_time: Optional[str] = None        # HH:MM or HH:MM:SS
+    end_time: Optional[str] = None         # HH:MM or HH:MM:SS
+
+
+class UpdateGuardianAttendanceCertificate(BaseModel):
+    student_id: Optional[int] = None
+    document_type_id: Optional[int] = None
+    professional_id: Optional[int] = None
+    certificate_date: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+
+
 class StoreHealthEvaluation(BaseModel):
     student_id: Optional[int] = None
     gender_id: Optional[int] = None
@@ -1102,6 +1309,409 @@ class UpdateSchoolIntegrationProgramExitCertificate(BaseModel):
     guardian_id: Optional[int] = None
 
 class SchoolIntegrationProgramExitCertificateList(BaseModel):
+    page: Optional[int] = None
+    per_page: int = 10
+    student_id: Optional[int] = None
+
+
+# Anamnesis (documento tipo 3)
+def _empty_str_to_none(v):
+    """Convierte cadena vacía a None para campos opcionales."""
+    if v == "" or (isinstance(v, str) and not v.strip()):
+        return None
+    return v
+
+
+class AnamnesisInformantSchema(BaseModel):
+    id: Optional[int] = None
+    sort_order: Optional[int] = 0
+    name: Optional[str] = None
+    relationship: Optional[str] = None
+    presence: Optional[str] = None
+    interview_date: Optional[date] = None
+
+    @validator("interview_date", pre=True)
+    def interview_date_empty_to_none(cls, v):
+        return _empty_str_to_none(v)
+
+
+class AnamnesisInterviewerSchema(BaseModel):
+    id: Optional[int] = None
+    sort_order: Optional[int] = 0
+    professional_id: Optional[int] = None
+    role: Optional[str] = None
+    interview_date: Optional[date] = None
+
+    @validator("interview_date", pre=True)
+    def interview_date_empty_to_none(cls, v):
+        return _empty_str_to_none(v)
+
+
+class AnamnesisHouseholdMemberSchema(BaseModel):
+    id: Optional[int] = None
+    sort_order: Optional[int] = 0
+    name: Optional[str] = None
+    relationship: Optional[str] = None
+    age: Optional[str] = None
+    schooling: Optional[str] = None
+    occupation: Optional[str] = None
+
+
+class StoreAnamnesis(BaseModel):
+    student_id: int
+    version: Optional[int] = 1
+    student_full_name: Optional[str] = None
+    gender_id: Optional[int] = None
+    born_date: Optional[date] = None
+    age: Optional[str] = None
+    nationality_id: Optional[int] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    native_language: Optional[str] = None
+    native_language_domain: Optional[Union[List, Dict]] = None
+    language_used: Optional[str] = None
+    language_used_domain: Optional[Union[List, Dict]] = None
+    current_schooling: Optional[str] = None
+    school_name: Optional[str] = None
+    interview_reason: Optional[str] = None
+    diagnosis_has: Optional[int] = None
+    diagnosis_detail: Optional[str] = None
+    specialists: Optional[Union[List, Dict]] = None
+    first_year_notes: Optional[str] = None
+    birth_type_id: Optional[int] = None
+    birth_reason: Optional[str] = None
+    birth_medical_assistance: Optional[int] = None
+    birth_weight: Optional[str] = None
+    birth_height: Optional[str] = None
+    first_year_conditions: Optional[Union[List, Dict]] = None
+    first_year_conditions_other_specify: Optional[str] = None
+    first_year_periodic_health_checkups: Optional[int] = None
+    first_year_vaccines: Optional[int] = None
+    first_year_observations: Optional[str] = None
+    sm_head_control: Optional[str] = None
+    sm_sits_alone: Optional[str] = None
+    sm_walks_without_support: Optional[str] = None
+    sm_first_words: Optional[str] = None
+    sm_first_phrases: Optional[str] = None
+    sm_dresses_alone: Optional[str] = None
+    sm_bladder_day: Optional[str] = None
+    sm_bladder_night: Optional[str] = None
+    sm_bowel_day: Optional[str] = None
+    sm_bowel_night: Optional[str] = None
+    sm_observations_1: Optional[str] = None
+    sm_motor_activity: Optional[str] = None
+    sm_muscle_tone: Optional[str] = None
+    sm_walking_stability: Optional[int] = None
+    sm_frequent_falls: Optional[int] = None
+    sm_lateral_dominance: Optional[str] = None
+    sm_fine_grab: Optional[int] = None
+    sm_fine_grip: Optional[int] = None
+    sm_fine_pinch: Optional[int] = None
+    sm_fine_draw: Optional[int] = None
+    sm_fine_write: Optional[int] = None
+    sm_fine_thread: Optional[int] = None
+    sm_cog_reacts_familiar: Optional[int] = None
+    sm_cog_demands_company: Optional[int] = None
+    sm_cog_smiles_babbles: Optional[int] = None
+    sm_cog_manipulates_explores: Optional[int] = None
+    sm_cog_understands_prohibitions: Optional[int] = None
+    sm_cog_poor_eye_hand: Optional[int] = None
+    sm_observations_2: Optional[str] = None
+    vision_interested_stimuli: Optional[int] = None
+    vision_irritated_eyes: Optional[int] = None
+    vision_headaches: Optional[int] = None
+    vision_squints: Optional[int] = None
+    vision_follows_movement: Optional[int] = None
+    vision_abnormal_movements: Optional[int] = None
+    vision_erroneous_behaviors: Optional[int] = None
+    vision_diagnosis: Optional[int] = None
+    hearing_interested_stimuli: Optional[int] = None
+    hearing_recognizes_voices: Optional[int] = None
+    hearing_turns_head: Optional[int] = None
+    hearing_ears_to_tv: Optional[int] = None
+    hearing_covers_ears: Optional[int] = None
+    hearing_earaches: Optional[int] = None
+    hearing_pronunciation_adequate: Optional[int] = None
+    hearing_diagnosis: Optional[int] = None
+    vision_hearing_observations: Optional[str] = None
+    language_communication_method: Optional[str] = None
+    language_communication_other: Optional[str] = None
+    language_exp_babbles: Optional[int] = None
+    language_exp_vocalizes_gestures: Optional[int] = None
+    language_exp_emits_words: Optional[int] = None
+    language_exp_emits_phrases: Optional[int] = None
+    language_exp_relates_experiences: Optional[int] = None
+    language_exp_clear_pronunciation: Optional[int] = None
+    language_comp_identifies_objects: Optional[int] = None
+    language_comp_identifies_people: Optional[int] = None
+    language_comp_understands_abstract: Optional[int] = None
+    language_comp_responds_coherently: Optional[int] = None
+    language_comp_follows_simple_instructions: Optional[int] = None
+    language_comp_follows_complex_instructions: Optional[int] = None
+    language_comp_follows_group_instructions: Optional[int] = None
+    language_comp_understands_stories: Optional[int] = None
+    language_oral_loss: Optional[str] = None
+    language_observations: Optional[str] = None
+    social_relates_spontaneously: Optional[int] = None
+    social_explains_behaviors: Optional[int] = None
+    social_participates_groups: Optional[int] = None
+    social_prefers_individual: Optional[int] = None
+    social_echolalic_language: Optional[int] = None
+    social_difficulty_adapting: Optional[int] = None
+    social_relates_collaboratively: Optional[int] = None
+    social_respects_social_norms: Optional[int] = None
+    social_respects_school_norms: Optional[int] = None
+    social_shows_humor: Optional[int] = None
+    social_stereotyped_movements: Optional[int] = None
+    social_frequent_tantrums: Optional[int] = None
+    social_reaction_lights: Optional[str] = None
+    social_reaction_sounds: Optional[str] = None
+    social_reaction_strange_people: Optional[str] = None
+    social_observations: Optional[str] = None
+    health_vaccines_up_to_date: Optional[int] = None
+    health_epilepsy: Optional[int] = None
+    health_heart_problems: Optional[int] = None
+    health_paraplegia: Optional[int] = None
+    health_hearing_loss: Optional[int] = None
+    health_vision_loss: Optional[int] = None
+    health_motor_disorder: Optional[int] = None
+    health_bronchorespiratory: Optional[int] = None
+    health_infectious_disease: Optional[int] = None
+    health_emotional_disorder: Optional[int] = None
+    health_behavioral_disorder: Optional[int] = None
+    health_other: Optional[int] = None
+    health_other_specify: Optional[str] = None
+    health_problems_treatment: Optional[str] = None
+    health_diet: Optional[str] = None
+    health_diet_other: Optional[str] = None
+    health_weight: Optional[str] = None
+    health_sleep_pattern: Optional[str] = None
+    health_sleep_insomnia: Optional[int] = 0
+    health_sleep_nightmares: Optional[int] = 0
+    health_sleep_terrors: Optional[int] = 0
+    health_sleep_sleepwalking: Optional[int] = 0
+    health_sleep_good_mood: Optional[int] = 0
+    health_sleep_hours: Optional[str] = None
+    health_sleeps_alone: Optional[str] = None
+    health_sleeps_specify: Optional[str] = None
+    health_mood_behavior: Optional[str] = None
+    health_mood_other: Optional[str] = None
+    health_current_observations: Optional[str] = None
+    family_health_history: Optional[str] = None
+    family_health_observations: Optional[str] = None
+    school_entry_age: Optional[str] = None
+    attended_kindergarten: Optional[int] = None
+    schools_count: Optional[str] = None
+    teaching_modality: Optional[str] = None
+    changes_reason: Optional[str] = None
+    repeated_grade: Optional[int] = None
+    repeated_courses: Optional[str] = None
+    repeated_reason: Optional[str] = None
+    current_level: Optional[str] = None
+    learning_difficulty: Optional[int] = None
+    participation_difficulty: Optional[int] = None
+    disruptive_behavior: Optional[int] = None
+    attends_regularly: Optional[int] = None
+    attends_gladly: Optional[int] = None
+    family_support_homework: Optional[int] = None
+    friends: Optional[int] = None
+    family_attitude: Optional[str] = None
+    performance_assessment: Optional[str] = None
+    performance_reasons: Optional[str] = None
+    response_difficulties: Optional[Union[List, Dict]] = None
+    response_difficulties_other: Optional[str] = None
+    response_success: Optional[Union[List, Dict]] = None
+    response_success_other: Optional[str] = None
+    rewards: Optional[Union[List, Dict]] = None
+    rewards_other: Optional[str] = None
+    supporters: Optional[Union[List, Dict]] = None
+    supporters_other_professionals: Optional[str] = None
+    expectations: Optional[str] = None
+    environment: Optional[str] = None
+    final_comments: Optional[str] = None
+    informants: Optional[List[AnamnesisInformantSchema]] = None
+    interviewers: Optional[List[AnamnesisInterviewerSchema]] = None
+    household_members: Optional[List[AnamnesisHouseholdMemberSchema]] = None
+
+
+class UpdateAnamnesis(BaseModel):
+    student_id: Optional[int] = None
+    version: Optional[int] = None
+    student_full_name: Optional[str] = None
+    gender_id: Optional[int] = None
+    born_date: Optional[date] = None
+    age: Optional[str] = None
+    nationality_id: Optional[int] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    native_language: Optional[str] = None
+    native_language_domain: Optional[Union[List, Dict]] = None
+    language_used: Optional[str] = None
+    language_used_domain: Optional[Union[List, Dict]] = None
+    current_schooling: Optional[str] = None
+    school_name: Optional[str] = None
+    interview_reason: Optional[str] = None
+    diagnosis_has: Optional[int] = None
+    diagnosis_detail: Optional[str] = None
+    specialists: Optional[Union[List, Dict]] = None
+    first_year_notes: Optional[str] = None
+    birth_type_id: Optional[int] = None
+    birth_reason: Optional[str] = None
+    birth_medical_assistance: Optional[int] = None
+    birth_weight: Optional[str] = None
+    birth_height: Optional[str] = None
+    first_year_conditions: Optional[Union[List, Dict]] = None
+    first_year_conditions_other_specify: Optional[str] = None
+    first_year_periodic_health_checkups: Optional[int] = None
+    first_year_vaccines: Optional[int] = None
+    first_year_observations: Optional[str] = None
+    sm_head_control: Optional[str] = None
+    sm_sits_alone: Optional[str] = None
+    sm_walks_without_support: Optional[str] = None
+    sm_first_words: Optional[str] = None
+    sm_first_phrases: Optional[str] = None
+    sm_dresses_alone: Optional[str] = None
+    sm_bladder_day: Optional[str] = None
+    sm_bladder_night: Optional[str] = None
+    sm_bowel_day: Optional[str] = None
+    sm_bowel_night: Optional[str] = None
+    sm_observations_1: Optional[str] = None
+    sm_motor_activity: Optional[str] = None
+    sm_muscle_tone: Optional[str] = None
+    sm_walking_stability: Optional[int] = None
+    sm_frequent_falls: Optional[int] = None
+    sm_lateral_dominance: Optional[str] = None
+    sm_fine_grab: Optional[int] = None
+    sm_fine_grip: Optional[int] = None
+    sm_fine_pinch: Optional[int] = None
+    sm_fine_draw: Optional[int] = None
+    sm_fine_write: Optional[int] = None
+    sm_fine_thread: Optional[int] = None
+    sm_cog_reacts_familiar: Optional[int] = None
+    sm_cog_demands_company: Optional[int] = None
+    sm_cog_smiles_babbles: Optional[int] = None
+    sm_cog_manipulates_explores: Optional[int] = None
+    sm_cog_understands_prohibitions: Optional[int] = None
+    sm_cog_poor_eye_hand: Optional[int] = None
+    sm_observations_2: Optional[str] = None
+    vision_interested_stimuli: Optional[int] = None
+    vision_irritated_eyes: Optional[int] = None
+    vision_headaches: Optional[int] = None
+    vision_squints: Optional[int] = None
+    vision_follows_movement: Optional[int] = None
+    vision_abnormal_movements: Optional[int] = None
+    vision_erroneous_behaviors: Optional[int] = None
+    vision_diagnosis: Optional[int] = None
+    hearing_interested_stimuli: Optional[int] = None
+    hearing_recognizes_voices: Optional[int] = None
+    hearing_turns_head: Optional[int] = None
+    hearing_ears_to_tv: Optional[int] = None
+    hearing_covers_ears: Optional[int] = None
+    hearing_earaches: Optional[int] = None
+    hearing_pronunciation_adequate: Optional[int] = None
+    hearing_diagnosis: Optional[int] = None
+    vision_hearing_observations: Optional[str] = None
+    language_communication_method: Optional[str] = None
+    language_communication_other: Optional[str] = None
+    language_exp_babbles: Optional[int] = None
+    language_exp_vocalizes_gestures: Optional[int] = None
+    language_exp_emits_words: Optional[int] = None
+    language_exp_emits_phrases: Optional[int] = None
+    language_exp_relates_experiences: Optional[int] = None
+    language_exp_clear_pronunciation: Optional[int] = None
+    language_comp_identifies_objects: Optional[int] = None
+    language_comp_identifies_people: Optional[int] = None
+    language_comp_understands_abstract: Optional[int] = None
+    language_comp_responds_coherently: Optional[int] = None
+    language_comp_follows_simple_instructions: Optional[int] = None
+    language_comp_follows_complex_instructions: Optional[int] = None
+    language_comp_follows_group_instructions: Optional[int] = None
+    language_comp_understands_stories: Optional[int] = None
+    language_oral_loss: Optional[str] = None
+    language_observations: Optional[str] = None
+    social_relates_spontaneously: Optional[int] = None
+    social_explains_behaviors: Optional[int] = None
+    social_participates_groups: Optional[int] = None
+    social_prefers_individual: Optional[int] = None
+    social_echolalic_language: Optional[int] = None
+    social_difficulty_adapting: Optional[int] = None
+    social_relates_collaboratively: Optional[int] = None
+    social_respects_social_norms: Optional[int] = None
+    social_respects_school_norms: Optional[int] = None
+    social_shows_humor: Optional[int] = None
+    social_stereotyped_movements: Optional[int] = None
+    social_frequent_tantrums: Optional[int] = None
+    social_reaction_lights: Optional[str] = None
+    social_reaction_sounds: Optional[str] = None
+    social_reaction_strange_people: Optional[str] = None
+    social_observations: Optional[str] = None
+    health_vaccines_up_to_date: Optional[int] = None
+    health_epilepsy: Optional[int] = None
+    health_heart_problems: Optional[int] = None
+    health_paraplegia: Optional[int] = None
+    health_hearing_loss: Optional[int] = None
+    health_vision_loss: Optional[int] = None
+    health_motor_disorder: Optional[int] = None
+    health_bronchorespiratory: Optional[int] = None
+    health_infectious_disease: Optional[int] = None
+    health_emotional_disorder: Optional[int] = None
+    health_behavioral_disorder: Optional[int] = None
+    health_other: Optional[int] = None
+    health_other_specify: Optional[str] = None
+    health_problems_treatment: Optional[str] = None
+    health_diet: Optional[str] = None
+    health_diet_other: Optional[str] = None
+    health_weight: Optional[str] = None
+    health_sleep_pattern: Optional[str] = None
+    health_sleep_insomnia: Optional[int] = None
+    health_sleep_nightmares: Optional[int] = None
+    health_sleep_terrors: Optional[int] = None
+    health_sleep_sleepwalking: Optional[int] = None
+    health_sleep_good_mood: Optional[int] = None
+    health_sleep_hours: Optional[str] = None
+    health_sleeps_alone: Optional[str] = None
+    health_sleeps_specify: Optional[str] = None
+    health_mood_behavior: Optional[str] = None
+    health_mood_other: Optional[str] = None
+    health_current_observations: Optional[str] = None
+    family_health_history: Optional[str] = None
+    family_health_observations: Optional[str] = None
+    school_entry_age: Optional[str] = None
+    attended_kindergarten: Optional[int] = None
+    schools_count: Optional[str] = None
+    teaching_modality: Optional[str] = None
+    changes_reason: Optional[str] = None
+    repeated_grade: Optional[int] = None
+    repeated_courses: Optional[str] = None
+    repeated_reason: Optional[str] = None
+    current_level: Optional[str] = None
+    learning_difficulty: Optional[int] = None
+    participation_difficulty: Optional[int] = None
+    disruptive_behavior: Optional[int] = None
+    attends_regularly: Optional[int] = None
+    attends_gladly: Optional[int] = None
+    family_support_homework: Optional[int] = None
+    friends: Optional[int] = None
+    family_attitude: Optional[str] = None
+    performance_assessment: Optional[str] = None
+    performance_reasons: Optional[str] = None
+    response_difficulties: Optional[Union[List, Dict]] = None
+    response_difficulties_other: Optional[str] = None
+    response_success: Optional[Union[List, Dict]] = None
+    response_success_other: Optional[str] = None
+    rewards: Optional[Union[List, Dict]] = None
+    rewards_other: Optional[str] = None
+    supporters: Optional[Union[List, Dict]] = None
+    supporters_other_professionals: Optional[str] = None
+    expectations: Optional[str] = None
+    environment: Optional[str] = None
+    final_comments: Optional[str] = None
+    informants: Optional[List[AnamnesisInformantSchema]] = None
+    interviewers: Optional[List[AnamnesisInterviewerSchema]] = None
+    household_members: Optional[List[AnamnesisHouseholdMemberSchema]] = None
+
+
+class AnamnesisList(BaseModel):
     page: Optional[int] = None
     per_page: int = 10
     student_id: Optional[int] = None

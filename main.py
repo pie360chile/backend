@@ -53,6 +53,10 @@ from app.backend.routers.progress_status_individual_supports import progress_sta
 from app.backend.routers.fonoaudiological_reports import fonoaudiological_reports
 from app.backend.routers.school_integration_program_exit_certificates import school_integration_program_exit_certificates
 from app.backend.routers.audits import audits
+from app.backend.routers.anamnesis import anamnesis_router
+from app.backend.routers.family_reports import family_reports
+from app.backend.routers.interconsultations import interconsultations
+from app.backend.routers.guardian_attendance_certificates import guardian_attendance_certificates
 
 app = FastAPI(root_path="/api")
 application = app
@@ -150,9 +154,13 @@ app.include_router(progress_status_individual_supports)
 app.include_router(fonoaudiological_reports)
 app.include_router(school_integration_program_exit_certificates)
 app.include_router(audits)
+app.include_router(anamnesis_router)
+app.include_router(family_reports)
+app.include_router(interconsultations)
+app.include_router(guardian_attendance_certificates)
 
 if __name__ == "__main__":
     # Para aumentar el límite de tamaño de archivo, configurar en el servidor
     # En producción con gunicorn, usar: --limit-request-line 8190 --limit-request-field_size 8190
     # El límite por defecto de Starlette es 1MB, se puede aumentar configurando el servidor
-    uvicorn.run("main:app", port=8000, reload=True)
+    uvicorn.run("main:app", port=8005, reload=True)

@@ -264,14 +264,13 @@ class FolderClass:
             all_documents = []
             missing_documents = []
             
-            # Primero, obtener TODOS los document_id que pertenecen a este document_type_id con su información (solo no eliminados)
+            # Obtener TODOS los document_id de este document_type_id (incluye deleted_date NULL o con valor)
             document_records = self.db.query(
                 DocumentModel.id,
                 DocumentModel.document,
                 DocumentModel.document_type_id
             ).filter(
-                DocumentModel.document_type_id == document_type_id,
-                DocumentModel.deleted_date.is_(None)
+                DocumentModel.document_type_id == document_type_id
             ).all()
             
             # Convertir a lista de IDs e información
@@ -288,7 +287,7 @@ class FolderClass:
                     "data": [],
                     "missing": []
                 }
-            
+
             # Para cada document_id, buscar en su tabla correspondiente
             for document_id in document_id_list:
                 doc_info = document_info_dict.get(document_id)
@@ -373,7 +372,7 @@ class FolderClass:
                         })
                         found = True
                 
-                # Para otros document_id, buscar en folders
+                # Para document_id 7 y otros: existencia = está en folders; si no está, va a missing
                 else:
                     folder_records = self.db.query(
                         FolderModel.id,

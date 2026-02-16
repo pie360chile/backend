@@ -28,12 +28,6 @@ def index(course: CourseList, session_user: UserLogin = Depends(get_current_acti
     professional_course_ids = []
     if session_user.rut:
         # Buscar el profesional por rut
-        print(f"DEBUG - Buscando profesional con RUT: '{session_user.rut}'")
-        all_professionals = db.query(ProfessionalModel).filter(
-            ProfessionalModel.identification_number == session_user.rut
-        ).all()
-        print(f"DEBUG - Profesionales encontrados: {[(p.id, p.identification_number, p.names) for p in all_professionals]}")
-        
         professional = db.query(ProfessionalModel).filter(
             ProfessionalModel.identification_number == session_user.rut
         ).first()
@@ -44,11 +38,7 @@ def index(course: CourseList, session_user: UserLogin = Depends(get_current_acti
                 ProfessionalTeachingCourseModel.professional_id == professional.id,
                 ProfessionalTeachingCourseModel.deleted_status_id == 0
             ).all()
-            
-            print(f"DEBUG - Professional ID: {professional.id}, PTC records: {[(r.id, r.teaching_id, r.course_id, r.deleted_status_id) for r in ptc_records]}")
-            
             professional_course_ids = [ptc.course_id for ptc in ptc_records]
-            print(f"DEBUG - Extracted course IDs: {professional_course_ids}")
 
     # Si el profesional tiene cursos asignados, filtrar solo esos cursos
     if professional_course_ids:
