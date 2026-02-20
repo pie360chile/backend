@@ -148,6 +148,33 @@ def store(professional: StoreProfessional, session_user: UserLogin = Depends(get
         }
     )
 
+@professionals.get("/coordinators/{school_id}")
+def get_coordinators_by_school(
+    school_id: int,
+    session_user: UserLogin = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Lista de coordinadores del colegio: filtra por school_id y rol 'Coordinador' (el rol_id es distinto por escuela)."""
+    result = ProfessionalClass(db).get_coordinators_by_school(school_id)
+    if isinstance(result, dict) and result.get("status") == "error":
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "status": 500,
+                "message": result.get("message", "Error al listar coordinadores"),
+                "data": [],
+            },
+        )
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "status": 200,
+            "message": "Coordinadores del colegio",
+            "data": result if isinstance(result, list) else [],
+        },
+    )
+
+
 @professionals.get("/edit/{id}")
 def edit(id: int, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
     result = ProfessionalClass(db).get(id)

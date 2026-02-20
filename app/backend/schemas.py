@@ -476,6 +476,26 @@ class UpdateProfessional(BaseModel):
     teaching_id: Optional[List[int]] = None
     career_type_id: Optional[int] = None
 
+
+class StoreProfessionalTeachingCourse(BaseModel):
+    """Asignar profesional a enseñanza/curso (una fila en professionals_teachings_courses)."""
+    professional_id: int
+    teaching_id: int
+    course_id: int
+    teacher_type_id: Optional[int] = None
+    subject: Optional[str] = None
+
+
+class UpdateProfessionalTeachingCourse(BaseModel):
+    """Editar asignación profesional-enseñanza-curso (todos opcionales)."""
+    professional_id: Optional[int] = None
+    teaching_id: Optional[int] = None
+    course_id: Optional[int] = None
+    teacher_type_id: Optional[int] = None
+    subject: Optional[str] = None
+    deleted_status_id: Optional[int] = None
+
+
 # Package schemas
 class PackageList(BaseModel):
     page: Optional[int] = None
@@ -868,6 +888,38 @@ class UpdateGuardianAttendanceCertificate(BaseModel):
     certificate_date: Optional[str] = None
     start_time: Optional[str] = None
     end_time: Optional[str] = None
+
+
+class StoreCoordinatorsCourse(BaseModel):
+    """Tabla coordinators_courses: coordinador asignado a curso por colegio. school_id se obtiene de la sesión."""
+    course_id: int
+    professional_id: int
+    coordinator_type_id: int
+    phone: Optional[str] = None
+    email: Optional[str] = None
+
+
+class UpdateCoordinatorsCourse(BaseModel):
+    school_id: Optional[int] = None
+    course_id: Optional[int] = None
+    professional_id: Optional[int] = None
+    coordinator_type_id: Optional[int] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+
+
+class StoreMeetingSchedulaling(BaseModel):
+    """Tabla meeting_schedualings. school_id se obtiene de la sesión."""
+    course_id: int
+    meeting_date: Optional[str] = None  # YYYY-MM-DD
+    meeting_time: Optional[str] = None
+
+
+class UpdateMeetingSchedulaling(BaseModel):
+    school_id: Optional[int] = None
+    course_id: Optional[int] = None
+    meeting_date: Optional[str] = None  # YYYY-MM-DD
+    meeting_time: Optional[str] = None
 
 
 class StoreHealthEvaluation(BaseModel):

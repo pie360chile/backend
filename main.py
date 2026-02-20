@@ -57,8 +57,24 @@ from app.backend.routers.anamnesis import anamnesis_router
 from app.backend.routers.family_reports import family_reports
 from app.backend.routers.interconsultations import interconsultations
 from app.backend.routers.guardian_attendance_certificates import guardian_attendance_certificates
+from app.backend.routers.professional_teaching_courses import professional_teaching_courses
+from app.backend.routers.coordinators_courses import coordinators_courses
+from app.backend.routers.meeting_schedualings import meeting_schedualings
 
-app = FastAPI(root_path="/api")
+# OpenAPI (Swagger): FastAPI genera automáticamente el esquema desde rutas y modelos Pydantic.
+# Documentación interactiva:
+#   - Swagger UI:  http://localhost:8005/docs     (o /api/docs si usas proxy con root_path)
+#   - ReDoc:       http://localhost:8005/redoc    (o /api/redoc)
+#   - JSON schema: http://localhost:8005/openapi.json
+app = FastAPI(
+    root_path="/api",
+    title="PIE 360 API",
+    description="API del proyecto PIE 360",
+    version="1.0.0",
+    docs_url="/docs",       # Swagger UI (poner None para desactivar)
+    redoc_url="/redoc",     # ReDoc (poner None para desactivar)
+    openapi_url="/openapi.json",  # Esquema OpenAPI en JSON
+)
 application = app
 
 # Nota: El límite de tamaño de archivo se configura en el servidor
@@ -158,6 +174,9 @@ app.include_router(anamnesis_router)
 app.include_router(family_reports)
 app.include_router(interconsultations)
 app.include_router(guardian_attendance_certificates)
+app.include_router(professional_teaching_courses)
+app.include_router(coordinators_courses)
+app.include_router(meeting_schedualings)
 
 if __name__ == "__main__":
     # Para aumentar el límite de tamaño de archivo, configurar en el servidor

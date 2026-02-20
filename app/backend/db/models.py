@@ -580,6 +580,7 @@ class ProfessionalModel(Base):
     added_date = Column(DateTime)
     updated_date = Column(DateTime)
 
+
 class ProfessionalTeachingCourseModel(Base):
     __tablename__ = 'professionals_teachings_courses'
 
@@ -587,9 +588,40 @@ class ProfessionalTeachingCourseModel(Base):
     professional_id = Column(Integer)
     teaching_id = Column(Integer)
     course_id = Column(Integer)
+    teacher_type_id = Column(Integer, nullable=True)  # Regular / Especialidad
     deleted_status_id = Column(Integer)
+    subject = Column(String(255), nullable=True)
     added_date = Column(DateTime)
     updated_date = Column(DateTime)
+
+
+class CoordinatorsCourseModel(Base):
+    __tablename__ = 'coordinators_courses'
+
+    id = Column(Integer, primary_key=True)
+    school_id = Column(Integer)
+    course_id = Column(Integer)
+    professional_id = Column(Integer)
+    coordinator_type_id = Column(Integer)
+    phone = Column(String(255), nullable=True)
+    email = Column(String(255), nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+
+class MeetingSchedulalingModel(Base):
+    __tablename__ = 'meeting_schedualings'
+
+    id = Column(Integer, primary_key=True)
+    school_id = Column(Integer)
+    course_id = Column(Integer)
+    meeting_date = Column(Date, nullable=True)
+    meeting_time = Column(String(255), nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
 
 class PackageModel(Base):
     __tablename__ = 'packages'

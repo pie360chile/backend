@@ -109,7 +109,70 @@ class ProfessionalClass:
         except Exception as e:
             error_message = str(e)
             return {"status": "error", "message": error_message}
-    
+
+    def get_coordinators_by_school(self, school_id: int):
+        """Lista de coordinadores del colegio: busca el rol 'Coordinador' por school_id y filtra professionals por ese rol_id."""
+        try:
+            # Buscar el id del rol "Coordinador" para este colegio (el nombre es fijo, el id varía por escuela)
+            coordinador_rol = (
+                self.db.query(RolModel)
+                .filter(
+                    RolModel.school_id == school_id,
+                    RolModel.rol.ilike("Coordinador"),
+                )
+                .first()
+            )
+            if not coordinador_rol:
+                return []
+            rol_id = coordinador_rol.id
+            # Listar profesionales del colegio con ese rol_id
+            query = (
+                self.db.query(
+                    ProfessionalModel.id,
+                    ProfessionalModel.school_id,
+                    ProfessionalModel.rol_id,
+                    ProfessionalModel.career_type_id,
+                    ProfessionalModel.identification_number,
+                    ProfessionalModel.names,
+                    ProfessionalModel.lastnames,
+                    ProfessionalModel.email,
+                    ProfessionalModel.birth_date,
+                    ProfessionalModel.address,
+                    ProfessionalModel.phone,
+                    ProfessionalModel.added_date,
+                    ProfessionalModel.updated_date,
+                    RolModel.rol.label("rol_name"),
+                )
+                .outerjoin(RolModel, ProfessionalModel.rol_id == RolModel.id)
+                .filter(
+                    ProfessionalModel.school_id == school_id,
+                    ProfessionalModel.rol_id == rol_id,
+                )
+            )
+            data = query.all()
+            serialized_data = [
+                {
+                    "id": p.id,
+                    "school_id": p.school_id,
+                    "rol_id": p.rol_id,
+                    "rol_name": p.rol_name,
+                    "career_type_id": p.career_type_id,
+                    "identification_number": p.identification_number,
+                    "names": p.names,
+                    "lastnames": p.lastnames,
+                    "email": p.email,
+                    "birth_date": p.birth_date.strftime("%Y-%m-%d") if p.birth_date else None,
+                    "address": p.address,
+                    "phone": p.phone,
+                    "added_date": p.added_date.strftime("%Y-%m-%d %H:%M:%S") if p.added_date else None,
+                    "updated_date": p.updated_date.strftime("%Y-%m-%d %H:%M:%S") if p.updated_date else None,
+                }
+                for p in data
+            ]
+            return serialized_data
+        except Exception as e:
+            return {"status": "error", "message": str(e), "data": []}
+
     def get(self, id):
         try:
             data_query = self.db.query(ProfessionalModel).filter(ProfessionalModel.id == id).first()
@@ -119,8 +182,6 @@ class ProfessionalClass:
                     "id": data_query.id,
                     "school_id": data_query.school_id,
                     "rol_id": data_query.rol_id,
-                    "course_id": data_query.course_id,
-                    "teaching_id": data_query.teaching_id,
                     "career_type_id": data_query.career_type_id,
                     "identification_number": data_query.identification_number,
                     "names": data_query.names,
