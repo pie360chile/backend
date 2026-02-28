@@ -60,6 +60,29 @@ from app.backend.routers.guardian_attendance_certificates import guardian_attend
 from app.backend.routers.professional_teaching_courses import professional_teaching_courses
 from app.backend.routers.coordinators_courses import coordinators_courses
 from app.backend.routers.meeting_schedualings import meeting_schedualings
+from app.backend.routers.meeting_schedualing_agreements import meeting_schedualing_agreements
+from app.backend.routers.meeting_schedualing_register_professionals import meeting_schedualing_register_professionals
+from app.backend.routers.diversified_strategies import diversified_strategies
+from app.backend.routers.regular_teacher_diversified_strategies import regular_teacher_diversified_strategies
+from app.backend.routers.subjects import subjects
+from app.backend.routers.collaborative_works import collaborative_works
+from app.backend.routers.support_organizations import support_organizations
+from app.backend.routers.diversity_criteria import diversity_criteria
+from app.backend.routers.diversity_strategy_options import diversity_strategy_options
+from app.backend.routers.course_diversity_responses import course_diversity_responses
+from app.backend.routers.course_adjustments import course_adjustments
+from app.backend.routers.course_curricular_adequacies import course_curricular_adequacies
+from app.backend.routers.course_individual_supports import course_individual_supports
+from app.backend.routers.plan_apoyo_individual import plan_apoyo_individual
+from app.backend.routers.course_eval_diversity import course_eval_diversity
+from app.backend.routers.course_family_community import course_family_community
+from app.backend.routers.support_areas import support_areas
+from app.backend.routers.differentiated_strategies_implementations import differentiated_strategies_implementations
+from app.backend.routers.course_teacher_record_observations import course_teacher_record_observations
+from app.backend.routers.course_teacher_record_activities import course_teacher_record_activities
+from app.backend.routers.course_record_supports import course_record_supports
+from app.backend.routers.course_learning_achievements import course_learning_achievements
+from app.backend.routers.psychopedagogical_evaluations import psychopedagogical_evaluations
 
 # OpenAPI (Swagger): FastAPI genera automáticamente el esquema desde rutas y modelos Pydantic.
 # Documentación interactiva:
@@ -177,6 +200,29 @@ app.include_router(guardian_attendance_certificates)
 app.include_router(professional_teaching_courses)
 app.include_router(coordinators_courses)
 app.include_router(meeting_schedualings)
+app.include_router(meeting_schedualing_agreements)
+app.include_router(meeting_schedualing_register_professionals)
+app.include_router(diversified_strategies)
+app.include_router(regular_teacher_diversified_strategies)
+app.include_router(subjects)
+app.include_router(collaborative_works)
+app.include_router(support_organizations)
+app.include_router(diversity_criteria)
+app.include_router(diversity_strategy_options)
+app.include_router(course_diversity_responses)
+app.include_router(course_adjustments)
+app.include_router(course_curricular_adequacies)
+app.include_router(course_individual_supports)
+app.include_router(plan_apoyo_individual)
+app.include_router(course_eval_diversity)
+app.include_router(course_family_community)
+app.include_router(support_areas)
+app.include_router(differentiated_strategies_implementations)
+app.include_router(course_teacher_record_observations)
+app.include_router(course_teacher_record_activities)
+app.include_router(course_record_supports)
+app.include_router(course_learning_achievements)
+app.include_router(psychopedagogical_evaluations)
 
 if __name__ == "__main__":
     # Para aumentar el límite de tamaño de archivo, configurar en el servidor

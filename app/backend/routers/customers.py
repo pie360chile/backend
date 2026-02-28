@@ -141,6 +141,15 @@ def store(customer: StoreCustomer, session_user: UserLogin = Depends(get_current
                             "permissions": [1, 2, 3, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 40, 41]
                         }
                         rol_class.store(rol_coordinador_inputs)
+
+                        # Crear rol "Evaluador" con los mismos permisos que Coordinador
+                        rol_evaluador_inputs = {
+                            "customer_id": customer_id,
+                            "school_id": school_id,
+                            "rol": "Evaluador",
+                            "permissions": [1, 2, 3, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 40, 41]
+                        }
+                        rol_class.store(rol_evaluador_inputs)
                         
                         # Crear enseñanzas automáticas: Pre Básica, Básica y Media
                         teachings_to_create = [
@@ -161,7 +170,7 @@ def store(customer: StoreCustomer, session_user: UserLogin = Depends(get_current
         status_code=status.HTTP_201_CREATED,
         content={
             "status": 201,
-            "message": "Customer, user, schools and roles created successfully",
+            "message": "Customer, user, schools and roles (Profesional, Coordinador, Evaluador) created successfully",
             "data": result
         }
     )

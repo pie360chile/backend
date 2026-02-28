@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Depends, status, UploadFile, File
+from fastapi import APIRouter, Depends, status, UploadFile, File, Query
 from fastapi.responses import JSONResponse
+from typing import Optional
 from app.backend.db.database import get_db
 from sqlalchemy.orm import Session
 from app.backend.schemas import UserLogin, StudentList, StoreStudent, UpdateStudent
@@ -14,6 +15,81 @@ students = APIRouter(
     prefix="/students",
     tags=["Students"]
 )
+
+
+@students.get("/by_school_course_with_sen")
+def list_by_school_course_with_sen(
+    school_id: int = Query(..., description="ID del establecimiento"),
+    course_id: int = Query(..., description="ID del curso"),
+    page: Optional[int] = Query(0, description="Página (0 = sin paginación)"),
+    per_page: Optional[int] = Query(100, description="Registros por página"),
+    session_user: UserLogin = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Lista estudiantes filtrados por school_id, course_id y con special_educational_need_id no nulo (solo NEE)."""
+    result = StudentClass(db).get_by_school_course_with_sen(
+        school_id=school_id,
+        course_id=course_id,
+        page=page or 0,
+        items_per_page=per_page if per_page and per_page > 0 else 100,
+    )
+    if isinstance(result, dict) and result.get("status") == "error":
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST if "requeridos" in (result.get("message") or "") else status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"status": 400 if "requeridos" in (result.get("message") or "") else 500, "message": result.get("message", "Error"), "data": result.get("data", [])},
+        )
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={"status": 200, "message": "OK", "data": result},
+    )
+
+
+@students.get("/list")
+def list_students(
+    course_id: Optional[int] = Query(None, description="Filtrar por curso (-1 o omitir = no filtrar)"),
+    page: Optional[int] = Query(0, description="Página (0-based)"),
+    per_page: Optional[int] = Query(20, description="Registros por página"),
+    rut: Optional[str] = Query(None, description="Filtrar por RUT"),
+    names: Optional[str] = Query(None, description="Filtrar por nombres"),
+    identification_number: Optional[str] = Query(None, description="Filtrar por número de identificación"),
+    session_user: UserLogin = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Lista estudiantes. Filtro opcional por course_id, rut, names, identification_number."""
+    customer_id = session_user.customer_id if session_user else None
+    school_id = session_user.school_id if session_user else None
+    if customer_id and not school_id:
+        schools_list = SchoolClass(db).get_all(page=0, customer_id=customer_id)
+        if isinstance(schools_list, list) and len(schools_list) > 0:
+            school_id = schools_list[0].get("id")
+    page_value = 0 if page is None else page
+    per_page_value = 20 if per_page is None else per_page
+    result = StudentClass(db).get_all(
+        page=page_value,
+        items_per_page=per_page_value,
+        school_id=school_id,
+        rut=rut,
+        names=names,
+        identification_number=identification_number,
+        course_id=course_id if course_id is not None and course_id != -1 else None,
+    )
+    if isinstance(result, dict) and result.get("status") == "error":
+        error_message = result.get("message", "Error")
+        lower_message = error_message.lower() if isinstance(error_message, str) else ""
+        if "no data" in lower_message or "no se encontraron datos" in lower_message:
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={"status": 200, "message": error_message, "data": []},
+            )
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"status": 404, "message": error_message, "data": None},
+        )
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={"status": 200, "message": "OK", "data": result},
+    )
+
 
 @students.post("/")
 def index(student_item: StudentList, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):

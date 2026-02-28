@@ -911,6 +911,7 @@ class UpdateCoordinatorsCourse(BaseModel):
 class StoreMeetingSchedulaling(BaseModel):
     """Tabla meeting_schedualings. school_id se obtiene de la sesión."""
     course_id: int
+    period_id: Optional[int] = None
     meeting_date: Optional[str] = None  # YYYY-MM-DD
     meeting_time: Optional[str] = None
 
@@ -918,8 +919,373 @@ class StoreMeetingSchedulaling(BaseModel):
 class UpdateMeetingSchedulaling(BaseModel):
     school_id: Optional[int] = None
     course_id: Optional[int] = None
+    period_id: Optional[int] = None
     meeting_date: Optional[str] = None  # YYYY-MM-DD
     meeting_time: Optional[str] = None
+
+
+class StoreMeetingSchedualingAgreement(BaseModel):
+    """Tabla meeting_schedualing_agreements."""
+    meeting_schedualing_id: int
+    agreements: Optional[str] = None
+
+
+class UpdateMeetingSchedualingAgreement(BaseModel):
+    meeting_schedualing_id: Optional[int] = None
+    agreements: Optional[str] = None
+
+
+class StoreMeetingSchedualingRegisterProfessional(BaseModel):
+    """Tabla meeting_schedualing_register_professionals."""
+    meeting_schedualing_register_id: int
+    professional_id: int
+
+
+class UpdateMeetingSchedualingRegisterProfessional(BaseModel):
+    meeting_schedualing_register_id: Optional[int] = None
+    professional_id: Optional[int] = None
+
+
+class SyncMeetingSchedualingRegisterProfessionals(BaseModel):
+    """Lista de professional_id que debe quedar para ese register. Los que no estén se borran (lógico)."""
+    professional_ids: list[int] = []
+
+
+class StoreDiversifiedStrategy(BaseModel):
+    """Tabla diversified_strategies (Diversified Strategies)."""
+    course_id: int
+    planning_learning_styles: Optional[str] = None
+    planning_strengths: Optional[str] = None
+    planning_support_needs: Optional[str] = None
+
+
+class UpdateDiversifiedStrategy(BaseModel):
+    course_id: Optional[int] = None
+    planning_learning_styles: Optional[str] = None
+    planning_strengths: Optional[str] = None
+    planning_support_needs: Optional[str] = None
+
+
+class StoreRegularTeacherDiversifiedStrategy(BaseModel):
+    """Tabla regular_teacher_diversified_strategies. school_id del body o de la sesión."""
+    school_id: Optional[int] = None
+    course_id: int
+    subject_id: Optional[int] = None
+    strategy: Optional[str] = None
+    period: Optional[str] = None
+    criteria: Optional[str] = None
+
+
+class UpdateRegularTeacherDiversifiedStrategy(BaseModel):
+    school_id: Optional[int] = None
+    course_id: Optional[int] = None
+    subject_id: Optional[int] = None
+    strategy: Optional[str] = None
+    period: Optional[str] = None
+    criteria: Optional[str] = None
+
+
+class StoreSubject(BaseModel):
+    """Tabla subjects. school_id se puede enviar o tomar de la sesión."""
+    school_id: Optional[int] = None
+    subject: Optional[str] = None
+
+
+class UpdateSubject(BaseModel):
+    school_id: Optional[int] = None
+    subject: Optional[str] = None
+
+
+class StoreCollaborativeWork(BaseModel):
+    """Tabla collaborative_works. school_id puede venir del body o de la sesión."""
+    school_id: Optional[int] = None
+    course_id: Optional[int] = None
+    planning_collab_co_teaching: Optional[str] = None
+    planning_collab_assistants: Optional[str] = None
+    planning_collab_students: Optional[str] = None
+    planning_collab_family: Optional[str] = None
+    planning_collab_community: Optional[str] = None
+    planning_observations: Optional[str] = None
+
+
+class UpdateCollaborativeWork(BaseModel):
+    school_id: Optional[int] = None
+    course_id: Optional[int] = None
+    planning_collab_co_teaching: Optional[str] = None
+    planning_collab_assistants: Optional[str] = None
+    planning_collab_students: Optional[str] = None
+    planning_collab_family: Optional[str] = None
+    planning_collab_community: Optional[str] = None
+    planning_observations: Optional[str] = None
+
+
+class StoreSupportOrganization(BaseModel):
+    """Tabla support_organizations. school_id del body o de la sesión."""
+    school_id: Optional[int] = None
+    course_id: Optional[int] = None
+    subject_id: Optional[int] = None
+    hours_support_regular_classroom: Optional[str] = None
+    hours_support_outside_classroom: Optional[str] = None
+    specialized_support_types: Optional[str] = None
+
+
+class UpdateSupportOrganization(BaseModel):
+    school_id: Optional[int] = None
+    course_id: Optional[int] = None
+    subject_id: Optional[int] = None
+    hours_support_regular_classroom: Optional[str] = None
+    hours_support_outside_classroom: Optional[str] = None
+    specialized_support_types: Optional[str] = None
+
+
+class StoreCourseDiversityResponse(BaseModel):
+    """Tabla course_diversity_responses. Upsert por (course_id, diversity_criterion_id). Incluye observations (course_diversity_observations)."""
+    course_id: int
+    diversity_criterion_id: int
+    criterion_selected: Optional[bool] = False
+    diversity_strategy_option_id: Optional[int] = None
+    how_text: Optional[str] = None
+    student_ids: Optional[List[int]] = None
+    observations: Optional[str] = None
+
+
+class UpdateCourseDiversityResponse(BaseModel):
+    criterion_selected: Optional[bool] = None
+    diversity_strategy_option_id: Optional[int] = None
+    how_text: Optional[str] = None
+    student_ids: Optional[List[int]] = None
+
+
+class StoreCourseDiversityObservations(BaseModel):
+    """Tabla course_diversity_observations. Una fila por course_id."""
+    course_id: int
+    observations: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Ajustes (adjustment_aspects, course_adjustments, course_adjustment_students)
+# ---------------------------------------------------------------------------
+
+class StoreCourseAdjustment(BaseModel):
+    """Upsert por (course_id, adjustment_aspect_id)."""
+    course_id: int
+    adjustment_aspect_id: int
+    other_aspect_text: Optional[str] = None
+    value: Optional[str] = None
+    student_ids: Optional[List[int]] = None
+
+
+class UpdateCourseAdjustment(BaseModel):
+    other_aspect_text: Optional[str] = None
+    value: Optional[str] = None
+    student_ids: Optional[List[int]] = None
+
+
+# ---------------------------------------------------------------------------
+# Adecuaciones curriculares (curricular_adequacy_types, course_curricular_adequacies)
+# ---------------------------------------------------------------------------
+
+class StoreCourseCurricularAdequacy(BaseModel):
+    """Upsert por (course_id, curricular_adequacy_type_id)."""
+    course_id: int
+    curricular_adequacy_type_id: int
+    applied: Optional[bool] = False
+    scope_text: Optional[str] = None
+    strategies_text: Optional[str] = None
+    subject_ids: Optional[List[int]] = None
+    student_ids: Optional[List[int]] = None
+
+
+class UpdateCourseCurricularAdequacy(BaseModel):
+    applied: Optional[bool] = None
+    scope_text: Optional[str] = None
+    strategies_text: Optional[str] = None
+    subject_ids: Optional[List[int]] = None
+    student_ids: Optional[List[int]] = None
+
+
+# ---------------------------------------------------------------------------
+# Plan de Apoyo Individual (course_individual_supports)
+# ---------------------------------------------------------------------------
+
+class StoreCourseIndividualSupport(BaseModel):
+    """Crear o actualizar un apoyo individual por curso (área = support_area_id)."""
+    course_id: int
+    support_area_id: Optional[int] = None
+    horario: Optional[str] = None
+    fecha_inicio: Optional[str] = None  # ISO date string
+    fecha_termino: Optional[str] = None
+    student_ids: Optional[List[int]] = None
+
+
+class UpdateCourseIndividualSupport(BaseModel):
+    support_area_id: Optional[int] = None
+    horario: Optional[str] = None
+    fecha_inicio: Optional[str] = None
+    fecha_termino: Optional[str] = None
+    student_ids: Optional[List[int]] = None
+
+
+# ---------------------------------------------------------------------------
+# Card 2: Registro de apoyos (course_record_support, course_record_support_students, interventions)
+# ---------------------------------------------------------------------------
+
+class StoreCourseRecordSupport(BaseModel):
+    """Guardar registro por curso y área: objetivos de aprendizaje + estudiantes."""
+    course_id: int
+    support_area_id: int
+    learning_objectives: Optional[str] = None
+    student_ids: Optional[List[int]] = None
+
+
+class UpdateCourseRecordSupport(BaseModel):
+    learning_objectives: Optional[str] = None
+    student_ids: Optional[List[int]] = None
+
+
+class StoreCourseRecordSupportIntervention(BaseModel):
+    """Crear intervención 'Ingresar apoyo'."""
+    course_id: int
+    support_area_id: int
+    date: str  # ISO date
+    pedagogical_hours: Optional[float] = None
+    place: Optional[str] = None
+    professional_id: Optional[int] = None
+    activities_description: Optional[str] = None
+
+
+class UpdateCourseRecordSupportIntervention(BaseModel):
+    date: Optional[str] = None
+    pedagogical_hours: Optional[float] = None
+    place: Optional[str] = None
+    professional_id: Optional[int] = None
+    activities_description: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Card 3: Registro de logros de aprendizaje (course_learning_achievements)
+# ---------------------------------------------------------------------------
+
+class StoreCourseLearningAchievement(BaseModel):
+    """Upsert por (course_id, student_id, period_id). period_id: 1, 2 o 3."""
+    course_id: int
+    student_id: int
+    period_id: int  # 1 = 1er período, 2 = 2do, 3 = 3er
+    achievements: Optional[str] = None
+    comments: Optional[str] = None
+
+
+class UpdateCourseLearningAchievement(BaseModel):
+    achievements: Optional[str] = None
+    comments: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# b) Pestaña 3: Registro de acciones del profesor (observaciones 1 por materia, actividades varias)
+# ---------------------------------------------------------------------------
+
+class StoreCourseTeacherRecordObservation(BaseModel):
+    """Observaciones por asignatura (1 por course_id, subject_id)."""
+    course_id: int
+    subject_id: int
+    observations: Optional[str] = None
+
+
+class UpdateCourseTeacherRecordObservation(BaseModel):
+    observations: Optional[str] = None
+
+
+class StoreCourseTeacherRecordActivity(BaseModel):
+    """Actividad registrada por asignatura (varias por materia)."""
+    course_id: int
+    subject_id: int
+    date: str  # ISO date
+    pedagogical_hours: Optional[float] = 0
+    teacher_names: Optional[List[str]] = None  # ["Juan Pérez", "María López"]
+    description: Optional[str] = None
+
+
+class UpdateCourseTeacherRecordActivity(BaseModel):
+    date: Optional[str] = None
+    pedagogical_hours: Optional[float] = None
+    teacher_names: Optional[List[str]] = None
+    description: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# c) Estrategias y procedimientos de evaluación (eval_diversity_types, course_eval_diversity, observations)
+# ---------------------------------------------------------------------------
+
+class StoreCourseEvalDiversity(BaseModel):
+    """Upsert por (course_id, eval_diversity_type_id)."""
+    course_id: int
+    eval_diversity_type_id: int
+    strategies_text: Optional[str] = None
+    observations: Optional[str] = None
+
+
+class UpdateCourseEvalDiversity(BaseModel):
+    strategies_text: Optional[str] = None
+
+
+class StoreCourseEvalDiversityObservations(BaseModel):
+    """Observaciones de la sección c) — una por curso."""
+    course_id: int
+    observations: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# 5. Estrategias de trabajo con la familia y con la comunidad
+# ---------------------------------------------------------------------------
+
+class StoreCourseFamilyCommunity(BaseModel):
+    """Upsert por (course_id, family_community_strategy_type_id)."""
+    course_id: int
+    family_community_strategy_type_id: int
+    descripcion: Optional[str] = None
+    seguimiento: Optional[str] = None
+    evaluacion: Optional[str] = None
+    observations: Optional[str] = None
+
+
+class UpdateCourseFamilyCommunity(BaseModel):
+    descripcion: Optional[str] = None
+    seguimiento: Optional[str] = None
+    evaluacion: Optional[str] = None
+
+
+class StoreCourseFamilyCommunityObservations(BaseModel):
+    """Observaciones de la sección 5 — una por curso."""
+    course_id: int
+    observations: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Support areas (support_areas)
+# ---------------------------------------------------------------------------
+
+class StoreSupportArea(BaseModel):
+    support_area: Optional[str] = None
+
+
+class UpdateSupportArea(BaseModel):
+    support_area: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# differentiated_strategies_implementations
+# ---------------------------------------------------------------------------
+
+class StoreDifferentiatedStrategiesImplementation(BaseModel):
+    period_id: Optional[int] = None
+    actions_taken: Optional[str] = None
+    applied_strategies: Optional[str] = None
+
+
+class UpdateDifferentiatedStrategiesImplementation(BaseModel):
+    period_id: Optional[int] = None
+    actions_taken: Optional[str] = None
+    applied_strategies: Optional[str] = None
 
 
 class StoreHealthEvaluation(BaseModel):
@@ -946,6 +1312,71 @@ class StoreHealthEvaluation(BaseModel):
     general_assessment: Optional[str] = None
     diagnosis: Optional[str] = None
     indications: Optional[str] = None
+
+
+# Document 27: Psychopedagogical Evaluation Information
+class PsychopedagogicalEvaluationScaleItem(BaseModel):
+    scale_type: str  # 'pedagogical' | 'social_communicative'
+    indicator_number: int  # 1-10
+    value: str  # '1', '2', '3', 'N/O'
+
+
+class StorePsychopedagogicalEvaluationInfo(BaseModel):
+    student_id: int
+    social_name: Optional[str] = None
+    age: Optional[str] = None
+    evaluation_date: Optional[str] = None
+    diagnosis: Optional[str] = None
+    diagnosis_issue_date: Optional[str] = None
+    admission_type: Optional[str] = None  # ingreso|reevaluacion|otro
+    admission_type_other: Optional[str] = None
+    instruments_applied: Optional[str] = None
+    school_history_background: Optional[str] = None
+    cognitive_analysis: Optional[str] = None
+    personal_analysis: Optional[str] = None
+    cognitive_synthesis: Optional[str] = None
+    personal_synthesis: Optional[str] = None
+    motor_synthesis: Optional[str] = None
+    suggestions_to_school: Optional[str] = None
+    suggestions_to_classroom_team: Optional[str] = None
+    suggestions_to_student: Optional[str] = None
+    suggestions_to_family: Optional[str] = None
+    other_suggestions: Optional[str] = None
+    conclusion: Optional[str] = None
+    professional_id: Optional[int] = None
+    professional_identification_number: Optional[str] = None
+    professional_registration_number: Optional[str] = None
+    professional_specialty: Optional[str] = None
+    scales: Optional[List[PsychopedagogicalEvaluationScaleItem]] = None
+
+
+class UpdatePsychopedagogicalEvaluationInfo(BaseModel):
+    social_name: Optional[str] = None
+    age: Optional[str] = None
+    evaluation_date: Optional[str] = None
+    diagnosis: Optional[str] = None
+    diagnosis_issue_date: Optional[str] = None
+    admission_type: Optional[str] = None
+    admission_type_other: Optional[str] = None
+    instruments_applied: Optional[str] = None
+    school_history_background: Optional[str] = None
+    cognitive_analysis: Optional[str] = None
+    personal_analysis: Optional[str] = None
+    cognitive_synthesis: Optional[str] = None
+    personal_synthesis: Optional[str] = None
+    motor_synthesis: Optional[str] = None
+    suggestions_to_school: Optional[str] = None
+    suggestions_to_classroom_team: Optional[str] = None
+    suggestions_to_student: Optional[str] = None
+    suggestions_to_family: Optional[str] = None
+    other_suggestions: Optional[str] = None
+    conclusion: Optional[str] = None
+    professional_id: Optional[int] = None
+    professional_identification_number: Optional[str] = None
+    professional_registration_number: Optional[str] = None
+    professional_specialty: Optional[str] = None
+    scales: Optional[List[PsychopedagogicalEvaluationScaleItem]] = None
+
 
 # Event schemas
 class EventList(BaseModel):

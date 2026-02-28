@@ -16,6 +16,7 @@ meeting_schedualings = APIRouter(
 @meeting_schedualings.get("")
 def get_list(
     course_id: Optional[int] = Query(None, description="-1 o omitir = no filtrar"),
+    period_id: Optional[int] = Query(None, description="-1 o omitir = no filtrar"),
     session_user: UserLogin = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
@@ -27,7 +28,7 @@ def get_list(
                 status_code=status.HTTP_200_OK,
                 content={"status": 200, "message": "OK", "data": []},
             )
-        result = MeetingSchedulalingClass(db).get(school_id=school_id, course_id=course_id)
+        result = MeetingSchedulalingClass(db).get(school_id=school_id, course_id=course_id, period_id=period_id)
         if result.get("status") == "error":
             return JSONResponse(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

@@ -23,6 +23,7 @@ def _row_to_dict(r: MeetingSchedulalingModel) -> dict:
         "id": r.id,
         "school_id": r.school_id,
         "course_id": r.course_id,
+        "period_id": getattr(r, "period_id", None),
         "meeting_date": r.meeting_date.isoformat() if r.meeting_date else None,
         "meeting_time": r.meeting_time,
         "added_date": r.added_date.isoformat() if r.added_date else None,
@@ -39,6 +40,7 @@ class MeetingSchedulalingClass:
         self,
         school_id: Optional[int] = None,
         course_id: Optional[int] = None,
+        period_id: Optional[int] = None,
     ) -> Any:
         """Lista registros activos (deleted_date is None). Filtros opcionales (-1 o None = no filtrar)."""
         try:
@@ -50,6 +52,8 @@ class MeetingSchedulalingClass:
                 q = q.filter(MeetingSchedulalingModel.school_id == school_id)
             if course_id is not None and course_id != -1:
                 q = q.filter(MeetingSchedulalingModel.course_id == course_id)
+            if period_id is not None and period_id != -1:
+                q = q.filter(MeetingSchedulalingModel.period_id == period_id)
             rows = q.all()
             return {"status": "success", "data": [_row_to_dict(r) for r in rows]}
         except Exception as e:
@@ -73,6 +77,7 @@ class MeetingSchedulalingClass:
             row = MeetingSchedulalingModel(
                 school_id=data.get("school_id"),
                 course_id=data.get("course_id"),
+                period_id=data.get("period_id"),
                 meeting_date=meeting_date,
                 meeting_time=data.get("meeting_time"),
                 added_date=now,
@@ -97,6 +102,8 @@ class MeetingSchedulalingClass:
                 row.school_id = data["school_id"]
             if "course_id" in data and data["course_id"] is not None:
                 row.course_id = data["course_id"]
+            if "period_id" in data:
+                row.period_id = data["period_id"]
             if "meeting_date" in data:
                 row.meeting_date = _parse_date(data["meeting_date"])
             if "meeting_time" in data:

@@ -2,6 +2,18 @@ from datetime import datetime
 from app.backend.db.models import StudentModel, StudentAcademicInfoModel, StudentPersonalInfoModel
 from sqlalchemy.orm import aliased
 
+
+def _date_str(v, fmt="%Y-%m-%d %H:%M:%S"):
+    """Convierte fecha/datetime a string; si ya es str lo devuelve tal cual."""
+    if v is None:
+        return None
+    if isinstance(v, str):
+        return v
+    if hasattr(v, "strftime"):
+        return v.strftime(fmt)
+    return str(v)
+
+
 class StudentClass:
     def __init__(self, db):
         self.db = db
@@ -169,7 +181,116 @@ class StudentClass:
         except Exception as e:
             error_message = str(e)
             return {"status": "error", "message": error_message}
-    
+
+    def get_by_school_course_with_sen(self, school_id, course_id, page=0, items_per_page=100):
+        """Lista estudiantes filtrados por school_id, course_id y con special_educational_need_id no nulo."""
+        try:
+            if not school_id or not course_id:
+                return {"status": "error", "message": "school_id y course_id son requeridos.", "data": []}
+            query = self.db.query(
+                StudentModel.id,
+                StudentModel.deleted_status_id,
+                StudentModel.school_id,
+                StudentModel.identification_number.label('student_identification_number'),
+                StudentModel.added_date,
+                StudentModel.updated_date,
+                StudentAcademicInfoModel.id.label('academic_id'),
+                StudentAcademicInfoModel.special_educational_need_id,
+                StudentAcademicInfoModel.course_id,
+                StudentAcademicInfoModel.sip_admission_year,
+                StudentPersonalInfoModel.id.label('personal_id'),
+                StudentPersonalInfoModel.region_id,
+                StudentPersonalInfoModel.commune_id,
+                StudentPersonalInfoModel.gender_id,
+                StudentPersonalInfoModel.proficiency_native_language_id,
+                StudentPersonalInfoModel.proficiency_language_used_id,
+                StudentPersonalInfoModel.identification_number,
+                StudentPersonalInfoModel.names,
+                StudentPersonalInfoModel.father_lastname,
+                StudentPersonalInfoModel.mother_lastname,
+                StudentPersonalInfoModel.social_name,
+                StudentPersonalInfoModel.born_date,
+                StudentPersonalInfoModel.nationality,
+                StudentPersonalInfoModel.address,
+                StudentPersonalInfoModel.phone,
+                StudentPersonalInfoModel.email,
+                StudentPersonalInfoModel.native_language,
+                StudentPersonalInfoModel.language_usually_used
+            ).join(
+                StudentAcademicInfoModel,
+                StudentModel.id == StudentAcademicInfoModel.student_id
+            ).outerjoin(
+                StudentPersonalInfoModel,
+                StudentModel.id == StudentPersonalInfoModel.student_id
+            ).filter(
+                StudentModel.deleted_status_id == 0,
+                StudentModel.school_id == school_id,
+                StudentAcademicInfoModel.course_id == course_id,
+                StudentAcademicInfoModel.special_educational_need_id.isnot(None)
+            )
+            query = query.order_by(StudentModel.id.desc())
+            if page > 0 and items_per_page > 0:
+                total_items = query.count()
+                total_pages = (total_items + items_per_page - 1) // items_per_page if items_per_page else 0
+                if page < 1 or page > max(1, total_pages):
+                    return {
+                        "total_items": total_items,
+                        "total_pages": total_pages or 1,
+                        "current_page": page,
+                        "items_per_page": items_per_page,
+                        "data": []
+                    }
+                data = query.offset((page - 1) * items_per_page).limit(items_per_page).all()
+            else:
+                data = query.all()
+                total_items = len(data)
+                total_pages = 1
+            serialized_data = [{
+                "id": student.id,
+                "deleted_status_id": student.deleted_status_id,
+                "school_id": student.school_id,
+                "identification_number": student.student_identification_number,
+                "added_date": _date_str(student.added_date),
+                "updated_date": _date_str(student.updated_date),
+                "academic_info": {
+                    "id": student.academic_id,
+                    "special_educational_need_id": student.special_educational_need_id,
+                    "course_id": student.course_id,
+                    "sip_admission_year": student.sip_admission_year
+                } if student.academic_id else None,
+                "personal_data": {
+                    "id": student.personal_id,
+                    "region_id": student.region_id,
+                    "commune_id": student.commune_id,
+                    "gender_id": student.gender_id,
+                    "proficiency_native_language_id": student.proficiency_native_language_id,
+                    "proficiency_language_used_id": student.proficiency_language_used_id,
+                    "identification_number": student.identification_number,
+                    "names": student.names,
+                    "father_lastname": student.father_lastname,
+                    "mother_lastname": student.mother_lastname,
+                    "social_name": student.social_name,
+                    "born_date": _date_str(student.born_date, "%Y-%m-%d"),
+                    "nationality": student.nationality,
+                    "address": student.address,
+                    "phone": student.phone,
+                    "email": student.email,
+                    "native_language": student.native_language,
+                    "language_usually_used": student.language_usually_used
+                } if student.personal_id else None
+            } for student in data]
+            if page > 0 and items_per_page > 0:
+                return {
+                    "total_items": total_items,
+                    "total_pages": total_pages,
+                    "current_page": page,
+                    "items_per_page": items_per_page,
+                    "data": serialized_data
+                }
+            return serialized_data
+        except Exception as e:
+            return {"status": "error", "message": str(e), "data": []}
+
     def get(self, id):
         try:
             data_query = self.db.query(

@@ -14,6 +14,7 @@ from app.backend.classes.anamnesis_class import AnamnesisClass
 from app.backend.classes.family_report_class import FamilyReportClass
 from app.backend.classes.interconsultation_class import InterconsultationClass
 from app.backend.classes.guardian_attendance_certificate_class import GuardianAttendanceCertificateClass
+from app.backend.classes.psychopedagogical_evaluation_class import PsychopedagogicalEvaluationClass
 from app.backend.db.database import get_db
 from app.backend.db.models import (
     FolderModel,
@@ -21,6 +22,14 @@ from app.backend.db.models import (
     GenderModel,
     NationalityModel,
     ProfessionalModel,
+    StudentModel,
+    ProfessionalTeachingCourseModel,
+    CoordinatorsCourseModel,
+    MeetingSchedulalingModel,
+    MeetingSchedualingAgreementModel,
+    MeetingSchedualingRegisterProfessionalModel,
+    RegularTeacherDiversifiedStrategyModel,
+    SubjectModel,
     FamilyMemberModel,
     CourseModel,
     SchoolModel,
@@ -1102,6 +1111,299 @@ def _generate_anamnesis_docx_internal(student_id: int, db: Session) -> dict:
         return {"status": "error", "message": str(e), "status_code": 500}
 
 
+def _generate_register_book_impl(course_id: int, db: Session):
+    """Lógica común para generar el libro de registro por course_id. Rellena regular, specialist, specialized_assistant y coordinadores (school, daem, support_networks)."""
+    template_path = Path("files/original_student_files") / "register_book.docx"
+    if not template_path.exists():
+        return None, "Template register_book.docx no encontrado en files/original_student_files"
+    replacements = {}
+    for i in range(1, 5):
+        replacements[f"regular_professional_full_name_{i}"] = ""
+        replacements[f"regular_professional_subject_{i}"] = ""
+        replacements[f"regular_professional_phone_{i}"] = ""
+        replacements[f"regular_professional_email_{i}"] = ""
+        replacements[f"specialist_professional_full_name_{i}"] = ""
+        replacements[f"specialist_professional_subject_{i}"] = ""
+        replacements[f"specialist_professional_phone_{i}"] = ""
+        replacements[f"specialist_professional_email_{i}"] = ""
+    for i in range(1, 4):
+        replacements[f"specialized_assistant_professional_full_name_{i}"] = ""
+        replacements[f"specialized_assistant_professional_subject_{i}"] = ""
+        replacements[f"specialized_assistant_professional_phone_{i}"] = ""
+        replacements[f"specialized_assistant_professional_email_{i}"] = ""
+    replacements["school_coordinator_full_name"] = ""
+    replacements["school_coordinator_email"] = ""
+    replacements["school_coordinator_phone"] = ""
+    replacements["daem_coordinator_full_name"] = ""
+    replacements["daem_coordinator_email"] = ""
+    replacements["daem_coordinator_phone"] = ""
+    replacements["support_networks_coordinator_full_name"] = ""
+    replacements["support_networks_coordinator_email"] = ""
+    replacements["support_networks_coordinator_phone"] = ""
+    # Días de la semana por mes (march, april, may, june, july) - primer periodo (period_id=1) desde meeting_schedualings
+    _weekdays = ["monday", "tuesday", "wednesday", "thursday", "friday"]
+    _months = [(3, "march"), (4, "april"), (5, "may"), (6, "june"), (7, "july")]
+    for _, month_name in _months:
+        for wd in _weekdays:
+            replacements[f"{month_name}_{wd}_date"] = ""
+            replacements[f"{month_name}_{wd}_time"] = ""
+    meetings_first_period = (
+        db.query(MeetingSchedulalingModel)
+        .filter(
+            MeetingSchedulalingModel.course_id == course_id,
+            MeetingSchedulalingModel.period_id == 1,
+            MeetingSchedulalingModel.meeting_date.isnot(None),
+            MeetingSchedulalingModel.deleted_date.is_(None),
+        )
+        .order_by(MeetingSchedulalingModel.meeting_date)
+        .all()
+    )
+    for row in meetings_first_period:
+        d = row.meeting_date
+        if not d or not hasattr(d, "month"):
+            continue
+        if d.month not in (3, 4, 5, 6, 7):
+            continue
+        # Python: weekday() 0=Monday, 4=Friday, 5=Saturday, 6=Sunday
+        wd_idx = d.weekday()
+        if wd_idx > 4:
+            continue
+        month_name = next((m[1] for m in _months if m[0] == d.month), None)
+        if not month_name:
+            continue
+        wd_name = _weekdays[wd_idx]
+        tag_date = f"{month_name}_{wd_name}_date"
+        tag_time = f"{month_name}_{wd_name}_time"
+        replacements[tag_date] = d.strftime("%d/%m/%Y")
+        replacements[tag_time] = (row.meeting_time or "").strip()
+    # Profesores regulares (teacher_type_id=1)
+    ptc_regular = (
+        db.query(ProfessionalTeachingCourseModel, ProfessionalModel)
+        .join(ProfessionalModel, ProfessionalTeachingCourseModel.professional_id == ProfessionalModel.id)
+        .filter(
+            ProfessionalTeachingCourseModel.course_id == course_id,
+            ProfessionalTeachingCourseModel.teacher_type_id == 1,
+            ProfessionalTeachingCourseModel.deleted_status_id == 0,
+        )
+        .order_by(ProfessionalTeachingCourseModel.id)
+        .limit(4)
+        .all()
+    )
+    for idx, (ptc, prof) in enumerate(ptc_regular):
+        if idx >= 4:
+            break
+        i = idx + 1
+        full_name = f"{prof.names or ''} {prof.lastnames or ''}".strip()
+        replacements[f"regular_professional_full_name_{i}"] = full_name
+        replacements[f"regular_professional_subject_{i}"] = (ptc.subject or "").strip()
+        replacements[f"regular_professional_phone_{i}"] = (prof.phone or "").strip()
+        replacements[f"regular_professional_email_{i}"] = (prof.email or "").strip()
+    # Profesionales especialistas (teacher_type_id=2)
+    ptc_specialist = (
+        db.query(ProfessionalTeachingCourseModel, ProfessionalModel)
+        .join(ProfessionalModel, ProfessionalTeachingCourseModel.professional_id == ProfessionalModel.id)
+        .filter(
+            ProfessionalTeachingCourseModel.course_id == course_id,
+            ProfessionalTeachingCourseModel.teacher_type_id == 2,
+            ProfessionalTeachingCourseModel.deleted_status_id == 0,
+        )
+        .order_by(ProfessionalTeachingCourseModel.id)
+        .limit(4)
+        .all()
+    )
+    for idx, (ptc, prof) in enumerate(ptc_specialist):
+        if idx >= 4:
+            break
+        i = idx + 1
+        full_name = f"{prof.names or ''} {prof.lastnames or ''}".strip()
+        replacements[f"specialist_professional_full_name_{i}"] = full_name
+        replacements[f"specialist_professional_subject_{i}"] = (ptc.subject or "").strip()
+        replacements[f"specialist_professional_phone_{i}"] = (prof.phone or "").strip()
+        replacements[f"specialist_professional_email_{i}"] = (prof.email or "").strip()
+    # Asistentes especializados (teacher_type_id=3), del 1 al 3
+    ptc_assistant = (
+        db.query(ProfessionalTeachingCourseModel, ProfessionalModel)
+        .join(ProfessionalModel, ProfessionalTeachingCourseModel.professional_id == ProfessionalModel.id)
+        .filter(
+            ProfessionalTeachingCourseModel.course_id == course_id,
+            ProfessionalTeachingCourseModel.teacher_type_id == 3,
+            ProfessionalTeachingCourseModel.deleted_status_id == 0,
+        )
+        .order_by(ProfessionalTeachingCourseModel.id)
+        .limit(3)
+        .all()
+    )
+    for idx, (ptc, prof) in enumerate(ptc_assistant):
+        if idx >= 3:
+            break
+        i = idx + 1
+        full_name = f"{prof.names or ''} {prof.lastnames or ''}".strip()
+        replacements[f"specialized_assistant_professional_full_name_{i}"] = full_name
+        replacements[f"specialized_assistant_professional_subject_{i}"] = (ptc.subject or "").strip()
+        replacements[f"specialized_assistant_professional_phone_{i}"] = (prof.phone or "").strip()
+        replacements[f"specialized_assistant_professional_email_{i}"] = (prof.email or "").strip()
+    # Coordinadores: school (coordinator_type_id=1), daem (2), support_networks (3)
+    for coordinator_type_id, prefix in [(1, "school"), (2, "daem"), (3, "support_networks")]:
+        coord = (
+            db.query(CoordinatorsCourseModel, ProfessionalModel)
+            .join(ProfessionalModel, CoordinatorsCourseModel.professional_id == ProfessionalModel.id)
+            .filter(
+                CoordinatorsCourseModel.course_id == course_id,
+                CoordinatorsCourseModel.coordinator_type_id == coordinator_type_id,
+                CoordinatorsCourseModel.deleted_date.is_(None),
+            )
+            .order_by(CoordinatorsCourseModel.id)
+            .first()
+        )
+        if coord:
+            cc, prof = coord
+            full_name = f"{prof.names or ''} {prof.lastnames or ''}".strip()
+            replacements[f"{prefix}_coordinator_full_name"] = full_name
+            replacements[f"{prefix}_coordinator_email"] = (cc.email or prof.email or "").strip()
+            replacements[f"{prefix}_coordinator_phone"] = (cc.phone or prof.phone or "").strip()
+    # Reuniones 1 a 5: fecha, asistentes y acuerdos desde meeting_schedualings (period_id=1), meeting_schedualing_registers_professionals y meeting_schedualing_agreements
+    for i in range(1, 6):
+        replacements[f"reunion_date_{i}"] = ""
+        replacements[f"reunion_attendees_{i}"] = ""
+        replacements[f"reunion_agreements_{i}"] = ""
+    meetings_for_reunion = (
+        db.query(MeetingSchedulalingModel)
+        .filter(
+            MeetingSchedulalingModel.course_id == course_id,
+            MeetingSchedulalingModel.period_id == 1,
+            MeetingSchedulalingModel.deleted_date.is_(None),
+        )
+        .order_by(MeetingSchedulalingModel.meeting_date)
+        .limit(5)
+        .all()
+    )
+    for idx, meeting in enumerate(meetings_for_reunion):
+        if idx >= 5:
+            break
+        i = idx + 1
+        if meeting.meeting_date:
+            replacements[f"reunion_date_{i}"] = meeting.meeting_date.strftime("%d/%m/%Y")
+        # Asistentes: meeting_schedualing_registers_professionals con meeting_schedualing_register_id = meeting.id, join professionals
+        reg_profs = (
+            db.query(MeetingSchedualingRegisterProfessionalModel, ProfessionalModel)
+            .join(ProfessionalModel, MeetingSchedualingRegisterProfessionalModel.professional_id == ProfessionalModel.id)
+            .filter(
+                MeetingSchedualingRegisterProfessionalModel.meeting_schedualing_register_id == meeting.id,
+                MeetingSchedualingRegisterProfessionalModel.deleted_date.is_(None),
+            )
+            .all()
+        )
+        names = []
+        for _rp, prof in reg_profs:
+            fn = f"{prof.names or ''} {prof.lastnames or ''}".strip()
+            if fn:
+                names.append(fn)
+        replacements[f"reunion_attendees_{i}"] = ", ".join(names)
+        # Acuerdos: meeting_schedualing_agreements por meeting_schedualing_id
+        agreements_rows = (
+            db.query(MeetingSchedualingAgreementModel)
+            .filter(
+                MeetingSchedualingAgreementModel.meeting_schedualing_id == meeting.id,
+                MeetingSchedualingAgreementModel.deleted_date.is_(None),
+            )
+            .all()
+        )
+        agreements_text = "; ".join((r.agreements or "").strip() for r in agreements_rows if (r.agreements or "").strip())
+        replacements[f"reunion_agreements_{i}"] = agreements_text
+    # Estrategias diversificadas profesor regular (registro b): regular_teacher_diversified_strategies por curso, 1 a 5
+    for i in range(1, 6):
+        replacements[f"regular_diversified_subject_{i}"] = ""
+        replacements[f"regular_diversified_strategy_{i}"] = ""
+        replacements[f"regular_diversified_period_{i}"] = ""
+        replacements[f"regular_diversified_criteria_{i}"] = ""
+    rtd_rows = (
+        db.query(RegularTeacherDiversifiedStrategyModel, SubjectModel)
+        .outerjoin(SubjectModel, RegularTeacherDiversifiedStrategyModel.subject_id == SubjectModel.id)
+        .filter(
+            RegularTeacherDiversifiedStrategyModel.course_id == course_id,
+        )
+        .order_by(RegularTeacherDiversifiedStrategyModel.id)
+        .limit(5)
+        .all()
+    )
+    for idx, (rtd, subj) in enumerate(rtd_rows):
+        if idx >= 5:
+            break
+        i = idx + 1
+        replacements[f"regular_diversified_subject_{i}"] = (subj.subject if subj and subj.subject else "").strip()
+        replacements[f"regular_diversified_strategy_{i}"] = (rtd.strategy or "").strip()
+        replacements[f"regular_diversified_period_{i}"] = (rtd.period or "").strip()
+        replacements[f"regular_diversified_criteria_{i}"] = (rtd.criteria or "").strip()
+    out_dir = Path("files/system/students")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    course = db.query(CourseModel).filter(CourseModel.id == course_id).first()
+    course_name = (course.course_name or f"curso_{course_id}").replace(" ", "_")
+    safe_name = re.sub(r"[^\w\-]", "", course_name)[:50]
+    out_file = out_dir / f"libro_registro_{safe_name}_{uuid.uuid4().hex[:8]}.docx"
+    result = DocumentsClass.fill_docx_form(str(template_path), replacements, str(out_file))
+    if result.get("status") == "error":
+        return None, result.get("message", "Error generando libro de registro")
+    return str(out_file), None
+
+
+@documents.get("/register_book/{course_id}")
+async def get_register_book(
+    course_id: int,
+    db: Session = Depends(get_db),
+    session_user: UserLogin = Depends(get_current_active_user),
+):
+    """
+    Genera y descarga el documento 27 (Libro de registro) para un curso.
+    URL: GET /api/documents/register_book/{course_id}
+    """
+    try:
+        file_path, err = _generate_register_book_impl(course_id, db)
+        if err:
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND if "no encontrado" in err.lower() else status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={"status": 404 if "no encontrado" in err.lower() else 500, "message": err, "data": None},
+            )
+        return FileResponse(
+            path=file_path,
+            filename=Path(file_path).name,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"status": 500, "message": str(e), "data": None},
+        )
+
+
+@documents.get("/generate/register_book/{course_id}")
+async def generate_register_book(
+    course_id: int,
+    db: Session = Depends(get_db),
+    session_user: UserLogin = Depends(get_current_active_user),
+):
+    """
+    Genera el documento 27 (Libro de registro) en DOCX para un curso.
+    Rellena regular_professional_* (teacher_type_id=1) y specialist_professional_* (teacher_type_id=2).
+    """
+    try:
+        file_path, err = _generate_register_book_impl(course_id, db)
+        if err:
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND if "no encontrado" in err.lower() else status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={"status": 404 if "no encontrado" in err.lower() else 500, "message": err, "data": None},
+            )
+        return FileResponse(
+            path=file_path,
+            filename=Path(file_path).name,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"status": 500, "message": str(e), "data": None},
+        )
+
+
 @documents.get("/generate/{student_id}/{document_id}")
 async def generate_document(
     student_id: int,
@@ -1130,8 +1432,8 @@ async def generate_document(
         # Obtener el documento usando la clase
         document = DocumentsClass(db)
         document_result = document.get(document_id)
-        # Documentos 3,4,7,8,18,19,22,23,24 se pueden generar aunque no existan en la tabla documents
-        known_generable = (3, 4, 7, 8, 18, 19, 22, 23, 24, 25)
+        # Documentos 3,4,7,8,18,19,22,23,24,25,27 se pueden generar aunque no existan en la tabla documents
+        known_generable = (3, 4, 7, 8, 18, 19, 22, 23, 24, 25, 27)
         if isinstance(document_result, dict) and document_result.get("status") == "error":
             if document_id in known_generable:
                 document_result = {"document_type_id": document_id}
@@ -2054,6 +2356,134 @@ async def generate_document(
                     content={
                         "status": 500,
                         "message": result.get("message", "Error generando documento de interconsulta"),
+                        "data": None
+                    }
+                )
+            return FileResponse(
+                path=result["file_path"],
+                filename=result["filename"],
+                media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+
+        # Si document_id = 27, generar documento de evaluación psicopedagógica (psychopedagogical_evaluation.docx)
+        if document_id == 27:
+            def _fmt_date_d27(val):
+                if not val:
+                    return ""
+                try:
+                    if isinstance(val, str):
+                        dt = datetime.strptime(val.strip()[:10], "%Y-%m-%d").date()
+                    elif hasattr(val, "date"):
+                        dt = val.date() if callable(getattr(val, "date", None)) else val
+                    else:
+                        dt = val
+                    return dt.strftime("%d/%m/%Y")
+                except Exception:
+                    return str(val) if val else ""
+
+            psychoped_service = PsychopedagogicalEvaluationClass(db)
+            psychoped_result = psychoped_service.get_by_student_id(student_id=student_id, latest_only=True)
+            eval_data = psychoped_result.get("data") if psychoped_result.get("status") == "success" else None
+            if not eval_data:
+                return JSONResponse(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    content={
+                        "status": 404,
+                        "message": "No se encontró evaluación psicopedagógica para este estudiante",
+                        "data": None
+                    }
+                )
+
+            student_data = student_result.get("student_data", {}) if isinstance(student_result, dict) else {}
+            personal = student_data.get("personal_data") or {}
+            academic = student_data.get("academic_info") or {}
+
+            student_full_name = (
+                f"{personal.get('names') or ''} {personal.get('father_lastname') or ''} {personal.get('mother_lastname') or ''}".strip()
+                or eval_data.get("social_name")
+                or f"Estudiante {student_id}"
+            )
+            student_social_name = str(eval_data.get("social_name") or "").strip() or student_full_name
+            birth_day = _fmt_date_d27(personal.get("born_date"))
+            student_age = str(eval_data.get("age") or "").strip()
+            if not student_age and personal.get("born_date"):
+                try:
+                    bd = personal.get("born_date")
+                    if isinstance(bd, str):
+                        bd = datetime.strptime(bd.strip()[:10], "%Y-%m-%d").date()
+                    today = date.today()
+                    years = today.year - bd.year - ((today.month, today.day) < (bd.month, bd.day))
+                    student_age = f"{years} año(s)" if years != 1 else "1 año"
+                except Exception:
+                    pass
+            student_school = ""
+            student_obj = db.query(StudentModel).filter(StudentModel.id == student_id).first()
+            if student_obj and student_obj.school_id:
+                school = db.query(SchoolModel).filter(SchoolModel.id == student_obj.school_id).first()
+                if school and school.school_name:
+                    student_school = school.school_name
+            student_course = ""
+            if academic and academic.get("course_id"):
+                course = db.query(CourseModel).filter(CourseModel.id == academic.get("course_id")).first()
+                if course and course.course_name:
+                    student_course = course.course_name
+            evaluation_date = _fmt_date_d27(eval_data.get("evaluation_date"))
+            diagnostic = str(eval_data.get("diagnosis") or "").strip()
+            issue_date = _fmt_date_d27(eval_data.get("diagnosis_issue_date"))
+
+            admission_type_raw = str(eval_data.get("admission_type") or "").strip().lower()
+            admission_type_other_val = str(eval_data.get("admission_type_other") or "").strip()
+            admission_type_1 = ""
+            admission_type_2 = ""
+            admission_type_3 = ""
+            if admission_type_raw in ("ingreso", "1"):
+                admission_type_1 = "X"
+            elif admission_type_raw in ("reevaluacion", "reevaluación", "2"):
+                admission_type_2 = "X"
+            elif admission_type_raw in ("otro", "other", "3"):
+                admission_type_3 = admission_type_other_val or "Otro"
+
+            instruments_applied = str(eval_data.get("instruments_applied") or "").strip()
+            school_history_background = str(eval_data.get("school_history_background") or "").strip()
+
+            replacements = {
+                "student_full_name": student_full_name,
+                "student_social_name": student_social_name,
+                "birth_day": birth_day,
+                "student_age": student_age,
+                "student_school": student_school,
+                "student_course": student_course,
+                "evaluation_date": evaluation_date,
+                "diagnostic": diagnostic,
+                "issue_date": issue_date,
+                "admission_type_1": admission_type_1,
+                "admission_type_2": admission_type_2,
+                "admission_type_3": admission_type_3,
+                "instruments_applied": instruments_applied,
+                "school_history_background": school_history_background,
+            }
+
+            template_path = Path("files/original_student_files") / "psychopedagogical_evaluation.docx"
+            if not template_path.exists():
+                return JSONResponse(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    content={
+                        "status": 404,
+                        "message": "Plantilla psychopedagogical_evaluation.docx no encontrada en files/original_student_files",
+                        "data": None
+                    }
+                )
+            out_dir = Path("files/system/students")
+            out_dir.mkdir(parents=True, exist_ok=True)
+            safe_name = re.sub(r'[^\w\s-]', '', (student_full_name or "evaluacion_psico")).replace(" ", "_")[:30]
+            out_file = out_dir / f"evaluacion_psicopedagogica_{safe_name}_{uuid.uuid4().hex[:8]}.docx"
+            result = DocumentsClass.fill_docx_form(str(template_path), replacements, str(out_file))
+            if result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    content={
+                        "status": 500,
+                        "message": result.get("message", "Error generando documento de evaluación psicopedagógica"),
                         "data": None
                     }
                 )
