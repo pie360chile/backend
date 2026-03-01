@@ -17,7 +17,7 @@ class CourseClass:
                 CourseModel.updated_date,
                 TeachingModel.teaching_name,
                 func.count(StudentModel.id).label('total_students'),
-                func.count(case((StudentAcademicInfoModel.special_educational_need_id.isnot(None), 1))).label('total_students_sen'),
+                func.count(case((SpecialEducationalNeedModel.id.isnot(None), 1))).label('total_students_sen'),
                 func.count(case((SpecialEducationalNeedModel.special_educational_need_type_id.isnot(None), 1))).label('total_students_tsen'),
             ).join(
                 TeachingModel, CourseModel.teaching_id == TeachingModel.id
