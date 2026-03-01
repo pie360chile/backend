@@ -17,7 +17,8 @@ def index(need: SpecialEducationalNeedList, session_user: UserLogin = Depends(ge
     result = SpecialEducationalNeedClass(db).get_all(
         page=page_value,
         items_per_page=need.per_page,
-        special_educational_needs=need.special_educational_needs
+        special_educational_needs=need.special_educational_needs,
+        special_educational_need_type_id=need.special_educational_need_type_id
     )
 
     if isinstance(result, dict) and result.get("status") == "error":

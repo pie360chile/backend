@@ -1037,10 +1037,26 @@ class SpecialEducationalNeedModel(Base):
     __tablename__ = 'special_educational_needs'
 
     id = Column(Integer, primary_key=True)
+    special_educational_need_type_id = Column(Integer)
     deleted_status_id = Column(Integer)
     special_educational_needs = Column(String(255))
     added_date = Column(DateTime)
     updated_date = Column(DateTime)
+
+
+class DiagnosisSummaryModel(Base):
+    """Resumen por diagnóstico: cupos disponibles y ocupados por NEE, curso y año (year_index: 0=1er año, 1=2do año)."""
+    __tablename__ = 'diagnosis_summary'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    school_id = Column(Integer, nullable=True)
+    special_educational_need_id = Column(Integer, nullable=False)
+    course_id = Column(Integer, nullable=False)
+    year_index = Column(Integer, nullable=False, default=0)  # 0 = 1er año, 1 = 2do año
+    available_slots = Column(Integer, nullable=False, default=0)
+    occupied_slots = Column(Integer, nullable=False, default=0)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
 
 
 class SupportAreaModel(Base):

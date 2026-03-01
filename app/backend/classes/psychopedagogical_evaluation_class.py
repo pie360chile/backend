@@ -32,6 +32,30 @@ VALID_SCALE_TYPES = ("pedagogical", "social_communicative")
 VALID_VALUES = ("1", "2", "3", "N/O")
 
 
+def _build_scales_from_flat(data: dict) -> List[dict]:
+    """Construye el array scales desde claves planas del frontend (pedagogical_scale_1..10, social_communicative_scale_1..10)."""
+    if data.get("scales") and isinstance(data["scales"], list) and len(data["scales"]) > 0:
+        return data["scales"]
+    scales = []
+    for i in range(1, 11):
+        key = f"pedagogical_scale_{i}"
+        val = data.get(key)
+        if val is not None and str(val).strip() != "":
+            v = str(val).strip()
+            if v.upper() == "N/O" or v == "N/O":
+                v = "N/O"
+            scales.append({"scale_type": "pedagogical", "indicator_number": i, "value": v})
+    for i in range(1, 11):
+        key = f"social_communicative_scale_{i}"
+        val = data.get(key)
+        if val is not None and str(val).strip() != "":
+            v = str(val).strip()
+            if v.upper() == "N/O" or v == "N/O":
+                v = "N/O"
+            scales.append({"scale_type": "social_communicative", "indicator_number": i, "value": v})
+    return scales
+
+
 def _info_to_dict(row: PsychopedagogicalEvaluationInfoModel) -> dict:
     return {
         "id": row.id,
@@ -203,8 +227,8 @@ class PsychopedagogicalEvaluationClass:
             )
             self.db.add(row)
             self.db.flush()
-            scales = data.get("scales") or []
-            if isinstance(scales, list):
+            scales = _build_scales_from_flat(data)
+            if scales:
                 self._save_scales(row.id, scales)
             self.db.commit()
             self.db.refresh(row)
@@ -263,6 +287,10 @@ class PsychopedagogicalEvaluationClass:
 
             if "scales" in data and isinstance(data["scales"], list):
                 self._save_scales(row.id, data["scales"])
+            else:
+                scales = _build_scales_from_flat(data)
+                if scales:
+                    self._save_scales(row.id, scales)
             self.db.commit()
             self.db.refresh(row)
             out = _info_to_dict(row)

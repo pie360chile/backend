@@ -5,13 +5,15 @@ class SpecialEducationalNeedClass:
     def __init__(self, db):
         self.db = db
 
-    def get_all(self, page=0, items_per_page=10, special_educational_needs=None):
+    def get_all(self, page=0, items_per_page=10, special_educational_needs=None, special_educational_need_type_id=None):
         try:
             query = self.db.query(SpecialEducationalNeedModel)
 
             # Filtrar solo registros no eliminados
             query = query.filter(SpecialEducationalNeedModel.deleted_status_id == 0)
 
+            if special_educational_need_type_id is not None:
+                query = query.filter(SpecialEducationalNeedModel.special_educational_need_type_id == special_educational_need_type_id)
             # Aplicar filtro de búsqueda
             if special_educational_needs and special_educational_needs.strip():
                 query = query.filter(SpecialEducationalNeedModel.special_educational_needs.like(f"%{special_educational_needs.strip()}%"))
@@ -38,6 +40,7 @@ class SpecialEducationalNeedClass:
 
                 serialized_data = [{
                     "id": need.id,
+                    "special_educational_need_type_id": need.special_educational_need_type_id,
                     "deleted_status_id": need.deleted_status_id,
                     "special_educational_needs": need.special_educational_needs,
                     "added_date": need.added_date.strftime("%Y-%m-%d %H:%M:%S") if need.added_date else None,
@@ -57,6 +60,7 @@ class SpecialEducationalNeedClass:
 
                 serialized_data = [{
                     "id": need.id,
+                    "special_educational_need_type_id": need.special_educational_need_type_id,
                     "deleted_status_id": need.deleted_status_id,
                     "special_educational_needs": need.special_educational_needs,
                     "added_date": need.added_date.strftime("%Y-%m-%d %H:%M:%S") if need.added_date else None,
@@ -79,6 +83,7 @@ class SpecialEducationalNeedClass:
             if need:
                 return {
                     "id": need.id,
+                    "special_educational_need_type_id": need.special_educational_need_type_id,
                     "deleted_status_id": need.deleted_status_id,
                     "special_educational_needs": need.special_educational_needs,
                     "added_date": need.added_date.strftime("%Y-%m-%d %H:%M:%S") if need.added_date else None,
@@ -94,6 +99,7 @@ class SpecialEducationalNeedClass:
     def store(self, need_inputs):
         try:
             new_need = SpecialEducationalNeedModel(
+                special_educational_need_type_id=need_inputs.get('special_educational_need_type_id'),
                 deleted_status_id=0,
                 special_educational_needs=need_inputs.get('special_educational_needs'),
                 added_date=datetime.now(),
@@ -124,6 +130,8 @@ class SpecialEducationalNeedClass:
             if not existing_need:
                 return {"status": "error", "message": "No data found"}
 
+            if 'special_educational_need_type_id' in need_inputs:
+                existing_need.special_educational_need_type_id = need_inputs['special_educational_need_type_id']
             if 'special_educational_needs' in need_inputs:
                 existing_need.special_educational_needs = need_inputs['special_educational_needs']
 

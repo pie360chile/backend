@@ -517,12 +517,40 @@ class SpecialEducationalNeedList(BaseModel):
     page: Optional[int] = None
     per_page: int = 10
     special_educational_needs: Optional[str] = None
+    special_educational_need_type_id: Optional[int] = None
 
 class StoreSpecialEducationalNeed(BaseModel):
+    special_educational_need_type_id: Optional[int] = None
     special_educational_needs: str
 
 class UpdateSpecialEducationalNeed(BaseModel):
+    special_educational_need_type_id: Optional[int] = None
     special_educational_needs: Optional[str] = None
+
+# Diagnosis Summary schemas (cupos por NEE, curso y año)
+class DiagnosisSummaryList(BaseModel):
+    page: Optional[int] = None
+    per_page: int = 10
+    school_id: Optional[int] = None
+    special_educational_need_id: Optional[int] = None
+    course_id: Optional[int] = None
+    year_index: Optional[int] = None
+
+class StoreDiagnosisSummary(BaseModel):
+    school_id: Optional[int] = None
+    special_educational_need_id: int
+    course_id: int
+    year_index: int = 0  # 0 = 1er año, 1 = 2do año
+    available_slots: int = 0
+    occupied_slots: int = 0
+
+class UpdateDiagnosisSummary(BaseModel):
+    school_id: Optional[int] = None
+    special_educational_need_id: Optional[int] = None
+    course_id: Optional[int] = None
+    year_index: Optional[int] = None
+    available_slots: Optional[int] = None
+    occupied_slots: Optional[int] = None
 
 # Document Type schemas
 class DocumentTypeList(BaseModel):
@@ -1348,6 +1376,27 @@ class StorePsychopedagogicalEvaluationInfo(BaseModel):
     professional_registration_number: Optional[str] = None
     professional_specialty: Optional[str] = None
     scales: Optional[List[PsychopedagogicalEvaluationScaleItem]] = None
+    # Escalas en formato plano (frontend envía pedagogical_scale_1..10, social_communicative_scale_1..10)
+    pedagogical_scale_1: Optional[str] = None
+    pedagogical_scale_2: Optional[str] = None
+    pedagogical_scale_3: Optional[str] = None
+    pedagogical_scale_4: Optional[str] = None
+    pedagogical_scale_5: Optional[str] = None
+    pedagogical_scale_6: Optional[str] = None
+    pedagogical_scale_7: Optional[str] = None
+    pedagogical_scale_8: Optional[str] = None
+    pedagogical_scale_9: Optional[str] = None
+    pedagogical_scale_10: Optional[str] = None
+    social_communicative_scale_1: Optional[str] = None
+    social_communicative_scale_2: Optional[str] = None
+    social_communicative_scale_3: Optional[str] = None
+    social_communicative_scale_4: Optional[str] = None
+    social_communicative_scale_5: Optional[str] = None
+    social_communicative_scale_6: Optional[str] = None
+    social_communicative_scale_7: Optional[str] = None
+    social_communicative_scale_8: Optional[str] = None
+    social_communicative_scale_9: Optional[str] = None
+    social_communicative_scale_10: Optional[str] = None
 
 
 class UpdatePsychopedagogicalEvaluationInfo(BaseModel):
@@ -1376,6 +1425,26 @@ class UpdatePsychopedagogicalEvaluationInfo(BaseModel):
     professional_registration_number: Optional[str] = None
     professional_specialty: Optional[str] = None
     scales: Optional[List[PsychopedagogicalEvaluationScaleItem]] = None
+    pedagogical_scale_1: Optional[str] = None
+    pedagogical_scale_2: Optional[str] = None
+    pedagogical_scale_3: Optional[str] = None
+    pedagogical_scale_4: Optional[str] = None
+    pedagogical_scale_5: Optional[str] = None
+    pedagogical_scale_6: Optional[str] = None
+    pedagogical_scale_7: Optional[str] = None
+    pedagogical_scale_8: Optional[str] = None
+    pedagogical_scale_9: Optional[str] = None
+    pedagogical_scale_10: Optional[str] = None
+    social_communicative_scale_1: Optional[str] = None
+    social_communicative_scale_2: Optional[str] = None
+    social_communicative_scale_3: Optional[str] = None
+    social_communicative_scale_4: Optional[str] = None
+    social_communicative_scale_5: Optional[str] = None
+    social_communicative_scale_6: Optional[str] = None
+    social_communicative_scale_7: Optional[str] = None
+    social_communicative_scale_8: Optional[str] = None
+    social_communicative_scale_9: Optional[str] = None
+    social_communicative_scale_10: Optional[str] = None
 
 
 # Event schemas

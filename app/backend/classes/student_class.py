@@ -1,5 +1,5 @@
 from datetime import datetime
-from app.backend.db.models import StudentModel, StudentAcademicInfoModel, StudentPersonalInfoModel
+from app.backend.db.models import StudentModel, StudentAcademicInfoModel, StudentPersonalInfoModel, SpecialEducationalNeedModel, CourseModel
 from sqlalchemy.orm import aliased
 
 
@@ -290,6 +290,97 @@ class StudentClass:
             return serialized_data
         except Exception as e:
             return {"status": "error", "message": str(e), "data": []}
+
+    def get_counts_by_sen_type_and_pie_years(self, school_id=None):
+        """
+        Counts students by course and NEE type (special_educational_need_type_id), split by
+        years in PIE: one_year (<=1) and more_than_one_year (>1). Returns by_course.
+        """
+        try:
+            from datetime import date
+            current_year = date.today().year
+            query = (
+                self.db.query(
+                    StudentAcademicInfoModel.student_id,
+                    StudentAcademicInfoModel.course_id,
+                    StudentAcademicInfoModel.sip_admission_year,
+                    SpecialEducationalNeedModel.special_educational_need_type_id,
+                    CourseModel.course_name,
+                )
+                .join(
+                    StudentModel,
+                    StudentModel.id == StudentAcademicInfoModel.student_id,
+                )
+                .join(
+                    SpecialEducationalNeedModel,
+                    SpecialEducationalNeedModel.id == StudentAcademicInfoModel.special_educational_need_id,
+                )
+                .outerjoin(
+                    CourseModel,
+                    CourseModel.id == StudentAcademicInfoModel.course_id,
+                )
+                .filter(
+                    StudentModel.deleted_status_id == 0,
+                    StudentAcademicInfoModel.special_educational_need_id.isnot(None),
+                    SpecialEducationalNeedModel.deleted_status_id == 0,
+                )
+            )
+            if school_id:
+                query = query.filter(StudentModel.school_id == school_id)
+            rows = query.all()
+
+            # by_course: course_id -> { course_name, by_type: { type_id -> { one_year, more_than_one_year } }, totals }
+            by_course = {}
+            for row in rows:
+                course_id = row.course_id or 0
+                course_name = (row.course_name or "").strip() if row.course_name else ""
+                type_id = row.special_educational_need_type_id
+                if type_id is None:
+                    continue
+                if course_id not in by_course:
+                    by_course[course_id] = {
+                        "course_name": course_name,
+                        "by_type": {},
+                        "total_one_year": 0,
+                        "total_more_than_one_year": 0,
+                    }
+                if course_name and not by_course[course_id]["course_name"]:
+                    by_course[course_id]["course_name"] = course_name
+                sip_year = row.sip_admission_year
+                years_in_pie = (current_year - sip_year) if sip_year else 0
+                t = by_course[course_id]["by_type"].setdefault(type_id, {"one_year": 0, "more_than_one_year": 0})
+                if years_in_pie <= 1:
+                    t["one_year"] += 1
+                    by_course[course_id]["total_one_year"] += 1
+                else:
+                    t["more_than_one_year"] += 1
+                    by_course[course_id]["total_more_than_one_year"] += 1
+
+            by_course_list = []
+            for cid in sorted(by_course.keys()):
+                info = by_course[cid]
+                by_type_list = [
+                    {
+                        "special_educational_need_type_id": tid,
+                        "one_year": data["one_year"],
+                        "more_than_one_year": data["more_than_one_year"],
+                        "total": data["one_year"] + data["more_than_one_year"],
+                    }
+                    for tid, data in sorted(info["by_type"].items())
+                ]
+                by_course_list.append({
+                    "course_id": cid if cid else None,
+                    "course_name": info["course_name"],
+                    "by_type": by_type_list,
+                    "total_one_year": info["total_one_year"],
+                    "total_more_than_one_year": info["total_more_than_one_year"],
+                })
+            return {
+                "by_course": by_course_list,
+                "current_year": current_year,
+            }
+        except Exception as e:
+            return {"status": "error", "message": str(e), "data": None}
 
     def get(self, id):
         try:

@@ -2431,20 +2431,74 @@ async def generate_document(
             diagnostic = str(eval_data.get("diagnosis") or "").strip()
             issue_date = _fmt_date_d27(eval_data.get("diagnosis_issue_date"))
 
+            # admission_type_1, admission_type_2, admission_type_3 son campos de texto: solo el que corresponde a admission_type se rellena con el valor de admission_type_other
             admission_type_raw = str(eval_data.get("admission_type") or "").strip().lower()
             admission_type_other_val = str(eval_data.get("admission_type_other") or "").strip()
             admission_type_1 = ""
             admission_type_2 = ""
             admission_type_3 = ""
             if admission_type_raw in ("ingreso", "1"):
-                admission_type_1 = "X"
+                admission_type_1 = admission_type_other_val
             elif admission_type_raw in ("reevaluacion", "reevaluación", "2"):
-                admission_type_2 = "X"
+                admission_type_2 = admission_type_other_val
             elif admission_type_raw in ("otro", "other", "3"):
-                admission_type_3 = admission_type_other_val or "Otro"
+                admission_type_3 = admission_type_other_val
 
             instruments_applied = str(eval_data.get("instruments_applied") or "").strip()
             school_history_background = str(eval_data.get("school_history_background") or "").strip()
+            cognitive_analysis = str(eval_data.get("cognitive_analysis") or "").strip()
+            personal_analysis = str(eval_data.get("personal_analysis") or "").strip()
+            conclusion = str(eval_data.get("conclusion") or "").strip()
+            cognitive_synthesis = str(eval_data.get("cognitive_synthesis") or "").strip()
+            personal_synthesis = str(eval_data.get("personal_synthesis") or "").strip()
+            motor_synthesis = str(eval_data.get("motor_synthesis") or "").strip()
+            suggestions_to_school = str(eval_data.get("suggestions_to_school") or "").strip()
+            suggestions_to_classroom_team = str(eval_data.get("suggestions_to_classroom_team") or "").strip()
+            suggestions_to_family = str(eval_data.get("suggestions_to_family") or "").strip()
+            suggestions_to_student = str(eval_data.get("suggestions_to_student") or "").strip()
+            other_suggestions = str(eval_data.get("other_suggestions") or "").strip()
+
+            professional_full_name = ""
+            professional_identification_number = ""
+            professional_registration_number = str(eval_data.get("professional_registration_number") or "").strip()
+            professional_specialty = str(eval_data.get("professional_specialty") or "").strip()
+            if eval_data.get("professional_id"):
+                prof = db.query(ProfessionalModel).filter(ProfessionalModel.id == eval_data.get("professional_id")).first()
+                if prof:
+                    professional_full_name = f"{prof.names or ''} {prof.lastnames or ''}".strip()
+                    professional_identification_number = str(prof.identification_number or "").strip()
+
+            # Escalas: scale_{fila}_{columna} fila 1..10, columna 1..4 (1=valor "1", 2="2", 3="3", 4="N/O")
+            scales_list = eval_data.get("scales") or []
+            ped_by_indicator = {}
+            soc_by_indicator = {}
+            for s in scales_list:
+                st = (s.get("scale_type") or "").strip().lower()
+                ind = s.get("indicator_number")
+                if ind is None:
+                    continue
+                try:
+                    ind = int(ind)
+                except (TypeError, ValueError):
+                    continue
+                val = (s.get("value") or "").strip().upper()
+                if not val:
+                    continue
+                if "social" in st or "comunica" in st or st == "social_communicative":
+                    soc_by_indicator[ind] = val
+                else:
+                    ped_by_indicator[ind] = val
+
+            def _value_to_col(v):
+                if v in ("1",):
+                    return 1
+                if v in ("2",):
+                    return 2
+                if v in ("3",):
+                    return 3
+                if v in ("N/O", "NO", "N-O"):
+                    return 4
+                return None
 
             replacements = {
                 "student_full_name": student_full_name,
@@ -2461,7 +2515,37 @@ async def generate_document(
                 "admission_type_3": admission_type_3,
                 "instruments_applied": instruments_applied,
                 "school_history_background": school_history_background,
+                "cognitive_analysis": cognitive_analysis,
+                "personal_analysis": personal_analysis,
+                "conclusion": conclusion,
+                "cognitive_synthesis": cognitive_synthesis,
+                "personal_synthesis": personal_synthesis,
+                "motor_synthesis": motor_synthesis,
+                "suggestions_to_school": suggestions_to_school,
+                "suggestions_to_classroom_team": suggestions_to_classroom_team,
+                "suggestions_to_family": suggestions_to_family,
+                "suggestions_to_student": suggestions_to_student,
+                "other_suggestions": other_suggestions,
+                "professional_full_name": professional_full_name,
+                "professional_identification_number": professional_identification_number,
+                "professional_registration_number": professional_registration_number,
+                "professional_specialty": professional_specialty,
             }
+            # Pedagógica: filas 1 a 10
+            for row in range(1, 11):
+                for col in range(1, 5):
+                    key = f"scale_{row}_{col}"
+                    val_ped = ped_by_indicator.get(row)
+                    c = _value_to_col(val_ped) if val_ped else None
+                    replacements[key] = "X" if c == col else ""
+            # Social/comunicativa: scale_11_1 .. scale_20_4; en BD vienen como indicador 1..10 → mapear a fila 11..20
+            for row in range(11, 21):
+                for col in range(1, 5):
+                    key = f"scale_{row}_{col}"
+                    social_indicator = row - 10  # indicador 1→fila11, 2→fila12, ... 10→fila20
+                    val_soc = soc_by_indicator.get(social_indicator)
+                    c = _value_to_col(val_soc) if val_soc else None
+                    replacements[key] = "X" if c == col else ""
 
             template_path = Path("files/original_student_files") / "psychopedagogical_evaluation.docx"
             if not template_path.exists():

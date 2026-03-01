@@ -148,6 +148,42 @@ def index(student_item: StudentList, session_user: UserLogin = Depends(get_curre
         }
     )
 
+@students.get("/counts_by_sen_type_and_pie_years")
+def counts_by_sen_type_and_pie_years(
+    school_id: Optional[int] = Query(None, description="Filter by school (optional; uses session school if not provided)"),
+    session_user: UserLogin = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Count of students by course and NEE type, split by years in PIE (one_year / more_than_one_year).
+    Returns by_course: each course has by_type and totals.
+    """
+    customer_id = session_user.customer_id if session_user else None
+    school_id_resolved = school_id if school_id is not None else (session_user.school_id if session_user else None)
+    if customer_id and not school_id_resolved:
+        schools_list = SchoolClass(db).get_all(page=0, customer_id=customer_id)
+        if isinstance(schools_list, list) and len(schools_list) > 0:
+            school_id_resolved = schools_list[0].get("id")
+    result = StudentClass(db).get_counts_by_sen_type_and_pie_years(school_id=school_id_resolved)
+    if isinstance(result, dict) and result.get("status") == "error":
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "status": 500,
+                "message": result.get("message", "Error fetching counts"),
+                "data": None
+            },
+        )
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "status": 200,
+            "message": "Counts by NEE type and years in PIE",
+            "data": result
+        },
+    )
+
+
 @students.post("/totals")
 def totals(session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
     customer_id = session_user.customer_id if session_user else None
