@@ -1,6 +1,6 @@
 from datetime import datetime
-from sqlalchemy import func
-from app.backend.db.models import CourseModel, TeachingModel, ProfessionalTeachingCourseModel, StudentModel, StudentAcademicInfoModel
+from sqlalchemy import func, case
+from app.backend.db.models import CourseModel, TeachingModel, ProfessionalTeachingCourseModel, StudentModel, StudentAcademicInfoModel, SpecialEducationalNeedModel
 
 class CourseClass:
     def __init__(self, db):
@@ -16,15 +16,20 @@ class CourseClass:
                 CourseModel.added_date,
                 CourseModel.updated_date,
                 TeachingModel.teaching_name,
-                func.count(StudentModel.id).label('total_students')
+                func.count(StudentModel.id).label('total_students'),
+                func.count(case((StudentAcademicInfoModel.special_educational_need_id.isnot(None), 1))).label('total_students_sen'),
+                func.count(case((SpecialEducationalNeedModel.special_educational_need_type_id.isnot(None), 1))).label('total_students_tsen'),
             ).join(
                 TeachingModel, CourseModel.teaching_id == TeachingModel.id
             ).outerjoin(
                 StudentAcademicInfoModel, CourseModel.id == StudentAcademicInfoModel.course_id
             ).outerjoin(
-                StudentModel, 
-                (StudentAcademicInfoModel.student_id == StudentModel.id) & 
-                (StudentModel.deleted_status_id == 0)
+                StudentModel,
+                (StudentAcademicInfoModel.student_id == StudentModel.id) & (StudentModel.deleted_status_id == 0)
+            ).outerjoin(
+                SpecialEducationalNeedModel,
+                (StudentAcademicInfoModel.special_educational_need_id == SpecialEducationalNeedModel.id)
+                & (SpecialEducationalNeedModel.deleted_status_id == 0),
             )
 
             # Filtrar por school_id si se proporciona
@@ -79,6 +84,8 @@ class CourseClass:
                     "course_name": course.course_name,
                     "teaching_name": course.teaching_name,
                     "total_students": course.total_students,
+                    "total_students_sen": getattr(course, "total_students_sen", 0) or 0,
+                    "total_students_tsen": getattr(course, "total_students_tsen", 0) or 0,
                     "added_date": course.added_date.strftime("%Y-%m-%d %H:%M:%S") if course.added_date else None,
                     "updated_date": course.updated_date.strftime("%Y-%m-%d %H:%M:%S") if course.updated_date else None
                 } for course in data]
@@ -101,6 +108,8 @@ class CourseClass:
                     "course_name": course.course_name,
                     "teaching_name": course.teaching_name,
                     "total_students": course.total_students,
+                    "total_students_sen": getattr(course, "total_students_sen", 0) or 0,
+                    "total_students_tsen": getattr(course, "total_students_tsen", 0) or 0,
                     "added_date": course.added_date.strftime("%Y-%m-%d %H:%M:%S") if course.added_date else None,
                     "updated_date": course.updated_date.strftime("%Y-%m-%d %H:%M:%S") if course.updated_date else None
                 } for course in data]
