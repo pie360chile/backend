@@ -15,6 +15,7 @@ from app.backend.classes.family_report_class import FamilyReportClass
 from app.backend.classes.interconsultation_class import InterconsultationClass
 from app.backend.classes.guardian_attendance_certificate_class import GuardianAttendanceCertificateClass
 from app.backend.classes.psychopedagogical_evaluation_class import PsychopedagogicalEvaluationClass
+from app.backend.classes.conners_teacher_evaluation_class import ConnersTeacherEvaluationClass
 from app.backend.db.database import get_db
 from app.backend.db.models import (
     FolderModel,
@@ -1437,7 +1438,7 @@ async def generate_document(
         document = DocumentsClass(db)
         document_result = document.get(document_id)
         # Documentos 3,4,7,8,18,19,22,23,24,25,27 se pueden generar aunque no existan en la tabla documents
-        known_generable = (3, 4, 7, 8, 18, 19, 22, 23, 24, 25, 27)
+        known_generable = (3, 4, 7, 8, 18, 19, 22, 23, 24, 25, 27, 29)
         if isinstance(document_result, dict) and document_result.get("status") == "error":
             if document_id in known_generable:
                 document_result = {"document_type_id": document_id}
@@ -3250,6 +3251,72 @@ async def generate_document(
                     content={
                         "status": 500,
                         "message": result.get("message", "Error generando certificado Ley TEA"),
+                        "data": None,
+                    },
+                )
+            return FileResponse(
+                path=result["file_path"],
+                filename=result["filename"],
+                media_type="application/pdf",
+            )
+        
+        # Si document_id = 29, generar Test de Conners (PDF) desde cero; datos de conners_teacher_evaluations
+        if document_id == 29:
+            conners_service = ConnersTeacherEvaluationClass(db)
+            conners_result = conners_service.get_by_student_id(student_id, latest_only=True)
+            if not conners_result or conners_result.get("status") != "success" or not conners_result.get("data"):
+                return JSONResponse(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    content={
+                        "status": 404,
+                        "message": "No hay evaluación Conners para este estudiante. Cree una desde conners_teacher_evaluations/store.",
+                        "data": None,
+                    },
+                )
+            eval_data = conners_result["data"]
+            student_data = student_result.get("student_data", {}) if isinstance(student_result, dict) else {}
+            personal = student_data.get("personal_data") or {}
+            student_full_name = f"{personal.get('names') or ''} {personal.get('father_lastname') or ''} {personal.get('mother_lastname') or ''}".strip()
+            if not student_full_name:
+                student_full_name = f"Estudiante {student_id}"
+            student_rut = student_data.get("identification_number") or personal.get("identification_number") or ""
+            born_raw = personal.get("born_date") or student_data.get("born_date")
+            student_born_date = ""
+            if born_raw:
+                try:
+                    s = str(born_raw).strip()[:10]
+                    if len(s) == 10 and s[4] == "-" and s[7] == "-":
+                        d = datetime.strptime(s, "%Y-%m-%d").date()
+                        student_born_date = d.strftime("%d/%m/%Y")
+                    else:
+                        student_born_date = s
+                except Exception:
+                    student_born_date = str(born_raw)[:10] if born_raw else ""
+            conners_data = {
+                "student_full_name": student_full_name,
+                "student_rut": student_rut,
+                "student_born_date": student_born_date,
+                "evaluation_date": eval_data.get("evaluation_date") or "",
+                "evaluator_name": eval_data.get("evaluator_name") or "",
+                "evaluation_type": eval_data.get("evaluation_type") or "ingreso",
+                "comments_observations": eval_data.get("comments_observations") or "",
+                "total_score": eval_data.get("total_score"),
+                "scores": eval_data.get("scores") or [],
+                "conduct_responses": eval_data.get("conduct_responses") or [],
+            }
+            result = DocumentsClass.generate_document_pdf(
+                document_id=29,
+                document_data=conners_data,
+                db=db,
+                template_path=None,
+                output_directory="files/system/students",
+            )
+            if result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    content={
+                        "status": 500,
+                        "message": result.get("message", "Error generando PDF Conners"),
                         "data": None,
                     },
                 )

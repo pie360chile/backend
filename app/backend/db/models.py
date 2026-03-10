@@ -1,5 +1,5 @@
 from app.backend.db.database import Base
-from sqlalchemy import Column, Integer, String, DateTime, Date, Time, ForeignKey, Float, Boolean, Text, Numeric
+from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Date, Time, ForeignKey, Float, Boolean, Text, Numeric
 from datetime import datetime
 
 class AIConversationModel(Base):
@@ -1309,6 +1309,45 @@ class PsychopedagogicalEvaluationScaleModel(Base):
     indicator_number = Column(Integer, nullable=False)  # 1-10
     value = Column(String(10), nullable=False)  # '1', '2', '3', 'N/O'
     created_at = Column(DateTime, nullable=True)
+
+
+class ConnersTeacherEvaluationModel(Base):
+    """Document 29: Conners Teacher Abbreviated + Conduct – header (one row per form)."""
+    __tablename__ = 'conners_teacher_evaluations'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    student_id = Column(BigInteger, nullable=False)  # BIGINT UNSIGNED; FK to students.id optional via ALTER
+    evaluation_date = Column(Date, nullable=False)
+    evaluator_name = Column(String(255), nullable=False, default='')
+    evaluation_type = Column(String(50), nullable=False, default='ingreso')  # ENUM: ingreso | reevaluacion
+    comments_observations = Column(Text, nullable=True)
+    total_score = Column(Integer, nullable=True)  # TINYINT UNSIGNED: sum of 10 items (0-30)
+    created_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
+
+
+class ConnersTeacherScoreModel(Base):
+    """Document 29: Conners 10-item scale (one row per item; score 0-3)."""
+    __tablename__ = 'conners_teacher_scores'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    evaluation_id = Column(
+        Integer, ForeignKey('conners_teacher_evaluations.id', ondelete='CASCADE', onupdate='CASCADE'), nullable=False
+    )
+    item_index = Column(Integer, nullable=False)  # TINYINT 1-10
+    score = Column(Integer, nullable=False)  # TINYINT 0-3 (Nada/Un poco/Bastante/Mucho)
+
+
+class ConnersConductResponseModel(Base):
+    """Document 29: Conduct questionnaire 18 items (one row per item; response n/p/b/m)."""
+    __tablename__ = 'conners_conduct_responses'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    evaluation_id = Column(
+        Integer, ForeignKey('conners_teacher_evaluations.id', ondelete='CASCADE', onupdate='CASCADE'), nullable=False
+    )
+    item_index = Column(Integer, nullable=False)  # TINYINT 1-18
+    response = Column(String(1), nullable=False)  # ENUM n,p,b,m (Nada/Poco/Bastante/Mucho)
 
 
 class FamilyReportModel(Base):

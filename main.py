@@ -83,6 +83,7 @@ from app.backend.routers.course_teacher_record_activities import course_teacher_
 from app.backend.routers.course_record_supports import course_record_supports
 from app.backend.routers.course_learning_achievements import course_learning_achievements
 from app.backend.routers.psychopedagogical_evaluations import psychopedagogical_evaluations
+from app.backend.routers.conners_teacher_evaluations import conners_teacher_evaluations
 from app.backend.routers.diagnosis_summary import diagnosis_summary
 
 # OpenAPI (Swagger): FastAPI genera automáticamente el esquema desde rutas y modelos Pydantic.
@@ -224,6 +225,7 @@ app.include_router(course_teacher_record_activities)
 app.include_router(course_record_supports)
 app.include_router(course_learning_achievements)
 app.include_router(psychopedagogical_evaluations)
+app.include_router(conners_teacher_evaluations)
 app.include_router(diagnosis_summary)
 
 if __name__ == "__main__":

@@ -1475,6 +1475,35 @@ class UpdatePsychopedagogicalEvaluationInfo(BaseModel):
     social_communicative_scale_10: Optional[str] = None
 
 
+# Document 29: Conners Teacher Abbreviated + Conduct
+class ConnersTeacherScoreItem(BaseModel):
+    item_index: int  # 1-10
+    score: int  # 0-3
+
+class ConnersConductResponseItem(BaseModel):
+    item_index: int  # 1-18
+    response: str  # n | p | b | m
+
+class StoreConnersTeacherEvaluation(BaseModel):
+    student_id: int
+    evaluation_date: str  # YYYY-MM-DD
+    evaluator_name: str = ''
+    evaluation_type: str = 'ingreso'  # ingreso | reevaluacion
+    comments_observations: Optional[str] = None
+    total_score: Optional[int] = None  # 0-30
+    scores: Optional[List[ConnersTeacherScoreItem]] = None  # 10 items
+    conduct_responses: Optional[List[ConnersConductResponseItem]] = None  # 18 items
+
+class UpdateConnersTeacherEvaluation(BaseModel):
+    evaluation_date: Optional[str] = None
+    evaluator_name: Optional[str] = None
+    evaluation_type: Optional[str] = None
+    comments_observations: Optional[str] = None
+    total_score: Optional[int] = None
+    scores: Optional[List[ConnersTeacherScoreItem]] = None
+    conduct_responses: Optional[List[ConnersConductResponseItem]] = None
+
+
 # Event schemas
 class EventList(BaseModel):
     page: Optional[int] = None

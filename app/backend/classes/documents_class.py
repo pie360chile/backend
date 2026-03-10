@@ -9,7 +9,7 @@ import fitz  # PyMuPDF
 from docx import Document
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, date
 from app.backend.db.models import DocumentModel, BirthCertificateDocumentModel, HealthEvaluationModel, FolderModel
 
 # pypdf imports (opcional, solo si está instalado)
@@ -133,6 +133,15 @@ class DocumentsClass:
                 return DocumentsClass._generate_tea_certificate_from_scratch(
                     document_id=document_id,
                     cert_data=document_data,
+                    db=db,
+                    output_directory=output_directory
+                )
+            
+            # Si es documento 29 (Test de Conners - Profesor Abreviado + Cuestionario de Conducta)
+            if document_id == 29:
+                return DocumentsClass._generate_conners_teacher_from_scratch(
+                    document_id=document_id,
+                    conners_data=document_data,
                     db=db,
                     output_directory=output_directory
                 )
@@ -4536,6 +4545,340 @@ class DocumentsClass:
             return {
                 "status": "error",
                 "message": f"Error generando certificado Ley TEA: {str(e)}",
+                "filename": None,
+                "file_path": None
+            }
+
+    @staticmethod
+    def _generate_conners_teacher_from_scratch(
+        document_id: int,
+        conners_data: Dict[str, Any],
+        db: Optional[Session] = None,
+        output_directory: str = "files/system/students"
+    ) -> Dict[str, Any]:
+        """
+        Genera el PDF del Test de Conners (Documento 29) desde cero.
+        Dos partes con cuadrados: 1) Escala Conners 10 ítems (0-3), 2) Cuestionario de conducta 18 ítems (N/P/B/M).
+        """
+        # Textos de los 10 ítems de la Escala Conners (II)
+        CONNERS_SCALE_ITEMS = [
+            "Inquieto o hiperactivo",
+            "Excitable, impulsivo",
+            "Molesta a otros niños",
+            "No termina lo que empieza—poca capacidad de atención",
+            "Se mueve constantemente",
+            "Desatento, se distrae con facilidad",
+            "Exige que se cumplan sus demandas de inmediato—se frustra con facilidad",
+            "Llora a menudo y con facilidad",
+            "Los cambios de humor son rápidos y drásticos",
+            "Estallidos de mal genio, conducta explosiva e impredecible",
+        ]
+        # Textos de los 18 ítems del Cuestionario de Conducta (III)
+        CONNERS_CONDUCT_ITEMS = [
+            "Emite sonidos molestos en situaciones inapropiadas.",
+            "Habla en exceso.",
+            "Interrumpe o se entromete en conversaciones o juegos.",
+            "No espera su turno cuando debe hacer fila o en juegos.",
+            "Responde inesperadamente o antes de que se haya concluido una pregunta.",
+            "Tiene dificultades para permanecer sentado cuando se le pide.",
+            "Se levanta en situaciones en que debería permanecer sentado.",
+            "Corre o salta en situaciones inapropiadas.",
+            "Tiene dificultades para jugar o dedicarse tranquilamente a actividades de ocio.",
+            "Está en marcha o actúa como si tuviera un motor.",
+            "Pierde cosas necesarias para tareas o actividades.",
+            "Se distrae con estímulos externos.",
+            "Muestra olvido en las actividades cotidianas.",
+            "No sigue instrucciones y no termina tareas.",
+            "No se lleva bien con la mayoría de sus compañeros/as.",
+            "Evita o se muestra reacio a tareas que requieren esfuerzo mental sostenido.",
+            "Comete frecuentes y numerosos errores, por olvidar o desatender detalles.",
+            "Tiene dificultades de aprendizaje escolar.",
+        ]
+        try:
+            if not REPORTLAB_AVAILABLE:
+                return {
+                    "status": "error",
+                    "message": "ReportLab no está instalado. Instala con: pip install reportlab",
+                    "filename": None,
+                    "file_path": None
+                }
+
+            def g(k: str, d: str = ""):
+                v = conners_data.get(k)
+                if v is None:
+                    return d
+                return str(v).strip() if v else d
+
+            student_name = g("student_full_name", "estudiante").replace(" ", "_")
+            unique_filename = f"conners_teacher_{student_name}_{uuid.uuid4().hex[:8]}.pdf"
+            output_file = Path(output_directory) / unique_filename
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+
+            # Mismos márgenes y criterio de diseño que otros PDFs (cert. egreso PIE, cert. TEA)
+            doc = SimpleDocTemplate(
+                str(output_file),
+                pagesize=A4,
+                rightMargin=2.5*cm,
+                leftMargin=2.5*cm,
+                topMargin=2.5*cm,
+                bottomMargin=2.5*cm
+            )
+            elements = []
+            styles = getSampleStyleSheet()
+
+            # Título: mismo criterio que certificados (centrado, negrita)
+            title_style = ParagraphStyle(
+                'ConnersTitle',
+                parent=styles['Heading1'],
+                fontSize=16,
+                textColor=colors.HexColor('#000000'),
+                spaceAfter=20,
+                spaceBefore=12,
+                alignment=TA_CENTER,
+                fontName='Helvetica-Bold'
+            )
+            section_style = ParagraphStyle(
+                'ConnersSection',
+                parent=styles['Heading2'],
+                fontSize=12,
+                textColor=colors.HexColor('#000000'),
+                spaceAfter=8,
+                spaceBefore=12,
+                fontName='Helvetica-Bold'
+            )
+            normal_style = ParagraphStyle(
+                'ConnersNormal',
+                parent=styles['Normal'],
+                fontSize=11,
+                textColor=colors.HexColor('#000000'),
+                leading=16,
+                spaceAfter=8
+            )
+            cell_style_center = ParagraphStyle(
+                'ConnersCell',
+                parent=styles['Normal'],
+                fontSize=10,
+                alignment=TA_CENTER,
+                textColor=colors.HexColor('#000000')
+            )
+            cell_style_left = ParagraphStyle(
+                'ConnersCellLeft',
+                parent=styles['Normal'],
+                fontSize=9,
+                alignment=TA_LEFT,
+                textColor=colors.HexColor('#000000'),
+                leftIndent=2,
+                rightIndent=2,
+            )
+
+            # Encabezado
+            elements.append(Paragraph("Test de Conners", title_style))
+            elements.append(Spacer(1, 0.2*inch))
+
+            student_full = DocumentsClass._escape_html_for_paragraph(g("student_full_name", "—"))
+            student_rut = DocumentsClass._escape_html_for_paragraph(g("student_rut", "—"))
+            eval_date_raw = g("evaluation_date", "")
+            eval_date = "—"
+            if eval_date_raw:
+                try:
+                    s = str(eval_date_raw).strip()[:10]
+                    if len(s) == 10 and s[4] == "-" and s[7] == "-":
+                        d = datetime.strptime(s, "%Y-%m-%d").date()
+                        eval_date = d.strftime("%d/%m/%Y")
+                    else:
+                        eval_date = eval_date_raw
+                except Exception:
+                    eval_date = eval_date_raw if eval_date_raw else "—"
+            evaluator = DocumentsClass._escape_html_for_paragraph(g("evaluator_name", "—"))
+            eval_type = g("evaluation_type", "ingreso")
+            eval_type_label = "Reevaluación" if eval_type == "reevaluacion" else "Ingreso"
+            total_score = conners_data.get("total_score")
+            total_score_str = str(total_score) if total_score is not None else "—"
+            comments = DocumentsClass._escape_html_for_paragraph(g("comments_observations", ""))
+
+            born_date_str = DocumentsClass._escape_html_for_paragraph(g("student_born_date", "—"))
+            # Edad a la fecha de evaluación (años y meses)
+            age_str = "—"
+            born_raw = g("student_born_date", "")
+            ref_date = None
+            if eval_date_raw:
+                try:
+                    s = str(eval_date_raw).strip()[:10]
+                    if len(s) == 10 and s[4] == "-" and s[7] == "-":
+                        ref_date = datetime.strptime(s, "%Y-%m-%d").date()
+                except Exception:
+                    pass
+            if ref_date is None:
+                ref_date = date.today()
+            if born_raw:
+                try:
+                    # Puede venir DD/MM/YYYY o YYYY-MM-DD
+                    s = str(born_raw).strip()
+                    if len(s) >= 10 and s[2] == "/" and s[5] == "/":
+                        birth_d = datetime.strptime(s[:10], "%d/%m/%Y").date()
+                    elif len(s) >= 10 and s[4] == "-" and s[7] == "-":
+                        birth_d = datetime.strptime(s[:10], "%Y-%m-%d").date()
+                    else:
+                        birth_d = None
+                    if birth_d:
+                        years = ref_date.year - birth_d.year
+                        if (ref_date.month, ref_date.day) < (birth_d.month, birth_d.day):
+                            years -= 1
+                        # Meses desde el último cumpleaños (siempre mostrar año y mes)
+                        if (ref_date.month, ref_date.day) >= (birth_d.month, birth_d.day):
+                            months = (ref_date.month - birth_d.month) + (0 if ref_date.day >= birth_d.day else -1)
+                        else:
+                            months = (12 - birth_d.month + ref_date.month - 1) + (0 if ref_date.day >= birth_d.day else -1)
+                        if months < 0:
+                            months += 12
+                            years -= 1
+                        if years < 0:
+                            age_str = "—"
+                        else:
+                            age_str = f"{years} año{'s' if years != 1 else ''} {months} mes{'es' if months != 1 else ''}"
+                except Exception:
+                    pass
+            age_str = DocumentsClass._escape_html_for_paragraph(age_str)
+            info_data = [
+                [Paragraph("<b>RUT:</b>", normal_style), Paragraph(student_rut, normal_style)],
+                [Paragraph("<b>Estudiante:</b>", normal_style), Paragraph(student_full, normal_style)],
+                [Paragraph("<b>Fecha de&nbsp;nacimiento:</b>", normal_style), Paragraph(born_date_str, normal_style)],
+                [Paragraph("<b>Edad:</b>", normal_style), Paragraph(age_str, normal_style)],
+                [Paragraph("<b>Fecha evaluación:</b>", normal_style), Paragraph(eval_date, normal_style)],
+                [Paragraph("<b>Evaluador(a):</b>", normal_style), Paragraph(evaluator, normal_style)],
+                [Paragraph("<b>Tipo:</b>", normal_style), Paragraph(eval_type_label, normal_style)],
+            ]
+            info_table = Table(info_data, colWidths=[5.5*cm, 10.5*cm])
+            info_table.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 6),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+                ('TOPPADDING', (0, 0), (-1, -1), 4),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),
+            ]))
+            elements.append(info_table)
+            elements.append(Spacer(1, 0.25*inch))
+
+            # --- II. Escala Conners (10 ítems) - cuadrados 0,1,2,3 ---
+            elements.append(Paragraph("II. Escala Conners (10 ítems)", section_style))
+            elements.append(Paragraph("0 = Nada,  1 = Un poco,  2 = Bastante,  3 = Mucho", normal_style))
+            elements.append(Spacer(1, 0.1*inch))
+
+            scores_list = conners_data.get("scores") or []
+            scores_by_item = {int(s.get("item_index", 0)): int(s.get("score", 0)) for s in scores_list if s.get("item_index") is not None}
+
+            # Ancho útil A4 menos márgenes (21 - 5 = 16 cm); columna ítem ancha para el texto
+            table_width = 16*cm
+            col_item = 9*cm
+            col_opt = (table_width - col_item) / 4
+            col_widths = [col_item, col_opt, col_opt, col_opt, col_opt]
+            header_cells_1 = [
+                Paragraph(DocumentsClass._escape_html_for_paragraph("Ítem"), cell_style_center),
+                Paragraph("Nada<br/>0", cell_style_center),
+                Paragraph("Un poco<br/>1", cell_style_center),
+                Paragraph("Bastante<br/>2", cell_style_center),
+                Paragraph("Mucho<br/>3", cell_style_center),
+            ]
+            table_data_1 = [header_cells_1]
+            for i in range(1, 11):
+                sc = scores_by_item.get(i, -1)
+                desc = CONNERS_SCALE_ITEMS[i - 1] if i <= len(CONNERS_SCALE_ITEMS) else ""
+                item_text = f"{i}. {desc}" if desc else str(i)
+                row = [Paragraph(DocumentsClass._escape_html_for_paragraph(item_text), cell_style_left)]
+                for opt in range(4):
+                    cell_text = "X" if sc == opt else ""
+                    row.append(Paragraph(cell_text, cell_style_center))
+                table_data_1.append(row)
+
+            tbl1 = Table(table_data_1, colWidths=col_widths)
+            tbl1.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+                ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 4),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+                ('TOPPADDING', (0, 0), (-1, -1), 6),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#333333')),
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#E0E0E0')),
+            ]))
+            elements.append(tbl1)
+            elements.append(Spacer(1, 0.12*inch))
+            elements.append(Paragraph(f"<b>Puntaje total (0-30):</b> {total_score_str}", normal_style))
+            elements.append(Spacer(1, 0.25*inch))
+
+            # --- III. Cuestionario de conducta (18 ítems) - en la segunda hoja ---
+            elements.append(PageBreak())
+            elements.append(Paragraph("III. Cuestionario de Conducta (18 ítems)", section_style))
+            elements.append(Paragraph("N = Nada,  P = Poco,  B = Bastante,  M = Mucho", normal_style))
+            elements.append(Spacer(1, 0.1*inch))
+
+            conduct_list = conners_data.get("conduct_responses") or []
+            conduct_by_item = {}
+            for r in conduct_list:
+                idx = r.get("item_index")
+                if idx is not None:
+                    val = (r.get("response") or "").strip().lower()[:1]
+                    if val in ("n", "p", "b", "m"):
+                        conduct_by_item[int(idx)] = val
+
+            col_widths2 = [col_item, col_opt, col_opt, col_opt, col_opt]
+            header_cells_2 = [
+                Paragraph(DocumentsClass._escape_html_for_paragraph("Ítem"), cell_style_center),
+                Paragraph("Nada<br/>N", cell_style_center),
+                Paragraph("Poco<br/>P", cell_style_center),
+                Paragraph("Bastante<br/>B", cell_style_center),
+                Paragraph("Mucho<br/>M", cell_style_center),
+            ]
+            table_data_2 = [header_cells_2]
+            for i in range(1, 19):
+                resp = conduct_by_item.get(i, "")
+                desc = CONNERS_CONDUCT_ITEMS[i - 1] if i <= len(CONNERS_CONDUCT_ITEMS) else ""
+                item_text = f"{i}. {desc}" if desc else str(i)
+                row = [Paragraph(DocumentsClass._escape_html_for_paragraph(item_text), cell_style_left)]
+                for opt in ["n", "p", "b", "m"]:
+                    cell_text = "X" if resp == opt else ""
+                    row.append(Paragraph(cell_text, cell_style_center))
+                table_data_2.append(row)
+
+            tbl2 = Table(table_data_2, colWidths=col_widths2)
+            tbl2.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+                ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 4),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+                ('TOPPADDING', (0, 0), (-1, -1), 6),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#333333')),
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#E0E0E0')),
+            ]))
+            elements.append(tbl2)
+            elements.append(Spacer(1, 0.3*inch))
+
+            # --- IV. Comentarios y observaciones ---
+            elements.append(Paragraph("IV. Comentarios y observaciones", section_style))
+            elements.append(Paragraph(comments if comments else "—", normal_style))
+
+            doc.build(elements)
+            return {
+                "status": "success",
+                "message": "PDF Conners generado exitosamente",
+                "filename": unique_filename,
+                "file_path": str(output_file)
+            }
+        except ImportError:
+            return {
+                "status": "error",
+                "message": "ReportLab no está instalado. Instala con: pip install reportlab",
+                "filename": None,
+                "file_path": None
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Error generando PDF Conners: {str(e)}",
                 "filename": None,
                 "file_path": None
             }
