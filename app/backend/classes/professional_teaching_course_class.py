@@ -1,5 +1,9 @@
 from datetime import datetime
-from app.backend.db.models import ProfessionalTeachingCourseModel
+from app.backend.db.models import (
+    ProfessionalTeachingCourseModel,
+    ProfessionalModel,
+    CareerTypeModel,
+)
 
 
 class ProfessionalTeachingCourseClass:
@@ -31,23 +35,33 @@ class ProfessionalTeachingCourseClass:
                 # -1 o None: solo devolver activos (deleted_status_id == 0)
                 q = q.filter(ProfessionalTeachingCourseModel.deleted_status_id == 0)
             rows = q.all()
-            data = [
-                {
+            data = []
+            for r in rows:
+                especialidad = self._get_especialidad_for_professional(r.professional_id)
+                data.append({
                     "id": r.id,
                     "professional_id": r.professional_id,
                     "teaching_id": r.teaching_id,
                     "course_id": r.course_id,
                     "teacher_type_id": r.teacher_type_id,
                     "subject": r.subject,
+                    "specialty": especialidad,
                     "deleted_status_id": r.deleted_status_id,
                     "added_date": r.added_date.isoformat() if r.added_date else None,
                     "updated_date": r.updated_date.isoformat() if r.updated_date else None,
-                }
-                for r in rows
-            ]
+                })
             return {"status": "success", "data": data}
         except Exception as e:
             return {"status": "error", "message": str(e), "data": []}
+
+    def _get_especialidad_for_professional(self, professional_id):
+        if not professional_id:
+            return None
+        prof = self.db.query(ProfessionalModel).filter(ProfessionalModel.id == professional_id).first()
+        if not prof or not prof.career_type_id:
+            return None
+        ct = self.db.query(CareerTypeModel).filter(CareerTypeModel.id == prof.career_type_id).first()
+        return (ct.career_type or "").strip() if ct and ct.career_type else None
 
     def get_by_teacher_type(self, teacher_type_id: int, course_id: int):
         """Lista asignaciones por tipo de profesional (regular/especialista) y course_id con deleted_status_id == 0."""
@@ -61,20 +75,21 @@ class ProfessionalTeachingCourseClass:
                 )
                 .all()
             )
-            data = [
-                {
+            data = []
+            for r in rows:
+                especialidad = self._get_especialidad_for_professional(r.professional_id)
+                data.append({
                     "id": r.id,
                     "professional_id": r.professional_id,
                     "teaching_id": r.teaching_id,
                     "course_id": r.course_id,
                     "teacher_type_id": r.teacher_type_id,
                     "subject": r.subject,
+                    "specialty": especialidad,
                     "deleted_status_id": r.deleted_status_id,
                     "added_date": r.added_date.isoformat() if r.added_date else None,
                     "updated_date": r.updated_date.isoformat() if r.updated_date else None,
-                }
-                for r in rows
-            ]
+                })
             return {"status": "success", "data": data}
         except Exception as e:
             return {"status": "error", "message": str(e), "data": []}
@@ -87,6 +102,7 @@ class ProfessionalTeachingCourseClass:
             ).first()
             if not row:
                 return {"status": "error", "message": "Asignaci?n no encontrada.", "data": None}
+            especialidad = self._get_especialidad_for_professional(row.professional_id)
             data = {
                 "id": row.id,
                 "professional_id": row.professional_id,
@@ -94,6 +110,7 @@ class ProfessionalTeachingCourseClass:
                 "course_id": row.course_id,
                 "teacher_type_id": row.teacher_type_id,
                 "subject": row.subject,
+                "specialty": especialidad,
                 "deleted_status_id": row.deleted_status_id,
                 "added_date": row.added_date.isoformat() if row.added_date else None,
                 "updated_date": row.updated_date.isoformat() if row.updated_date else None,
