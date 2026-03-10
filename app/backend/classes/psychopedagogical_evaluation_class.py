@@ -71,6 +71,7 @@ def _info_to_dict(row: PsychopedagogicalEvaluationInfoModel) -> dict:
         "school_history_background": row.school_history_background,
         "cognitive_analysis": row.cognitive_analysis,
         "personal_analysis": row.personal_analysis,
+        "motor_analysis": row.motor_analysis,
         "cognitive_synthesis": row.cognitive_synthesis,
         "personal_synthesis": row.personal_synthesis,
         "motor_synthesis": row.motor_synthesis,
@@ -180,9 +181,15 @@ class PsychopedagogicalEvaluationClass:
                 created_at=now,
             ))
 
+    def _normalize_motor_analysis(self, data: dict) -> None:
+        """Asegura que motor_analysis esté en data (por si viene como moto_analysis)."""
+        if "motor_analysis" not in data and "moto_analysis" in data:
+            data["motor_analysis"] = data["moto_analysis"]
+
     def store(self, data: dict) -> Any:
         """Crea o actualiza evaluación por estudiante: si ya existe una para el student_id, se actualiza; si no, se crea."""
         try:
+            self._normalize_motor_analysis(data)
             student_id = int(data.get("student_id"))
             if not student_id:
                 return {"status": "error", "message": "student_id es requerido.", "data": None}
@@ -209,6 +216,7 @@ class PsychopedagogicalEvaluationClass:
                 school_history_background=(data.get("school_history_background") or "").strip() or None,
                 cognitive_analysis=(data.get("cognitive_analysis") or "").strip() or None,
                 personal_analysis=(data.get("personal_analysis") or "").strip() or None,
+                motor_analysis=(data.get("motor_analysis") or "").strip() or None,
                 cognitive_synthesis=(data.get("cognitive_synthesis") or "").strip() or None,
                 personal_synthesis=(data.get("personal_synthesis") or "").strip() or None,
                 motor_synthesis=(data.get("motor_synthesis") or "").strip() or None,
@@ -245,6 +253,7 @@ class PsychopedagogicalEvaluationClass:
     def update(self, id: int, data: dict) -> Any:
         """Actualiza evaluación por id (y reemplaza scales si vienen en data)."""
         try:
+            self._normalize_motor_analysis(data)
             row = self.db.query(PsychopedagogicalEvaluationInfoModel).filter(PsychopedagogicalEvaluationInfoModel.id == id).first()
             if not row:
                 return {"status": "error", "message": "Registro no encontrado.", "data": None}
@@ -270,6 +279,7 @@ class PsychopedagogicalEvaluationClass:
             set_str("school_history_background", "school_history_background")
             set_str("cognitive_analysis", "cognitive_analysis")
             set_str("personal_analysis", "personal_analysis")
+            set_str("motor_analysis", "motor_analysis")
             set_str("cognitive_synthesis", "cognitive_synthesis")
             set_str("personal_synthesis", "personal_synthesis")
             set_str("motor_synthesis", "motor_synthesis")

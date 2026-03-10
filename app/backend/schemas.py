@@ -1362,6 +1362,7 @@ class StorePsychopedagogicalEvaluationInfo(BaseModel):
     school_history_background: Optional[str] = None
     cognitive_analysis: Optional[str] = None
     personal_analysis: Optional[str] = None
+    motor_analysis: Optional[str] = None  # alias moto_analysis aceptado en clase
     cognitive_synthesis: Optional[str] = None
     personal_synthesis: Optional[str] = None
     motor_synthesis: Optional[str] = None
@@ -1411,6 +1412,7 @@ class UpdatePsychopedagogicalEvaluationInfo(BaseModel):
     school_history_background: Optional[str] = None
     cognitive_analysis: Optional[str] = None
     personal_analysis: Optional[str] = None
+    motor_analysis: Optional[str] = None
     cognitive_synthesis: Optional[str] = None
     personal_synthesis: Optional[str] = None
     motor_synthesis: Optional[str] = None

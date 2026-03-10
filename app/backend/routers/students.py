@@ -26,7 +26,7 @@ def list_by_school_course_with_sen(
     session_user: UserLogin = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
-    """Lista estudiantes filtrados por school_id, course_id y con special_educational_need_id no nulo (solo NEE)."""
+    """Lista estudiantes con NEE o NEET (tipo 1 o 2), ordenados por nombre de la NEE/NEET y luego por nombre del estudiante."""
     result = StudentClass(db).get_by_school_course_with_sen(
         school_id=school_id,
         course_id=course_id,

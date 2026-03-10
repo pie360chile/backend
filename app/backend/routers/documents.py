@@ -2448,6 +2448,7 @@ async def generate_document(
             school_history_background = str(eval_data.get("school_history_background") or "").strip()
             cognitive_analysis = str(eval_data.get("cognitive_analysis") or "").strip()
             personal_analysis = str(eval_data.get("personal_analysis") or "").strip()
+            motor_analysis = str(eval_data.get("motor_analysis") or "").strip()
             conclusion = str(eval_data.get("conclusion") or "").strip()
             cognitive_synthesis = str(eval_data.get("cognitive_synthesis") or "").strip()
             personal_synthesis = str(eval_data.get("personal_synthesis") or "").strip()
@@ -2517,6 +2518,7 @@ async def generate_document(
                 "school_history_background": school_history_background,
                 "cognitive_analysis": cognitive_analysis,
                 "personal_analysis": personal_analysis,
+                "motor_analysis": motor_analysis,
                 "conclusion": conclusion,
                 "cognitive_synthesis": cognitive_synthesis,
                 "personal_synthesis": personal_synthesis,

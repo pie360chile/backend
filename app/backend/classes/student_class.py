@@ -31,6 +31,7 @@ class StudentClass:
                 StudentAcademicInfoModel.special_educational_need_id,
                 StudentAcademicInfoModel.course_id,
                 StudentAcademicInfoModel.sip_admission_year,
+                SpecialEducationalNeedModel.special_educational_needs.label('special_educational_need_name'),
                 StudentPersonalInfoModel.id.label('personal_id'),
                 StudentPersonalInfoModel.region_id,
                 StudentPersonalInfoModel.commune_id,
@@ -52,6 +53,9 @@ class StudentClass:
             ).outerjoin(
                 StudentAcademicInfoModel,
                 StudentModel.id == StudentAcademicInfoModel.student_id
+            ).outerjoin(
+                SpecialEducationalNeedModel,
+                StudentAcademicInfoModel.special_educational_need_id == SpecialEducationalNeedModel.id
             ).outerjoin(
                 StudentPersonalInfoModel,
                 StudentModel.id == StudentPersonalInfoModel.student_id
@@ -105,6 +109,7 @@ class StudentClass:
                     "academic_info": {
                         "id": student.academic_id,
                         "special_educational_need_id": student.special_educational_need_id,
+                        "special_educational_need_name": (getattr(student, "special_educational_need_name", None) or "").strip() or None,
                         "course_id": student.course_id,
                         "sip_admission_year": student.sip_admission_year
                     } if student.academic_id else None,
@@ -151,6 +156,7 @@ class StudentClass:
                     "academic_info": {
                         "id": student.academic_id,
                         "special_educational_need_id": student.special_educational_need_id,
+                        "special_educational_need_name": (getattr(student, "special_educational_need_name", None) or "").strip() or None,
                         "course_id": student.course_id,
                         "sip_admission_year": student.sip_admission_year
                     } if student.academic_id else None,
@@ -198,6 +204,7 @@ class StudentClass:
                 StudentAcademicInfoModel.special_educational_need_id,
                 StudentAcademicInfoModel.course_id,
                 StudentAcademicInfoModel.sip_admission_year,
+                SpecialEducationalNeedModel.special_educational_needs.label('special_educational_need_name'),
                 StudentPersonalInfoModel.id.label('personal_id'),
                 StudentPersonalInfoModel.region_id,
                 StudentPersonalInfoModel.commune_id,
@@ -220,15 +227,25 @@ class StudentClass:
                 StudentAcademicInfoModel,
                 StudentModel.id == StudentAcademicInfoModel.student_id
             ).outerjoin(
+                SpecialEducationalNeedModel,
+                StudentAcademicInfoModel.special_educational_need_id == SpecialEducationalNeedModel.id
+            ).outerjoin(
                 StudentPersonalInfoModel,
                 StudentModel.id == StudentPersonalInfoModel.student_id
             ).filter(
                 StudentModel.deleted_status_id == 0,
                 StudentModel.school_id == school_id,
                 StudentAcademicInfoModel.course_id == course_id,
-                StudentAcademicInfoModel.special_educational_need_id.isnot(None)
+                StudentAcademicInfoModel.special_educational_need_id.isnot(None),
+                SpecialEducationalNeedModel.deleted_status_id == 0,
+                SpecialEducationalNeedModel.special_educational_need_type_id.in_([1, 2]),
             )
-            query = query.order_by(StudentModel.id.desc())
+            query = query.order_by(
+                SpecialEducationalNeedModel.special_educational_need_type_id.desc(),
+                SpecialEducationalNeedModel.special_educational_needs.asc(),
+                StudentPersonalInfoModel.names.asc(),
+                StudentPersonalInfoModel.father_lastname.asc(),
+            )
             if page > 0 and items_per_page > 0:
                 total_items = query.count()
                 total_pages = (total_items + items_per_page - 1) // items_per_page if items_per_page else 0
@@ -255,6 +272,7 @@ class StudentClass:
                 "academic_info": {
                     "id": student.academic_id,
                     "special_educational_need_id": student.special_educational_need_id,
+                    "special_educational_need_name": (getattr(student, "special_educational_need_name", None) or "").strip() or None,
                     "course_id": student.course_id,
                     "sip_admission_year": student.sip_admission_year
                 } if student.academic_id else None,
@@ -293,8 +311,9 @@ class StudentClass:
 
     def get_counts_by_sen_type_and_pie_years(self, school_id=None):
         """
-        Counts students by course and NEE type (special_educational_need_type_id), split by
-        years in PIE: one_year (<=1) and more_than_one_year (>1). Returns by_course.
+        Counts students by course and NEE type, split by años en PIE:
+        one_year = primer año (years_in_pie == 0, ingresó en el año actual);
+        more_than_one_year = segundo año o más (years_in_pie >= 1). Returns by_course.
         """
         try:
             from datetime import date
@@ -349,7 +368,7 @@ class StudentClass:
                 sip_year = row.sip_admission_year
                 years_in_pie = (current_year - sip_year) if sip_year else 0
                 t = by_course[course_id]["by_type"].setdefault(type_id, {"one_year": 0, "more_than_one_year": 0})
-                if years_in_pie <= 1:
+                if years_in_pie == 0:
                     t["one_year"] += 1
                     by_course[course_id]["total_one_year"] += 1
                 else:
@@ -395,6 +414,7 @@ class StudentClass:
                 StudentAcademicInfoModel.special_educational_need_id,
                 StudentAcademicInfoModel.course_id,
                 StudentAcademicInfoModel.sip_admission_year,
+                SpecialEducationalNeedModel.special_educational_needs.label('special_educational_need_name'),
                 StudentPersonalInfoModel.id.label('personal_id'),
                 StudentPersonalInfoModel.region_id,
                 StudentPersonalInfoModel.commune_id,
@@ -417,6 +437,9 @@ class StudentClass:
                 StudentAcademicInfoModel,
                 StudentModel.id == StudentAcademicInfoModel.student_id
             ).outerjoin(
+                SpecialEducationalNeedModel,
+                StudentAcademicInfoModel.special_educational_need_id == SpecialEducationalNeedModel.id
+            ).outerjoin(
                 StudentPersonalInfoModel,
                 StudentModel.id == StudentPersonalInfoModel.student_id
             ).filter(
@@ -435,6 +458,7 @@ class StudentClass:
                     "academic_info": {
                         "id": data_query.academic_id,
                         "special_educational_need_id": data_query.special_educational_need_id,
+                        "special_educational_need_name": (getattr(data_query, "special_educational_need_name", None) or "").strip() or None,
                         "course_id": data_query.course_id,
                         "sip_admission_year": data_query.sip_admission_year
                     } if data_query.academic_id else None,

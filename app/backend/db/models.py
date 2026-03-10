@@ -1276,6 +1276,7 @@ class PsychopedagogicalEvaluationInfoModel(Base):
     school_history_background = Column(Text, nullable=True)
     cognitive_analysis = Column(Text, nullable=True)
     personal_analysis = Column(Text, nullable=True)
+    motor_analysis = Column(Text, nullable=True)
     cognitive_synthesis = Column(Text, nullable=True)
     personal_synthesis = Column(Text, nullable=True)
     motor_synthesis = Column(Text, nullable=True)
