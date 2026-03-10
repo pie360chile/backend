@@ -508,6 +508,7 @@ class StudentAcademicInfoModel(Base):
     special_educational_need_id = Column(Integer)
     course_id = Column(Integer)
     sip_admission_year = Column(Integer)
+    diagnostic_date = Column(Date, nullable=True)
     added_date = Column(DateTime)
     updated_date = Column(DateTime)
 
@@ -527,7 +528,7 @@ class StudentPersonalInfoModel(Base):
     mother_lastname = Column(String(255))
     social_name = Column(String(255))
     born_date = Column(String(255))
-    nationality = Column(String(255))
+    nationality_id = Column(Integer, nullable=True)
     address = Column(String(255))
     phone = Column(String(255))
     email = Column(String(255))
@@ -589,8 +590,10 @@ class ProfessionalTeachingCourseModel(Base):
     teaching_id = Column(Integer)
     course_id = Column(Integer)
     teacher_type_id = Column(Integer, nullable=True)  # Regular / Especialidad
+    career_type_id = Column(Integer, nullable=True)  # Especialidad de esta asignación
     deleted_status_id = Column(Integer)
     subject = Column(String(255), nullable=True)
+    hours = Column(String(255), nullable=True)
     added_date = Column(DateTime)
     updated_date = Column(DateTime)
 

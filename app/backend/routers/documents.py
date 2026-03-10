@@ -477,7 +477,11 @@ def _generate_anamnesis_docx_internal(student_id: int, db: Session) -> dict:
                     female, male = "1", "0"
                 elif "masculino" in gn or gn == "m" or "male" in gn or "hombre" in gn:
                     female, male = "0", "1"
-        birth_country = str(personal.get("nationality") or "").strip()
+        birth_country = ""
+        if personal.get("nationality_id") and db:
+            nat = db.query(NationalityModel).filter(NationalityModel.id == personal.get("nationality_id")).first()
+            if nat and nat.nationality:
+                birth_country = str(nat.nationality).strip()
         address = str(personal.get("address") or "").strip()
         phone = str(personal.get("phone") or "").strip()
         mother_language = str(personal.get("native_language") or "").strip()
@@ -2146,8 +2150,6 @@ async def generate_document(
                 nat = db.query(NationalityModel).filter(NationalityModel.id == nationality_id).first()
                 if nat:
                     student_nationality = str(nat.nationality or "").strip()
-            if not student_nationality:
-                student_nationality = str(personal.get("nationality") or "").strip()
             student_commune = ""
             if commune_id and db:
                 comm = db.query(CommuneModel).filter(CommuneModel.id == commune_id).first()

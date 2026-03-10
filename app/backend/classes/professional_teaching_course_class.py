@@ -1,8 +1,10 @@
 from datetime import datetime
+from sqlalchemy import func
 from app.backend.db.models import (
     ProfessionalTeachingCourseModel,
     ProfessionalModel,
     CareerTypeModel,
+    CourseModel,
 )
 
 
@@ -37,15 +39,15 @@ class ProfessionalTeachingCourseClass:
             rows = q.all()
             data = []
             for r in rows:
-                especialidad = self._get_especialidad_for_professional(r.professional_id)
                 data.append({
                     "id": r.id,
                     "professional_id": r.professional_id,
                     "teaching_id": r.teaching_id,
                     "course_id": r.course_id,
                     "teacher_type_id": r.teacher_type_id,
+                    "career_type_id": getattr(r, "career_type_id", None),
                     "subject": r.subject,
-                    "specialty": especialidad,
+                    "hours": r.hours,
                     "deleted_status_id": r.deleted_status_id,
                     "added_date": r.added_date.isoformat() if r.added_date else None,
                     "updated_date": r.updated_date.isoformat() if r.updated_date else None,
@@ -54,7 +56,7 @@ class ProfessionalTeachingCourseClass:
         except Exception as e:
             return {"status": "error", "message": str(e), "data": []}
 
-    def _get_especialidad_for_professional(self, professional_id):
+    def _get_specialty_for_professional(self, professional_id):
         if not professional_id:
             return None
         prof = self.db.query(ProfessionalModel).filter(ProfessionalModel.id == professional_id).first()
@@ -62,6 +64,65 @@ class ProfessionalTeachingCourseClass:
             return None
         ct = self.db.query(CareerTypeModel).filter(CareerTypeModel.id == prof.career_type_id).first()
         return (ct.career_type or "").strip() if ct and ct.career_type else None
+
+    def _get_specialty_for_assignment(self, row):
+        """Especialidad: primero career_type_id de la asignación, si no del profesional."""
+        assignment_ct_id = getattr(row, "career_type_id", None)
+        if assignment_ct_id:
+            ct = self.db.query(CareerTypeModel).filter(CareerTypeModel.id == assignment_ct_id).first()
+            if ct and ct.career_type:
+                return (ct.career_type or "").strip()
+        return self._get_specialty_for_professional(row.professional_id)
+
+    def get_professionals_by_course_school_career(
+        self,
+        course_id: int,
+        school_id: int,
+        career_type_id: int,
+        teacher_type_id: int = -1,
+    ):
+        """Lista profesionales (nombres, apellidos, rut, teacher_type_id) filtrados por curso, colegio, career_type_id y opcionalmente teacher_type_id (-1 = no filtrar)."""
+        try:
+            q = (
+                self.db.query(
+                    ProfessionalModel.id.label("professional_id"),
+                    ProfessionalModel.names,
+                    ProfessionalModel.lastnames,
+                    ProfessionalModel.identification_number,
+                    ProfessionalTeachingCourseModel.teacher_type_id,
+                )
+                .join(
+                    ProfessionalTeachingCourseModel,
+                    ProfessionalTeachingCourseModel.professional_id == ProfessionalModel.id,
+                )
+                .join(
+                    CourseModel,
+                    CourseModel.id == ProfessionalTeachingCourseModel.course_id,
+                )
+                .filter(
+                    ProfessionalTeachingCourseModel.course_id == course_id,
+                    CourseModel.school_id == school_id,
+                    ProfessionalTeachingCourseModel.career_type_id == career_type_id,
+                    ProfessionalTeachingCourseModel.deleted_status_id == 0,
+                )
+            )
+            if teacher_type_id is not None and teacher_type_id != -1:
+                q = q.filter(ProfessionalTeachingCourseModel.teacher_type_id == teacher_type_id)
+            q = q.distinct()
+            rows = q.all()
+            data = [
+                {
+                    "professional_id": r.professional_id,
+                    "names": (r.names or "").strip() or None,
+                    "lastnames": (r.lastnames or "").strip() or None,
+                    "rut": (r.identification_number or "").strip() or None,
+                    "teacher_type_id": r.teacher_type_id,
+                }
+                for r in rows
+            ]
+            return {"status": "success", "data": data}
+        except Exception as e:
+            return {"status": "error", "message": str(e), "data": []}
 
     def get_by_teacher_type(self, teacher_type_id: int, course_id: int):
         """Lista asignaciones por tipo de profesional (regular/especialista) y course_id con deleted_status_id == 0."""
@@ -77,15 +138,17 @@ class ProfessionalTeachingCourseClass:
             )
             data = []
             for r in rows:
-                especialidad = self._get_especialidad_for_professional(r.professional_id)
+                specialty = self._get_specialty_for_assignment(r)
                 data.append({
                     "id": r.id,
                     "professional_id": r.professional_id,
                     "teaching_id": r.teaching_id,
                     "course_id": r.course_id,
                     "teacher_type_id": r.teacher_type_id,
+                    "career_type_id": getattr(r, "career_type_id", None),
                     "subject": r.subject,
-                    "specialty": especialidad,
+                    "hours": r.hours,
+                    "specialty": specialty,
                     "deleted_status_id": r.deleted_status_id,
                     "added_date": r.added_date.isoformat() if r.added_date else None,
                     "updated_date": r.updated_date.isoformat() if r.updated_date else None,
@@ -102,15 +165,17 @@ class ProfessionalTeachingCourseClass:
             ).first()
             if not row:
                 return {"status": "error", "message": "Asignaci?n no encontrada.", "data": None}
-            especialidad = self._get_especialidad_for_professional(row.professional_id)
+            specialty = self._get_specialty_for_assignment(row)
             data = {
                 "id": row.id,
                 "professional_id": row.professional_id,
                 "teaching_id": row.teaching_id,
                 "course_id": row.course_id,
                 "teacher_type_id": row.teacher_type_id,
+                "career_type_id": getattr(row, "career_type_id", None),
                 "subject": row.subject,
-                "specialty": especialidad,
+                "hours": row.hours,
+                "specialty": specialty,
                 "deleted_status_id": row.deleted_status_id,
                 "added_date": row.added_date.isoformat() if row.added_date else None,
                 "updated_date": row.updated_date.isoformat() if row.updated_date else None,
@@ -137,8 +202,30 @@ class ProfessionalTeachingCourseClass:
                 row.teacher_type_id = data["teacher_type_id"]
             if "subject" in data:
                 row.subject = data["subject"]
+            if "hours" in data:
+                row.hours = data["hours"]
             if data.get("deleted_status_id") is not None:
                 row.deleted_status_id = data["deleted_status_id"]
+            # career_type_id of the assignment (specialty for this assignment)
+            if data.get("career_type_id") is not None:
+                row.career_type_id = data["career_type_id"]
+            elif "specialty" in data:
+                specialty_val = data.get("specialty")
+                specialty_name = (specialty_val if specialty_val is not None else "").strip() if isinstance(specialty_val, str) else str(specialty_val or "").strip()
+                if specialty_name:
+                    ct = self.db.query(CareerTypeModel).filter(
+                        func.trim(CareerTypeModel.career_type) == specialty_name
+                    ).first()
+                    if not ct:
+                        ct = self.db.query(CareerTypeModel).filter(
+                            func.trim(CareerTypeModel.career_type).ilike(specialty_name)
+                        ).first()
+                    if not ct:
+                        ct = self.db.query(CareerTypeModel).filter(
+                            CareerTypeModel.career_type.ilike(f"%{specialty_name}%")
+                        ).first()
+                    if ct:
+                        row.career_type_id = ct.id
             row.updated_date = datetime.now()
             self.db.commit()
             self.db.refresh(row)
@@ -155,7 +242,9 @@ class ProfessionalTeachingCourseClass:
                 teaching_id=data.get("teaching_id"),
                 course_id=data.get("course_id"),
                 teacher_type_id=data.get("teacher_type_id"),
+                career_type_id=data.get("career_type_id"),
                 subject=data.get("subject"),
+                hours=data.get("hours"),
                 deleted_status_id=data.get("deleted_status_id", 0),
                 added_date=datetime.now(),
                 updated_date=datetime.now(),

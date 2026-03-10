@@ -349,6 +349,7 @@ class StudentAcademicInfo(BaseModel):
     special_educational_need_id: Optional[int] = None
     course_id: Optional[int] = None
     sip_admission_year: Optional[int] = None
+    diagnostic_date: Optional[date] = None
 
 class StudentPersonalInfo(BaseModel):
     region_id: Optional[int] = None
@@ -362,7 +363,7 @@ class StudentPersonalInfo(BaseModel):
     mother_lastname: Optional[str] = None
     social_name: Optional[str] = None
     born_date: Optional[str] = None
-    nationality: Optional[str] = None
+    nationality_id: Optional[int] = None
     address: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
@@ -390,7 +391,7 @@ class UpdateStudent(BaseModel):
     address: Optional[str] = None
     region_id: Optional[int] = None
     commune_id: Optional[int] = None
-    nationality: Optional[str] = None
+    nationality_id: Optional[int] = None
     native_language: Optional[str] = None
     proficiency_native_language_id: Optional[int] = None
     language_usually_used: Optional[str] = None
@@ -399,6 +400,7 @@ class UpdateStudent(BaseModel):
     special_educational_need_id: Optional[int] = None
     course_id: Optional[int] = None
     sip_admission_year: Optional[int] = None
+    diagnostic_date: Optional[date] = None
 
 # Customer schemas
 class CustomerList(BaseModel):
@@ -477,13 +479,30 @@ class UpdateProfessional(BaseModel):
     career_type_id: Optional[int] = None
 
 
+def _hours_to_str(v):
+    """Acepta string o número y devuelve string (para guardar en columna varchar)."""
+    if v is None:
+        return None
+    if isinstance(v, str):
+        return v
+    if isinstance(v, (int, float)):
+        return str(v)
+    return str(v)
+
+
 class StoreProfessionalTeachingCourse(BaseModel):
     """Asignar profesional a enseñanza/curso (una fila en professionals_teachings_courses)."""
     professional_id: int
     teaching_id: int
     course_id: int
     teacher_type_id: Optional[int] = None
+    career_type_id: Optional[int] = None
     subject: Optional[str] = None
+    hours: Optional[str] = None
+
+    @validator("hours", pre=True)
+    def hours_accept_number(cls, v):
+        return _hours_to_str(v)
 
 
 class UpdateProfessionalTeachingCourse(BaseModel):
@@ -493,7 +512,14 @@ class UpdateProfessionalTeachingCourse(BaseModel):
     course_id: Optional[int] = None
     teacher_type_id: Optional[int] = None
     subject: Optional[str] = None
+    hours: Optional[str] = None
+    specialty: Optional[str] = None
+    career_type_id: Optional[int] = None
     deleted_status_id: Optional[int] = None
+
+    @validator("hours", pre=True)
+    def hours_accept_number(cls, v):
+        return _hours_to_str(v)
 
 
 # Package schemas

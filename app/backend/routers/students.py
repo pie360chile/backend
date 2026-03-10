@@ -319,12 +319,12 @@ def update(
     # Campos que van a personal_data (student_personal_info)
     personal_data_fields = ['names', 'father_lastname', 'mother_lastname', 'social_name', 
                            'gender_id', 'born_date', 'email', 'identification_number', 'phone', 
-                           'address', 'region_id', 'commune_id', 'nationality', 
+                           'address', 'region_id', 'commune_id', 'nationality_id', 
                            'native_language', 'proficiency_native_language_id', 
                            'language_usually_used', 'proficiency_language_used_id']
     
     # Campos que van a academic_info (student_academic_data)
-    academic_fields = ['special_educational_need_id', 'course_id', 'sip_admission_year']
+    academic_fields = ['special_educational_need_id', 'course_id', 'sip_admission_year', 'diagnostic_date']
     
     for field_key, value in student_inputs.items():
         # Si el campo va a personal_data

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, date
 from app.backend.db.models import StudentModel, StudentAcademicInfoModel, StudentPersonalInfoModel, SpecialEducationalNeedModel, CourseModel
 from sqlalchemy.orm import aliased
 
@@ -14,9 +14,27 @@ def _date_str(v, fmt="%Y-%m-%d %H:%M:%S"):
     return str(v)
 
 
+def _parse_date(v):
+    if v is None:
+        return None
+    if isinstance(v, date):
+        return v
+    if isinstance(v, datetime):
+        return v.date()
+    if isinstance(v, str) and v.strip():
+        try:
+            return datetime.strptime(v.strip()[:10], "%Y-%m-%d").date()
+        except ValueError:
+            return None
+    return None
+
+
 class StudentClass:
     def __init__(self, db):
         self.db = db
+
+    def _parse_date(self, v):
+        return _parse_date(v)
 
     def get_all(self, page=0, items_per_page=10, school_id=None, rut=None, names=None, identification_number=None, course_id=None):
         try:
@@ -31,6 +49,7 @@ class StudentClass:
                 StudentAcademicInfoModel.special_educational_need_id,
                 StudentAcademicInfoModel.course_id,
                 StudentAcademicInfoModel.sip_admission_year,
+                StudentAcademicInfoModel.diagnostic_date,
                 SpecialEducationalNeedModel.special_educational_needs.label('special_educational_need_name'),
                 StudentPersonalInfoModel.id.label('personal_id'),
                 StudentPersonalInfoModel.region_id,
@@ -44,7 +63,7 @@ class StudentClass:
                 StudentPersonalInfoModel.mother_lastname,
                 StudentPersonalInfoModel.social_name,
                 StudentPersonalInfoModel.born_date,
-                StudentPersonalInfoModel.nationality,
+                StudentPersonalInfoModel.nationality_id,
                 StudentPersonalInfoModel.address,
                 StudentPersonalInfoModel.phone,
                 StudentPersonalInfoModel.email,
@@ -111,7 +130,8 @@ class StudentClass:
                         "special_educational_need_id": student.special_educational_need_id,
                         "special_educational_need_name": (getattr(student, "special_educational_need_name", None) or "").strip() or None,
                         "course_id": student.course_id,
-                        "sip_admission_year": student.sip_admission_year
+                        "sip_admission_year": student.sip_admission_year,
+                        "diagnostic_date": student.diagnostic_date.isoformat() if getattr(student, "diagnostic_date", None) else None
                     } if student.academic_id else None,
                     "personal_data": {
                         "id": student.personal_id,
@@ -126,7 +146,7 @@ class StudentClass:
                         "mother_lastname": student.mother_lastname,
                         "social_name": student.social_name,
                         "born_date": student.born_date,
-                        "nationality": student.nationality,
+                        "nationality_id": student.nationality_id,
                         "address": student.address,
                         "phone": student.phone,
                         "email": student.email,
@@ -158,7 +178,8 @@ class StudentClass:
                         "special_educational_need_id": student.special_educational_need_id,
                         "special_educational_need_name": (getattr(student, "special_educational_need_name", None) or "").strip() or None,
                         "course_id": student.course_id,
-                        "sip_admission_year": student.sip_admission_year
+                        "sip_admission_year": student.sip_admission_year,
+                        "diagnostic_date": student.diagnostic_date.isoformat() if getattr(student, "diagnostic_date", None) else None
                     } if student.academic_id else None,
                     "personal_data": {
                         "id": student.personal_id,
@@ -173,7 +194,7 @@ class StudentClass:
                         "mother_lastname": student.mother_lastname,
                         "social_name": student.social_name,
                         "born_date": student.born_date,
-                        "nationality": student.nationality,
+                        "nationality_id": student.nationality_id,
                         "address": student.address,
                         "phone": student.phone,
                         "email": student.email,
@@ -204,6 +225,7 @@ class StudentClass:
                 StudentAcademicInfoModel.special_educational_need_id,
                 StudentAcademicInfoModel.course_id,
                 StudentAcademicInfoModel.sip_admission_year,
+                StudentAcademicInfoModel.diagnostic_date,
                 SpecialEducationalNeedModel.special_educational_needs.label('special_educational_need_name'),
                 StudentPersonalInfoModel.id.label('personal_id'),
                 StudentPersonalInfoModel.region_id,
@@ -217,7 +239,7 @@ class StudentClass:
                 StudentPersonalInfoModel.mother_lastname,
                 StudentPersonalInfoModel.social_name,
                 StudentPersonalInfoModel.born_date,
-                StudentPersonalInfoModel.nationality,
+                StudentPersonalInfoModel.nationality_id,
                 StudentPersonalInfoModel.address,
                 StudentPersonalInfoModel.phone,
                 StudentPersonalInfoModel.email,
@@ -269,14 +291,15 @@ class StudentClass:
                 "identification_number": student.student_identification_number,
                 "added_date": _date_str(student.added_date),
                 "updated_date": _date_str(student.updated_date),
-                "academic_info": {
-                    "id": student.academic_id,
-                    "special_educational_need_id": student.special_educational_need_id,
-                    "special_educational_need_name": (getattr(student, "special_educational_need_name", None) or "").strip() or None,
-                    "course_id": student.course_id,
-                    "sip_admission_year": student.sip_admission_year
-                } if student.academic_id else None,
-                "personal_data": {
+"academic_info": {
+                        "id": student.academic_id,
+                        "special_educational_need_id": student.special_educational_need_id,
+                        "special_educational_need_name": (getattr(student, "special_educational_need_name", None) or "").strip() or None,
+                        "course_id": student.course_id,
+                        "sip_admission_year": student.sip_admission_year,
+                        "diagnostic_date": student.diagnostic_date.isoformat() if getattr(student, "diagnostic_date", None) else None
+                    } if student.academic_id else None,
+                    "personal_data": {
                     "id": student.personal_id,
                     "region_id": student.region_id,
                     "commune_id": student.commune_id,
@@ -289,7 +312,7 @@ class StudentClass:
                     "mother_lastname": student.mother_lastname,
                     "social_name": student.social_name,
                     "born_date": _date_str(student.born_date, "%Y-%m-%d"),
-                    "nationality": student.nationality,
+                    "nationality_id": student.nationality_id,
                     "address": student.address,
                     "phone": student.phone,
                     "email": student.email,
@@ -414,6 +437,7 @@ class StudentClass:
                 StudentAcademicInfoModel.special_educational_need_id,
                 StudentAcademicInfoModel.course_id,
                 StudentAcademicInfoModel.sip_admission_year,
+                StudentAcademicInfoModel.diagnostic_date,
                 SpecialEducationalNeedModel.special_educational_needs.label('special_educational_need_name'),
                 StudentPersonalInfoModel.id.label('personal_id'),
                 StudentPersonalInfoModel.region_id,
@@ -427,7 +451,7 @@ class StudentClass:
                 StudentPersonalInfoModel.mother_lastname,
                 StudentPersonalInfoModel.social_name,
                 StudentPersonalInfoModel.born_date,
-                StudentPersonalInfoModel.nationality,
+                StudentPersonalInfoModel.nationality_id,
                 StudentPersonalInfoModel.address,
                 StudentPersonalInfoModel.phone,
                 StudentPersonalInfoModel.email,
@@ -460,7 +484,8 @@ class StudentClass:
                         "special_educational_need_id": data_query.special_educational_need_id,
                         "special_educational_need_name": (getattr(data_query, "special_educational_need_name", None) or "").strip() or None,
                         "course_id": data_query.course_id,
-                        "sip_admission_year": data_query.sip_admission_year
+                        "sip_admission_year": data_query.sip_admission_year,
+                        "diagnostic_date": data_query.diagnostic_date.isoformat() if getattr(data_query, "diagnostic_date", None) else None
                     } if data_query.academic_id else None,
                     "personal_data": {
                         "id": data_query.personal_id,
@@ -475,7 +500,7 @@ class StudentClass:
                         "mother_lastname": data_query.mother_lastname,
                         "social_name": data_query.social_name,
                         "born_date": data_query.born_date,
-                        "nationality": data_query.nationality,
+                        "nationality_id": data_query.nationality_id,
                         "address": data_query.address,
                         "phone": data_query.phone,
                         "email": data_query.email,
@@ -514,7 +539,8 @@ class StudentClass:
                 identification_number=student_inputs.get('identification_number'),
                 names=student_inputs.get('names'),
                 father_lastname=student_inputs.get('father_lastname'),
-                mother_lastname=student_inputs.get('mother_lastname')
+                mother_lastname=student_inputs.get('mother_lastname'),
+                nationality_id=student_inputs.get('nationality_id'),
             )
             self.db.add(new_personal)
 
@@ -524,6 +550,9 @@ class StudentClass:
                 new_academic = StudentAcademicInfoModel(
                     student_id=new_student.id,
                     course_id=course_id,
+                    special_educational_need_id=student_inputs.get('special_educational_need_id'),
+                    sip_admission_year=student_inputs.get('sip_admission_year'),
+                    diagnostic_date=self._parse_date(student_inputs.get('diagnostic_date')),
                     added_date=datetime.now(),
                     updated_date=datetime.now()
                 )
@@ -593,6 +622,8 @@ class StudentClass:
                         existing_academic.course_id = academic_info['course_id']
                     if 'sip_admission_year' in academic_info:
                         existing_academic.sip_admission_year = academic_info['sip_admission_year']
+                    if 'diagnostic_date' in academic_info:
+                        existing_academic.diagnostic_date = self._parse_date(academic_info['diagnostic_date'])
                     existing_academic.updated_date = datetime.now()
                 else:
                     # Crear nuevo registro
@@ -601,6 +632,7 @@ class StudentClass:
                         special_educational_need_id=academic_info.get('special_educational_need_id'),
                         course_id=academic_info.get('course_id'),
                         sip_admission_year=academic_info.get('sip_admission_year'),
+                        diagnostic_date=self._parse_date(academic_info.get('diagnostic_date')),
                         added_date=datetime.now(),
                         updated_date=datetime.now()
                     )
@@ -638,8 +670,8 @@ class StudentClass:
                         existing_personal.social_name = personal_data['social_name']
                     if 'born_date' in personal_data:
                         existing_personal.born_date = personal_data['born_date']
-                    if 'nationality' in personal_data:
-                        existing_personal.nationality = personal_data['nationality']
+                    if 'nationality_id' in personal_data:
+                        existing_personal.nationality_id = personal_data['nationality_id']
                     if 'address' in personal_data:
                         existing_personal.address = personal_data['address']
                     if 'phone' in personal_data:
@@ -665,7 +697,7 @@ class StudentClass:
                         mother_lastname=personal_data.get('mother_lastname'),
                         social_name=personal_data.get('social_name'),
                         born_date=personal_data.get('born_date'),
-                        nationality=personal_data.get('nationality'),
+                        nationality_id=personal_data.get('nationality_id'),
                         address=personal_data.get('address'),
                         phone=personal_data.get('phone'),
                         email=personal_data.get('email'),

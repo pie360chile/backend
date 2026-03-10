@@ -51,6 +51,47 @@ def get_by_teacher_type(
         )
 
 
+@professional_teaching_courses.get("/by_course_school_career")
+def get_professionals_by_course_school_career(
+    course_id: int = Query(..., description="ID del curso"),
+    school_id: int = Query(..., description="ID del colegio"),
+    career_type_id: int = Query(..., description="Career type / specialty ID"),
+    teacher_type_id: int = Query(-1, description="ID tipo de profesor (regular/especialista). -1 = no filtrar"),
+    session_user: UserLogin = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Lista profesionales (nombres, apellidos, rut, teacher_type_id) filtrados por curso, colegio, career_type_id y opcionalmente teacher_type_id."""
+    try:
+        result = ProfessionalTeachingCourseClass(db).get_professionals_by_course_school_career(
+            course_id=course_id,
+            school_id=school_id,
+            career_type_id=career_type_id,
+            teacher_type_id=teacher_type_id,
+        )
+        if result.get("status") == "error":
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={
+                    "status": 500,
+                    "message": result.get("message", "Error al listar"),
+                    "data": [],
+                },
+            )
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "status": 200,
+                "message": "OK",
+                "data": result.get("data", []),
+            },
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"status": 500, "message": str(e), "data": []},
+        )
+
+
 @professional_teaching_courses.get("/{professional_id}/{teaching_id}/{course_id}/{teacher_type_id}/{deleted_status_id}")
 def get_list(
     professional_id: int,
