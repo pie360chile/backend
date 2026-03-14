@@ -20,12 +20,17 @@ class FolderClass:
             if document_file:
                 return {
                     "id": document_file.id,
+                    "school_id": getattr(document_file, "school_id", None),
+                    "course_id": getattr(document_file, "course_id", None),
                     "student_id": document_file.student_id,
                     "document_id": document_file.document_id,
                     "version_id": document_file.version_id,
+                    "detail_id": getattr(document_file, "detail_id", None),
+                    "professional_id": getattr(document_file, "professional_id", 0) or 0,
                     "file": document_file.file,
+                    "period_year": getattr(document_file, "period_year", None),
                     "added_date": document_file.added_date.strftime("%Y-%m-%d %H:%M:%S") if document_file.added_date else None,
-                    "updated_date": document_file.updated_date.strftime("%Y-%m-%d %H:%M:%S") if document_file.updated_date else None
+                    "updated_date": document_file.updated_date.strftime("%Y-%m-%d %H:%M:%S") if document_file.updated_date else None,
                 }
             else:
                 return {"status": "error", "message": "No se encontraron datos para el archivo de documento especificado."}
@@ -49,13 +54,17 @@ class FolderClass:
             return [
                 {
                     "id": doc_file.id,
+                    "school_id": getattr(doc_file, "school_id", None),
+                    "course_id": getattr(doc_file, "course_id", None),
                     "student_id": doc_file.student_id,
                     "document_id": doc_file.document_id,
                     "version_id": doc_file.version_id,
-                    "detail_id": doc_file.detail_id,
+                    "detail_id": getattr(doc_file, "detail_id", None),
+                    "professional_id": getattr(doc_file, "professional_id", 0) or 0,
                     "file": doc_file.file,
+                    "period_year": getattr(doc_file, "period_year", None),
                     "added_date": doc_file.added_date.strftime("%Y-%m-%d %H:%M:%S") if doc_file.added_date else None,
-                    "updated_date": doc_file.updated_date.strftime("%Y-%m-%d %H:%M:%S") if doc_file.updated_date else None
+                    "updated_date": doc_file.updated_date.strftime("%Y-%m-%d %H:%M:%S") if doc_file.updated_date else None,
                 }
                 for doc_file in document_files
             ]
@@ -84,12 +93,17 @@ class FolderClass:
             return [
                 {
                     "id": doc_file.id,
+                    "school_id": getattr(doc_file, "school_id", None),
+                    "course_id": getattr(doc_file, "course_id", None),
                     "student_id": doc_file.student_id,
                     "document_id": doc_file.document_id,
                     "version_id": doc_file.version_id,
+                    "detail_id": getattr(doc_file, "detail_id", None),
+                    "professional_id": getattr(doc_file, "professional_id", 0) or 0,
                     "file": doc_file.file,
+                    "period_year": getattr(doc_file, "period_year", None),
                     "added_date": doc_file.added_date.strftime("%Y-%m-%d %H:%M:%S") if doc_file.added_date else None,
-                    "updated_date": doc_file.updated_date.strftime("%Y-%m-%d %H:%M:%S") if doc_file.updated_date else None
+                    "updated_date": doc_file.updated_date.strftime("%Y-%m-%d %H:%M:%S") if doc_file.updated_date else None,
                 }
                 for doc_file in document_files
             ]
@@ -100,12 +114,23 @@ class FolderClass:
                 "message": str(e)
             }
 
-    def store(self, student_id: int, document_id: int, file_path: str) -> Any:
+    def store(
+        self,
+        student_id: int,
+        document_id: int,
+        file_path: str,
+        school_id: Optional[int] = None,
+        course_id: Optional[int] = None,
+        professional_id: Optional[int] = None,
+        period_year: Optional[str] = None,
+    ) -> Any:
         """
         Almacena un archivo de documento con control de versiones.
+        Si professional_id no viene del frontend se usa 0.
         Para health evaluations (document_id = 4), actualiza el registro existente con file vacío,
         o actualiza la versión más reciente si no hay ninguno con file vacío.
         """
+        pro_id = 0 if professional_id is None else int(professional_id)
         try:
             # Si es health evaluation (document_id = 4), buscar registro con file vacío para actualizar
             if document_id == 4:
@@ -154,12 +179,18 @@ class FolderClass:
                     else:
                         # Si no existe ningún registro, crear uno nuevo (no debería pasar para health evaluations)
                         new_document_file = FolderModel(
+                            school_id=school_id,
+                            course_id=course_id,
                             student_id=student_id,
                             document_id=document_id,
                             version_id=1,
+                            detail_id=None,
+                            professional_id=pro_id,
                             file=file_path,
+                            period_year=period_year,
                             added_date=datetime.now(),
-                            updated_date=datetime.now()
+                            updated_date=datetime.now(),
+                            deleted_date=None,
                         )
                         
                         self.db.add(new_document_file)
@@ -188,12 +219,18 @@ class FolderClass:
                 
                 # Crear el nuevo registro
                 new_document_file = FolderModel(
+                    school_id=school_id,
+                    course_id=course_id,
                     student_id=student_id,
                     document_id=document_id,
                     version_id=new_version_id,
+                    detail_id=None,
+                    professional_id=pro_id,
                     file=file_path,
+                    period_year=period_year,
                     added_date=datetime.now(),
-                    updated_date=datetime.now()
+                    updated_date=datetime.now(),
+                    deleted_date=None,
                 )
                 
                 self.db.add(new_document_file)
@@ -376,6 +413,8 @@ class FolderClass:
                 else:
                     folder_records = self.db.query(
                         FolderModel.id,
+                        FolderModel.school_id,
+                        FolderModel.course_id,
                         FolderModel.student_id,
                         FolderModel.document_id,
                         FolderModel.version_id,
@@ -402,6 +441,8 @@ class FolderClass:
                         folder_record = folder_records[0]  # Ya está ordenado por version_id desc
                         all_documents.append({
                             "id": folder_record.id,
+                            "school_id": getattr(folder_record, "school_id", None),
+                            "course_id": getattr(folder_record, "course_id", None),
                             "student_id": folder_record.student_id,
                             "document_id": folder_record.document_id,
                             "document_type_id": folder_record.document_type_id,

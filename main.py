@@ -28,6 +28,8 @@ from app.backend.routers.nationalities import nationalities
 from app.backend.routers.genders import genders
 from app.backend.routers.schools import schools
 from app.backend.routers.students import students
+from app.backend.routers.students_professionals import students_professionals
+from app.backend.routers.document_alerts import document_alerts
 from app.backend.routers.customers import customers
 from app.backend.routers.professionals import professionals
 from app.backend.routers.packages import packages
@@ -85,6 +87,7 @@ from app.backend.routers.course_learning_achievements import course_learning_ach
 from app.backend.routers.psychopedagogical_evaluations import psychopedagogical_evaluations
 from app.backend.routers.conners_teacher_evaluations import conners_teacher_evaluations
 from app.backend.routers.diagnosis_summary import diagnosis_summary
+from app.backend.routers.cesp import cesp
 
 # OpenAPI (Swagger): FastAPI genera automáticamente el esquema desde rutas y modelos Pydantic.
 # Documentación interactiva:
@@ -170,6 +173,8 @@ app.include_router(nationalities)
 app.include_router(genders)
 app.include_router(schools)
 app.include_router(students)
+app.include_router(students_professionals)
+app.include_router(document_alerts)
 app.include_router(customers)
 app.include_router(professionals)
 app.include_router(packages)
@@ -227,6 +232,7 @@ app.include_router(course_learning_achievements)
 app.include_router(psychopedagogical_evaluations)
 app.include_router(conners_teacher_evaluations)
 app.include_router(diagnosis_summary)
+app.include_router(cesp)
 
 if __name__ == "__main__":
     # Para aumentar el límite de tamaño de archivo, configurar en el servidor

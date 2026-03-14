@@ -90,6 +90,10 @@ async def upload_document(
     student_id: int,
     document_id: int,
     file: UploadFile = File(...),
+    school_id: Optional[int] = None,
+    course_id: Optional[int] = None,
+    professional_id: Optional[int] = None,
+    period_year: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     """
@@ -156,12 +160,16 @@ async def upload_document(
                 }
             )
         
-        # Guardar el registro en la base de datos usando el método store
+        # Guardar el registro en la base de datos usando el método store (professional_id=0 si no viene)
         folder_service = FolderClass(db)
         store_result = folder_service.store(
             student_id=student_id,
             document_id=document_id,
-            file_path=unique_filename
+            file_path=unique_filename,
+            school_id=school_id,
+            course_id=course_id,
+            professional_id=professional_id,
+            period_year=period_year,
         )
         
         if isinstance(store_result, dict) and store_result.get("status") == "error":

@@ -236,13 +236,18 @@ class HealthEvaluationClass:
                 
                 # Crear el registro en folders
                 new_folder = FolderModel(
+                    school_id=None,
+                    course_id=None,
                     student_id=new_evaluation.student_id,
                     document_id=document_id,
                     version_id=new_version_id,
                     detail_id=new_evaluation.id,  # El ID de la evaluación de salud
+                    professional_id=0,
                     file=None,  # No hay archivo asociado inicialmente
+                    period_year=None,
                     added_date=datetime.now(),
-                    updated_date=datetime.now()
+                    updated_date=datetime.now(),
+                    deleted_date=None,
                 )
                 
                 self.db.add(new_folder)

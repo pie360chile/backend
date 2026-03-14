@@ -16,6 +16,8 @@ from app.backend.classes.interconsultation_class import InterconsultationClass
 from app.backend.classes.guardian_attendance_certificate_class import GuardianAttendanceCertificateClass
 from app.backend.classes.psychopedagogical_evaluation_class import PsychopedagogicalEvaluationClass
 from app.backend.classes.conners_teacher_evaluation_class import ConnersTeacherEvaluationClass
+from app.backend.classes.cesp_class import CespClass
+from app.backend.classes.action_incident_class import ActionIncidentClass
 from app.backend.db.database import get_db
 from app.backend.db.models import (
     FolderModel,
@@ -341,13 +343,18 @@ async def upload_document(
         
         # Crear el nuevo registro en folders
         new_folder = FolderModel(
+            school_id=None,
+            course_id=None,
             student_id=student_id,
             document_id=document_id,
             version_id=new_version_id,
             detail_id=None,
+            professional_id=0,
             file=unique_filename,
+            period_year=None,
             added_date=datetime.now(),
-            updated_date=datetime.now()
+            updated_date=datetime.now(),
+            deleted_date=None,
         )
         
         db.add(new_folder)
@@ -1438,7 +1445,7 @@ async def generate_document(
         document = DocumentsClass(db)
         document_result = document.get(document_id)
         # Documentos 3,4,7,8,18,19,22,23,24,25,27 se pueden generar aunque no existan en la tabla documents
-        known_generable = (3, 4, 7, 8, 18, 19, 22, 23, 24, 25, 27, 29)
+        known_generable = (3, 4, 7, 8, 18, 19, 20, 22, 23, 24, 25, 27, 29)
         if isinstance(document_result, dict) and document_result.get("status") == "error":
             if document_id in known_generable:
                 document_result = {"document_type_id": document_id}
@@ -2884,6 +2891,114 @@ async def generate_document(
                 media_type="application/pdf",
             )
         
+        # Si document_id = 20, generar documento CESP (Plan de Acompañamiento Emocional y Conductual - PAEC)
+        if document_id == 20:
+            cesp_service = CespClass(db)
+            cesp_result = cesp_service.get_by_student_id(student_id, latest_only=True)
+            if isinstance(cesp_result, dict) and cesp_result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    content={"status": 404, "message": "No se encontró documento CESP para este estudiante", "data": None},
+                )
+            cesp_data_raw = cesp_result.get("data") if isinstance(cesp_result, dict) else None
+            if not cesp_data_raw or not isinstance(cesp_data_raw, dict):
+                return JSONResponse(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    content={"status": 404, "message": "No se encontró documento CESP para este estudiante", "data": None},
+                )
+            student_data = student_result.get("student_data", {}) if isinstance(student_result, dict) else {}
+            personal_data = student_data.get("personal_data") or {}
+            academic_info = student_data.get("academic_info") or {}
+            student_name = personal_data.get("names", "") or ""
+            student_lastname = f"{personal_data.get('father_lastname', '')} {personal_data.get('mother_lastname', '')}".strip()
+            student_fullname = f"{student_name} {student_lastname}".strip()
+            cesp_data = dict(cesp_data_raw)
+            cesp_data["student_fullname"] = student_fullname
+            cesp_data["student_name"] = student_name
+            cesp_data["student_lastname"] = student_lastname
+            # Datos personales o generales para el PDF
+            cesp_data["student_rut"] = personal_data.get("identification_number", "") or ""
+            cesp_data["student_born_date"] = personal_data.get("born_date", "") or cesp_data_raw.get("student_born_date", "")
+            school_name = cesp_data_raw.get("student_school") or student_data.get("school_name") or ""
+            if not school_name and student_data.get("school_id"):
+                school = db.query(SchoolModel).filter(SchoolModel.id == student_data["school_id"]).first()
+                if school:
+                    school_name = (school.school_name or "").strip()
+            course_name = cesp_data_raw.get("student_course") or (academic_info.get("course_name") if isinstance(academic_info, dict) else "") or ""
+            if not course_name and academic_info and isinstance(academic_info, dict) and academic_info.get("course_id"):
+                course = db.query(CourseModel).filter(CourseModel.id == academic_info["course_id"]).first()
+                if course:
+                    course_name = (course.course_name or "").strip()
+            nee_name = cesp_data_raw.get("student_nee") or ""
+            if not nee_name and academic_info and isinstance(academic_info, dict):
+                nee_name = (academic_info.get("special_educational_need_name") or "").strip() or (academic_info.get("special_educational_needs") or "").strip()
+            cesp_data["student_school"] = school_name
+            cesp_data["student_course"] = course_name
+            cesp_data["student_nee"] = nee_name or str(cesp_data_raw.get("student_nee") or "")
+            # Edad calculada desde fecha de nacimiento
+            student_age = ""
+            born_date_str = cesp_data.get("student_born_date", "")
+            if born_date_str:
+                try:
+                    born_date = None
+                    for date_fmt in ["%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d", "%d-%m-%Y"]:
+                        try:
+                            born_date = datetime.strptime(str(born_date_str)[:10], date_fmt).date()
+                            break
+                        except Exception:
+                            continue
+                    if born_date:
+                        ref = datetime.now().date()
+                        years = ref.year - born_date.year
+                        months = ref.month - born_date.month
+                        if months < 0:
+                            years -= 1
+                            months += 12
+                        elif months == 0 and ref.day < born_date.day:
+                            years -= 1
+                            months = 11
+                        if years > 0:
+                            student_age = f"{years} año{'s' if years != 1 else ''} y {months} mes{'es' if months != 1 else ''}" if months else f"{years} año{'s' if years != 1 else ''}"
+                        elif months > 0:
+                            student_age = f"{months} mes{'es' if months != 1 else ''}"
+                except Exception:
+                    pass
+            cesp_data["student_age"] = student_age
+            participant = cesp_data.get("participant_professional")
+            if participant and isinstance(participant, dict) and participant.get("professional_id"):
+                prof = db.query(ProfessionalModel).filter(ProfessionalModel.id == participant["professional_id"]).first()
+                cesp_data["participant_professional_name"] = f"{prof.names or ''} {prof.lastnames or ''}".strip() if prof else ""
+            support_list = cesp_data.get("support_team_members") or []
+            for s in support_list:
+                if isinstance(s, dict) and s.get("professional_id"):
+                    prof = db.query(ProfessionalModel).filter(ProfessionalModel.id == s["professional_id"]).first()
+                    s["professional_name"] = f"{prof.names or ''} {prof.lastnames or ''}".strip() if prof else ""
+            # Registros DEC (incidentes de acción) del estudiante para sección VII
+            incidents_result = ActionIncidentClass(db).get_all(student_id=student_id)
+            dec_records = []
+            if isinstance(incidents_result, list):
+                dec_records = incidents_result
+            elif isinstance(incidents_result, dict) and incidents_result.get("data"):
+                dec_records = incidents_result.get("data", [])
+            cesp_data["dec_records"] = dec_records
+            result = DocumentsClass.generate_document_pdf(
+                document_id=document_id,
+                document_data=cesp_data,
+                db=db,
+                template_path=None,
+                output_directory="files/system/students",
+            )
+            if result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    content={"status": 500, "message": result.get("message", "Error generando documento CESP"), "data": None},
+                )
+            return FileResponse(
+                path=result["file_path"],
+                filename=result["filename"],
+                media_type="application/pdf",
+            )
+        
         # Si document_id = 22, generar documento de Plan de Apoyo Individual
         if document_id == 22:
             # Buscar el Plan de Apoyo Individual más reciente para este estudiante
@@ -3530,13 +3645,18 @@ async def generate_document(
                     
                     # Crear el nuevo registro en folders con document_id = 2
                     new_folder = FolderModel(
+                        school_id=None,
+                        course_id=None,
                         student_id=student_id,
                         document_id=parent_auth_document_id,  # document_id = 2 para parent_authorization
                         version_id=new_version_id,
                         detail_id=None,  # No hay detail_id para parent_authorization
+                        professional_id=0,
                         file=unique_filename,
+                        period_year=None,
                         added_date=datetime.now(),
-                        updated_date=datetime.now()
+                        updated_date=datetime.now(),
+                        deleted_date=None,
                     )
                     
                     db.add(new_folder)

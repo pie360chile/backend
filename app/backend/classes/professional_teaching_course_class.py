@@ -39,15 +39,17 @@ class ProfessionalTeachingCourseClass:
             rows = q.all()
             data = []
             for r in rows:
+                career_type_id = getattr(r, "career_type_id", None)
+                career_type_name = self._get_specialty_for_assignment(r)
                 data.append({
                     "id": r.id,
                     "professional_id": r.professional_id,
                     "teaching_id": r.teaching_id,
                     "course_id": r.course_id,
                     "teacher_type_id": r.teacher_type_id,
-                    "career_type_id": getattr(r, "career_type_id", None),
+                    "career_type_id": career_type_id,
+                    "career_type_name": career_type_name,
                     "subject": r.subject,
-                    "hours": r.hours,
                     "deleted_status_id": r.deleted_status_id,
                     "added_date": r.added_date.isoformat() if r.added_date else None,
                     "updated_date": r.updated_date.isoformat() if r.updated_date else None,
@@ -147,7 +149,6 @@ class ProfessionalTeachingCourseClass:
                     "teacher_type_id": r.teacher_type_id,
                     "career_type_id": getattr(r, "career_type_id", None),
                     "subject": r.subject,
-                    "hours": r.hours,
                     "specialty": specialty,
                     "deleted_status_id": r.deleted_status_id,
                     "added_date": r.added_date.isoformat() if r.added_date else None,
@@ -174,7 +175,6 @@ class ProfessionalTeachingCourseClass:
                 "teacher_type_id": row.teacher_type_id,
                 "career_type_id": getattr(row, "career_type_id", None),
                 "subject": row.subject,
-                "hours": row.hours,
                 "specialty": specialty,
                 "deleted_status_id": row.deleted_status_id,
                 "added_date": row.added_date.isoformat() if row.added_date else None,
@@ -202,8 +202,6 @@ class ProfessionalTeachingCourseClass:
                 row.teacher_type_id = data["teacher_type_id"]
             if "subject" in data:
                 row.subject = data["subject"]
-            if "hours" in data:
-                row.hours = data["hours"]
             if data.get("deleted_status_id") is not None:
                 row.deleted_status_id = data["deleted_status_id"]
             # career_type_id of the assignment (specialty for this assignment)
@@ -244,7 +242,6 @@ class ProfessionalTeachingCourseClass:
                 teacher_type_id=data.get("teacher_type_id"),
                 career_type_id=data.get("career_type_id"),
                 subject=data.get("subject"),
-                hours=data.get("hours"),
                 deleted_status_id=data.get("deleted_status_id", 0),
                 added_date=datetime.now(),
                 updated_date=datetime.now(),

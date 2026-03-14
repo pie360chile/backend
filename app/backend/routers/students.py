@@ -184,6 +184,37 @@ def counts_by_sen_type_and_pie_years(
     )
 
 
+@students.get("/counts_by_sen_type_and_pie_years_by_school")
+def counts_by_sen_type_and_pie_years_by_school(
+    session_user: UserLogin = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Same as counts_by_sen_type_and_pie_years but grouped by school (colegio).
+    Returns by_school: each school has school_id, school_name, by_course (same structure as the other endpoint), total_one_year, total_more_than_one_year.
+    Schools are filtered by the session customer_id.
+    """
+    customer_id = session_user.customer_id if session_user else None
+    result = StudentClass(db).get_counts_by_sen_type_and_pie_years_by_school(customer_id=customer_id)
+    if isinstance(result, dict) and result.get("status") == "error":
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "status": 500,
+                "message": result.get("message", "Error fetching counts by school"),
+                "data": None
+            },
+        )
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "status": 200,
+            "message": "Counts by NEE type and years in PIE, grouped by school",
+            "data": result
+        },
+    )
+
+
 @students.post("/totals")
 def totals(session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
     customer_id = session_user.customer_id if session_user else None

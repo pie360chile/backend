@@ -593,9 +593,21 @@ class ProfessionalTeachingCourseModel(Base):
     career_type_id = Column(Integer, nullable=True)  # Especialidad de esta asignación
     deleted_status_id = Column(Integer)
     subject = Column(String(255), nullable=True)
-    hours = Column(String(255), nullable=True)
     added_date = Column(DateTime)
     updated_date = Column(DateTime)
+
+
+class StudentProfessionalModel(Base):
+    __tablename__ = 'students_professionals'
+
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer)
+    professional_id = Column(Integer)
+    career_type_id = Column(Integer, nullable=True)
+    hours = Column(Integer, nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
 
 
 class CoordinatorsCourseModel(Base):
@@ -1217,13 +1229,120 @@ class FolderModel(Base):
     __tablename__ = 'folders'
 
     id = Column(Integer, primary_key=True)
+    school_id = Column(Integer, nullable=True)
+    course_id = Column(Integer, nullable=True)
     student_id = Column(Integer)
     document_id = Column(Integer)
     version_id = Column(Integer)
-    detail_id = Column(Integer)
-    file = Column(String(255))
-    added_date = Column(DateTime)
-    updated_date = Column(DateTime)
+    detail_id = Column(Integer, nullable=True)
+    professional_id = Column(Integer, nullable=True)  # 0 cuando no viene del frontend
+    file = Column(String(255), nullable=True)
+    period_year = Column(String(255), nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+
+class DocumentAlertModel(Base):
+    __tablename__ = 'document_alerts'
+
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer)
+    professional_id = Column(Integer)
+    document_id = Column(Integer)
+    must_be_finish_date = Column(DateTime, nullable=True)
+    document_uploaded_date = Column(DateTime, nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+
+# -----------------------------------------------------------------------------
+# Document 20: Community Education Support Program (CESP)
+# -----------------------------------------------------------------------------
+class PeriodTypeModel(Base):
+    __tablename__ = 'period_types'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(100), nullable=False)
+
+
+class CespDocumentModel(Base):
+    __tablename__ = 'cesp_documents'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    student_id = Column(Integer, nullable=False)
+    document_type_id = Column(Integer, nullable=False, default=20)
+    elaboration_date = Column(Date, nullable=True)
+    period_type_id = Column(Integer, nullable=False, default=1)
+    pharmacological_treatment = Column(String(10), nullable=True)  # 'yes' | 'no'
+    external_specialists = Column(String(10), nullable=True)  # 'yes' | 'no'
+    profile_interaction = Column(Text, nullable=True)
+    profile_involvement = Column(Text, nullable=True)
+    profile_behavior_repertoire = Column(Text, nullable=True)
+    profile_skills = Column(Text, nullable=True)
+    profile_challenges = Column(Text, nullable=True)
+    profile_support_needs = Column(Text, nullable=True)
+    profile_interests = Column(Text, nullable=True)
+    stressors_triggers = Column(Text, nullable=True)
+    prevention_measures = Column(Text, nullable=True)
+    suggestions_special = Column(Text, nullable=True)
+    strategies_phase1_manifestations = Column(Text, nullable=True)
+    strategies_phase1_strategies = Column(Text, nullable=True)
+    strategies_phase2_manifestations = Column(Text, nullable=True)
+    strategies_phase2_strategies = Column(Text, nullable=True)
+    strategies_phase3_manifestations = Column(Text, nullable=True)
+    strategies_phase3_strategies = Column(Text, nullable=True)
+    strategies_phase4_manifestations = Column(Text, nullable=True)
+    strategies_phase4_strategies = Column(Text, nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+
+class CespGuardianModel(Base):
+    __tablename__ = 'cesp_guardians'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    cesp_document_id = Column(Integer, nullable=False)
+    guardian_id = Column(Integer, nullable=True)
+    name = Column(String(255), nullable=True)
+    identification_number = Column(String(50), nullable=True)
+    family_member_id = Column(Integer, nullable=True)
+    address = Column(String(500), nullable=True)
+    phone = Column(String(50), nullable=True)
+    email = Column(String(255), nullable=True)
+    is_emergency_contact = Column(Integer, nullable=False, default=0)
+    is_guardian = Column(Integer, nullable=False, default=1)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+
+
+class CespParticipantProfessionalModel(Base):
+    __tablename__ = 'cesp_participant_professionals'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    cesp_document_id = Column(Integer, nullable=False)
+    professional_id = Column(Integer, nullable=False)
+    professional_role = Column(String(255), nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+
+
+class CespSupportTeamMemberModel(Base):
+    __tablename__ = 'cesp_support_team_members'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    cesp_document_id = Column(Integer, nullable=False)
+    professional_id = Column(Integer, nullable=False)
+    professional_role = Column(String(255), nullable=True)
+    support_roles = Column(Text, nullable=True)
+    phone = Column(String(50), nullable=True)
+    email = Column(String(255), nullable=True)
+    sort_order = Column(Integer, nullable=False, default=0)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+
 
 class HealthEvaluationModel(Base):
     __tablename__ = 'health_evaluations'

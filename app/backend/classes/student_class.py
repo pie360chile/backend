@@ -1,5 +1,5 @@
 from datetime import datetime, date
-from app.backend.db.models import StudentModel, StudentAcademicInfoModel, StudentPersonalInfoModel, SpecialEducationalNeedModel, CourseModel
+from app.backend.db.models import StudentModel, StudentAcademicInfoModel, StudentPersonalInfoModel, SpecialEducationalNeedModel, CourseModel, SchoolModel
 from sqlalchemy.orm import aliased
 
 
@@ -419,6 +419,128 @@ class StudentClass:
                 })
             return {
                 "by_course": by_course_list,
+                "current_year": current_year,
+            }
+        except Exception as e:
+            return {"status": "error", "message": str(e), "data": None}
+
+    def get_counts_by_sen_type_and_pie_years_by_school(self, customer_id=None):
+        """
+        Same as get_counts_by_sen_type_and_pie_years but grouped by school (colegio).
+        Returns by_school: each school has school_id, school_name, by_course (same structure), totals.
+        If customer_id is provided, only schools of that customer are included.
+        """
+        try:
+            from datetime import date
+            current_year = date.today().year
+            query = (
+                self.db.query(
+                    StudentModel.school_id,
+                    SchoolModel.school_name,
+                    StudentAcademicInfoModel.student_id,
+                    StudentAcademicInfoModel.course_id,
+                    StudentAcademicInfoModel.sip_admission_year,
+                    SpecialEducationalNeedModel.special_educational_need_type_id,
+                    CourseModel.course_name,
+                )
+                .join(
+                    StudentModel,
+                    StudentModel.id == StudentAcademicInfoModel.student_id,
+                )
+                .join(
+                    SchoolModel,
+                    SchoolModel.id == StudentModel.school_id,
+                )
+                .join(
+                    SpecialEducationalNeedModel,
+                    SpecialEducationalNeedModel.id == StudentAcademicInfoModel.special_educational_need_id,
+                )
+                .outerjoin(
+                    CourseModel,
+                    CourseModel.id == StudentAcademicInfoModel.course_id,
+                )
+                .filter(
+                    StudentModel.deleted_status_id == 0,
+                    StudentAcademicInfoModel.special_educational_need_id.isnot(None),
+                    SpecialEducationalNeedModel.deleted_status_id == 0,
+                )
+            )
+            if customer_id is not None:
+                query = query.filter(SchoolModel.customer_id == customer_id)
+            rows = query.all()
+
+            # by_school: school_id -> { school_name, by_course: { course_id -> { ... } }, totals }
+            by_school = {}
+            for row in rows:
+                school_id = row.school_id or 0
+                school_name = (row.school_name or "").strip() if row.school_name else ""
+                course_id = row.course_id or 0
+                course_name = (row.course_name or "").strip() if row.course_name else ""
+                type_id = row.special_educational_need_type_id
+                if type_id is None:
+                    continue
+                if school_id not in by_school:
+                    by_school[school_id] = {
+                        "school_name": school_name,
+                        "by_course": {},
+                        "total_one_year": 0,
+                        "total_more_than_one_year": 0,
+                    }
+                if school_name and not by_school[school_id]["school_name"]:
+                    by_school[school_id]["school_name"] = school_name
+                if course_id not in by_school[school_id]["by_course"]:
+                    by_school[school_id]["by_course"][course_id] = {
+                        "course_name": course_name,
+                        "by_type": {},
+                        "total_one_year": 0,
+                        "total_more_than_one_year": 0,
+                    }
+                if course_name and not by_school[school_id]["by_course"][course_id]["course_name"]:
+                    by_school[school_id]["by_course"][course_id]["course_name"] = course_name
+                sip_year = row.sip_admission_year
+                years_in_pie = (current_year - sip_year) if sip_year else 0
+                c = by_school[school_id]["by_course"][course_id]
+                t = c["by_type"].setdefault(type_id, {"one_year": 0, "more_than_one_year": 0})
+                if years_in_pie == 0:
+                    t["one_year"] += 1
+                    c["total_one_year"] += 1
+                    by_school[school_id]["total_one_year"] += 1
+                else:
+                    t["more_than_one_year"] += 1
+                    c["total_more_than_one_year"] += 1
+                    by_school[school_id]["total_more_than_one_year"] += 1
+
+            by_school_list = []
+            for sid in sorted(by_school.keys()):
+                info = by_school[sid]
+                by_course_list = []
+                for cid in sorted(info["by_course"].keys()):
+                    cinfo = info["by_course"][cid]
+                    by_type_list = [
+                        {
+                            "special_educational_need_type_id": tid,
+                            "one_year": data["one_year"],
+                            "more_than_one_year": data["more_than_one_year"],
+                            "total": data["one_year"] + data["more_than_one_year"],
+                        }
+                        for tid, data in sorted(cinfo["by_type"].items())
+                    ]
+                    by_course_list.append({
+                        "course_id": cid if cid else None,
+                        "course_name": cinfo["course_name"],
+                        "by_type": by_type_list,
+                        "total_one_year": cinfo["total_one_year"],
+                        "total_more_than_one_year": cinfo["total_more_than_one_year"],
+                    })
+                by_school_list.append({
+                    "school_id": sid if sid else None,
+                    "school_name": info["school_name"],
+                    "by_course": by_course_list,
+                    "total_one_year": info["total_one_year"],
+                    "total_more_than_one_year": info["total_more_than_one_year"],
+                })
+            return {
+                "by_school": by_school_list,
                 "current_year": current_year,
             }
         except Exception as e:

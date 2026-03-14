@@ -296,13 +296,18 @@ class AnamnesisClass:
             )
             new_version_id = (last_folder.version_id + 1) if last_folder else 1
             folder = FolderModel(
+                school_id=None,
+                course_id=None,
                 student_id=student_id,
                 document_id=ANAMNESIS_DOCUMENT_ID,
                 version_id=new_version_id,
                 detail_id=rec.id,
+                professional_id=0,
                 file=None,
+                period_year=None,
                 added_date=datetime.now(),
                 updated_date=datetime.now(),
+                deleted_date=None,
             )
             self.db.add(folder)
             self.db.commit()

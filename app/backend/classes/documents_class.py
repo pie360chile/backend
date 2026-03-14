@@ -29,7 +29,7 @@ try:
     from reportlab.lib.pagesizes import A4, letter
     from reportlab.lib.units import inch, cm
     from reportlab.lib import colors
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak, Image
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak, Image, KeepTogether
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY, TA_RIGHT
     REPORTLAB_AVAILABLE = True
@@ -97,6 +97,15 @@ class DocumentsClass:
                 return DocumentsClass._generate_progress_status_from_scratch(
                     document_id=document_id,
                     progress_status_data=document_data,
+                    db=db,
+                    output_directory=output_directory
+                )
+            
+            # Si es documento 20 (CESP - Plan de Acompañamiento Emocional y Conductual), usar función específica
+            if document_id == 20:
+                return DocumentsClass._generate_cesp_from_scratch(
+                    document_id=document_id,
+                    cesp_data=document_data,
                     db=db,
                     output_directory=output_directory
                 )
@@ -978,13 +987,18 @@ class DocumentsClass:
             
             # Crear el nuevo registro en folders
             new_folder = FolderModel(
+                school_id=None,
+                course_id=None,
                 student_id=student_id,
                 document_id=document.id,
                 version_id=new_version_id,
                 detail_id=detail_id,  # ID de birth_certificate_documents si es tipo 1
+                professional_id=0,
                 file=file_path,
+                period_year=None,
                 added_date=datetime.now(),
-                updated_date=datetime.now()
+                updated_date=datetime.now(),
+                deleted_date=None,
             )
             
             self.db.add(new_folder)
@@ -3548,6 +3562,332 @@ class DocumentsClass:
             return {
                 "status": "error",
                 "message": f"Error generando PDF Estado de Avance PAI: {str(e)}",
+                "filename": None,
+                "file_path": None
+            }
+
+    @staticmethod
+    def _generate_cesp_from_scratch(
+        document_id: int,
+        cesp_data: Dict[str, Any],
+        db: Optional[Session] = None,
+        output_directory: str = "files/system/students"
+    ) -> Dict[str, Any]:
+        """
+        Genera un PDF del documento 20 (CESP - Plan de Acompañamiento Emocional y Conductual / PAEC) desde cero usando ReportLab.
+        """
+        try:
+            if not REPORTLAB_AVAILABLE:
+                return {
+                    "status": "error",
+                    "message": "ReportLab no está instalado. Instala con: pip install reportlab",
+                    "filename": None,
+                    "file_path": None
+                }
+            student_name_safe = (cesp_data.get("student_fullname") or "estudiante").replace(" ", "_")
+            unique_filename = f"cesp_paec_{student_name_safe}_{uuid.uuid4().hex[:8]}.pdf"
+            output_file = Path(output_directory) / unique_filename
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+            doc = SimpleDocTemplate(
+                str(output_file),
+                pagesize=A4,
+                rightMargin=2.5*cm,
+                leftMargin=2.5*cm,
+                topMargin=2.5*cm,
+                bottomMargin=2.5*cm
+            )
+            elements = []
+            styles = getSampleStyleSheet()
+            title_style = ParagraphStyle(
+                'CustomTitle',
+                parent=styles['Heading1'],
+                fontSize=16,
+                textColor=colors.HexColor('#000000'),
+                spaceAfter=25,
+                spaceBefore=15,
+                alignment=TA_CENTER,
+                fontName='Helvetica-Bold'
+            )
+            section_style = ParagraphStyle(
+                'SectionStyle',
+                parent=styles['Normal'],
+                fontSize=12,
+                textColor=colors.HexColor('#000000'),
+                spaceAfter=12,
+                spaceBefore=15,
+                fontName='Helvetica-Bold',
+                alignment=TA_LEFT,
+                backColor=colors.HexColor('#E8E8E8'),
+                borderPadding=6
+            )
+            normal_style = ParagraphStyle(
+                'CustomNormal',
+                parent=styles['Normal'],
+                fontSize=11,
+                textColor=colors.HexColor('#000000'),
+                alignment=TA_LEFT,
+                leading=13,
+                spaceAfter=4
+            )
+            label_style = ParagraphStyle(
+                'LabelStyle',
+                parent=styles['Normal'],
+                fontSize=11,
+                textColor=colors.HexColor('#000000'),
+                alignment=TA_LEFT,
+                fontName='Helvetica-Bold',
+                backColor=colors.HexColor('#F5F5F5'),
+                borderPadding=4
+            )
+            def get_value(key: str, default: str = "") -> str:
+                v = cesp_data.get(key)
+                if v is None:
+                    return default
+                return str(v).strip() if v else default
+            def hr_line():
+                t = Table([[""]], colWidths=[16*cm], rowHeights=[0.02*inch])
+                t.setStyle(TableStyle([('LINEBELOW', (0, 0), (-1, 0), 0.5, colors.grey)]))
+                return t
+            def format_date(date_str: Optional[str]) -> str:
+                if not date_str:
+                    return ""
+                s = str(date_str).strip()[:10]
+                if not s:
+                    return ""
+                for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%Y/%m/%d"):
+                    try:
+                        date_obj = datetime.strptime(s, fmt).date()
+                        return date_obj.strftime("%d/%m/%Y")
+                    except Exception:
+                        continue
+                return s
+            elements.append(Paragraph("Plan de Acompañamiento Emocional y Conductual", title_style))
+            elements.append(Spacer(1, 0.3*inch))
+            elements.append(Paragraph("I. Datos personales o generales", section_style))
+            elements.append(Spacer(1, 0.15*inch))
+            student_fullname = get_value("student_fullname")
+            student_rut = get_value("student_rut")
+            student_born_date = format_date(get_value("student_born_date"))
+            student_age = get_value("student_age")
+            student_nee = get_value("student_nee")
+            student_school = get_value("student_school")
+            student_course = get_value("student_course")
+            elaboration_date = format_date(get_value("elaboration_date"))
+            period_label = get_value("period_type_id") == "2" and "Semestral" or "Anual"
+            def si_no(val: str) -> str:
+                if not val: return val
+                v = (val or "").strip().lower()
+                if v == "yes": return "Si"
+                if v == "no": return "No"
+                return val.strip()
+            pharmacological = si_no(get_value("pharmacological_treatment"))
+            external_specialists = si_no(get_value("external_specialists"))
+            def cell_para(text: str, bold: bool = False):
+                content = (text or "—").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                tag = "b" if bold else ""
+                return Paragraph(f"<{tag}>{content}</{tag}>" if tag else content, normal_style)
+            gen_data = [
+                [cell_para("RUT", True), cell_para(student_rut)],
+                [cell_para("Nombre", True), cell_para(student_fullname)],
+                [cell_para("Fecha de nacimiento", True), cell_para(student_born_date)],
+                [cell_para("Edad", True), cell_para(student_age)],
+                [cell_para("NEE", True), cell_para(student_nee)],
+                [cell_para("Establecimiento", True), cell_para(student_school)],
+                [cell_para("Curso", True), cell_para(student_course)],
+                [cell_para("Fecha de elaboración", True), cell_para(elaboration_date)],
+                [cell_para("Tipo (Período)", True), cell_para(period_label)],
+                [cell_para("¿Tratamiento farmacológico?", True), cell_para(pharmacological)],
+                [cell_para("¿Especialistas externos?", True), cell_para(external_specialists)],
+            ]
+            gen_table = Table(gen_data, colWidths=[7*cm, 9*cm])
+            hr_style = [('LINEBELOW', (0, i), (-1, i), 0.5, colors.grey) for i in range(len(gen_data))]
+            gen_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#f0f0f0')),
+                ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 11),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+                ('TOPPADDING', (0, 0), (-1, -1), 10),
+                ('LEFTPADDING', (0, 0), (-1, -1), 8),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ] + hr_style))
+            elements.append(gen_table)
+            elements.append(Spacer(1, 0.25*inch))
+            elements.append(Paragraph("II. Identificación del apoderado informante y del profesional participante", section_style))
+            elements.append(Spacer(1, 0.15*inch))
+            guardians = cesp_data.get("guardians") or []
+            if guardians:
+                guard_headers = [Paragraph("<b>RUT</b>", label_style), Paragraph("<b>Nombre</b>", label_style), Paragraph("<b>Teléfono</b>", label_style), Paragraph("<b>Correo</b>", label_style)]
+                guard_rows = [guard_headers]
+                for g in guardians:
+                    if isinstance(g, dict):
+                        guard_rows.append([
+                            (g.get("identification_number") or "").strip() or "—",
+                            (g.get("name") or "").strip() or "—",
+                            (g.get("phone") or "").strip() or "—",
+                            (g.get("email") or "").strip() or "—",
+                        ])
+                if len(guard_rows) > 1:
+                    gtable = Table(guard_rows, colWidths=[3*cm, 5.5*cm, 3*cm, 4.5*cm])
+                    gtable.setStyle(TableStyle([
+                        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e0e0e0')),
+                        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                        ('FONTSIZE', (0, 0), (-1, -1), 10),
+                        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+                        ('TOPPADDING', (0, 0), (-1, -1), 8),
+                        ('LEFTPADDING', (0, 0), (-1, -1), 6),
+                        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+                        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                    ]))
+                    elements.append(gtable)
+                    elements.append(Spacer(1, 0.15*inch))
+            participant_name = cesp_data.get("participant_professional_name") or ""
+            participant_role = (cesp_data.get("participant_professional") or {})
+            if isinstance(participant_role, dict):
+                participant_role = participant_role.get("professional_role") or ""
+            else:
+                participant_role = ""
+            if participant_name or participant_role:
+                part_headers = [Paragraph("<b>Nombre</b>", label_style), Paragraph("<b>Cargo / Rol</b>", label_style)]
+                part_data = [[participant_name or "—", participant_role or "—"]]
+                part_table = Table([part_headers] + part_data, colWidths=[8*cm, 8*cm])
+                part_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e0e0e0')),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, -1), 10),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+                    ('TOPPADDING', (0, 0), (-1, -1), 8),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 6),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                ]))
+                elements.append(KeepTogether([part_table, Spacer(1, 0.2*inch)]))
+            elements.append(Paragraph("III. Identificación del equipo de apoyo", section_style))
+            elements.append(Spacer(1, 0.15*inch))
+            support_list = cesp_data.get("support_team_members") or []
+            if support_list:
+                sup_headers = [Paragraph("<b>Nombre</b>", label_style), Paragraph("<b>Cargo / Rol</b>", label_style), Paragraph("<b>Roles de apoyo</b>", label_style), Paragraph("<b>Contacto</b>", label_style)]
+                sup_rows = [sup_headers]
+                for s in support_list:
+                    if isinstance(s, dict):
+                        contact = " | ".join(filter(None, [s.get("phone"), s.get("email")])) or "—"
+                        sup_rows.append([
+                            s.get("professional_name") or "—",
+                            s.get("professional_role") or "—",
+                            (s.get("support_roles") or "—")[:80] + ("..." if len((s.get("support_roles") or "")) > 80 else ""),
+                            contact,
+                        ])
+                if len(sup_rows) > 1:
+                    stable = Table(sup_rows, colWidths=[4*cm, 3.5*cm, 4*cm, 4.5*cm])
+                    stable.setStyle(TableStyle([
+                        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e0e0e0')),
+                        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                        ('FONTSIZE', (0, 0), (-1, -1), 9),
+                        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                        ('TOPPADDING', (0, 0), (-1, -1), 5),
+                        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                    ]))
+                    elements.append(stable)
+            elements.append(Spacer(1, 0.25*inch))
+            elements.append(Paragraph("IV. Perfil del estudiante", section_style))
+            elements.append(Spacer(1, 0.1*inch))
+            profile_fields = [
+                ("Interacción", "profile_interaction"),
+                ("Involucramiento", "profile_involvement"),
+                ("Repertorio conductual", "profile_behavior_repertoire"),
+                ("Habilidades", "profile_skills"),
+                ("Desafíos", "profile_challenges"),
+                ("Necesidades de apoyo", "profile_support_needs"),
+                ("Intereses", "profile_interests"),
+            ]
+            for label, key in profile_fields:
+                val = get_value(key)
+                elements.append(Paragraph(f"<b>{label}</b>", normal_style))
+                elements.append(hr_line())
+                elements.append(Paragraph((val[:2000] + ("..." if len(val) > 2000 else "")) if val else "—", normal_style))
+                elements.append(Spacer(1, 0.08*inch))
+            elements.append(Paragraph("V. Estresores y prevención", section_style))
+            elements.append(Spacer(1, 0.1*inch))
+            for label, key in [("Estresores y desencadenantes", "stressors_triggers"), ("Medidas de prevención", "prevention_measures")]:
+                val = get_value(key)
+                elements.append(Paragraph(f"<b>{label}</b>", normal_style))
+                elements.append(hr_line())
+                elements.append(Paragraph((val[:2000] + ("..." if len(val) > 2000 else "")) if val else "—", normal_style))
+                elements.append(Spacer(1, 0.08*inch))
+            elements.append(Paragraph("VI. Sugerencias", section_style))
+            elements.append(Spacer(1, 0.1*inch))
+            val_sug = get_value("suggestions_special")
+            elements.append(Paragraph("<b>Sugerencias</b>", normal_style))
+            elements.append(hr_line())
+            elements.append(Paragraph((val_sug[:2000] + ("..." if len(val_sug) > 2000 else "")) if val_sug else "—", normal_style))
+            elements.append(Spacer(1, 0.1*inch))
+            elements.append(Paragraph("VII. Estrategias por fases", section_style))
+            elements.append(Spacer(1, 0.1*inch))
+            for phase in [1, 2, 3, 4]:
+                m = get_value(f"strategies_phase{phase}_manifestations")
+                s = get_value(f"strategies_phase{phase}_strategies")
+                elements.append(Paragraph(f"<b>Fase {phase}</b>", normal_style))
+                elements.append(hr_line())
+                elements.append(Paragraph("<b>Manifestaciones</b>", normal_style))
+                elements.append(hr_line())
+                elements.append(Spacer(1, 0.06*inch))
+                elements.append(Paragraph((m[:1500] + "..." if len(m) > 1500 else m) if m else "—", normal_style))
+                elements.append(Spacer(1, 0.08*inch))
+                elements.append(Paragraph("<b>Estrategias</b>", normal_style))
+                elements.append(hr_line())
+                elements.append(Spacer(1, 0.06*inch))
+                elements.append(Paragraph((s[:1500] + "..." if len(s) > 1500 else s) if s else "—", normal_style))
+                elements.append(Spacer(1, 0.1*inch))
+            elements.append(Paragraph("VIII. Registro DEC", section_style))
+            elements.append(Spacer(1, 0.1*inch))
+            dec_records = cesp_data.get("dec_records") or []
+            dec_type_labels = {1: "Desregulación emocional/conductual", 2: "Otra incidencia", 3: "Otro"}
+            if dec_records:
+                for idx, rec in enumerate(dec_records):
+                    if not isinstance(rec, dict):
+                        continue
+                    rec_date = format_date(rec.get("incident_date") or "")
+                    rec_time = rec.get("incident_time") or ""
+                    rec_type_id = rec.get("action_incident_type_id")
+                    rec_type = dec_type_labels.get(rec_type_id, str(rec_type_id) if rec_type_id else "—")
+                    rec_title = (rec.get("title") or "").strip() or "—"
+                    elements.append(Paragraph(f"<b>Registro {idx + 1}</b>", normal_style))
+                    elements.append(hr_line())
+                    elements.append(Paragraph(f"<b>Fecha</b>", normal_style))
+                    elements.append(hr_line())
+                    elements.append(Spacer(1, 0.04*inch))
+                    elements.append(Paragraph(f"{rec_date} {rec_time}".strip() or "—", normal_style))
+                    elements.append(Paragraph(f"<b>Tipo</b>", normal_style))
+                    elements.append(hr_line())
+                    elements.append(Spacer(1, 0.04*inch))
+                    elements.append(Paragraph(rec_type, normal_style))
+                    elements.append(Paragraph(f"<b>Título</b>", normal_style))
+                    elements.append(hr_line())
+                    elements.append(Spacer(1, 0.04*inch))
+                    elements.append(Paragraph(rec_title, normal_style))
+                    for label, key in [("Antecedentes", "background"), ("Conducta", "conduct"), ("Consecuencias", "consequences"), ("Recomendaciones", "recommendations")]:
+                        val = (rec.get(key) or "").strip() if rec.get(key) else ""
+                        elements.append(Paragraph(f"<b>{label}</b>", normal_style))
+                        elements.append(hr_line())
+                        elements.append(Spacer(1, 0.04*inch))
+                        elements.append(Paragraph((val[:1500] + "..." if len(val) > 1500 else val) if val else "—", normal_style))
+                    elements.append(Spacer(1, 0.15*inch))
+            else:
+                elements.append(Paragraph("No se registran incidentes DEC para este estudiante.", normal_style))
+            doc.build(elements)
+            return {
+                "status": "success",
+                "message": "PDF CESP generado correctamente",
+                "filename": unique_filename,
+                "file_path": str(output_file)
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Error generando PDF CESP: {str(e)}",
                 "filename": None,
                 "file_path": None
             }

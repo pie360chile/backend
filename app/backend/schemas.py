@@ -479,17 +479,6 @@ class UpdateProfessional(BaseModel):
     career_type_id: Optional[int] = None
 
 
-def _hours_to_str(v):
-    """Acepta string o número y devuelve string (para guardar en columna varchar)."""
-    if v is None:
-        return None
-    if isinstance(v, str):
-        return v
-    if isinstance(v, (int, float)):
-        return str(v)
-    return str(v)
-
-
 class StoreProfessionalTeachingCourse(BaseModel):
     """Asignar profesional a enseñanza/curso (una fila en professionals_teachings_courses)."""
     professional_id: int
@@ -498,11 +487,6 @@ class StoreProfessionalTeachingCourse(BaseModel):
     teacher_type_id: Optional[int] = None
     career_type_id: Optional[int] = None
     subject: Optional[str] = None
-    hours: Optional[str] = None
-
-    @validator("hours", pre=True)
-    def hours_accept_number(cls, v):
-        return _hours_to_str(v)
 
 
 class UpdateProfessionalTeachingCourse(BaseModel):
@@ -512,14 +496,128 @@ class UpdateProfessionalTeachingCourse(BaseModel):
     course_id: Optional[int] = None
     teacher_type_id: Optional[int] = None
     subject: Optional[str] = None
-    hours: Optional[str] = None
     specialty: Optional[str] = None
     career_type_id: Optional[int] = None
     deleted_status_id: Optional[int] = None
 
-    @validator("hours", pre=True)
-    def hours_accept_number(cls, v):
-        return _hours_to_str(v)
+
+# Students-Professionals (students_professionals)
+class StoreStudentProfessional(BaseModel):
+    student_id: int
+    professional_id: int
+    career_type_id: Optional[int] = None
+    hours: Optional[int] = None
+
+
+class UpdateStudentProfessional(BaseModel):
+    student_id: Optional[int] = None
+    professional_id: Optional[int] = None
+    career_type_id: Optional[int] = None
+    hours: Optional[int] = None
+
+
+# Document Alerts (document_alerts)
+class StoreDocumentAlert(BaseModel):
+    student_id: int
+    professional_id: int
+    document_id: int
+    must_be_finish_date: Optional[str] = None  # YYYY-MM-DD o ISO
+    document_uploaded_date: Optional[str] = None
+
+
+class UpdateDocumentAlert(BaseModel):
+    student_id: Optional[int] = None
+    professional_id: Optional[int] = None
+    document_id: Optional[int] = None
+    must_be_finish_date: Optional[str] = None
+    document_uploaded_date: Optional[str] = None
+
+
+# Document 20: Community Education Support Program (CESP)
+class CespGuardianSchema(BaseModel):
+    guardian_id: Optional[int] = None
+    name: Optional[str] = None
+    identification_number: Optional[str] = None
+    family_member_id: Optional[int] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    is_emergency_contact: Optional[int] = 0
+    is_guardian: Optional[int] = 1
+
+
+class CespParticipantProfessionalSchema(BaseModel):
+    professional_id: int
+    professional_role: Optional[str] = None
+
+
+class CespSupportTeamMemberSchema(BaseModel):
+    professional_id: int
+    professional_role: Optional[str] = None
+    support_roles: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    sort_order: Optional[int] = 0
+
+
+class StoreCespDocument(BaseModel):
+    student_id: int
+    document_type_id: Optional[int] = 20
+    elaboration_date: Optional[str] = None
+    period_type_id: Optional[int] = 1
+    pharmacological_treatment: Optional[str] = None  # 'yes' | 'no'
+    external_specialists: Optional[str] = None  # 'yes' | 'no'
+    profile_interaction: Optional[str] = None
+    profile_involvement: Optional[str] = None
+    profile_behavior_repertoire: Optional[str] = None
+    profile_skills: Optional[str] = None
+    profile_challenges: Optional[str] = None
+    profile_support_needs: Optional[str] = None
+    profile_interests: Optional[str] = None
+    stressors_triggers: Optional[str] = None
+    prevention_measures: Optional[str] = None
+    suggestions_special: Optional[str] = None
+    strategies_phase1_manifestations: Optional[str] = None
+    strategies_phase1_strategies: Optional[str] = None
+    strategies_phase2_manifestations: Optional[str] = None
+    strategies_phase2_strategies: Optional[str] = None
+    strategies_phase3_manifestations: Optional[str] = None
+    strategies_phase3_strategies: Optional[str] = None
+    strategies_phase4_manifestations: Optional[str] = None
+    strategies_phase4_strategies: Optional[str] = None
+    guardians: Optional[List[CespGuardianSchema]] = None
+    participant_professional: Optional[CespParticipantProfessionalSchema] = None
+    support_team_members: Optional[List[CespSupportTeamMemberSchema]] = None
+
+
+class UpdateCespDocument(BaseModel):
+    student_id: Optional[int] = None
+    document_type_id: Optional[int] = None
+    elaboration_date: Optional[str] = None
+    period_type_id: Optional[int] = None
+    pharmacological_treatment: Optional[str] = None
+    external_specialists: Optional[str] = None
+    profile_interaction: Optional[str] = None
+    profile_involvement: Optional[str] = None
+    profile_behavior_repertoire: Optional[str] = None
+    profile_skills: Optional[str] = None
+    profile_challenges: Optional[str] = None
+    profile_support_needs: Optional[str] = None
+    profile_interests: Optional[str] = None
+    stressors_triggers: Optional[str] = None
+    prevention_measures: Optional[str] = None
+    suggestions_special: Optional[str] = None
+    strategies_phase1_manifestations: Optional[str] = None
+    strategies_phase1_strategies: Optional[str] = None
+    strategies_phase2_manifestations: Optional[str] = None
+    strategies_phase2_strategies: Optional[str] = None
+    strategies_phase3_manifestations: Optional[str] = None
+    strategies_phase3_strategies: Optional[str] = None
+    strategies_phase4_manifestations: Optional[str] = None
+    strategies_phase4_strategies: Optional[str] = None
+    guardians: Optional[List[CespGuardianSchema]] = None
+    participant_professional: Optional[CespParticipantProfessionalSchema] = None
+    support_team_members: Optional[List[CespSupportTeamMemberSchema]] = None
 
 
 # Package schemas
