@@ -128,6 +128,15 @@ class DocumentsClass:
                     output_directory=output_directory
                 )
             
+            # Si es documento 9 (Informe fonoaudiológico IDTEL), usar función específica
+            if document_id == 9:
+                return DocumentsClass._generate_idtel_report_from_scratch(
+                    document_id=document_id,
+                    report_data=document_data,
+                    db=db,
+                    output_directory=output_directory
+                )
+            
             # Si es documento 23 (Certificado de egreso PIE), usar función específica
             if document_id == 23:
                 return DocumentsClass._generate_school_integration_exit_certificate_from_scratch(
@@ -151,6 +160,49 @@ class DocumentsClass:
                 return DocumentsClass._generate_conners_teacher_from_scratch(
                     document_id=document_id,
                     conners_data=document_data,
+                    db=db,
+                    output_directory=output_directory
+                )
+            
+            # Si es documento 31 (Pauta de evaluación pedagógica - Docente de aula - 1º Básico)
+            if document_id == 31:
+                return DocumentsClass._generate_pedagogical_evaluation_classroom_first_grade_from_scratch(
+                    document_id=document_id,
+                    doc_data=document_data,
+                    db=db,
+                    output_directory=output_directory
+                )
+            
+            # Si es documento 32 (Pauta de evaluación pedagógica - Docente de aula - 2º Básico)
+            if document_id == 32:
+                return DocumentsClass._generate_pedagogical_evaluation_classroom_second_grade_from_scratch(
+                    document_id=document_id,
+                    doc_data=document_data,
+                    db=db,
+                    output_directory=output_directory
+                )
+            
+            # Si es documento 33 (Pauta de evaluación pedagógica - Docente de aula - 3º Básico)
+            if document_id == 33:
+                return DocumentsClass._generate_pedagogical_evaluation_classroom_third_grade_from_scratch(
+                    document_id=document_id,
+                    doc_data=document_data,
+                    db=db,
+                    output_directory=output_directory
+                )
+            
+            if document_id == 34:
+                return DocumentsClass._generate_pedagogical_evaluation_classroom_fourth_grade_from_scratch(
+                    document_id=document_id,
+                    doc_data=document_data,
+                    db=db,
+                    output_directory=output_directory
+                )
+            
+            if document_id == 38:
+                return DocumentsClass._generate_pedagogical_evaluation_classroom_first_grade_secondary_from_scratch(
+                    document_id=document_id,
+                    doc_data=document_data,
                     db=db,
                     output_directory=output_directory
                 )
@@ -4591,6 +4643,227 @@ class DocumentsClass:
             }
 
     @staticmethod
+    def _generate_idtel_report_from_scratch(
+        document_id: int,
+        report_data: Dict[str, Any],
+        db: Optional[Session] = None,
+        output_directory: str = "files/system/students"
+    ) -> Dict[str, Any]:
+        """
+        Genera un PDF del Informe fonoaudiológico IDTEL (Documento 9) desde cero usando ReportLab.
+        """
+        try:
+            if not REPORTLAB_AVAILABLE:
+                return {
+                    "status": "error",
+                    "message": "ReportLab no está instalado. Instala con: pip install reportlab",
+                    "filename": None,
+                    "file_path": None
+                }
+            student_name = report_data.get("student_full_name", "estudiante").replace(" ", "_")
+            unique_filename = f"informe_idtel_{student_name}_{uuid.uuid4().hex[:8]}.pdf"
+            output_file = Path(output_directory) / unique_filename
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+            doc = SimpleDocTemplate(
+                str(output_file),
+                pagesize=A4,
+                rightMargin=2.5*cm,
+                leftMargin=2.5*cm,
+                topMargin=3*cm,
+                bottomMargin=2.5*cm
+            )
+            elements = []
+            styles = getSampleStyleSheet()
+            title_style = ParagraphStyle(
+                'CustomTitle',
+                parent=styles['Heading1'],
+                fontSize=16,
+                textColor=colors.HexColor('#000000'),
+                spaceAfter=25,
+                spaceBefore=15,
+                alignment=TA_CENTER,
+                fontName='Helvetica-Bold'
+            )
+            section_style = ParagraphStyle(
+                'SectionStyle',
+                parent=styles['Normal'],
+                fontSize=12,
+                textColor=colors.HexColor('#000000'),
+                spaceAfter=12,
+                spaceBefore=15,
+                fontName='Helvetica-Bold',
+                alignment=TA_LEFT,
+                backColor=colors.HexColor('#E8E8E8'),
+                borderPadding=6
+            )
+            subtitle_style = ParagraphStyle(
+                'Subtitle',
+                parent=styles['Normal'],
+                fontSize=10,
+                textColor=colors.HexColor('#000000'),
+                spaceAfter=6,
+                spaceBefore=10,
+                fontName='Helvetica-Bold'
+            )
+            normal_style = ParagraphStyle(
+                'CustomNormal',
+                parent=styles['Normal'],
+                fontSize=10,
+                textColor=colors.HexColor('#000000'),
+                alignment=TA_LEFT,
+                leading=12,
+                spaceAfter=4
+            )
+            label_style = ParagraphStyle(
+                'LabelStyle',
+                parent=styles['Normal'],
+                fontSize=10,
+                textColor=colors.HexColor('#000000'),
+                alignment=TA_LEFT,
+                fontName='Helvetica-Bold',
+                backColor=colors.HexColor('#F5F5F5'),
+                borderPadding=4
+            )
+
+            def get_value(key: str, default: str = "") -> str:
+                v = report_data.get(key)
+                if v is None:
+                    return default
+                return str(v).strip() if v else default
+
+            def format_date(date_val) -> str:
+                if not date_val:
+                    return ""
+                try:
+                    s = str(date_val).strip()[:10]
+                    if not s:
+                        return ""
+                    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+                        try:
+                            dt = datetime.strptime(s, fmt).date()
+                            return dt.strftime("%d/%m/%Y")
+                        except Exception:
+                            continue
+                    return s
+                except Exception:
+                    return str(date_val) if date_val else ""
+
+            def add_section(title: str):
+                elements.append(Paragraph(title, section_style))
+                elements.append(Spacer(1, 0.2*inch))
+
+            def add_text_block(label: str, text: str):
+                if not text:
+                    return
+                elements.append(Paragraph(f"<b>{label}</b>", subtitle_style))
+                elements.append(Paragraph(DocumentsClass._escape_html_for_paragraph(text), normal_style))
+                elements.append(Spacer(1, 0.15*inch))
+
+            elements.append(Paragraph("Informe fonoaudiológico IDTEL", title_style))
+            elements.append(Spacer(1, 0.4*inch))
+
+            add_section("I. Identificación del/la estudiante")
+            id_data = []
+            id_spans = []
+            def _add_row(lbl: str, val: str):
+                if val is None:
+                    val = ""
+                val = str(val).strip()
+                r = len(id_data)
+                id_data.append([Paragraph(f"<b>{lbl}</b>", label_style), ""])
+                id_spans.append(('SPAN', (0, r), (1, r)))
+                id_data.append([Paragraph(DocumentsClass._escape_html_for_paragraph(val or "—"), normal_style), ""])
+                id_spans.append(('SPAN', (0, r + 1), (1, r + 1)))
+
+            age_range = report_data.get("idtel_age_range") or "6_7"
+            age_range_label = "8 a 9 años 11 meses" if age_range == "8_9" else "6 a 7 años 11 meses"
+            _add_row("Nombre", get_value("student_full_name"))
+            _add_row("RUT", get_value("student_identification_number"))
+            _add_row("Fecha de nacimiento", format_date(get_value("student_born_date")))
+            _add_row("Edad", get_value("student_age"))
+            _add_row("Establecimiento", get_value("establishment_id"))
+            _add_row("Curso", get_value("course_name"))
+            _add_row("Profesional/es responsable/s", get_value("responsible_professionals_names"))
+            _add_row("Fecha de informe", format_date(get_value("report_date")))
+            _add_row("Rango etario IDTEL", age_range_label)
+            if id_data:
+                tbl = Table(id_data, colWidths=[7.5*cm, 7.5*cm])
+                tbl.setStyle(TableStyle([
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 8),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+                    ('TOPPADDING', (0, 0), (-1, -1), 8),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),
+                ] + id_spans))
+                elements.append(tbl)
+            elements.append(Spacer(1, 0.3*inch))
+
+            add_section("II. Motivo y antecedentes")
+            add_text_block("Motivo de la evaluación", get_value("reason_evaluation"))
+            add_text_block("Antecedentes relevantes", get_value("relevant_background"))
+            add_text_block("Instrumentos de evaluación utilizados", get_value("evaluation_instruments"))
+            add_text_block("Conductas observadas durante la evaluación", get_value("behaviors_observed"))
+
+            add_section("III. Puntajes IDTEL")
+            score_rows = [
+                ("Fonológico", report_data.get("score_phonological")),
+                ("Morfosintáctico", report_data.get("score_morphosyntactic")),
+                ("Semántico", report_data.get("score_semantic")),
+                ("Pragmático", report_data.get("score_pragmatic")),
+                ("Total IDTEL", report_data.get("score_total_idtel")),
+            ]
+            score_table_data = [[Paragraph("<b>Área</b>", label_style), Paragraph("<b>Puntaje</b>", label_style)]]
+            for area, val in score_rows:
+                if val is not None and str(val).strip() != "":
+                    score_table_data.append([area, str(val)])
+            if len(score_table_data) > 1:
+                st = Table(score_table_data, colWidths=[5*cm, 4*cm])
+                st.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e0e0e0')),
+                    ('FONTSIZE', (0, 0), (-1, -1), 10),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                    ('PADDING', (0, 0), (-1, -1), 6),
+                ]))
+                elements.append(st)
+            elements.append(Spacer(1, 0.2*inch))
+
+            add_section("IV. Análisis por niveles")
+            add_text_block("Nivel fonológico", get_value("phonological_level"))
+            add_text_block("Nivel morfosintáctico", get_value("morphosyntactic_level"))
+            add_text_block("Nivel semántico", get_value("semantic_level"))
+            add_text_block("Nivel pragmático", get_value("pragmatic_level"))
+
+            add_section("V. Síntesis diagnóstica y/o conclusiones")
+            diag = get_value("diagnostic_synthesis")
+            if diag:
+                add_text_block("Síntesis diagnóstica y/o conclusiones", diag)
+
+            sug_fam = get_value("suggestions_family")
+            sug_est = get_value("suggestions_establishment")
+            if sug_fam or sug_est:
+                add_section("VI. Sugerencias")
+                if sug_fam:
+                    add_text_block("Sugerencias a la familia", sug_fam)
+                if sug_est:
+                    add_text_block("Sugerencias al establecimiento", sug_est)
+
+            doc.build(elements)
+            return {
+                "status": "success",
+                "message": "PDF informe IDTEL generado correctamente",
+                "filename": unique_filename,
+                "file_path": str(output_file)
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Error generando informe IDTEL: {str(e)}",
+                "filename": None,
+                "file_path": None
+            }
+
+    @staticmethod
     def _generate_school_integration_exit_certificate_from_scratch(
         document_id: int,
         cert_data: Dict[str, Any],
@@ -4888,6 +5161,1441 @@ class DocumentsClass:
                 "filename": None,
                 "file_path": None
             }
+
+    @staticmethod
+    def _generate_pedagogical_evaluation_classroom_first_grade_from_scratch(
+        document_id: int,
+        doc_data: Dict[str, Any],
+        db: Optional[Session] = None,
+        output_directory: str = "files/system/students"
+    ) -> Dict[str, Any]:
+        """
+        Genera el PDF del documento 31 (Pauta de evaluación pedagógica - Docente de aula - 1º Básico)
+        desde cero, con todos los datos y respuestas en español.
+        """
+        try:
+            if not REPORTLAB_AVAILABLE:
+                return {
+                    "status": "error",
+                    "message": "ReportLab no está instalado. Instala con: pip install reportlab",
+                    "filename": None,
+                    "file_path": None
+                }
+
+            def get_value(key: str, default: str = "") -> str:
+                v = doc_data.get(key)
+                if v is None:
+                    return default
+                return str(v).strip() if v else default
+
+            def format_date(date_val) -> str:
+                if not date_val:
+                    return ""
+                try:
+                    if isinstance(date_val, str) and len(date_val) >= 10:
+                        d = datetime.strptime(date_val[:10], "%Y-%m-%d").date()
+                        return d.strftime("%d/%m/%Y")
+                    if hasattr(date_val, "strftime"):
+                        return date_val.strftime("%d/%m/%Y")
+                    return str(date_val)[:10]
+                except Exception:
+                    return str(date_val)[:10] if date_val else ""
+
+            student_name = get_value("student_full_name", "estudiante").replace(" ", "_")
+            unique_filename = f"pauta_eval_pedagogica_1basico_{student_name}_{uuid.uuid4().hex[:8]}.pdf"
+            output_file = Path(output_directory) / unique_filename
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+
+            doc = SimpleDocTemplate(
+                str(output_file),
+                pagesize=A4,
+                rightMargin=2*cm,
+                leftMargin=2*cm,
+                topMargin=2*cm,
+                bottomMargin=2*cm
+            )
+            elements = []
+            styles = getSampleStyleSheet()
+
+            title_style = ParagraphStyle(
+                'Doc31Title',
+                parent=styles['Heading1'],
+                fontSize=14,
+                textColor=colors.HexColor('#000000'),
+                spaceAfter=14,
+                spaceBefore=8,
+                alignment=TA_CENTER,
+                fontName='Helvetica-Bold'
+            )
+            section_style = ParagraphStyle(
+                'Doc31Section',
+                parent=styles['Normal'],
+                fontSize=11,
+                textColor=colors.HexColor('#000000'),
+                spaceAfter=6,
+                spaceBefore=10,
+                fontName='Helvetica-Bold',
+                backColor=colors.HexColor('#E8E8E8'),
+                borderPadding=6
+            )
+            subtitle_style = ParagraphStyle(
+                'Doc31Subtitle',
+                parent=styles['Normal'],
+                fontSize=10,
+                textColor=colors.HexColor('#000000'),
+                spaceAfter=4,
+                spaceBefore=6,
+                fontName='Helvetica-Bold'
+            )
+            normal_style = ParagraphStyle(
+                'Doc31Normal',
+                parent=styles['Normal'],
+                fontSize=10,
+                textColor=colors.HexColor('#000000'),
+                alignment=TA_LEFT,
+                leading=12,
+                spaceAfter=2
+            )
+            legend_style = ParagraphStyle(
+                'Doc31Legend',
+                parent=styles['Normal'],
+                fontSize=9,
+                textColor=colors.HexColor('#333333'),
+                alignment=TA_LEFT,
+                spaceAfter=6,
+                spaceBefore=2
+            )
+            header_cell_style = ParagraphStyle(
+                'Doc31HeaderCell',
+                parent=styles['Normal'],
+                fontSize=9,
+                textColor=colors.white,
+                alignment=TA_CENTER,
+                fontName='Helvetica-Bold'
+            )
+            cell_center_style = ParagraphStyle(
+                'Doc31CellCenter',
+                parent=styles['Normal'],
+                fontSize=10,
+                textColor=colors.HexColor('#000000'),
+                alignment=TA_CENTER
+            )
+            # Leyenda de respuestas: S, G, O, P/V, N, N/O
+            DOC31_RESPONSE_COLS = ["S", "G", "O", "P/V", "N", "N/O"]
+            DOC31_LEGEND_TEXT = "S: Siempre   G: Generalmente   O: Ocasionalmente   P/V: Pocas veces   N: Nunca   N/O: No observado"
+            # Indicadores del primer cuadro (III. Actitud) - 12 ítems
+            DOC31_ACTITUD_INDICADORES = [
+                "Manifiesta curiosidad e interés por aprender",
+                "Demuestra disposición para compartir ideas, experiencias y opiniones con los demás",
+                "Presta atención a las actividades y dinámicas de la clase",
+                "Adopta una actitud positiva hacia sí mismo y hacia el aprendizaje",
+                "Inicia, persiste y finaliza tareas de forma autónoma",
+                "Realiza sus trabajos de manera ordenada y sistemática",
+                "Aborda y resuelve problemas de manera flexible y creativa durante las actividades",
+                "Muestra entusiasmo y motivación frente a nuevos desafíos",
+                "Se adapta con flexibilidad a cambios, imprevistos o nuevas rutinas de trabajo",
+                "Participa activamente en actividades grupales y colaborativas",
+                "Es receptivo a la retroalimentación y la aplica para mejorar",
+                "Busca apoyo o aclara dudas cuando enfrenta dificultades",
+            ]
+            # Indicadores del segundo cuadro (IV. Lenguaje) - 13 ítems
+            DOC31_LENGUAJE_INDICADORES = [
+                "Identifica los sonidos que componen las palabras (conciencia fonológica)",
+                "Reconoce que las palabras son unidades de significado separadas por espacios",
+                "Asocia sonido con letra (principio alfabético)",
+                "Lee palabras de uso frecuente en forma global",
+                "Comprende textos breves leídos por un adulto",
+                "Responde preguntas literales sobre el texto",
+                "Produce escritura con letras convencionales",
+                "Escribe su nombre y palabras conocidas",
+                "Sigue la direccionalidad de la escritura (izquierda a derecha)",
+                "Diferencia entre letras y números",
+                "Participa en conversaciones respetando turnos",
+                "Expresa ideas o experiencias en forma oral",
+                "Comprende y sigue instrucciones orales",
+            ]
+            # Indicadores del tercer cuadro (V. Matemática) - 11 ítems
+            DOC31_MATEMATICA_INDICADORES = [
+                "Lee números del 0 al 20 y los representa de forma concreta, pictórica y simbólica",
+                "Compara y ordena números del 0 al 20 de menor a mayor y viceversa",
+                "Compone y descompone números del 0 al 20 de manera aditiva",
+                "Determina las unidades y decenas en números del 0 al 20",
+                "Demuestra comprensión de la adición y la sustracción de números del 0 al 20, resolviendo sumas y restas progresivas",
+                "Reconoce, crea y continúa patrones repetitivos (sonidos, figuras, ritmos) y patrones numéricos hasta el 20, en secuencias crecientes y decrecientes",
+                "Describe la posición de objetos y personas en relación a sí mismos y a otros, utilizando un lenguaje común (por ejemplo, derecha, izquierda)",
+                "Identifica y relaciona figuras 3D y 2D en el entorno, utilizando material concreto",
+                "Identifica y compara la longitud de objetos, utilizando términos como largo y corto",
+                "Recolecta y registra datos para responder preguntas estadísticas sobre sí mismo y su entorno, utilizando bloques, tablas de conteo y pictogramas",
+                "Construye, lee e interpreta pictogramas",
+            ]
+
+            def normalize_response_doc31(val):
+                if val is None or (isinstance(val, str) and not val.strip()):
+                    return None
+                v = str(val).strip().upper().replace(" ", "")
+                if v in ("S", "SIEMPRE"):
+                    return "S"
+                if v in ("G", "GENERALMENTE"):
+                    return "G"
+                if v in ("O", "OCASIONALMENTE"):
+                    return "O"
+                if v in ("P/V", "PV", "POCASVECES", "P"):
+                    return "P/V"
+                if v in ("N/O", "NO", "NOOBSERVADO"):
+                    return "N/O"
+                if v in ("N", "NUNCA"):
+                    return "N"
+                # Por si viene solo una letra
+                if len(v) == 1 and v in "SGOPN":
+                    return "P/V" if v == "P" else v
+                return None
+
+            def build_doc31_indicator_table(header_label, item_prefix, num_items, get_val_fn, indicator_labels=None):
+                """Construye tabla con leyenda, encabezado (Indicadores + S, G, O, P/V, N, N/O) y filas con check.
+                Si indicator_labels está definido y tiene al menos num_items, se usa como texto del indicador."""
+                rows = []
+                rows.append([Paragraph(DocumentsClass._escape_html_for_paragraph("Indicadores"), header_cell_style)] + [Paragraph(c, header_cell_style) for c in DOC31_RESPONSE_COLS])
+                for i in range(1, num_items + 1):
+                    val = get_val_fn(i)
+                    col_key = normalize_response_doc31(val)
+                    if indicator_labels and len(indicator_labels) >= i:
+                        label_text = indicator_labels[i - 1]
+                    else:
+                        label_text = f"{item_prefix} {i}"
+                    cells = [Paragraph(DocumentsClass._escape_html_for_paragraph(label_text), normal_style)]
+                    for c in DOC31_RESPONSE_COLS:
+                        cells.append(Paragraph("✓" if col_key == c else "", cell_center_style))
+                    rows.append(cells)
+                col_ind = 8*cm
+                col_opt = (16*cm - col_ind) / 6
+                col_widths = [col_ind] + [col_opt] * 6
+                tbl = Table(rows, colWidths=col_widths)
+                tbl.setStyle(TableStyle([
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+                    ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 6),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+                    ('TOPPADDING', (0, 0), (-1, -1), 5),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#505050')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ]))
+                return tbl
+
+            # Título
+            elements.append(Paragraph("Pauta de evaluación pedagógica - Docente de aula - 1º Básico", title_style))
+            elements.append(Spacer(1, 0.25*inch))
+
+            # I. Datos del estudiante e informe
+            elements.append(Paragraph("I. DATOS DEL ESTUDIANTE E INFORME", section_style))
+            elements.append(Spacer(1, 0.15*inch))
+            col_label = 5*cm
+            col_value = 11*cm
+            id_data = []
+            id_data.append([Paragraph("<b>Nombre completo:</b>", subtitle_style), Paragraph(DocumentsClass._escape_html_for_paragraph(get_value("student_full_name", "—")), normal_style)])
+            id_data.append([Paragraph("<b>RUT:</b>", subtitle_style), Paragraph(DocumentsClass._escape_html_for_paragraph(get_value("student_identification_number", "—")), normal_style)])
+            id_data.append([Paragraph("<b>Fecha de nacimiento:</b>", subtitle_style), Paragraph(format_date(doc_data.get("student_born_date")) or "—", normal_style)])
+            id_data.append([Paragraph("<b>Edad:</b>", subtitle_style), Paragraph(get_value("student_age", "—"), normal_style)])
+            id_data.append([Paragraph("<b>Establecimiento:</b>", subtitle_style), Paragraph(DocumentsClass._escape_html_for_paragraph(get_value("establishment_id", "—")), normal_style)])
+            id_data.append([Paragraph("<b>Curso:</b>", subtitle_style), Paragraph(get_value("course", "—"), normal_style)])
+            id_data.append([Paragraph("<b>Fecha del informe:</b>", subtitle_style), Paragraph(format_date(doc_data.get("report_date")) or "—", normal_style)])
+            id_data.append([Paragraph("<b>Repeticiones:</b>", subtitle_style), Paragraph(get_value("repetitions", "—"), normal_style)])
+            report_type_val = (get_value("report_type", "") or "").strip()
+            if report_type_val.lower() == "anual":
+                report_type_val = "Anual"
+            elif report_type_val.lower() == "semestral":
+                report_type_val = "Semestral"
+            id_data.append([Paragraph("<b>Tipo de informe:</b>", subtitle_style), Paragraph(DocumentsClass._escape_html_for_paragraph(report_type_val or "—"), normal_style)])
+            tbl_id = Table(id_data, colWidths=[col_label, col_value])
+            tbl_id.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 8),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+                ('TOPPADDING', (0, 0), (-1, -1), 6),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),
+            ]))
+            elements.append(tbl_id)
+            elements.append(Spacer(1, 0.25*inch))
+
+            # II. Fortalezas de la situación escolar (school_situation_strengths puede ser JSON)
+            elements.append(Paragraph("II. FORTALEZAS DE LA SITUACIÓN ESCOLAR", section_style))
+            elements.append(Spacer(1, 0.1*inch))
+            strengths_raw = doc_data.get("school_situation_strengths")
+            strength_labels_es = {
+                "strength_creative": "Creativo/a",
+                "strength_autonomous": "Autónomo/a",
+                "strength_motivated": "Motivado/a",
+                "strength_tolerant_frustration": "Tolerante a la frustración",
+                "strength_respects_rules": "Respeta las normas",
+                "strength_follows_instructions": "Sigue instrucciones",
+                "strength_peers_relationship": "Buena relación con pares",
+                "strength_attends_gladly": "Asiste con gusto",
+                "strength_family_communication": "Comunicación con la familia",
+                "strength_persistent": "Persistente",
+                "strength_self_confident": "Seguro/a de sí mismo/a",
+                "strength_participates": "Participa",
+                "strength_pays_attention": "Presta atención",
+                "strength_interested_learning": "Interesado/a en el aprendizaje",
+                "strength_completes_tasks": "Completa tareas",
+                "strength_adults_relationship": "Buena relación con adultos",
+                "strength_attends_regularly": "Asiste regularmente",
+                "strength_family_committed": "Familia comprometida",
+            }
+            strengths_text = ""
+            if strengths_raw is not None and strengths_raw != "":
+                if isinstance(strengths_raw, dict):
+                    strengths_list = [strength_labels_es.get(k, k) for k, v in strengths_raw.items() if v is True]
+                    strengths_text = ", ".join(strengths_list) if strengths_list else "Ninguna marcada."
+                elif isinstance(strengths_raw, str):
+                    try:
+                        import json
+                        parsed = json.loads(strengths_raw)
+                        if isinstance(parsed, dict):
+                            strengths_list = [strength_labels_es.get(k, k) for k, v in parsed.items() if v is True]
+                            strengths_text = ", ".join(strengths_list) if strengths_list else "Ninguna marcada."
+                        else:
+                            strengths_text = str(strengths_raw).strip() or "—"
+                    except Exception:
+                        strengths_text = str(strengths_raw).strip() or "—"
+                else:
+                    strengths_text = str(strengths_raw).strip() or "—"
+            if not strengths_text:
+                strengths_text = "—"
+            elements.append(Paragraph(DocumentsClass._escape_html_for_paragraph(strengths_text), normal_style))
+            elements.append(Spacer(1, 0.15*inch))
+            elements.append(Paragraph("Observaciones generales", subtitle_style))
+            elements.append(Spacer(1, 0.1*inch))
+            obs = get_value("observations", "")
+            if obs:
+                elements.append(Paragraph(DocumentsClass._escape_html_for_paragraph(obs), normal_style))
+            else:
+                elements.append(Paragraph("—", normal_style))
+            elements.append(Spacer(1, 0.25*inch))
+
+            # III. Actitud (ítems 1-12: tabla con preguntas y check)
+            elements.append(Paragraph("III. ACTITUD", section_style))
+            elements.append(Spacer(1, 0.08*inch))
+            elements.append(Paragraph(DOC31_LEGEND_TEXT, legend_style))
+            elements.append(Spacer(1, 0.06*inch))
+            att_table = build_doc31_indicator_table(
+                "Actitud", "Actitud", 12, lambda i: get_value(f"attitude_{i}", ""),
+                indicator_labels=DOC31_ACTITUD_INDICADORES
+            )
+            elements.append(att_table)
+            elements.append(Spacer(1, 0.1*inch))
+            elements.append(Paragraph("Observaciones actitud:", subtitle_style))
+            obs_att = get_value("observations_attitude", "")
+            elements.append(Paragraph(DocumentsClass._escape_html_for_paragraph(obs_att) if obs_att else "—", normal_style))
+            elements.append(Spacer(1, 0.25*inch))
+
+            # IV. Lenguaje (ítems 1-13: tabla con preguntas y check)
+            elements.append(Paragraph("IV. LENGUAJE", section_style))
+            elements.append(Spacer(1, 0.08*inch))
+            elements.append(Paragraph(DOC31_LEGEND_TEXT, legend_style))
+            elements.append(Spacer(1, 0.06*inch))
+            lang_table = build_doc31_indicator_table(
+                "Lenguaje", "Lenguaje", 13, lambda i: get_value(f"language_{i}", ""),
+                indicator_labels=DOC31_LENGUAJE_INDICADORES
+            )
+            elements.append(lang_table)
+            elements.append(Spacer(1, 0.12*inch))
+            # Tipo de lectura, Nivel de comprensión, Nivel de escritura (pueden ser varios, separados por coma)
+            reading_type_labels = {
+                "en_desarrollo": "En desarrollo",
+                "silabica": "Silábica",
+                "palabra_a_palabra": "Palabra a palabra",
+                "por_unidades_cortas": "Por unidades cortas",
+                "fluida": "Fluida",
+            }
+            comprehension_labels = {
+                "en_desarrollo": "En desarrollo",
+                "literal": "Literal",
+                "inferencial": "Inferencial",
+                "critica": "Crítica",
+            }
+            writing_labels = {
+                "en_desarrollo": "En desarrollo",
+                "copia": "Copia",
+                "dictado": "Dictado",
+                "espontanea": "Espontánea",
+            }
+
+            def format_multi_value(raw: str, labels_dict: dict) -> str:
+                if not raw or not str(raw).strip():
+                    return "—"
+                parts = [p.strip().lower().replace(" ", "_") for p in str(raw).split(",") if p and p.strip()]
+                if not parts:
+                    return "—"
+                display = [labels_dict.get(p) or p for p in parts]
+                return ", ".join(display)
+
+            rt_display = format_multi_value(get_value("reading_type", ""), reading_type_labels)
+            cl_display = format_multi_value(get_value("comprehension_level", ""), comprehension_labels)
+            wl_display = format_multi_value(get_value("writing_level", ""), writing_labels)
+            elements.append(Paragraph("<b>Tipo de lectura:</b> " + DocumentsClass._escape_html_for_paragraph(rt_display), normal_style))
+            elements.append(Paragraph("<b>Nivel de comprensión:</b> " + DocumentsClass._escape_html_for_paragraph(cl_display), normal_style))
+            elements.append(Paragraph("<b>Nivel de escritura:</b> " + DocumentsClass._escape_html_for_paragraph(wl_display), normal_style))
+            elements.append(Spacer(1, 0.1*inch))
+            elements.append(Paragraph("Observaciones lenguaje:", subtitle_style))
+            obs_lang = get_value("observations_language", "")
+            elements.append(Paragraph(DocumentsClass._escape_html_for_paragraph(obs_lang) if obs_lang else "—", normal_style))
+            elements.append(Spacer(1, 0.25*inch))
+
+            # V. Matemática (ítems 1-11: tabla con preguntas y check)
+            elements.append(Paragraph("V. MATEMÁTICA", section_style))
+            elements.append(Spacer(1, 0.08*inch))
+            elements.append(Paragraph(DOC31_LEGEND_TEXT, legend_style))
+            elements.append(Spacer(1, 0.06*inch))
+            math_table = build_doc31_indicator_table(
+                "Matemática", "Matemática", 11, lambda i: get_value(f"mathematics_{i}", ""),
+                indicator_labels=DOC31_MATEMATICA_INDICADORES
+            )
+            elements.append(math_table)
+            elements.append(Spacer(1, 0.1*inch))
+            elements.append(Paragraph("Observaciones matemática:", subtitle_style))
+            obs_math = get_value("observations_mathematics", "")
+            elements.append(Paragraph(DocumentsClass._escape_html_for_paragraph(obs_math) if obs_math else "—", normal_style))
+
+            doc.build(elements)
+            return {
+                "status": "success",
+                "message": "PDF generado exitosamente desde cero",
+                "filename": unique_filename,
+                "file_path": str(output_file)
+            }
+        except ImportError:
+            return {
+                "status": "error",
+                "message": "ReportLab no está instalado. Instala con: pip install reportlab",
+                "filename": None,
+                "file_path": None
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Error generando PDF documento 31: {str(e)}",
+                "filename": None,
+                "file_path": None
+            }
+
+    @staticmethod
+    def _generate_pedagogical_evaluation_classroom_second_grade_from_scratch(
+        document_id: int,
+        doc_data: Dict[str, Any],
+        db: Optional[Session] = None,
+        output_directory: str = "files/system/students"
+    ) -> Dict[str, Any]:
+        """
+        Genera el PDF del documento 32 (Pauta de evaluación pedagógica - Docente de aula - 2º Básico)
+        desde cero. 15 indicadores de lenguaje, 12 de matemática.
+        """
+        try:
+            if not REPORTLAB_AVAILABLE:
+                return {
+                    "status": "error",
+                    "message": "ReportLab no está instalado. Instala con: pip install reportlab",
+                    "filename": None,
+                    "file_path": None
+                }
+
+            def get_value(key: str, default: str = "") -> str:
+                v = doc_data.get(key)
+                if v is None:
+                    return default
+                return str(v).strip() if v else default
+
+            def format_date(date_val) -> str:
+                if not date_val:
+                    return ""
+                try:
+                    if isinstance(date_val, str) and len(date_val) >= 10:
+                        d = datetime.strptime(date_val[:10], "%Y-%m-%d").date()
+                        return d.strftime("%d/%m/%Y")
+                    if hasattr(date_val, "strftime"):
+                        return date_val.strftime("%d/%m/%Y")
+                    return str(date_val)[:10]
+                except Exception:
+                    return str(date_val)[:10] if date_val else ""
+
+            student_name = get_value("student_full_name", "estudiante").replace(" ", "_")
+            unique_filename = f"pauta_eval_pedagogica_2basico_{student_name}_{uuid.uuid4().hex[:8]}.pdf"
+            output_file = Path(output_directory) / unique_filename
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+
+            doc = SimpleDocTemplate(
+                str(output_file),
+                pagesize=A4,
+                rightMargin=2*cm,
+                leftMargin=2*cm,
+                topMargin=2*cm,
+                bottomMargin=2*cm
+            )
+            elements = []
+            styles = getSampleStyleSheet()
+            title_style = ParagraphStyle(
+                'Doc32Title', parent=styles['Heading1'], fontSize=14, textColor=colors.HexColor('#000000'),
+                spaceAfter=14, spaceBefore=8, alignment=TA_CENTER, fontName='Helvetica-Bold'
+            )
+            section_style = ParagraphStyle(
+                'Doc32Section', parent=styles['Normal'], fontSize=11, textColor=colors.HexColor('#000000'),
+                spaceAfter=6, spaceBefore=10, fontName='Helvetica-Bold',
+                backColor=colors.HexColor('#E8E8E8'), borderPadding=6
+            )
+            subtitle_style = ParagraphStyle(
+                'Doc32Subtitle', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#000000'),
+                spaceAfter=4, spaceBefore=6, fontName='Helvetica-Bold'
+            )
+            normal_style = ParagraphStyle(
+                'Doc32Normal', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#000000'),
+                alignment=TA_LEFT, leading=12, spaceAfter=2
+            )
+            legend_style = ParagraphStyle(
+                'Doc32Legend', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#333333'),
+                alignment=TA_LEFT, spaceAfter=6, spaceBefore=2
+            )
+            header_cell_style = ParagraphStyle(
+                'Doc32HeaderCell', parent=styles['Normal'], fontSize=9, textColor=colors.white,
+                alignment=TA_CENTER, fontName='Helvetica-Bold'
+            )
+            cell_center_style = ParagraphStyle(
+                'Doc32CellCenter', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#000000'), alignment=TA_CENTER
+            )
+            DOC32_RESPONSE_COLS = ["S", "G", "O", "P/V", "N", "N/O"]
+            DOC32_LEGEND_TEXT = "S: Siempre   G: Generalmente   O: Ocasionalmente   P/V: Pocas veces   N: Nunca   N/O: No observado"
+            DOC32_ACTITUD_INDICADORES = [
+                "Manifiesta curiosidad e interés por aprender",
+                "Demuestra disposición para compartir ideas, experiencias y opiniones con los demás",
+                "Presta atención a las actividades y dinámicas de la clase",
+                "Adopta una actitud positiva hacia sí mismo y hacia el aprendizaje",
+                "Inicia, persiste y finaliza tareas de forma autónoma",
+                "Realiza sus trabajos de manera ordenada y sistemática",
+                "Aborda y resuelve problemas de manera flexible y creativa durante las actividades",
+                "Muestra entusiasmo y motivación frente a nuevos desafíos",
+                "Se adapta con flexibilidad a cambios, imprevistos o nuevas rutinas de trabajo",
+                "Participa activamente en actividades grupales y colaborativas",
+                "Es receptivo a la retroalimentación y la aplica para mejorar",
+                "Busca apoyo o aclara dudas cuando enfrenta dificultades",
+            ]
+            DOC32_LENGUAJE_INDICADORES = [
+                "Lee textos con palabras que incluyen hiatos, diptongos, grupos consonánticos y combinaciones complejas",
+                "Lee en voz alta con precisión y fluidez progresiva, autocorrigiéndose cuando es necesario",
+                "Lee y comprende textos no literarios como cartas, notas e instrucciones",
+                "Comprende narraciones extrayendo información explícita e implícita, recreando la secuencia de acciones, describiendo personajes, ambiente, entre otros",
+                "Comprende y extrae información de explicaciones, relatos o instrucciones verbales",
+                "Escribe oraciones simples con coherencia y respetando las normas gramaticales básicas",
+                "Escribe de manera creativa, expresando sus ideas y pensamientos",
+                "Redacta narraciones incluyendo inicio, desarrollo y desenlace claros y coherentes",
+                "Planifica sus escritos a partir de observaciones y discusiones sobre temas de interés personal",
+                "Escribe, revisa y edita sus textos, planificando ideas, corrigiendo errores y mejorando la redacción",
+                "Escribe de forma legible y separa las palabras correctamente",
+                "Participa activamente en conversaciones grupales, expresando ideas, mostrando interés y respetando turnos de habla",
+                "Interactúa de acuerdo con las convenciones sociales adecuándose a distintos contextos",
+                "Expone ideas de forma coherente y articulada sobre temas de interés, utilizando un vocabulario variado y pronunciación adecuada",
+                "Trabaja en equipo y desempeña diferentes roles para desarrollar su lenguaje y autoestima"
+            ]
+            DOC32_MATEMATICA_INDICADORES = [
+                "Lee números del 0 al 100 y los representa de manera concreta, pictórica y simbólica",
+                "Compara y ordena números del 0 al 100, de menor a mayor y viceversa",
+                "Compone y descompone números del 0 al 100 de manera aditiva",
+                "Identifica las unidades y decenas en números del 0 al 100, representando las cantidades de acuerdo a su valor posicional",
+                "Demuestra comprensión de la adición y sustracción en el ámbito de números del 0 al 100",
+                "Demuestra comprensión de la multiplicación",
+                "Crea, representa y continúa patrones numéricos",
+                "Describe, compara y construye figuras 2D",
+                "Describe, compara y construye figuras 3D",
+                "Determina la longitud de objetos utilizando unidades de medida estandarizadas y no estandarizadas",
+                "Recolecta y registra datos para responder preguntas estadísticas sobre juegos con monedas y dados, utilizando bloques, tablas de conteo y pictogramas",
+                "Construye, lee e interpreta pictogramas con escala y gráficos de barra simples"
+            ]
+
+            def normalize_response(val):
+                if val is None or (isinstance(val, str) and not val.strip()):
+                    return None
+                v = str(val).strip().upper().replace(" ", "")
+                if v in ("S", "SIEMPRE"): return "S"
+                if v in ("G", "GENERALMENTE"): return "G"
+                if v in ("O", "OCASIONALMENTE"): return "O"
+                if v in ("P/V", "PV", "POCASVECES", "P"): return "P/V"
+                if v in ("N/O", "NO", "NOOBSERVADO"): return "N/O"
+                if v in ("N", "NUNCA"): return "N"
+                if len(v) == 1 and v in "SGOPN": return "P/V" if v == "P" else v
+                return None
+
+            def build_table(header_label, num_items, get_val_fn, indicator_labels):
+                rows = []
+                rows.append([Paragraph(DocumentsClass._escape_html_for_paragraph("Indicadores"), header_cell_style)] + [Paragraph(c, header_cell_style) for c in DOC32_RESPONSE_COLS])
+                for i in range(1, num_items + 1):
+                    val = get_val_fn(i)
+                    col_key = normalize_response(val)
+                    label_text = indicator_labels[i - 1] if indicator_labels and len(indicator_labels) >= i else f"{header_label} {i}"
+                    cells = [Paragraph(DocumentsClass._escape_html_for_paragraph(label_text), normal_style)]
+                    for c in DOC32_RESPONSE_COLS:
+                        cells.append(Paragraph("✓" if col_key == c else "", cell_center_style))
+                    rows.append(cells)
+                col_ind = 8*cm
+                col_opt = (16*cm - col_ind) / 6
+                col_widths = [col_ind] + [col_opt] * 6
+                tbl = Table(rows, colWidths=col_widths)
+                tbl.setStyle(TableStyle([
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('ALIGN', (0, 0), (0, -1), 'LEFT'), ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 6), ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+                    ('TOPPADDING', (0, 0), (-1, -1), 5), ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#505050')), ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ]))
+                return tbl
+
+            def format_multi_value(raw: str, labels_dict: dict) -> str:
+                if not raw or not str(raw).strip():
+                    return "—"
+                parts = [p.strip().lower().replace(" ", "_") for p in str(raw).split(",") if p and p.strip()]
+                if not parts:
+                    return "—"
+                display = [labels_dict.get(p) or p for p in parts]
+                return ", ".join(display)
+            reading_type_labels = {"en_desarrollo": "En desarrollo", "silabica": "Silábica", "palabra_a_palabra": "Palabra a palabra", "por_unidades_cortas": "Por unidades cortas", "fluida": "Fluida"}
+            comprehension_labels = {"en_desarrollo": "En desarrollo", "literal": "Literal", "inferencial": "Inferencial", "critica": "Crítica"}
+            writing_labels = {"en_desarrollo": "En desarrollo", "copia": "Copia", "dictado": "Dictado", "espontanea": "Espontánea"}
+
+            elements.append(Paragraph("Pauta de evaluación pedagógica - Docente de aula - 2º Básico", title_style))
+            elements.append(Spacer(1, 0.25*inch))
+
+            # I. Datos del estudiante e informe
+            elements.append(Paragraph("I. DATOS DEL ESTUDIANTE E INFORME", section_style))
+            elements.append(Spacer(1, 0.15*inch))
+            col_label, col_value = 5*cm, 11*cm
+            id_data = [
+                [Paragraph("<b>Nombre completo:</b>", subtitle_style), Paragraph(DocumentsClass._escape_html_for_paragraph(get_value("student_full_name", "—")), normal_style)],
+                [Paragraph("<b>RUT:</b>", subtitle_style), Paragraph(DocumentsClass._escape_html_for_paragraph(get_value("student_identification_number", "—")), normal_style)],
+                [Paragraph("<b>Fecha de nacimiento:</b>", subtitle_style), Paragraph(format_date(doc_data.get("student_born_date")) or "—", normal_style)],
+                [Paragraph("<b>Edad:</b>", subtitle_style), Paragraph(get_value("student_age", "—"), normal_style)],
+                [Paragraph("<b>Establecimiento:</b>", subtitle_style), Paragraph(DocumentsClass._escape_html_for_paragraph(get_value("establishment_id", "—")), normal_style)],
+                [Paragraph("<b>Curso:</b>", subtitle_style), Paragraph(get_value("course", "—"), normal_style)],
+                [Paragraph("<b>Fecha del informe:</b>", subtitle_style), Paragraph(format_date(doc_data.get("report_date")) or "—", normal_style)],
+                [Paragraph("<b>Repeticiones:</b>", subtitle_style), Paragraph(get_value("repetitions", "—"), normal_style)],
+            ]
+            report_type_val = (get_value("report_type", "") or "").strip()
+            report_type_val = "Anual" if report_type_val.lower() == "anual" else ("Semestral" if report_type_val.lower() == "semestral" else report_type_val or "—")
+            id_data.append([Paragraph("<b>Tipo de informe:</b>", subtitle_style), Paragraph(DocumentsClass._escape_html_for_paragraph(report_type_val), normal_style)])
+            tbl_id = Table(id_data, colWidths=[col_label, col_value])
+            tbl_id.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 8),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+                ('TOPPADDING', (0, 0), (-1, -1), 6),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),
+            ]))
+            elements.append(tbl_id)
+            elements.append(Spacer(1, 0.25*inch))
+            elements.append(Paragraph("II. FORTALEZAS DE LA SITUACIÓN ESCOLAR", section_style))
+            elements.append(Spacer(1, 0.1*inch))
+            strengths_raw = doc_data.get("school_situation_strengths")
+            strength_labels_es = {"strength_creative": "Creativo/a", "strength_autonomous": "Autónomo/a", "strength_motivated": "Motivado/a", "strength_tolerant_frustration": "Tolerante a la frustración", "strength_respects_rules": "Respeta las normas", "strength_follows_instructions": "Sigue instrucciones", "strength_peers_relationship": "Buena relación con pares", "strength_attends_gladly": "Asiste con gusto", "strength_family_communication": "Comunicación con la familia", "strength_persistent": "Persistente", "strength_self_confident": "Seguro/a de sí mismo/a", "strength_participates": "Participa", "strength_pays_attention": "Presta atención", "strength_interested_learning": "Interesado/a en el aprendizaje", "strength_completes_tasks": "Completa tareas", "strength_adults_relationship": "Buena relación con adultos", "strength_attends_regularly": "Asiste regularmente", "strength_family_committed": "Familia comprometida"}
+            strengths_text = "—"
+            if strengths_raw not in (None, ""):
+                if isinstance(strengths_raw, dict):
+                    strengths_list = [strength_labels_es.get(k, k) for k, v in strengths_raw.items() if v is True]
+                    strengths_text = ", ".join(strengths_list) if strengths_list else "Ninguna marcada."
+                elif isinstance(strengths_raw, str):
+                    try:
+                        parsed = __import__("json").loads(strengths_raw)
+                        if isinstance(parsed, dict):
+                            strengths_list = [strength_labels_es.get(k, k) for k, v in parsed.items() if v is True]
+                            strengths_text = ", ".join(strengths_list) if strengths_list else "Ninguna marcada."
+                        else:
+                            strengths_text = str(strengths_raw).strip() or "—"
+                    except Exception:
+                        strengths_text = str(strengths_raw).strip() or "—"
+                else:
+                    strengths_text = str(strengths_raw).strip() or "—"
+            elements.append(Paragraph(DocumentsClass._escape_html_for_paragraph(strengths_text), normal_style))
+            elements.append(Spacer(1, 0.15*inch))
+            elements.append(Paragraph("Observaciones generales", subtitle_style))
+            elements.append(Paragraph(DocumentsClass._escape_html_for_paragraph(get_value("observations", "")) if get_value("observations", "") else "—", normal_style))
+            elements.append(Spacer(1, 0.25*inch))
+            elements.append(Paragraph("III. ACTITUD", section_style))
+            elements.append(Spacer(1, 0.08*inch))
+            elements.append(Paragraph(DOC32_LEGEND_TEXT, legend_style))
+            elements.append(Spacer(1, 0.06*inch))
+            elements.append(build_table("Actitud", 12, lambda i: get_value(f"attitude_{i}", ""), DOC32_ACTITUD_INDICADORES))
+            elements.append(Spacer(1, 0.1*inch))
+            elements.append(Paragraph("Observaciones actitud:", subtitle_style))
+            elements.append(Paragraph(DocumentsClass._escape_html_for_paragraph(get_value("observations_attitude", "")) if get_value("observations_attitude", "") else "—", normal_style))
+            elements.append(Spacer(1, 0.25*inch))
+            elements.append(Paragraph("IV. LENGUAJE", section_style))
+            elements.append(Spacer(1, 0.08*inch))
+            elements.append(Paragraph(DOC32_LEGEND_TEXT, legend_style))
+            elements.append(Spacer(1, 0.06*inch))
+            elements.append(build_table("Lenguaje", 15, lambda i: get_value(f"language_{i}", ""), DOC32_LENGUAJE_INDICADORES))
+            elements.append(Spacer(1, 0.12*inch))
+            rt_display = format_multi_value(get_value("reading_type", ""), reading_type_labels)
+            cl_display = format_multi_value(get_value("comprehension_level", ""), comprehension_labels)
+            wl_display = format_multi_value(get_value("writing_level", ""), writing_labels)
+            elements.append(Paragraph("<b>Tipo de lectura:</b> " + DocumentsClass._escape_html_for_paragraph(rt_display), normal_style))
+            elements.append(Paragraph("<b>Nivel de comprensión:</b> " + DocumentsClass._escape_html_for_paragraph(cl_display), normal_style))
+            elements.append(Paragraph("<b>Nivel de escritura:</b> " + DocumentsClass._escape_html_for_paragraph(wl_display), normal_style))
+            elements.append(Spacer(1, 0.1*inch))
+            elements.append(Paragraph("Observaciones lenguaje:", subtitle_style))
+            elements.append(Paragraph(DocumentsClass._escape_html_for_paragraph(get_value("observations_language", "")) if get_value("observations_language", "") else "—", normal_style))
+            elements.append(Spacer(1, 0.25*inch))
+            elements.append(Paragraph("V. MATEMÁTICA", section_style))
+            elements.append(Spacer(1, 0.08*inch))
+            elements.append(Paragraph(DOC32_LEGEND_TEXT, legend_style))
+            elements.append(Spacer(1, 0.06*inch))
+            elements.append(build_table("Matemática", 12, lambda i: get_value(f"mathematics_{i}", ""), DOC32_MATEMATICA_INDICADORES))
+            elements.append(Spacer(1, 0.1*inch))
+            elements.append(Paragraph("Observaciones matemática:", subtitle_style))
+            elements.append(Paragraph(DocumentsClass._escape_html_for_paragraph(get_value("observations_mathematics", "")) if get_value("observations_mathematics", "") else "—", normal_style))
+            doc.build(elements)
+            return {"status": "success", "message": "PDF generado exitosamente desde cero", "filename": unique_filename, "file_path": str(output_file)}
+        except ImportError:
+            return {"status": "error", "message": "ReportLab no está instalado.", "filename": None, "file_path": None}
+        except Exception as e:
+            return {"status": "error", "message": f"Error generando PDF documento 32: {str(e)}", "filename": None, "file_path": None}
+
+    @staticmethod
+    def _generate_pedagogical_evaluation_classroom_third_grade_from_scratch(
+        document_id: int,
+        doc_data: Dict[str, Any],
+        db: Optional[Session] = None,
+        output_directory: str = "files/system/students"
+    ) -> Dict[str, Any]:
+        """
+        Genera el PDF del documento 33 (Pauta de evaluación pedagógica - Docente de aula - 3º Básico)
+        desde cero. 15 indicadores de lenguaje, 12 de matemática.
+        """
+        try:
+            if not REPORTLAB_AVAILABLE:
+                return {
+                    "status": "error",
+                    "message": "ReportLab no está instalado. Instala con: pip install reportlab",
+                    "filename": None,
+                    "file_path": None
+                }
+
+            def get_value(key: str, default: str = "") -> str:
+                v = doc_data.get(key)
+                if v is None:
+                    return default
+                return str(v).strip() if v else default
+
+            def format_date(date_val) -> str:
+                if not date_val:
+                    return ""
+                try:
+                    if isinstance(date_val, str) and len(date_val) >= 10:
+                        d = datetime.strptime(date_val[:10], "%Y-%m-%d").date()
+                        return d.strftime("%d/%m/%Y")
+                    if hasattr(date_val, "strftime"):
+                        return date_val.strftime("%d/%m/%Y")
+                    return str(date_val)[:10]
+                except Exception:
+                    return str(date_val)[:10] if date_val else ""
+
+            student_name = get_value("student_full_name", "estudiante").replace(" ", "_")
+            unique_filename = f"pauta_eval_pedagogica_3basico_{student_name}_{uuid.uuid4().hex[:8]}.pdf"
+            output_file = Path(output_directory) / unique_filename
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+
+            doc = SimpleDocTemplate(
+                str(output_file),
+                pagesize=A4,
+                rightMargin=2*cm,
+                leftMargin=2*cm,
+                topMargin=2*cm,
+                bottomMargin=2*cm
+            )
+            elements = []
+            styles = getSampleStyleSheet()
+            title_style = ParagraphStyle(
+                'Doc33Title', parent=styles['Heading1'], fontSize=14, textColor=colors.HexColor('#000000'),
+                spaceAfter=14, spaceBefore=8, alignment=TA_CENTER, fontName='Helvetica-Bold'
+            )
+            section_style = ParagraphStyle(
+                'Doc33Section', parent=styles['Normal'], fontSize=11, textColor=colors.HexColor('#000000'),
+                spaceAfter=6, spaceBefore=10, fontName='Helvetica-Bold',
+                backColor=colors.HexColor('#E8E8E8'), borderPadding=6
+            )
+            subtitle_style = ParagraphStyle(
+                'Doc33Subtitle', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#000000'),
+                spaceAfter=4, spaceBefore=6, fontName='Helvetica-Bold'
+            )
+            normal_style = ParagraphStyle(
+                'Doc33Normal', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#000000'),
+                alignment=TA_LEFT, leading=12, spaceAfter=2
+            )
+            legend_style = ParagraphStyle(
+                'Doc33Legend', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#333333'),
+                alignment=TA_LEFT, spaceAfter=6, spaceBefore=2
+            )
+            header_cell_style = ParagraphStyle(
+                'Doc33HeaderCell', parent=styles['Normal'], fontSize=9, textColor=colors.white,
+                alignment=TA_CENTER, fontName='Helvetica-Bold'
+            )
+            cell_center_style = ParagraphStyle(
+                'Doc33CellCenter', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#000000'), alignment=TA_CENTER
+            )
+            DOC33_RESPONSE_COLS = ["S", "G", "O", "P/V", "N", "N/O"]
+            DOC33_LEGEND_TEXT = "S: Siempre   G: Generalmente   O: Ocasionalmente   P/V: Pocas veces   N: Nunca   N/O: No observado"
+            DOC33_ACTITUD_INDICADORES = [
+                "Manifiesta curiosidad e interés por aprender",
+                "Demuestra disposición para compartir ideas, experiencias y opiniones con los demás",
+                "Presta atención a las actividades y dinámicas de la clase",
+                "Adopta una actitud positiva hacia sí mismo y hacia el aprendizaje",
+                "Inicia, persiste y finaliza tareas de forma autónoma",
+                "Realiza sus trabajos de manera ordenada y sistemática",
+                "Aborda y resuelve problemas de manera flexible y creativa durante las actividades",
+                "Muestra entusiasmo y motivación frente a nuevos desafíos",
+                "Se adapta con flexibilidad a cambios, imprevistos o nuevas rutinas de trabajo",
+                "Participa activamente en actividades grupales y colaborativas",
+                "Es receptivo a la retroalimentación y la aplica para mejorar",
+                "Busca apoyo o aclara dudas cuando enfrenta dificultades",
+            ]
+            DOC33_LENGUAJE_INDICADORES = [
+                "Lee en voz alta con fluidez, respetando puntuación y pronunciación",
+                "Aplica estrategias de comprensión lectora (subrayar, formular preguntas, recapitular)",
+                "Comprende textos literarios y no literarios adecuados al nivel",
+                "Emite opiniones sobre personajes y describe ambientes en textos narrativos",
+                "Comprende e interpreta lenguaje figurado en poemas y cuentos",
+                "Escribe textos breves con coherencia y estructura adecuada",
+                "Planifica sus escritos y revisa ortografía y redacción",
+                "Redacta narraciones con inicio, desarrollo y desenlace coherentes",
+                "Participa en conversaciones respetando turnos y aportando ideas",
+                "Expone ideas de forma coherente con vocabulario variado",
+                "Utiliza convenciones sociales adecuadas en distintos contextos",
+                "Lee y comprende instrucciones, cartas y textos informativos breves",
+                "Identifica ideas principales e información explícita e implícita en textos",
+                "Escribe de forma legible con letra clara y separación correcta de palabras",
+                "Trabaja en equipo y desempeña diferentes roles en actividades de lenguaje",
+            ]
+            DOC33_MATEMATICA_INDICADORES = [
+                "Lee números hasta 1.000 y los representa de forma concreta, pictórica y simbólica",
+                "Compara y ordena números hasta 1.000, utilizando la recta numérica o la tabla posicional",
+                "Identifica y describe unidades, decenas y centenas en números hasta 1.000, representando las cantidades de acuerdo a su valor posicional",
+                "Demuestra comprensión de la adición y sustracción de números hasta 1.000",
+                "Demuestra una comprensión progresiva de las tablas de multiplicar hasta 10",
+                "Demuestra comprensión de la división, en el contexto de las tablas de multiplicar hasta 10x10",
+                "Resuelve problemas rutinarios en contextos cotidianos, involucrando las cuatro operaciones básicas (no combinadas)",
+                "Demuestra comprensión de las fracciones de uso común: 1/4, 1/3, 1/2, 2/3, 3/4",
+                "Genera, describe y registra patrones numéricos utilizando diversas estrategias",
+                "Demuestra comprensión de la relación entre figuras 2D y 3D",
+                "Demuestra comprensión del perímetro de una figura, tanto regular como irregular",
+                "Demuestra comprensión de la medición del peso en gramos (g) y kilogramos (kg)",
+                "Construye, lee e interpreta pictogramas y gráficos de barra simple, basados en información recolectada o proporcionada",
+            ]
+
+            def normalize_response(val):
+                if val is None or (isinstance(val, str) and not val.strip()):
+                    return None
+                v = str(val).strip().upper().replace(" ", "")
+                if v in ("S", "SIEMPRE"): return "S"
+                if v in ("G", "GENERALMENTE"): return "G"
+                if v in ("O", "OCASIONALMENTE"): return "O"
+                if v in ("P/V", "PV", "POCASVECES", "P"): return "P/V"
+                if v in ("N/O", "NO", "NOOBSERVADO"): return "N/O"
+                if v in ("N", "NUNCA"): return "N"
+                if len(v) == 1 and v in "SGOPN": return "P/V" if v == "P" else v
+                return None
+
+            def build_table(header_label, num_items, get_val_fn, indicator_labels):
+                rows = []
+                rows.append([Paragraph(DocumentsClass._escape_html_for_paragraph("Indicadores"), header_cell_style)] + [Paragraph(c, header_cell_style) for c in DOC33_RESPONSE_COLS])
+                for i in range(1, num_items + 1):
+                    val = get_val_fn(i)
+                    col_key = normalize_response(val)
+                    label_text = indicator_labels[i - 1] if indicator_labels and len(indicator_labels) >= i else f"{header_label} {i}"
+                    cells = [Paragraph(DocumentsClass._escape_html_for_paragraph(label_text), normal_style)]
+                    for c in DOC33_RESPONSE_COLS:
+                        cells.append(Paragraph("✓" if col_key == c else "", cell_center_style))
+                    rows.append(cells)
+                col_ind = 8*cm
+                col_opt = (16*cm - col_ind) / 6
+                col_widths = [col_ind] + [col_opt] * 6
+                tbl = Table(rows, colWidths=col_widths)
+                tbl.setStyle(TableStyle([
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('ALIGN', (0, 0), (0, -1), 'LEFT'), ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 6), ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+                    ('TOPPADDING', (0, 0), (-1, -1), 5), ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#505050')), ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ]))
+                return tbl
+
+            def format_multi_value(raw: str, labels_dict: dict) -> str:
+                if not raw or not str(raw).strip():
+                    return "—"
+                parts = [p.strip().lower().replace(" ", "_") for p in str(raw).split(",") if p and p.strip()]
+                if not parts:
+                    return "—"
+                display = [labels_dict.get(p) or p for p in parts]
+                return ", ".join(display)
+            reading_type_labels = {"en_desarrollo": "En desarrollo", "silabica": "Silábica", "palabra_a_palabra": "Palabra a palabra", "por_unidades_cortas": "Por unidades cortas", "fluida": "Fluida"}
+            comprehension_labels = {"en_desarrollo": "En desarrollo", "literal": "Literal", "inferencial": "Inferencial", "critica": "Crítica"}
+            writing_labels = {"en_desarrollo": "En desarrollo", "copia": "Copia", "dictado": "Dictado", "espontanea": "Espontánea"}
+
+            elements.append(Paragraph("Pauta de evaluación pedagógica - Docente de aula - 3º Básico", title_style))
+            elements.append(Spacer(1, 0.25*inch))
+
+            elements.append(Paragraph("I. DATOS DEL ESTUDIANTE E INFORME", section_style))
+            elements.append(Spacer(1, 0.15*inch))
+            col_label, col_value = 5*cm, 11*cm
+            id_data = [
+                [Paragraph("<b>Nombre completo:</b>", subtitle_style), Paragraph(DocumentsClass._escape_html_for_paragraph(get_value("student_full_name", "—")), normal_style)],
+                [Paragraph("<b>RUT:</b>", subtitle_style), Paragraph(DocumentsClass._escape_html_for_paragraph(get_value("student_identification_number", "—")), normal_style)],
+                [Paragraph("<b>Fecha de nacimiento:</b>", subtitle_style), Paragraph(format_date(doc_data.get("student_born_date")) or "—", normal_style)],
+                [Paragraph("<b>Edad:</b>", subtitle_style), Paragraph(get_value("student_age", "—"), normal_style)],
+                [Paragraph("<b>Establecimiento:</b>", subtitle_style), Paragraph(DocumentsClass._escape_html_for_paragraph(get_value("establishment_id", "—")), normal_style)],
+                [Paragraph("<b>Curso:</b>", subtitle_style), Paragraph(get_value("course", "—"), normal_style)],
+                [Paragraph("<b>Fecha del informe:</b>", subtitle_style), Paragraph(format_date(doc_data.get("report_date")) or "—", normal_style)],
+                [Paragraph("<b>Repeticiones:</b>", subtitle_style), Paragraph(get_value("repetitions", "—"), normal_style)],
+            ]
+            report_type_val = (get_value("report_type", "") or "").strip()
+            report_type_val = "Anual" if report_type_val.lower() == "anual" else ("Semestral" if report_type_val.lower() == "semestral" else report_type_val or "—")
+            id_data.append([Paragraph("<b>Tipo de informe:</b>", subtitle_style), Paragraph(DocumentsClass._escape_html_for_paragraph(report_type_val), normal_style)])
+            tbl_id = Table(id_data, colWidths=[col_label, col_value])
+            tbl_id.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 8),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+                ('TOPPADDING', (0, 0), (-1, -1), 6),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),
+            ]))
+            elements.append(tbl_id)
+            elements.append(Spacer(1, 0.25*inch))
+            elements.append(Paragraph("II. FORTALEZAS DE LA SITUACIÓN ESCOLAR", section_style))
+            elements.append(Spacer(1, 0.1*inch))
+            strengths_raw = doc_data.get("school_situation_strengths")
+            strength_labels_es = {"strength_creative": "Creativo/a", "strength_autonomous": "Autónomo/a", "strength_motivated": "Motivado/a", "strength_tolerant_frustration": "Tolerante a la frustración", "strength_respects_rules": "Respeta las normas", "strength_follows_instructions": "Sigue instrucciones", "strength_peers_relationship": "Buena relación con pares", "strength_attends_gladly": "Asiste con gusto", "strength_family_communication": "Comunicación con la familia", "strength_persistent": "Persistente", "strength_self_confident": "Seguro/a de sí mismo/a", "strength_participates": "Participa", "strength_pays_attention": "Presta atención", "strength_interested_learning": "Interesado/a en el aprendizaje", "strength_completes_tasks": "Completa tareas", "strength_adults_relationship": "Buena relación con adultos", "strength_attends_regularly": "Asiste regularmente", "strength_family_committed": "Familia comprometida"}
+            strengths_text = "—"
+            if strengths_raw not in (None, ""):
+                if isinstance(strengths_raw, dict):
+                    strengths_list = [strength_labels_es.get(k, k) for k, v in strengths_raw.items() if v is True]
+                    strengths_text = ", ".join(strengths_list) if strengths_list else "Ninguna marcada."
+                elif isinstance(strengths_raw, str):
+                    try:
+                        parsed = __import__("json").loads(strengths_raw)
+                        if isinstance(parsed, dict):
+                            strengths_list = [strength_labels_es.get(k, k) for k, v in parsed.items() if v is True]
+                            strengths_text = ", ".join(strengths_list) if strengths_list else "Ninguna marcada."
+                        else:
+                            strengths_text = str(strengths_raw).strip() or "—"
+                    except Exception:
+                        strengths_text = str(strengths_raw).strip() or "—"
+                else:
+                    strengths_text = str(strengths_raw).strip() or "—"
+            elements.append(Paragraph(DocumentsClass._escape_html_for_paragraph(strengths_text), normal_style))
+            elements.append(Spacer(1, 0.15*inch))
+            elements.append(Paragraph("Observaciones generales", subtitle_style))
+            elements.append(Paragraph(DocumentsClass._escape_html_for_paragraph(get_value("observations", "")) if get_value("observations", "") else "—", normal_style))
+            elements.append(Spacer(1, 0.25*inch))
+            elements.append(Paragraph("III. ACTITUD", section_style))
+            elements.append(Spacer(1, 0.08*inch))
+            elements.append(Paragraph(DOC33_LEGEND_TEXT, legend_style))
+            elements.append(Spacer(1, 0.06*inch))
+            elements.append(build_table("Actitud", 12, lambda i: get_value(f"attitude_{i}", ""), DOC33_ACTITUD_INDICADORES))
+            elements.append(Spacer(1, 0.1*inch))
+            elements.append(Paragraph("Observaciones actitud:", subtitle_style))
+            elements.append(Paragraph(DocumentsClass._escape_html_for_paragraph(get_value("observations_attitude", "")) if get_value("observations_attitude", "") else "—", normal_style))
+            elements.append(Spacer(1, 0.25*inch))
+            elements.append(Paragraph("IV. LENGUAJE", section_style))
+            elements.append(Spacer(1, 0.08*inch))
+            elements.append(Paragraph(DOC33_LEGEND_TEXT, legend_style))
+            elements.append(Spacer(1, 0.06*inch))
+            elements.append(build_table("Lenguaje", 15, lambda i: get_value(f"language_{i}", ""), DOC33_LENGUAJE_INDICADORES))
+            elements.append(Spacer(1, 0.12*inch))
+            rt_display = format_multi_value(get_value("reading_type", ""), reading_type_labels)
+            cl_display = format_multi_value(get_value("comprehension_level", ""), comprehension_labels)
+            wl_display = format_multi_value(get_value("writing_level", ""), writing_labels)
+            elements.append(Paragraph("<b>Tipo de lectura:</b> " + DocumentsClass._escape_html_for_paragraph(rt_display), normal_style))
+            elements.append(Paragraph("<b>Nivel de comprensión:</b> " + DocumentsClass._escape_html_for_paragraph(cl_display), normal_style))
+            elements.append(Paragraph("<b>Nivel de escritura:</b> " + DocumentsClass._escape_html_for_paragraph(wl_display), normal_style))
+            elements.append(Spacer(1, 0.1*inch))
+            elements.append(Paragraph("Observaciones lenguaje:", subtitle_style))
+            elements.append(Paragraph(DocumentsClass._escape_html_for_paragraph(get_value("observations_language", "")) if get_value("observations_language", "") else "—", normal_style))
+            elements.append(Spacer(1, 0.25*inch))
+            elements.append(Paragraph("V. MATEMÁTICA", section_style))
+            elements.append(Spacer(1, 0.08*inch))
+            elements.append(Paragraph(DOC33_LEGEND_TEXT, legend_style))
+            elements.append(Spacer(1, 0.06*inch))
+            elements.append(build_table("Matemática", 13, lambda i: get_value(f"mathematics_{i}", ""), DOC33_MATEMATICA_INDICADORES))
+            elements.append(Spacer(1, 0.1*inch))
+            elements.append(Paragraph("Observaciones matemática:", subtitle_style))
+            elements.append(Paragraph(DocumentsClass._escape_html_for_paragraph(get_value("observations_mathematics", "")) if get_value("observations_mathematics", "") else "—", normal_style))
+            doc.build(elements)
+            return {"status": "success", "message": "PDF generado exitosamente desde cero", "filename": unique_filename, "file_path": str(output_file)}
+        except ImportError:
+            return {"status": "error", "message": "ReportLab no está instalado.", "filename": None, "file_path": None}
+        except Exception as e:
+            return {"status": "error", "message": f"Error generando PDF documento 33: {str(e)}", "filename": None, "file_path": None}
+
+    @staticmethod
+    def _generate_pedagogical_evaluation_classroom_fourth_grade_from_scratch(
+        document_id: int,
+        doc_data: Dict[str, Any],
+        db: Optional[Session] = None,
+        output_directory: str = "files/system/students"
+    ) -> Dict[str, Any]:
+        """Genera el PDF del documento 34 (Pauta de evaluacion pedagogica - Docente de aula - 4to Basico). 15 lenguaje, 13 matematica."""
+        try:
+            if not REPORTLAB_AVAILABLE:
+                return {"status": "error", "message": "ReportLab no esta instalado.", "filename": None, "file_path": None}
+
+            def get_value(key: str, default: str = "") -> str:
+                v = doc_data.get(key)
+                if v is None:
+                    return default
+                return str(v).strip() if v else default
+
+            def format_date(date_val) -> str:
+                if not date_val:
+                    return ""
+                try:
+                    if isinstance(date_val, str) and len(date_val) >= 10:
+                        d = datetime.strptime(date_val[:10], "%Y-%m-%d").date()
+                        return d.strftime("%d/%m/%Y")
+                    if hasattr(date_val, "strftime"):
+                        return date_val.strftime("%d/%m/%Y")
+                    return str(date_val)[:10]
+                except Exception:
+                    return str(date_val)[:10] if date_val else ""
+
+            student_name = get_value("student_full_name", "estudiante").replace(" ", "_")
+            unique_filename = f"pauta_eval_pedagogica_4basico_{student_name}_{uuid.uuid4().hex[:8]}.pdf"
+            output_file = Path(output_directory) / unique_filename
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+
+            doc = SimpleDocTemplate(str(output_file), pagesize=A4, rightMargin=2*cm, leftMargin=2*cm, topMargin=2*cm, bottomMargin=2*cm)
+            elements = []
+            styles = getSampleStyleSheet()
+            title_style = ParagraphStyle('Doc34Title', parent=styles['Heading1'], fontSize=14, textColor=colors.HexColor('#000000'), spaceAfter=14, spaceBefore=8, alignment=TA_CENTER, fontName='Helvetica-Bold')
+            section_style = ParagraphStyle('Doc34Section', parent=styles['Normal'], fontSize=11, textColor=colors.HexColor('#000000'), spaceAfter=6, spaceBefore=10, fontName='Helvetica-Bold', backColor=colors.HexColor('#E8E8E8'), borderPadding=6)
+            subtitle_style = ParagraphStyle('Doc34Subtitle', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#000000'), spaceAfter=4, spaceBefore=6, fontName='Helvetica-Bold')
+            normal_style = ParagraphStyle('Doc34Normal', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#000000'), alignment=TA_LEFT, leading=12, spaceAfter=2)
+            legend_style = ParagraphStyle('Doc34Legend', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#333333'), alignment=TA_LEFT, spaceAfter=6, spaceBefore=2)
+            header_cell_style = ParagraphStyle('Doc34HeaderCell', parent=styles['Normal'], fontSize=9, textColor=colors.white, alignment=TA_CENTER, fontName='Helvetica-Bold')
+            cell_center_style = ParagraphStyle('Doc34CellCenter', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#000000'), alignment=TA_CENTER)
+            DOC34_RESPONSE_COLS = ["S", "G", "O", "P/V", "N", "N/O"]
+            DOC34_LEGEND_TEXT = "S: Siempre   G: Generalmente   O: Ocasionalmente   P/V: Pocas veces   N: Nunca   N/O: No observado"
+            DOC34_ACTITUD_INDICADORES = [
+                "Manifiesta curiosidad e interes por aprender", "Demuestra disposicion para compartir ideas, experiencias y opiniones con los demas",
+                "Presta atencion a las actividades y dinamicas de la clase", "Adopta una actitud positiva hacia si mismo y hacia el aprendizaje",
+                "Inicia, persiste y finaliza tareas de forma autonoma", "Realiza sus trabajos de manera ordenada y sistematica",
+                "Aborda y resuelve problemas de manera flexible y creativa durante las actividades", "Muestra entusiasmo y motivacion frente a nuevos desafios",
+                "Se adapta con flexibilidad a cambios, imprevistos o nuevas rutinas de trabajo", "Participa activamente en actividades grupales y colaborativas",
+                "Es receptivo a la retroalimentacion y la aplica para mejorar", "Busca apoyo o aclara dudas cuando enfrenta dificultades",
+            ]
+            DOC34_LENGUAJE_INDICADORES = [
+                "Lee en voz alta con fluidez, pronunciacion, puntuacion, entonacion y velocidad adecuadas",
+                "Lee y comprende narraciones extrayendo informacion, identificando problemas y soluciones, comparando personajes y emitiendo opiniones",
+                "Lee en forma autonoma textos no literarios, extrayendo informacion explicita e implicita y utilizando organizadores textuales",
+                "Comprende e interpreta el lenguaje figurado en poemas",
+                "Aplica estrategias de comprension lectora (relacionar con experiencia previa, releer, visualizar, formular preguntas, subrayar informacion clave)",
+                "Aplica estrategias para determinar el significado de palabras nuevas (contexto, claves del texto, diccionario)",
+                "Comprende, interactua y extrae informacion relevante de textos orales (instrucciones, explicaciones, relatos, noticias)",
+                "Busca y organiza informacion de diversas fuentes (libros, internet, diarios, revistas, enciclopedias)",
+                "Escribe textos de forma autonoma y clara, organizando las ideas con logica, conectores y vocabulario variado",
+                "Planifica sus escritos (proposito, audiencia, generacion de ideas)",
+                "Revisa y edita sus textos (corregir errores, mejorar la redaccion segun el proposito)",
+                "Aplica normas de ortografia y gramatica",
+                "Escribe con letra clara y legible",
+                "Participa activamente en conversaciones grupales (claridad, respeto de turnos, interes, empatia)",
+                "Expone ideas de forma coherente en presentaciones orales (vocabulario variado, pronunciacion y gestos adecuados)",
+                "Interactua respetando convenciones sociales y adaptando la comunicacion a distintos contextos",
+                "Trabaja en equipo desempenando roles variados y promoviendo habilidades comunicativas y autoestima",
+            ]
+            DOC34_MATEMATICA_INDICADORES = [
+                "Representa y describe numeros naturales hasta 10.000",
+                "Describe y aplica estrategias de calculo mental",
+                "Demuestra comprension de la adicion y sustraccion de numeros hasta 1.000",
+                "Demuestra comprension de la multiplicacion de numeros de tres digitos por numeros de un digito",
+                "Demuestra comprension de la division con dividendos de dos digitos y divisores de un digito",
+                "Resuelve problemas rutinarios y no rutinarios, seleccionando y utilizando la operacion matemática adecuada",
+                "Demuestra comprension de las fracciones",
+                "Resuelve adiciones y sustracciones de fracciones con igual denominador",
+                "Identifica y describe patrones numericos en tablas que involucren una operacion",
+                "Resuelve ecuaciones e inecuaciones de un paso que involucren adicion y sustraccion de numeros hasta 100",
+                "Traslada, rota y refleja figuras 2D",
+                "Construye y compara angulos con el transportador",
+                "Mide longitudes con unidades estandarizadas (metros, centimetros) y realiza conversiones entre estas unidades (m a cm y viceversa)",
+                "Demuestra comprension del concepto de area de un rectangulo y de un cuadrado",
+                "Demuestra comprension del concepto de volumen de un cuerpo",
+                "Realiza encuestas, analiza los datos y los compara con los resultados de muestras aleatorias, usando tablas y graficos",
+                "Lee e interpreta pictogramas y graficos de barra simple con escala, comunicando sus conclusiones",
+            ]
+
+            def normalize_response(val):
+                if val is None or (isinstance(val, str) and not val.strip()):
+                    return None
+                v = str(val).strip().upper().replace(" ", "")
+                if v in ("S", "SIEMPRE"): return "S"
+                if v in ("G", "GENERALMENTE"): return "G"
+                if v in ("O", "OCASIONALMENTE"): return "O"
+                if v in ("P/V", "PV", "POCASVECES", "P"): return "P/V"
+                if v in ("N/O", "NO", "NOOBSERVADO"): return "N/O"
+                if v in ("N", "NUNCA"): return "N"
+                if len(v) == 1 and v in "SGOPN": return "P/V" if v == "P" else v
+                return None
+
+            def build_table(header_label, num_items, get_val_fn, indicator_labels):
+                rows = []
+                rows.append([Paragraph(DocumentsClass._escape_html_for_paragraph("Indicadores"), header_cell_style)] + [Paragraph(c, header_cell_style) for c in DOC34_RESPONSE_COLS])
+                for i in range(1, num_items + 1):
+                    val = get_val_fn(i)
+                    col_key = normalize_response(val)
+                    label_text = indicator_labels[i - 1] if indicator_labels and len(indicator_labels) >= i else f"{header_label} {i}"
+                    cells = [Paragraph(DocumentsClass._escape_html_for_paragraph(label_text), normal_style)]
+                    for c in DOC34_RESPONSE_COLS:
+                        cells.append(Paragraph("✓" if col_key == c else "", cell_center_style))
+                    rows.append(cells)
+                col_ind = 8*cm
+                col_opt = (16*cm - col_ind) / 6
+                col_widths = [col_ind] + [col_opt] * 6
+                tbl = Table(rows, colWidths=col_widths)
+                tbl.setStyle(TableStyle([
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('ALIGN', (0, 0), (0, -1), 'LEFT'), ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 6), ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+                    ('TOPPADDING', (0, 0), (-1, -1), 5), ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#505050')), ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ]))
+                return tbl
+
+            def format_multi_value(raw: str, labels_dict: dict) -> str:
+                if not raw or not str(raw).strip():
+                    return "—"
+                parts = [p.strip().lower().replace(" ", "_") for p in str(raw).split(",") if p and p.strip()]
+                if not parts:
+                    return "—"
+                display = [labels_dict.get(p) or p for p in parts]
+                return ", ".join(display)
+            reading_type_labels = {"en_desarrollo": "En desarrollo", "silabica": "Silabica", "palabra_a_palabra": "Palabra a palabra", "por_unidades_cortas": "Por unidades cortas", "fluida": "Fluida"}
+            comprehension_labels = {"en_desarrollo": "En desarrollo", "literal": "Literal", "inferencial": "Inferencial", "critica": "Critica"}
+            writing_labels = {"en_desarrollo": "En desarrollo", "copia": "Copia", "dictado": "Dictado", "espontanea": "Espontanea"}
+
+            elements.append(Paragraph("Pauta de evaluacion pedagogica - Docente de aula - 4to Basico", title_style))
+            elements.append(Spacer(1, 0.25*inch))
+            elements.append(Paragraph("I. DATOS DEL ESTUDIANTE E INFORME", section_style))
+            elements.append(Spacer(1, 0.15*inch))
+            col_label, col_value = 5*cm, 11*cm
+            id_data = [
+                [Paragraph("<b>Nombre completo:</b>", subtitle_style), Paragraph(DocumentsClass._escape_html_for_paragraph(get_value("student_full_name", "—")), normal_style)],
+                [Paragraph("<b>RUT:</b>", subtitle_style), Paragraph(DocumentsClass._escape_html_for_paragraph(get_value("student_identification_number", "—")), normal_style)],
+                [Paragraph("<b>Fecha de nacimiento:</b>", subtitle_style), Paragraph(format_date(doc_data.get("student_born_date")) or "—", normal_style)],
+                [Paragraph("<b>Edad:</b>", subtitle_style), Paragraph(get_value("student_age", "—"), normal_style)],
+                [Paragraph("<b>Establecimiento:</b>", subtitle_style), Paragraph(DocumentsClass._escape_html_for_paragraph(get_value("establishment_id", "—")), normal_style)],
+                [Paragraph("<b>Curso:</b>", subtitle_style), Paragraph(get_value("course", "—"), normal_style)],
+                [Paragraph("<b>Fecha del informe:</b>", subtitle_style), Paragraph(format_date(doc_data.get("report_date")) or "—", normal_style)],
+                [Paragraph("<b>Repeticiones:</b>", subtitle_style), Paragraph(get_value("repetitions", "—"), normal_style)],
+            ]
+            report_type_val = (get_value("report_type", "") or "").strip()
+            report_type_val = "Anual" if report_type_val.lower() == "anual" else ("Semestral" if report_type_val.lower() == "semestral" else report_type_val or "—")
+            id_data.append([Paragraph("<b>Tipo de informe:</b>", subtitle_style), Paragraph(DocumentsClass._escape_html_for_paragraph(report_type_val), normal_style)])
+            tbl_id = Table(id_data, colWidths=[col_label, col_value])
+            tbl_id.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('ALIGN', (0, 0), (-1, -1), 'LEFT'), ('LEFTPADDING', (0, 0), (-1, -1), 8), ('RIGHTPADDING', (0, 0), (-1, -1), 8), ('TOPPADDING', (0, 0), (-1, -1), 6), ('BOTTOMPADDING', (0, 0), (-1, -1), 6), ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),
+            ]))
+            elements.append(tbl_id)
+            elements.append(Spacer(1, 0.25*inch))
+            elements.append(Paragraph("II. FORTALEZAS DE LA SITUACION ESCOLAR", section_style))
+            elements.append(Spacer(1, 0.1*inch))
+            strengths_raw = doc_data.get("school_situation_strengths")
+            strength_labels_es = {"strength_creative": "Creativo/a", "strength_autonomous": "Autonomo/a", "strength_motivated": "Motivado/a", "strength_tolerant_frustration": "Tolerante a la frustracion", "strength_respects_rules": "Respeta las normas", "strength_follows_instructions": "Sigue instrucciones", "strength_peers_relationship": "Buena relacion con pares", "strength_attends_gladly": "Asiste con gusto", "strength_family_communication": "Comunicacion con la familia", "strength_persistent": "Persistente", "strength_self_confident": "Seguro/a de si mismo/a", "strength_participates": "Participa", "strength_pays_attention": "Presta atencion", "strength_interested_learning": "Interesado/a en el aprendizaje", "strength_completes_tasks": "Completa tareas", "strength_adults_relationship": "Buena relacion con adultos", "strength_attends_regularly": "Asiste regularmente", "strength_family_committed": "Familia comprometida"}
+            strengths_text = "—"
+            if strengths_raw not in (None, ""):
+                if isinstance(strengths_raw, dict):
+                    strengths_list = [strength_labels_es.get(k, k) for k, v in strengths_raw.items() if v is True]
+                    strengths_text = ", ".join(strengths_list) if strengths_list else "Ninguna marcada."
+                elif isinstance(strengths_raw, str):
+                    try:
+                        parsed = __import__("json").loads(strengths_raw)
+                        if isinstance(parsed, dict):
+                            strengths_list = [strength_labels_es.get(k, k) for k, v in parsed.items() if v is True]
+                            strengths_text = ", ".join(strengths_list) if strengths_list else "Ninguna marcada."
+                        else:
+                            strengths_text = str(strengths_raw).strip() or "—"
+                    except Exception:
+                        strengths_text = str(strengths_raw).strip() or "—"
+                else:
+                    strengths_text = str(strengths_raw).strip() or "—"
+            elements.append(Paragraph(DocumentsClass._escape_html_for_paragraph(strengths_text), normal_style))
+            elements.append(Spacer(1, 0.15*inch))
+            elements.append(Paragraph("Observaciones generales", subtitle_style))
+            elements.append(Paragraph(DocumentsClass._escape_html_for_paragraph(get_value("observations", "")) if get_value("observations", "") else "—", normal_style))
+            elements.append(Spacer(1, 0.25*inch))
+            elements.append(Paragraph("III. ACTITUD", section_style))
+            elements.append(Spacer(1, 0.08*inch))
+            elements.append(Paragraph(DOC34_LEGEND_TEXT, legend_style))
+            elements.append(Spacer(1, 0.06*inch))
+            elements.append(build_table("Actitud", 12, lambda i: get_value(f"attitude_{i}", ""), DOC34_ACTITUD_INDICADORES))
+            elements.append(Spacer(1, 0.1*inch))
+            elements.append(Paragraph("Observaciones actitud:", subtitle_style))
+            elements.append(Paragraph(DocumentsClass._escape_html_for_paragraph(get_value("observations_attitude", "")) if get_value("observations_attitude", "") else "—", normal_style))
+            elements.append(Spacer(1, 0.25*inch))
+            elements.append(Paragraph("IV. LENGUAJE", section_style))
+            elements.append(Spacer(1, 0.08*inch))
+            elements.append(Paragraph(DOC34_LEGEND_TEXT, legend_style))
+            elements.append(Spacer(1, 0.06*inch))
+            elements.append(build_table("Lenguaje", 17, lambda i: get_value(f"language_{i}", ""), DOC34_LENGUAJE_INDICADORES))
+            elements.append(Spacer(1, 0.12*inch))
+            rt_display = format_multi_value(get_value("reading_type", ""), reading_type_labels)
+            cl_display = format_multi_value(get_value("comprehension_level", ""), comprehension_labels)
+            wl_display = format_multi_value(get_value("writing_level", ""), writing_labels)
+            elements.append(Paragraph("<b>Tipo de lectura:</b> " + DocumentsClass._escape_html_for_paragraph(rt_display), normal_style))
+            elements.append(Paragraph("<b>Nivel de comprensión:</b> " + DocumentsClass._escape_html_for_paragraph(cl_display), normal_style))
+            elements.append(Paragraph("<b>Nivel de escritura:</b> " + DocumentsClass._escape_html_for_paragraph(wl_display), normal_style))
+            elements.append(Spacer(1, 0.1*inch))
+            elements.append(Paragraph("Observaciones lenguaje:", subtitle_style))
+            elements.append(Paragraph(DocumentsClass._escape_html_for_paragraph(get_value("observations_language", "")) if get_value("observations_language", "") else "—", normal_style))
+            elements.append(Spacer(1, 0.25*inch))
+            elements.append(Paragraph("V. MATEMÁTICA", section_style))
+            elements.append(Spacer(1, 0.08*inch))
+            elements.append(Paragraph(DOC34_LEGEND_TEXT, legend_style))
+            elements.append(Spacer(1, 0.06*inch))
+            elements.append(build_table("Matemática", 17, lambda i: get_value(f"mathematics_{i}", ""), DOC34_MATEMATICA_INDICADORES))
+            elements.append(Spacer(1, 0.1*inch))
+            elements.append(Paragraph("Observaciones matemática:", subtitle_style))
+            elements.append(Paragraph(DocumentsClass._escape_html_for_paragraph(get_value("observations_mathematics", "")) if get_value("observations_mathematics", "") else "—", normal_style))
+            doc.build(elements)
+            return {"status": "success", "message": "PDF generado exitosamente desde cero", "filename": unique_filename, "file_path": str(output_file)}
+        except ImportError:
+            return {"status": "error", "message": "ReportLab no esta instalado.", "filename": None, "file_path": None}
+        except Exception as e:
+            return {"status": "error", "message": f"Error generando PDF documento 34: {str(e)}", "filename": None, "file_path": None}
+
+    @staticmethod
+    def _generate_pedagogical_evaluation_classroom_first_grade_secondary_from_scratch(
+        document_id: int,
+        doc_data: Dict[str, Any],
+        db: Optional[Session] = None,
+        output_directory: str = "files/system/students"
+    ) -> Dict[str, Any]:
+        """Genera el PDF del documento 38 (Pauta de evaluacion pedagogica - Docente de aula - 1ero Medio). 13 actitud, 13 lengua y literatura, 8 matemática."""
+        try:
+            if not REPORTLAB_AVAILABLE:
+                return {"status": "error", "message": "ReportLab no esta instalado.", "filename": None, "file_path": None}
+
+            def get_value(key: str, default: str = "") -> str:
+                v = doc_data.get(key)
+                if v is None:
+                    return default
+                return str(v).strip() if v else default
+
+            def format_date(date_val) -> str:
+                if not date_val:
+                    return ""
+                try:
+                    if isinstance(date_val, str) and len(date_val) >= 10:
+                        d = datetime.strptime(date_val[:10], "%Y-%m-%d").date()
+                        return d.strftime("%d/%m/%Y")
+                    if hasattr(date_val, "strftime"):
+                        return date_val.strftime("%d/%m/%Y")
+                    return str(date_val)[:10]
+                except Exception:
+                    return str(date_val)[:10] if date_val else ""
+
+            student_name = get_value("student_full_name", "estudiante").replace(" ", "_")
+            unique_filename = f"pauta_eval_pedagogica_first_grade_secondary_{student_name}_{uuid.uuid4().hex[:8]}.pdf"
+            output_file = Path(output_directory) / unique_filename
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+
+            doc = SimpleDocTemplate(str(output_file), pagesize=A4, rightMargin=2*cm, leftMargin=2*cm, topMargin=2*cm, bottomMargin=2*cm)
+            elements = []
+            styles = getSampleStyleSheet()
+            title_style = ParagraphStyle('Doc38Title', parent=styles['Heading1'], fontSize=14, textColor=colors.HexColor('#000000'), spaceAfter=14, spaceBefore=8, alignment=TA_CENTER, fontName='Helvetica-Bold')
+            section_style = ParagraphStyle('Doc38Section', parent=styles['Normal'], fontSize=11, textColor=colors.HexColor('#000000'), spaceAfter=6, spaceBefore=10, fontName='Helvetica-Bold', backColor=colors.HexColor('#E8E8E8'), borderPadding=6)
+            subtitle_style = ParagraphStyle('Doc38Subtitle', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#000000'), spaceAfter=4, spaceBefore=6, fontName='Helvetica-Bold')
+            normal_style = ParagraphStyle('Doc38Normal', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#000000'), alignment=TA_LEFT, leading=12, spaceAfter=2)
+            legend_style = ParagraphStyle('Doc38Legend', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#333333'), alignment=TA_LEFT, spaceAfter=6, spaceBefore=2)
+            header_cell_style = ParagraphStyle('Doc38HeaderCell', parent=styles['Normal'], fontSize=9, textColor=colors.white, alignment=TA_CENTER, fontName='Helvetica-Bold')
+            cell_center_style = ParagraphStyle('Doc38CellCenter', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#000000'), alignment=TA_CENTER)
+            DOC38_RESPONSE_COLS = ["S", "G", "O", "P/V", "N", "N/O"]
+            DOC38_LEGEND_TEXT = "S: Siempre   G: Generalmente   O: Ocasionalmente   P/V: Pocas veces   N: Nunca   N/O: No observado"
+            # Doc 38 (1ero Medio): 13 actitud, 13 lengua y literatura, 8 matematica (pauta oficial)
+            DOC38_ACTITUD_INDICADORES = [
+                "Manifiesta curiosidad e interes por aprender",
+                "Adopta una actitud positiva hacia si mismo y el aprendizaje",
+                "Expresa y escucha ideas de forma respetuosa",
+                "Participa activamente en actividades grupales y colaborativas",
+                "Muestra disposicion para compartir ideas, experiencias y opiniones con los demas",
+                "Inicia, persiste y finaliza sus tareas de forma autonoma",
+                "Realiza sus trabajos de manera ordenada y metodica",
+                "Aborda y resuelve problemas de manera flexible y creativa",
+                "Se adapta con flexibilidad a cambios, imprevistos o nuevas rutinas de trabajo",
+                "Busca apoyo o aclara dudas cuando enfrenta dificultades",
+                "Es receptivo a la retroalimentacion y la aplica para mejorar",
+                "Demuestra una actitud de esfuerzo y perseverancia",
+                "Reflexiona sobre si mismo, sus ideas y sus intereses para comprenderse y valorarse",
+            ]
+            DOC38_LENGUAJE_INDICADORES = [
+                "Comprende y analiza distintos tipos de texto apropiados para su nivel",
+                "Formula interpretaciones fundamentadas de textos leidos o escuchados",
+                "Analiza y evalua textos argumentativos, como columnas de opinion, cartas y discursos",
+                "Analiza y evalua criticamente textos de medios de comunicacion, como noticias, reportajes, cartas al director, textos publicitarios o publicaciones en redes sociales",
+                "Se expresa creativamente mediante la escritura de textos de diversos generos",
+                "Redacta textos con proposito persuasivo, como cartas al director, editoriales o criticas literarias",
+                "Planifica, escribe, revisa y edita sus textos considerando el contexto, destinatario y proposito comunicativo",
+                "Escribe textos aplicando correctamente las reglas ortograficas",
+                "Comprende y utiliza recursos de correferencia lexica compleja",
+                "Comprende, compara y analiza textos orales y audiovisuales, como exposiciones, discursos, documentales, noticias y reportajes",
+                "Dialoga de manera constructiva para debatir ideas y llegar a acuerdos",
+                "Realiza investigaciones sobre diversos temas ajustandose al proposito planteado",
+                "Sintetiza, organiza y registra las ideas principales de textos escuchados o leidos para estudiar, investigar o recordar detalles clave",
+            ]
+            DOC38_MATEMATICA_INDICADORES = [
+                "Calcula operaciones con numeros racionales de manera simbolica",
+                "Comprension las potencias con base racional y exponente entero, aplicando sus propiedades",
+                "Desarrolla los productos notables de manera concreta, pictorica y simbolica, comprendiendo su estructura",
+                "Resuelve sistemas de ecuaciones lineales (2x2) y los aplica en la resolucion de problemas reales",
+                "Muestra comprension del concepto de homotecia y su relacion con transformaciones geometricas",
+                "Aplica propiedades de semejanza y proporcionalidad a modelos a escala y situaciones cotidianas",
+                "Registra distribuciones de dos caracteristicas distintas, de una misma poblacion, utilizando tablas de doble entrada y nubes de puntos",
+                "Desarrolla y aplica las reglas de probabilidad (regla aditiva, multiplicativa y su combinacion) en la resolucion de problemas practicos",
+            ]
+
+            def normalize_response(val):
+                if val is None or (isinstance(val, str) and not val.strip()):
+                    return None
+                v = str(val).strip().upper().replace(" ", "")
+                if v in ("S", "SIEMPRE"): return "S"
+                if v in ("G", "GENERALMENTE"): return "G"
+                if v in ("O", "OCASIONALMENTE"): return "O"
+                if v in ("P/V", "PV", "POCASVECES", "P"): return "P/V"
+                if v in ("N/O", "NO", "NOOBSERVADO"): return "N/O"
+                if v in ("N", "NUNCA"): return "N"
+                if len(v) == 1 and v in "SGOPN": return "P/V" if v == "P" else v
+                return None
+
+            def build_table(header_label, num_items, get_val_fn, indicator_labels):
+                rows = []
+                rows.append([Paragraph(DocumentsClass._escape_html_for_paragraph("Indicadores"), header_cell_style)] + [Paragraph(c, header_cell_style) for c in DOC38_RESPONSE_COLS])
+                for i in range(1, num_items + 1):
+                    val = get_val_fn(i)
+                    col_key = normalize_response(val)
+                    label_text = indicator_labels[i - 1] if indicator_labels and len(indicator_labels) >= i else f"{header_label} {i}"
+                    cells = [Paragraph(DocumentsClass._escape_html_for_paragraph(label_text), normal_style)]
+                    for c in DOC38_RESPONSE_COLS:
+                        cells.append(Paragraph("✓" if col_key == c else "", cell_center_style))
+                    rows.append(cells)
+                col_ind = 8*cm
+                col_opt = (16*cm - col_ind) / 6
+                col_widths = [col_ind] + [col_opt] * 6
+                tbl = Table(rows, colWidths=col_widths)
+                tbl.setStyle(TableStyle([
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('ALIGN', (0, 0), (0, -1), 'LEFT'), ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 6), ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+                    ('TOPPADDING', (0, 0), (-1, -1), 5), ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#505050')), ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ]))
+                return tbl
+
+            def format_multi_value(raw: str, labels_dict: dict) -> str:
+                if not raw or not str(raw).strip():
+                    return "—"
+                parts = [p.strip().lower().replace(" ", "_") for p in str(raw).split(",") if p and p.strip()]
+                if not parts:
+                    return "—"
+                display = [labels_dict.get(p) or p for p in parts]
+                return ", ".join(display)
+            reading_type_labels = {"en_desarrollo": "En desarrollo", "silabica": "Silabica", "palabra_a_palabra": "Palabra a palabra", "por_unidades_cortas": "Por unidades cortas", "fluida": "Fluida"}
+            comprehension_labels = {"en_desarrollo": "En desarrollo", "literal": "Literal", "inferencial": "Inferencial", "critica": "Critica"}
+            writing_labels = {"en_desarrollo": "En desarrollo", "copia": "Copia", "dictado": "Dictado", "espontanea": "Espontanea"}
+
+            elements.append(Paragraph("Pauta de evaluacion pedagogica - Docente de aula - 1ero Medio", title_style))
+            elements.append(Spacer(1, 0.25*inch))
+            elements.append(Paragraph("I. DATOS DEL ESTUDIANTE E INFORME", section_style))
+            elements.append(Spacer(1, 0.15*inch))
+            col_label, col_value = 5*cm, 11*cm
+            id_data = [
+                [Paragraph("<b>Nombre completo:</b>", subtitle_style), Paragraph(DocumentsClass._escape_html_for_paragraph(get_value("student_full_name", "—")), normal_style)],
+                [Paragraph("<b>RUT:</b>", subtitle_style), Paragraph(DocumentsClass._escape_html_for_paragraph(get_value("student_identification_number", "—")), normal_style)],
+                [Paragraph("<b>Fecha de nacimiento:</b>", subtitle_style), Paragraph(format_date(doc_data.get("student_born_date")) or "—", normal_style)],
+                [Paragraph("<b>Edad:</b>", subtitle_style), Paragraph(get_value("student_age", "—"), normal_style)],
+                [Paragraph("<b>Establecimiento:</b>", subtitle_style), Paragraph(DocumentsClass._escape_html_for_paragraph(get_value("establishment_id", "—")), normal_style)],
+                [Paragraph("<b>Curso:</b>", subtitle_style), Paragraph(get_value("course", "—"), normal_style)],
+                [Paragraph("<b>Fecha del informe:</b>", subtitle_style), Paragraph(format_date(doc_data.get("report_date")) or "—", normal_style)],
+                [Paragraph("<b>Repeticiones:</b>", subtitle_style), Paragraph(get_value("repetitions", "—"), normal_style)],
+            ]
+            report_type_val = (get_value("report_type", "") or "").strip()
+            report_type_val = "Anual" if report_type_val.lower() == "anual" else ("Semestral" if report_type_val.lower() == "semestral" else report_type_val or "—")
+            id_data.append([Paragraph("<b>Tipo de informe:</b>", subtitle_style), Paragraph(DocumentsClass._escape_html_for_paragraph(report_type_val), normal_style)])
+            tbl_id = Table(id_data, colWidths=[col_label, col_value])
+            tbl_id.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('ALIGN', (0, 0), (-1, -1), 'LEFT'), ('LEFTPADDING', (0, 0), (-1, -1), 8), ('RIGHTPADDING', (0, 0), (-1, -1), 8), ('TOPPADDING', (0, 0), (-1, -1), 6), ('BOTTOMPADDING', (0, 0), (-1, -1), 6), ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),
+            ]))
+            elements.append(tbl_id)
+            elements.append(Spacer(1, 0.25*inch))
+            elements.append(Paragraph("II. FORTALEZAS DE LA SITUACION ESCOLAR", section_style))
+            elements.append(Spacer(1, 0.1*inch))
+            strengths_raw = doc_data.get("school_situation_strengths")
+            strength_labels_es = {"strength_creative": "Creativo/a", "strength_autonomous": "Autonomo/a", "strength_motivated": "Motivado/a", "strength_tolerant_frustration": "Tolerante a la frustracion", "strength_respects_rules": "Respeta las normas", "strength_follows_instructions": "Sigue instrucciones", "strength_peers_relationship": "Buena relacion con pares", "strength_attends_gladly": "Asiste con gusto", "strength_family_communication": "Comunicacion con la familia", "strength_persistent": "Persistente", "strength_self_confident": "Seguro/a de si mismo/a", "strength_participates": "Participa", "strength_pays_attention": "Presta atencion", "strength_interested_learning": "Interesado/a en el aprendizaje", "strength_completes_tasks": "Completa tareas", "strength_adults_relationship": "Buena relacion con adultos", "strength_attends_regularly": "Asiste regularmente", "strength_family_committed": "Familia comprometida"}
+            strengths_text = "—"
+            if strengths_raw not in (None, ""):
+                if isinstance(strengths_raw, dict):
+                    strengths_list = [strength_labels_es.get(k, k) for k, v in strengths_raw.items() if v is True]
+                    strengths_text = ", ".join(strengths_list) if strengths_list else "Ninguna marcada."
+                elif isinstance(strengths_raw, str):
+                    try:
+                        parsed = __import__("json").loads(strengths_raw)
+                        if isinstance(parsed, dict):
+                            strengths_list = [strength_labels_es.get(k, k) for k, v in parsed.items() if v is True]
+                            strengths_text = ", ".join(strengths_list) if strengths_list else "Ninguna marcada."
+                        else:
+                            strengths_text = str(strengths_raw).strip() or "—"
+                    except Exception:
+                        strengths_text = str(strengths_raw).strip() or "—"
+                else:
+                    strengths_text = str(strengths_raw).strip() or "—"
+            elements.append(Paragraph(DocumentsClass._escape_html_for_paragraph(strengths_text), normal_style))
+            elements.append(Spacer(1, 0.15*inch))
+            elements.append(Paragraph("Observaciones generales", subtitle_style))
+            elements.append(Paragraph(DocumentsClass._escape_html_for_paragraph(get_value("observations", "")) if get_value("observations", "") else "—", normal_style))
+            elements.append(Spacer(1, 0.25*inch))
+            elements.append(Paragraph("III. ACTITUD", section_style))
+            elements.append(Spacer(1, 0.08*inch))
+            elements.append(Paragraph(DOC38_LEGEND_TEXT, legend_style))
+            elements.append(Spacer(1, 0.06*inch))
+            elements.append(build_table("Actitud", 13, lambda i: get_value(f"attitude_{i}", ""), DOC38_ACTITUD_INDICADORES))
+            elements.append(Spacer(1, 0.1*inch))
+            elements.append(Paragraph("Observaciones actitud:", subtitle_style))
+            elements.append(Paragraph(DocumentsClass._escape_html_for_paragraph(get_value("observations_attitude", "")) if get_value("observations_attitude", "") else "—", normal_style))
+            elements.append(Spacer(1, 0.25*inch))
+            elements.append(Paragraph("IV. LENGUA Y LITERATURA", section_style))
+            elements.append(Spacer(1, 0.08*inch))
+            elements.append(Paragraph(DOC38_LEGEND_TEXT, legend_style))
+            elements.append(Spacer(1, 0.06*inch))
+            elements.append(build_table("Lengua y literatura", 13, lambda i: get_value(f"language_{i}", ""), DOC38_LENGUAJE_INDICADORES))
+            elements.append(Spacer(1, 0.12*inch))
+            rt_display = format_multi_value(get_value("reading_type", ""), reading_type_labels)
+            cl_display = format_multi_value(get_value("comprehension_level", ""), comprehension_labels)
+            wl_display = format_multi_value(get_value("writing_level", ""), writing_labels)
+            elements.append(Paragraph("<b>Tipo de lectura:</b> " + DocumentsClass._escape_html_for_paragraph(rt_display), normal_style))
+            elements.append(Paragraph("<b>Nivel de comprensión:</b> " + DocumentsClass._escape_html_for_paragraph(cl_display), normal_style))
+            elements.append(Paragraph("<b>Nivel de escritura:</b> " + DocumentsClass._escape_html_for_paragraph(wl_display), normal_style))
+            elements.append(Spacer(1, 0.1*inch))
+            elements.append(Paragraph("Observaciones lenguaje:", subtitle_style))
+            elements.append(Paragraph(DocumentsClass._escape_html_for_paragraph(get_value("observations_language", "")) if get_value("observations_language", "") else "—", normal_style))
+            elements.append(Spacer(1, 0.25*inch))
+            elements.append(Paragraph("V. MATEMÁTICA", section_style))
+            elements.append(Spacer(1, 0.08*inch))
+            elements.append(Paragraph(DOC38_LEGEND_TEXT, legend_style))
+            elements.append(Spacer(1, 0.06*inch))
+            elements.append(build_table("Matemática", 8, lambda i: get_value(f"mathematics_{i}", ""), DOC38_MATEMATICA_INDICADORES))
+            elements.append(Spacer(1, 0.1*inch))
+            elements.append(Paragraph("Observaciones matemática:", subtitle_style))
+            elements.append(Paragraph(DocumentsClass._escape_html_for_paragraph(get_value("observations_mathematics", "")) if get_value("observations_mathematics", "") else "—", normal_style))
+            doc.build(elements)
+            return {"status": "success", "message": "PDF generado exitosamente desde cero", "filename": unique_filename, "file_path": str(output_file)}
+        except ImportError:
+            return {"status": "error", "message": "ReportLab no esta instalado.", "filename": None, "file_path": None}
+        except Exception as e:
+            return {"status": "error", "message": f"Error generando PDF documento 38: {str(e)}", "filename": None, "file_path": None}
 
     @staticmethod
     def _generate_conners_teacher_from_scratch(

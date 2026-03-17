@@ -88,6 +88,12 @@ from app.backend.routers.psychopedagogical_evaluations import psychopedagogical_
 from app.backend.routers.conners_teacher_evaluations import conners_teacher_evaluations
 from app.backend.routers.diagnosis_summary import diagnosis_summary
 from app.backend.routers.cesp import cesp
+from app.backend.routers.idtel_reports import idtel_reports
+from app.backend.routers.pedagogical_evaluation_classroom_first_grade import pedagogical_evaluation_classroom_first_grade
+from app.backend.routers.pedagogical_evaluation_classroom_second_grade import pedagogical_evaluation_classroom_second_grade
+from app.backend.routers.pedagogical_evaluation_classroom_third_grade import pedagogical_evaluation_classroom_third_grade
+from app.backend.routers.pedagogical_evaluation_classroom_fourth_grade import pedagogical_evaluation_classroom_fourth_grade
+from app.backend.routers.pedagogical_evaluation_classroom_first_grade_secondary import pedagogical_evaluation_classroom_first_grade_secondary
 
 # OpenAPI (Swagger): FastAPI genera automáticamente el esquema desde rutas y modelos Pydantic.
 # Documentación interactiva:
@@ -233,6 +239,12 @@ app.include_router(psychopedagogical_evaluations)
 app.include_router(conners_teacher_evaluations)
 app.include_router(diagnosis_summary)
 app.include_router(cesp)
+app.include_router(idtel_reports)
+app.include_router(pedagogical_evaluation_classroom_first_grade)
+app.include_router(pedagogical_evaluation_classroom_second_grade)
+app.include_router(pedagogical_evaluation_classroom_third_grade)
+app.include_router(pedagogical_evaluation_classroom_fourth_grade)
+app.include_router(pedagogical_evaluation_classroom_first_grade_secondary)
 
 if __name__ == "__main__":
     # Para aumentar el límite de tamaño de archivo, configurar en el servidor

@@ -18,6 +18,12 @@ from app.backend.classes.psychopedagogical_evaluation_class import Psychopedagog
 from app.backend.classes.conners_teacher_evaluation_class import ConnersTeacherEvaluationClass
 from app.backend.classes.cesp_class import CespClass
 from app.backend.classes.action_incident_class import ActionIncidentClass
+from app.backend.classes.idtel_report_class import IdtelReportClass
+from app.backend.classes.pedagogical_evaluation_classroom_first_grade_class import PedagogicalEvaluationClassroomFirstGradeClass
+from app.backend.classes.pedagogical_evaluation_classroom_second_grade_class import PedagogicalEvaluationClassroomSecondGradeClass
+from app.backend.classes.pedagogical_evaluation_classroom_third_grade_class import PedagogicalEvaluationClassroomThirdGradeClass
+from app.backend.classes.pedagogical_evaluation_classroom_fourth_grade_class import PedagogicalEvaluationClassroomFourthGradeClass
+from app.backend.classes.pedagogical_evaluation_classroom_first_grade_secondary_class import PedagogicalEvaluationClassroomFirstGradeSecondaryClass
 from app.backend.db.database import get_db
 from app.backend.db.models import (
     FolderModel,
@@ -1441,11 +1447,15 @@ async def generate_document(
                 }
             )
         
+        # Mensajes unificados para generación de documentos
+        MSG_NO_DOC = "No se encontró documento para este estudiante."
+        MSG_ERROR_GEN = "Error generando documento."
+        
         # Obtener el documento usando la clase
         document = DocumentsClass(db)
         document_result = document.get(document_id)
         # Documentos 3,4,7,8,18,19,22,23,24,25,27 se pueden generar aunque no existan en la tabla documents
-        known_generable = (3, 4, 7, 8, 18, 19, 20, 22, 23, 24, 25, 27, 29)
+        known_generable = (3, 4, 7, 8, 9, 18, 19, 20, 22, 23, 24, 25, 27, 29, 31)
         if isinstance(document_result, dict) and document_result.get("status") == "error":
             if document_id in known_generable:
                 document_result = {"document_type_id": document_id}
@@ -1468,7 +1478,7 @@ async def generate_document(
                     status_code=code,
                     content={
                         "status": code,
-                        "message": result.get("message", "Error generando documento de anamnesis"),
+                        "message": result.get("message", MSG_ERROR_GEN),
                         "data": None
                     }
                 )
@@ -1502,7 +1512,7 @@ async def generate_document(
                     status_code=status.HTTP_404_NOT_FOUND,
                     content={
                         "status": 404,
-                        "message": "No se encontró evaluación de salud para este estudiante",
+                        "message": MSG_NO_DOC,
                         "data": None
                     }
                 )
@@ -1516,7 +1526,7 @@ async def generate_document(
                     status_code=status.HTTP_404_NOT_FOUND,
                     content={
                         "status": 404,
-                        "message": evaluation_data.get("message", "Evaluación de salud no encontrada"),
+                        "message": MSG_NO_DOC,
                         "data": None
                     }
                 )
@@ -1750,7 +1760,7 @@ async def generate_document(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     content={
                         "status": 500,
-                        "message": result.get("message", "Error generando documento"),
+                        "message": result.get("message", MSG_ERROR_GEN),
                         "data": None
                     }
                 )
@@ -1771,7 +1781,7 @@ async def generate_document(
                     status_code=status.HTTP_404_NOT_FOUND,
                     content={
                         "status": 404,
-                        "message": "No se encontró informe familiar para este estudiante",
+                        "message": MSG_NO_DOC,
                         "data": None
                     }
                 )
@@ -1933,7 +1943,7 @@ async def generate_document(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     content={
                         "status": 500,
-                        "message": result.get("message", "Error generando informe familiar"),
+                        "message": result.get("message", MSG_ERROR_GEN),
                         "data": None
                     }
                 )
@@ -2365,7 +2375,7 @@ async def generate_document(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     content={
                         "status": 500,
-                        "message": result.get("message", "Error generando documento de interconsulta"),
+                        "message": result.get("message", MSG_ERROR_GEN),
                         "data": None
                     }
                 )
@@ -2399,7 +2409,7 @@ async def generate_document(
                     status_code=status.HTTP_404_NOT_FOUND,
                     content={
                         "status": 404,
-                        "message": "No se encontró evaluación psicopedagógica para este estudiante",
+                        "message": MSG_NO_DOC,
                         "data": None
                     }
                 )
@@ -2579,7 +2589,7 @@ async def generate_document(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     content={
                         "status": 500,
-                        "message": result.get("message", "Error generando documento de evaluación psicopedagógica"),
+                        "message": result.get("message", MSG_ERROR_GEN),
                         "data": None
                     }
                 )
@@ -2600,7 +2610,7 @@ async def generate_document(
                     status_code=status.HTTP_404_NOT_FOUND,
                     content={
                         "status": 404,
-                        "message": "No se encontró estado de avance para este estudiante",
+                        "message": MSG_NO_DOC,
                         "data": None
                     }
                 )
@@ -2722,7 +2732,7 @@ async def generate_document(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     content={
                         "status": 500,
-                        "message": result.get("message", "Error generando documento"),
+                        "message": result.get("message", MSG_ERROR_GEN),
                         "data": None
                     }
                 )
@@ -2743,7 +2753,7 @@ async def generate_document(
                     status_code=status.HTTP_404_NOT_FOUND,
                     content={
                         "status": 404,
-                        "message": "No se encontró estado de avance PAI para este estudiante",
+                        "message": MSG_NO_DOC,
                         "data": None,
                     },
                 )
@@ -2881,7 +2891,7 @@ async def generate_document(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     content={
                         "status": 500,
-                        "message": result.get("message", "Error generando estado de avance PAI"),
+                        "message": result.get("message", MSG_ERROR_GEN),
                         "data": None,
                     },
                 )
@@ -2898,13 +2908,13 @@ async def generate_document(
             if isinstance(cesp_result, dict) and cesp_result.get("status") == "error":
                 return JSONResponse(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    content={"status": 404, "message": "No se encontró documento CESP para este estudiante", "data": None},
+                    content={"status": 404, "message": MSG_NO_DOC, "data": None},
                 )
             cesp_data_raw = cesp_result.get("data") if isinstance(cesp_result, dict) else None
             if not cesp_data_raw or not isinstance(cesp_data_raw, dict):
                 return JSONResponse(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    content={"status": 404, "message": "No se encontró documento CESP para este estudiante", "data": None},
+                    content={"status": 404, "message": MSG_NO_DOC, "data": None},
                 )
             student_data = student_result.get("student_data", {}) if isinstance(student_result, dict) else {}
             personal_data = student_data.get("personal_data") or {}
@@ -2991,7 +3001,7 @@ async def generate_document(
             if result.get("status") == "error":
                 return JSONResponse(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    content={"status": 500, "message": result.get("message", "Error generando documento CESP"), "data": None},
+                    content={"status": 500, "message": result.get("message", MSG_ERROR_GEN), "data": None},
                 )
             return FileResponse(
                 path=result["file_path"],
@@ -3010,7 +3020,7 @@ async def generate_document(
                     status_code=status.HTTP_404_NOT_FOUND,
                     content={
                         "status": 404,
-                        "message": "No se encontró Plan de Apoyo Individual para este estudiante",
+                        "message": MSG_NO_DOC,
                         "data": None
                     }
                 )
@@ -3087,7 +3097,7 @@ async def generate_document(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     content={
                         "status": 500,
-                        "message": result.get("message", "Error generando documento"),
+                        "message": result.get("message", MSG_ERROR_GEN),
                         "data": None
                     }
                 )
@@ -3109,7 +3119,7 @@ async def generate_document(
                     status_code=status.HTTP_404_NOT_FOUND,
                     content={
                         "status": 404,
-                        "message": "No se encontró informe fonoaudiológico para este estudiante",
+                        "message": MSG_NO_DOC,
                         "data": None
                     }
                 )
@@ -3175,7 +3185,7 @@ async def generate_document(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     content={
                         "status": 500,
-                        "message": result.get("message", "Error generando informe fonoaudiológico"),
+                        "message": result.get("message", MSG_ERROR_GEN),
                         "data": None
                     }
                 )
@@ -3184,6 +3194,82 @@ async def generate_document(
                 path=result["file_path"],
                 filename=result["filename"],
                 media_type='application/pdf'
+            )
+        
+        # Si document_id = 9, generar Informe fonoaudiológico IDTEL desde cero
+        if document_id == 9:
+            idtel_service = IdtelReportClass(db)
+            idtel_result = idtel_service.get_by_student_id(student_id)
+            if isinstance(idtel_result, dict) and idtel_result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    content={
+                        "status": 404,
+                        "message": MSG_NO_DOC,
+                        "data": None
+                    }
+                )
+            report_data = idtel_result.copy() if isinstance(idtel_result, dict) else {}
+            report_data.pop("id", None)
+            report_data.pop("added_date", None)
+            report_data.pop("updated_date", None)
+            if report_data.get("course_id"):
+                course = db.query(CourseModel).filter(CourseModel.id == report_data["course_id"]).first()
+                if course and course.course_name:
+                    report_data["course_name"] = course.course_name
+                report_data.pop("course_id", None)
+            else:
+                report_data["course_name"] = report_data.get("course_name") or ""
+            estab = report_data.get("establishment_id")
+            if estab is not None and str(estab).strip().isdigit():
+                try:
+                    sid = int(estab)
+                    school = db.query(SchoolModel).filter(SchoolModel.id == sid).first()
+                    if school and school.school_name:
+                        report_data["establishment_id"] = school.school_name
+                except (ValueError, TypeError):
+                    pass
+            rp = report_data.get("responsible_professionals")
+            if rp is not None:
+                ids = rp if isinstance(rp, list) else []
+                if isinstance(rp, str):
+                    try:
+                        ids = json.loads(rp)
+                    except Exception:
+                        ids = []
+                names = []
+                for pid in ids:
+                    try:
+                        prof_id = int(pid)
+                        professional = db.query(ProfessionalModel).filter(ProfessionalModel.id == prof_id).first()
+                        if professional:
+                            fn = f"{professional.names or ''} {professional.lastnames or ''}".strip()
+                            if fn:
+                                names.append(fn)
+                    except (ValueError, TypeError):
+                        pass
+                report_data["responsible_professionals_names"] = ", ".join(names) if names else ""
+            report_data.pop("responsible_professionals", None)
+            result = DocumentsClass.generate_document_pdf(
+                document_id=9,
+                document_data=report_data,
+                db=db,
+                template_path=None,
+                output_directory="files/system/students"
+            )
+            if result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    content={
+                        "status": 500,
+                        "message": result.get("message", MSG_ERROR_GEN),
+                        "data": None
+                    }
+                )
+            return FileResponse(
+                path=result["file_path"],
+                filename=result["filename"],
+                media_type="application/pdf"
             )
         
         # Si document_id = 23, generar Certificado de egreso PIE desde cero
@@ -3195,7 +3281,7 @@ async def generate_document(
                     status_code=status.HTTP_404_NOT_FOUND,
                     content={
                         "status": 404,
-                        "message": "No se encontró certificado de egreso PIE para este estudiante",
+                        "message": MSG_NO_DOC,
                         "data": None,
                     },
                 )
@@ -3281,7 +3367,7 @@ async def generate_document(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     content={
                         "status": 500,
-                        "message": result.get("message", "Error generando certificado de egreso PIE"),
+                        "message": result.get("message", MSG_ERROR_GEN),
                         "data": None,
                     },
                 )
@@ -3300,7 +3386,7 @@ async def generate_document(
                     status_code=status.HTTP_404_NOT_FOUND,
                     content={
                         "status": 404,
-                        "message": "No hay certificado de asistencia del apoderado para este estudiante. Cree uno desde guardian_attendance_certificates/store.",
+                        "message": MSG_NO_DOC,
                         "data": None,
                     },
                 )
@@ -3365,7 +3451,7 @@ async def generate_document(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     content={
                         "status": 500,
-                        "message": result.get("message", "Error generando certificado Ley TEA"),
+                        "message": result.get("message", MSG_ERROR_GEN),
                         "data": None,
                     },
                 )
@@ -3384,7 +3470,7 @@ async def generate_document(
                     status_code=status.HTTP_404_NOT_FOUND,
                     content={
                         "status": 404,
-                        "message": "No hay evaluación Conners para este estudiante. Cree una desde conners_teacher_evaluations/store.",
+                        "message": MSG_NO_DOC,
                         "data": None,
                     },
                 )
@@ -3431,7 +3517,187 @@ async def generate_document(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     content={
                         "status": 500,
-                        "message": result.get("message", "Error generando PDF Conners"),
+                        "message": result.get("message", MSG_ERROR_GEN),
+                        "data": None,
+                    },
+                )
+            return FileResponse(
+                path=result["file_path"],
+                filename=result["filename"],
+                media_type="application/pdf",
+            )
+        
+        # Si document_id = 31, generar Pauta de evaluación pedagógica - Docente de aula - 1º Básico (PDF)
+        if document_id == 31:
+            pe_service = PedagogicalEvaluationClassroomFirstGradeClass(db)
+            pe_result = pe_service.get_by_student_id(student_id)
+            if isinstance(pe_result, dict) and pe_result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    content={
+                        "status": 404,
+                        "message": MSG_NO_DOC,
+                        "data": None,
+                    },
+                )
+            doc_data_31 = dict(pe_result)
+            result = DocumentsClass.generate_document_pdf(
+                document_id=31,
+                document_data=doc_data_31,
+                db=db,
+                template_path=None,
+                output_directory="files/system/students",
+            )
+            if result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    content={
+                        "status": 500,
+                        "message": result.get("message", MSG_ERROR_GEN),
+                        "data": None,
+                    },
+                )
+            return FileResponse(
+                path=result["file_path"],
+                filename=result["filename"],
+                media_type="application/pdf",
+            )
+        
+        # Si document_id = 32, generar Pauta de evaluación pedagógica - Docente de aula - 2º Básico (PDF)
+        if document_id == 32:
+            pe2_service = PedagogicalEvaluationClassroomSecondGradeClass(db)
+            pe2_result = pe2_service.get_by_student_id(student_id)
+            if isinstance(pe2_result, dict) and pe2_result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    content={
+                        "status": 404,
+                        "message": MSG_NO_DOC,
+                        "data": None,
+                    },
+                )
+            doc_data_32 = dict(pe2_result)
+            result = DocumentsClass.generate_document_pdf(
+                document_id=32,
+                document_data=doc_data_32,
+                db=db,
+                template_path=None,
+                output_directory="files/system/students",
+            )
+            if result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    content={
+                        "status": 500,
+                        "message": result.get("message", MSG_ERROR_GEN),
+                        "data": None,
+                    },
+                )
+            return FileResponse(
+                path=result["file_path"],
+                filename=result["filename"],
+                media_type="application/pdf",
+            )
+        
+        # Si document_id = 33, generar Pauta de evaluación pedagógica - Docente de aula - 3º Básico (PDF)
+        if document_id == 33:
+            pe3_service = PedagogicalEvaluationClassroomThirdGradeClass(db)
+            pe3_result = pe3_service.get_by_student_id(student_id)
+            if isinstance(pe3_result, dict) and pe3_result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    content={
+                        "status": 404,
+                        "message": MSG_NO_DOC,
+                        "data": None,
+                    },
+                )
+            doc_data_33 = dict(pe3_result)
+            result = DocumentsClass.generate_document_pdf(
+                document_id=33,
+                document_data=doc_data_33,
+                db=db,
+                template_path=None,
+                output_directory="files/system/students",
+            )
+            if result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    content={
+                        "status": 500,
+                        "message": result.get("message", MSG_ERROR_GEN),
+                        "data": None,
+                    },
+                )
+            return FileResponse(
+                path=result["file_path"],
+                filename=result["filename"],
+                media_type="application/pdf",
+            )
+        
+        # Si document_id = 34, generar Pauta de evaluacion pedagogica - Docente de aula - 4to Basico (PDF)
+        if document_id == 34:
+            pe4_service = PedagogicalEvaluationClassroomFourthGradeClass(db)
+            pe4_result = pe4_service.get_by_student_id(student_id)
+            if isinstance(pe4_result, dict) and pe4_result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    content={
+                        "status": 404,
+                        "message": MSG_NO_DOC,
+                        "data": None,
+                    },
+                )
+            doc_data_34 = dict(pe4_result)
+            result = DocumentsClass.generate_document_pdf(
+                document_id=34,
+                document_data=doc_data_34,
+                db=db,
+                template_path=None,
+                output_directory="files/system/students",
+            )
+            if result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    content={
+                        "status": 500,
+                        "message": result.get("message", MSG_ERROR_GEN),
+                        "data": None,
+                    },
+                )
+            return FileResponse(
+                path=result["file_path"],
+                filename=result["filename"],
+                media_type="application/pdf",
+            )
+        
+        # Si document_id = 38, generar Pauta de evaluacion pedagogica - Docente de aula - 1ero Medio (PDF)
+        if document_id == 38:
+            pe1s_service = PedagogicalEvaluationClassroomFirstGradeSecondaryClass(db)
+            pe1s_result = pe1s_service.get_by_student_id(student_id)
+            if isinstance(pe1s_result, dict) and pe1s_result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    content={
+                        "status": 404,
+                        "message": MSG_NO_DOC,
+                        "data": None,
+                    },
+                )
+            doc_data_38 = dict(pe1s_result)
+            result = DocumentsClass.generate_document_pdf(
+                document_id=38,
+                document_data=doc_data_38,
+                db=db,
+                template_path=None,
+                output_directory="files/system/students",
+            )
+            if result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    content={
+                        "status": 500,
+                        "message": result.get("message", MSG_ERROR_GEN),
                         "data": None,
                     },
                 )
@@ -3595,7 +3861,7 @@ async def generate_document(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     content={
                         "status": 500,
-                        "message": result.get("message", "Error generando documento de autorización"),
+                        "message": result.get("message", MSG_ERROR_GEN),
                         "data": None
                     }
                 )
@@ -3728,7 +3994,7 @@ async def generate_document(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 content={
                     "status": 500,
-                    "message": result.get("message", "Error generando documento"),
+                    "message": result.get("message", MSG_ERROR_GEN),
                     "data": None
                 }
             )
@@ -3745,7 +4011,7 @@ async def generate_document(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
                 "status": 500,
-                "message": f"Error generando documento: {str(e)}",
+                "message": MSG_ERROR_GEN,
                 "data": None
             }
         )

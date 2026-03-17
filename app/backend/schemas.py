@@ -1993,6 +1993,139 @@ class UpdateFonoaudiologicalReport(BaseModel):
     suggestions_family: Optional[str] = None
     suggestions_establishment: Optional[str] = None
 
+class StoreIdtelReport(BaseModel):
+    """Document 9 – Informe fonoaudiológico IDTEL. Acepta todos los campos del formulario."""
+    student_id: int
+    document_type_id: Optional[int] = 9
+    quantitative_locked: Optional[bool] = None
+
+    class Config:
+        extra = "allow"
+
+
+# Document 31 – Pauta de evaluación pedagógica - Docente de aula - first grade
+class StorePedagogicalEvaluationClassroomFirstGrade(BaseModel):
+    """Document 31 – Pauta de evaluación pedagógica - Docente de aula - 1º Básico (first grade)."""
+    student_id: int
+    document_type_id: Optional[int] = 31
+    # IV. Lenguaje – varios valores separados por coma (checkboxes)
+    reading_type: Optional[str] = None
+    comprehension_level: Optional[str] = None
+    writing_level: Optional[str] = None
+
+    class Config:
+        extra = "allow"
+
+
+class UpdatePedagogicalEvaluationClassroomFirstGrade(BaseModel):
+    """Document 31 – Actualización. Acepta todos los campos del formulario."""
+    student_id: Optional[int] = None
+    document_type_id: Optional[int] = None
+    reading_type: Optional[str] = None
+    comprehension_level: Optional[str] = None
+    writing_level: Optional[str] = None
+
+    class Config:
+        extra = "allow"
+
+
+# Document 32 – Pauta de evaluación pedagógica - Docente de aula - 2º Básico (second grade)
+class StorePedagogicalEvaluationClassroomSecondGrade(BaseModel):
+    """Document 32 – Pauta de evaluación pedagógica - Docente de aula - 2º Básico."""
+    student_id: int
+    document_type_id: Optional[int] = 32
+    reading_type: Optional[str] = None
+    comprehension_level: Optional[str] = None
+    writing_level: Optional[str] = None
+
+    class Config:
+        extra = "allow"
+
+
+class UpdatePedagogicalEvaluationClassroomSecondGrade(BaseModel):
+    """Document 32 – Actualización. Acepta todos los campos del formulario."""
+    student_id: Optional[int] = None
+    document_type_id: Optional[int] = None
+    reading_type: Optional[str] = None
+    comprehension_level: Optional[str] = None
+    writing_level: Optional[str] = None
+
+    class Config:
+        extra = "allow"
+
+
+class StorePedagogicalEvaluationClassroomThirdGrade(BaseModel):
+    """Document 33 – Pauta de evaluación pedagógica - Docente de aula - 3º Básico."""
+    student_id: int
+    document_type_id: Optional[int] = 33
+    reading_type: Optional[str] = None
+    comprehension_level: Optional[str] = None
+    writing_level: Optional[str] = None
+
+    class Config:
+        extra = "allow"
+
+
+class UpdatePedagogicalEvaluationClassroomThirdGrade(BaseModel):
+    """Document 33 – Actualización. Acepta todos los campos del formulario."""
+    student_id: Optional[int] = None
+    document_type_id: Optional[int] = None
+    reading_type: Optional[str] = None
+    comprehension_level: Optional[str] = None
+    writing_level: Optional[str] = None
+
+    class Config:
+        extra = "allow"
+
+
+class StorePedagogicalEvaluationClassroomFourthGrade(BaseModel):
+    """Document 34 - Pauta de evaluacion pedagogica - Docente de aula - 4to Basico."""
+    student_id: int
+    document_type_id: Optional[int] = 34
+    reading_type: Optional[str] = None
+    comprehension_level: Optional[str] = None
+    writing_level: Optional[str] = None
+
+    class Config:
+        extra = "allow"
+
+
+class UpdatePedagogicalEvaluationClassroomFourthGrade(BaseModel):
+    """Document 34 - Actualizacion. Acepta todos los campos del formulario."""
+    student_id: Optional[int] = None
+    document_type_id: Optional[int] = None
+    reading_type: Optional[str] = None
+    comprehension_level: Optional[str] = None
+    writing_level: Optional[str] = None
+
+    class Config:
+        extra = "allow"
+
+
+class StorePedagogicalEvaluationClassroomFirstGradeSecondary(BaseModel):
+    """Document 38 - Pauta de evaluacion pedagogica - Docente de aula - 1ero Medio."""
+    student_id: int
+    document_type_id: Optional[int] = 38
+    reading_type: Optional[str] = None
+    comprehension_level: Optional[str] = None
+    writing_level: Optional[str] = None
+
+    class Config:
+        extra = "allow"
+
+
+class UpdatePedagogicalEvaluationClassroomFirstGradeSecondary(BaseModel):
+    """Document 38 - Actualizacion. Acepta todos los campos del formulario."""
+    student_id: Optional[int] = None
+    document_type_id: Optional[int] = None
+    reading_type: Optional[str] = None
+    comprehension_level: Optional[str] = None
+    writing_level: Optional[str] = None
+
+    class Config:
+        extra = "allow"
+
+
 class FonoaudiologicalReportList(BaseModel):
     page: Optional[int] = None
     per_page: int = 10
