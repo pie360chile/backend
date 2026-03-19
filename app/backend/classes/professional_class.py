@@ -3,11 +3,23 @@ from app.backend.db.models import ProfessionalModel, UserModel, SchoolModel, Pro
 from app.backend.auth.auth_user import generate_bcrypt_hash
 import json
 
+
+def _period_year_int(v):
+    """Convierte period_year (BD string) a int para la API; None si no es numérico."""
+    if v is None:
+        return None
+    try:
+        s = str(v).strip()
+        return int(s) if s else None
+    except (ValueError, TypeError):
+        return None
+
+
 class ProfessionalClass:
     def __init__(self, db):
         self.db = db
 
-    def get_all(self, page=0, items_per_page=10, identification_number=None, names=None, school_id=None):
+    def get_all(self, page=0, items_per_page=10, identification_number=None, names=None, school_id=None, period_year=None):
         try:
             query = self.db.query(
                 ProfessionalModel.id,
@@ -21,6 +33,7 @@ class ProfessionalClass:
                 ProfessionalModel.birth_date,
                 ProfessionalModel.address,
                 ProfessionalModel.phone,
+                ProfessionalModel.period_year,
                 ProfessionalModel.added_date,
                 ProfessionalModel.updated_date,
                 RolModel.rol.label('rol_name')
@@ -31,6 +44,12 @@ class ProfessionalClass:
             # Filtrar por school_id si se proporciona
             if school_id is not None:
                 query = query.filter(ProfessionalModel.school_id == school_id)
+
+            # Filtrar por period_year si se proporciona
+            if period_year is not None and str(period_year).strip():
+                query = query.filter(ProfessionalModel.period_year == str(period_year).strip())
+            elif period_year is not None:
+                query = query.filter(ProfessionalModel.period_year.is_(None))
 
             # Aplicar filtros de búsqueda
             if identification_number and str(identification_number).strip():
@@ -69,6 +88,7 @@ class ProfessionalClass:
                     "birth_date": professional.birth_date.strftime("%Y-%m-%d") if professional.birth_date else None,
                     "address": professional.address,
                     "phone": professional.phone,
+                    "period_year": _period_year_int(getattr(professional, "period_year", None)),
                     "added_date": professional.added_date.strftime("%Y-%m-%d %H:%M:%S") if professional.added_date else None,
                     "updated_date": professional.updated_date.strftime("%Y-%m-%d %H:%M:%S") if professional.updated_date else None
                 } for professional in data]
@@ -100,6 +120,7 @@ class ProfessionalClass:
                     "birth_date": professional.birth_date.strftime("%Y-%m-%d") if professional.birth_date else None,
                     "address": professional.address,
                     "phone": professional.phone,
+                    "period_year": _period_year_int(getattr(professional, "period_year", None)),
                     "added_date": professional.added_date.strftime("%Y-%m-%d %H:%M:%S") if professional.added_date else None,
                     "updated_date": professional.updated_date.strftime("%Y-%m-%d %H:%M:%S") if professional.updated_date else None
                 } for professional in data]
@@ -139,6 +160,7 @@ class ProfessionalClass:
                     ProfessionalModel.birth_date,
                     ProfessionalModel.address,
                     ProfessionalModel.phone,
+                    ProfessionalModel.period_year,
                     ProfessionalModel.added_date,
                     ProfessionalModel.updated_date,
                     RolModel.rol.label("rol_name"),
@@ -164,6 +186,7 @@ class ProfessionalClass:
                     "birth_date": p.birth_date.strftime("%Y-%m-%d") if p.birth_date else None,
                     "address": p.address,
                     "phone": p.phone,
+                    "period_year": _period_year_int(getattr(p, "period_year", None)),
                     "added_date": p.added_date.strftime("%Y-%m-%d %H:%M:%S") if p.added_date else None,
                     "updated_date": p.updated_date.strftime("%Y-%m-%d %H:%M:%S") if p.updated_date else None,
                 }
@@ -190,6 +213,7 @@ class ProfessionalClass:
                     "birth_date": data_query.birth_date.strftime("%Y-%m-%d") if data_query.birth_date else None,
                     "address": data_query.address,
                     "phone": data_query.phone,
+                    "period_year": _period_year_int(getattr(data_query, "period_year", None)),
                     "added_date": data_query.added_date.strftime("%Y-%m-%d %H:%M:%S") if data_query.added_date else None,
                     "updated_date": data_query.updated_date.strftime("%Y-%m-%d %H:%M:%S") if data_query.updated_date else None
                 }
@@ -217,7 +241,9 @@ class ProfessionalClass:
             teaching_ids = professional_inputs.get('teaching_id', [])
             course_ids = professional_inputs.get('course_id', [])
 
-            # Crear el profesional
+            # Crear el profesional (period_year en BD es string)
+            py = professional_inputs.get('period_year')
+            period_year_db = str(py).strip() if py is not None else None
             new_professional = ProfessionalModel(
                 school_id=school_id,
                 rol_id=professional_inputs.get('rol_id'),
@@ -229,6 +255,7 @@ class ProfessionalClass:
                 birth_date=birth_date_obj,
                 address=professional_inputs.get('address'),
                 phone=professional_inputs.get('phone'),
+                period_year=period_year_db,
                 added_date=datetime.now(),
                 updated_date=datetime.now()
             )
@@ -330,7 +357,10 @@ class ProfessionalClass:
             rol_id = professional_inputs.get('rol_id', existing_professional.rol_id)
 
             for key, value in professional_inputs.items():
-                if value is not None:
+                if key == 'period_year':
+                    py = value
+                    existing_professional.period_year = str(py).strip() if py is not None else None
+                elif value is not None:
                     setattr(existing_professional, key, value)
 
             existing_professional.updated_date = datetime.now()

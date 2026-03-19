@@ -152,6 +152,38 @@ class PsychopedagogicalEvaluationClass:
         except Exception as e:
             return {"status": "error", "message": str(e), "data": []}
 
+    def get_sample_responses_for_question(
+        self, question_key: str, exclude_student_id: int, limit: int = 20
+    ) -> List[str]:
+        """
+        Obtiene respuestas de otros estudiantes para la misma pregunta (campo),
+        hasta un máximo de 20, para que la IA vea ejemplos y sepa qué contestar.
+        Solo devuelve el texto del campo, sin datos que identifiquen al estudiante.
+        """
+        if not hasattr(PsychopedagogicalEvaluationInfoModel, question_key):
+            return []
+        try:
+            column = getattr(PsychopedagogicalEvaluationInfoModel, question_key)
+            rows = (
+                self.db.query(PsychopedagogicalEvaluationInfoModel)
+                .filter(
+                    PsychopedagogicalEvaluationInfoModel.student_id != exclude_student_id,
+                    column.isnot(None),
+                    column != "",
+                )
+                .order_by(PsychopedagogicalEvaluationInfoModel.id.desc())
+                .limit(limit)
+                .all()
+            )
+            out = []
+            for row in rows:
+                val = getattr(row, question_key, None)
+                if val and isinstance(val, str) and val.strip():
+                    out.append(val.strip())
+            return out
+        except Exception:
+            return []
+
     def _validate_scale(self, scale_type: str, indicator_number: int, value: str) -> Optional[str]:
         if scale_type not in VALID_SCALE_TYPES:
             return f"scale_type debe ser {VALID_SCALE_TYPES}"

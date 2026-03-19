@@ -94,7 +94,7 @@ class PedagogicalEvaluationClassroomFirstGradeSecondaryClass:
         try:
             data = _payload_to_row_values(payload)
             student_id = data.get("student_id") or payload.get("student_id")
-            document_type_id = data.get("document_type_id") if data.get("document_type_id") is not None else payload.get("document_type_id", 38)
+            document_type_id = data.get("document_type_id") if data.get("document_type_id") is not None else payload.get("document_type_id", 39)
             if not student_id:
                 return {"status": "error", "message": "Falta student_id."}
             data["student_id"] = student_id

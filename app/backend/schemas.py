@@ -339,11 +339,12 @@ class UpdateSchool(BaseModel):
 # Student schemas
 class StudentList(BaseModel):
     page: Optional[int] = None
+    per_page: int = 10
     rut: Optional[str] = None
     names: Optional[str] = None
     identification_number: Optional[str] = None
     course_id: Optional[int] = None
-    per_page: int = 10
+    period_year: Optional[int] = None  # Filtrar estudiantes por año (ej. 2026)
 
 class StudentAcademicInfo(BaseModel):
     special_educational_need_id: Optional[int] = None
@@ -376,10 +377,12 @@ class StoreStudent(BaseModel):
     father_lastname: str
     mother_lastname: str
     course_id: Optional[int] = None
+    period_year: Optional[int] = None
 
 class UpdateStudent(BaseModel):
     # Campos que vienen del frontend ya mapeados a nombres de BD
     identification_number: Optional[str] = None
+    period_year: Optional[int] = None
     names: Optional[str] = None
     father_lastname: Optional[str] = None
     mother_lastname: Optional[str] = None
@@ -450,6 +453,7 @@ class ProfessionalList(BaseModel):
     per_page: int = 10
     identification_number: Optional[str] = None
     names: Optional[str] = None
+    period_year: Optional[int] = None
 
 class StoreProfessional(BaseModel):
     identification_number: str
@@ -461,6 +465,7 @@ class StoreProfessional(BaseModel):
     phone: str
     rol_id: int
     password: str
+    period_year: Optional[int] = None
     course_id: Optional[List[int]] = None
     teaching_id: Optional[List[int]] = None
     career_type_id: Optional[int] = None
@@ -474,6 +479,7 @@ class UpdateProfessional(BaseModel):
     birth_date: Optional[str] = None
     address: Optional[str] = None
     phone: Optional[str] = None
+    period_year: Optional[int] = None
     course_id: Optional[List[int]] = None
     teaching_id: Optional[List[int]] = None
     career_type_id: Optional[int] = None
@@ -1573,6 +1579,12 @@ class UpdatePsychopedagogicalEvaluationInfo(BaseModel):
     social_communicative_scale_10: Optional[str] = None
 
 
+class PsychopedagogicalEvaluationIARequest(BaseModel):
+    """Request body for POST /psychopedagogical_evaluations/ia – generate synthesis for one question."""
+    student_id: int
+    question_key: str  # e.g. cognitive_analysis, conclusion, suggestions_to_school
+
+
 # Document 29: Conners Teacher Abbreviated + Conduct
 class ConnersTeacherScoreItem(BaseModel):
     item_index: int  # 1-10
@@ -2102,8 +2114,80 @@ class UpdatePedagogicalEvaluationClassroomFourthGrade(BaseModel):
         extra = "allow"
 
 
-class StorePedagogicalEvaluationClassroomFirstGradeSecondary(BaseModel):
-    """Document 38 - Pauta de evaluacion pedagogica - Docente de aula - 1ero Medio."""
+class StorePedagogicalEvaluationClassroomFifthGrade(BaseModel):
+    """Document 35 - Pauta de evaluacion pedagogica - Docente de aula - 5to Basico."""
+    student_id: int
+    document_type_id: Optional[int] = 35
+    reading_type: Optional[str] = None
+    comprehension_level: Optional[str] = None
+    writing_level: Optional[str] = None
+
+    class Config:
+        extra = "allow"
+
+
+class UpdatePedagogicalEvaluationClassroomFifthGrade(BaseModel):
+    """Document 35 - Actualizacion. Acepta todos los campos del formulario."""
+    student_id: Optional[int] = None
+    document_type_id: Optional[int] = None
+    reading_type: Optional[str] = None
+    comprehension_level: Optional[str] = None
+    writing_level: Optional[str] = None
+
+    class Config:
+        extra = "allow"
+
+
+class StorePedagogicalEvaluationClassroomSixthGrade(BaseModel):
+    """Document 36 - Pauta de evaluacion pedagogica - Docente de aula - 6to Basico."""
+    student_id: int
+    document_type_id: Optional[int] = 36
+    reading_type: Optional[str] = None
+    comprehension_level: Optional[str] = None
+    writing_level: Optional[str] = None
+
+    class Config:
+        extra = "allow"
+
+
+class UpdatePedagogicalEvaluationClassroomSixthGrade(BaseModel):
+    """Document 36 - Actualizacion. Acepta todos los campos del formulario."""
+    student_id: Optional[int] = None
+    document_type_id: Optional[int] = None
+    reading_type: Optional[str] = None
+    comprehension_level: Optional[str] = None
+    writing_level: Optional[str] = None
+
+    class Config:
+        extra = "allow"
+
+
+class StorePedagogicalEvaluationClassroomSeventhGrade(BaseModel):
+    """Document 37 - Pauta de evaluacion pedagogica - Docente de aula - 7mo Basico."""
+    student_id: int
+    document_type_id: Optional[int] = 37
+    reading_type: Optional[str] = None
+    comprehension_level: Optional[str] = None
+    writing_level: Optional[str] = None
+
+    class Config:
+        extra = "allow"
+
+
+class UpdatePedagogicalEvaluationClassroomSeventhGrade(BaseModel):
+    """Document 37 - Actualizacion. Acepta todos los campos del formulario."""
+    student_id: Optional[int] = None
+    document_type_id: Optional[int] = None
+    reading_type: Optional[str] = None
+    comprehension_level: Optional[str] = None
+    writing_level: Optional[str] = None
+
+    class Config:
+        extra = "allow"
+
+
+class StorePedagogicalEvaluationClassroomEighthGrade(BaseModel):
+    """Document 38 - Pauta de evaluacion pedagogica - Docente de aula - 8vo Basico."""
     student_id: int
     document_type_id: Optional[int] = 38
     reading_type: Optional[str] = None
@@ -2114,8 +2198,56 @@ class StorePedagogicalEvaluationClassroomFirstGradeSecondary(BaseModel):
         extra = "allow"
 
 
-class UpdatePedagogicalEvaluationClassroomFirstGradeSecondary(BaseModel):
+class UpdatePedagogicalEvaluationClassroomEighthGrade(BaseModel):
     """Document 38 - Actualizacion. Acepta todos los campos del formulario."""
+    student_id: Optional[int] = None
+    document_type_id: Optional[int] = None
+    reading_type: Optional[str] = None
+    comprehension_level: Optional[str] = None
+    writing_level: Optional[str] = None
+
+    class Config:
+        extra = "allow"
+
+
+class StorePedagogicalEvaluationClassroomFirstGradeSecondary(BaseModel):
+    """Document 39 - Pauta de evaluacion pedagogica - Docente de aula - 1ero Medio."""
+    student_id: int
+    document_type_id: Optional[int] = 39
+    reading_type: Optional[str] = None
+    comprehension_level: Optional[str] = None
+    writing_level: Optional[str] = None
+
+    class Config:
+        extra = "allow"
+
+
+class UpdatePedagogicalEvaluationClassroomFirstGradeSecondary(BaseModel):
+    """Document 39 - Actualizacion. Acepta todos los campos del formulario."""
+    student_id: Optional[int] = None
+    document_type_id: Optional[int] = None
+    reading_type: Optional[str] = None
+    comprehension_level: Optional[str] = None
+    writing_level: Optional[str] = None
+
+    class Config:
+        extra = "allow"
+
+
+class StorePedagogicalEvaluationClassroomSecondGradeSecondary(BaseModel):
+    """Document 40 - Pauta de evaluacion pedagogica - Docente de aula - 2do Medio."""
+    student_id: int
+    document_type_id: Optional[int] = 40
+    reading_type: Optional[str] = None
+    comprehension_level: Optional[str] = None
+    writing_level: Optional[str] = None
+
+    class Config:
+        extra = "allow"
+
+
+class UpdatePedagogicalEvaluationClassroomSecondGradeSecondary(BaseModel):
+    """Document 40 - Actualizacion. Acepta todos los campos del formulario."""
     student_id: Optional[int] = None
     document_type_id: Optional[int] = None
     reading_type: Optional[str] = None

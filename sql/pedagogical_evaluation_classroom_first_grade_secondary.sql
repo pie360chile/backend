@@ -5,7 +5,7 @@
 CREATE TABLE IF NOT EXISTS pedagogical_evaluation_classroom_first_grade_secondary (
   id INT AUTO_INCREMENT PRIMARY KEY,
   student_id INT NOT NULL,
-  document_type_id INT NULL DEFAULT 38,
+  document_type_id INT NULL DEFAULT 39,
 
   -- I. Identification
   student_full_name VARCHAR(255) NULL,

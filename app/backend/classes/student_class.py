@@ -29,6 +29,17 @@ def _parse_date(v):
     return None
 
 
+def _period_year_int(v):
+    """Convierte period_year (BD string) a int para la API; None si no es numérico."""
+    if v is None:
+        return None
+    try:
+        s = str(v).strip()
+        return int(s) if s else None
+    except (ValueError, TypeError):
+        return None
+
+
 class StudentClass:
     def __init__(self, db):
         self.db = db
@@ -36,13 +47,14 @@ class StudentClass:
     def _parse_date(self, v):
         return _parse_date(v)
 
-    def get_all(self, page=0, items_per_page=10, school_id=None, rut=None, names=None, identification_number=None, course_id=None):
+    def get_all(self, page=0, items_per_page=10, school_id=None, rut=None, names=None, identification_number=None, course_id=None, period_year=None):
         try:
             query = self.db.query(
                 StudentModel.id,
                 StudentModel.deleted_status_id,
                 StudentModel.school_id,
                 StudentModel.identification_number.label('student_identification_number'),
+                StudentModel.period_year,
                 StudentModel.added_date,
                 StudentModel.updated_date,
                 StudentAcademicInfoModel.id.label('academic_id'),
@@ -98,6 +110,9 @@ class StudentClass:
             if course_id:
                 query = query.filter(StudentAcademicInfoModel.course_id == course_id)
 
+            if period_year is not None and str(period_year).strip():
+                query = query.filter(StudentModel.period_year == str(period_year).strip())
+
             query = query.order_by(StudentModel.id.desc())
 
             if page > 0:
@@ -123,6 +138,7 @@ class StudentClass:
                     "deleted_status_id": student.deleted_status_id,
                     "school_id": student.school_id,
                     "identification_number": student.student_identification_number,
+                    "period_year": _period_year_int(getattr(student, "period_year", None)),
                     "added_date": student.added_date.strftime("%Y-%m-%d %H:%M:%S") if student.added_date else None,
                     "updated_date": student.updated_date.strftime("%Y-%m-%d %H:%M:%S") if student.updated_date else None,
                     "academic_info": {
@@ -171,6 +187,7 @@ class StudentClass:
                     "deleted_status_id": student.deleted_status_id,
                     "school_id": student.school_id,
                     "identification_number": student.student_identification_number,
+                    "period_year": _period_year_int(getattr(student, "period_year", None)),
                     "added_date": student.added_date.strftime("%Y-%m-%d %H:%M:%S") if student.added_date else None,
                     "updated_date": student.updated_date.strftime("%Y-%m-%d %H:%M:%S") if student.updated_date else None,
                     "academic_info": {
@@ -219,6 +236,7 @@ class StudentClass:
                 StudentModel.deleted_status_id,
                 StudentModel.school_id,
                 StudentModel.identification_number.label('student_identification_number'),
+                StudentModel.period_year,
                 StudentModel.added_date,
                 StudentModel.updated_date,
                 StudentAcademicInfoModel.id.label('academic_id'),
@@ -289,6 +307,7 @@ class StudentClass:
                 "deleted_status_id": student.deleted_status_id,
                 "school_id": student.school_id,
                 "identification_number": student.student_identification_number,
+                "period_year": _period_year_int(getattr(student, "period_year", None)),
                 "added_date": _date_str(student.added_date),
                 "updated_date": _date_str(student.updated_date),
 "academic_info": {
@@ -553,6 +572,7 @@ class StudentClass:
                 StudentModel.deleted_status_id,
                 StudentModel.school_id,
                 StudentModel.identification_number.label('student_identification_number'),
+                StudentModel.period_year,
                 StudentModel.added_date,
                 StudentModel.updated_date,
                 StudentAcademicInfoModel.id.label('academic_id'),
@@ -599,6 +619,7 @@ class StudentClass:
                     "deleted_status_id": data_query.deleted_status_id,
                     "school_id": data_query.school_id,
                     "identification_number": data_query.student_identification_number,
+                    "period_year": _period_year_int(getattr(data_query, "period_year", None)),
                     "added_date": data_query.added_date.strftime("%Y-%m-%d %H:%M:%S") if data_query.added_date else None,
                     "updated_date": data_query.updated_date.strftime("%Y-%m-%d %H:%M:%S") if data_query.updated_date else None,
                     "academic_info": {
@@ -642,11 +663,51 @@ class StudentClass:
         
     def store(self, student_inputs):
         try:
-            # Crear el estudiante principal
+            school_id = student_inputs.get('school_id')
+            identification_number = (student_inputs.get('identification_number') or '').strip()
+            period_year = student_inputs.get('period_year')
+            if period_year is not None and not isinstance(period_year, str):
+                period_year = str(period_year).strip() if period_year else None
+            elif period_year is not None:
+                period_year = (period_year or '').strip() or None
+            course_id = student_inputs.get('course_id')
+
+            if not identification_number:
+                return {"status": "error", "message": "El RUT/número de identificación es requerido."}
+
+            # Validar que no exista ya un estudiante con el mismo RUT, curso y periodo en el mismo colegio
+            duplicate_query = self.db.query(StudentModel).filter(
+                StudentModel.school_id == school_id,
+                StudentModel.identification_number == identification_number,
+                StudentModel.deleted_status_id == 0,
+            )
+            if period_year is not None and str(period_year):
+                duplicate_query = duplicate_query.filter(StudentModel.period_year == str(period_year))
+            else:
+                duplicate_query = duplicate_query.filter(StudentModel.period_year.is_(None))
+
+            if course_id:
+                duplicate_query = duplicate_query.join(
+                    StudentAcademicInfoModel,
+                    (StudentAcademicInfoModel.student_id == StudentModel.id)
+                    & (StudentAcademicInfoModel.course_id == course_id),
+                )
+            existing = duplicate_query.first()
+
+            if existing:
+                return {
+                    "status": "error",
+                    "message": "Ya existe un estudiante con ese RUT en el mismo curso y período.",
+                }
+
+            # Crear el estudiante principal (period_year en BD es string)
+            py = student_inputs.get('period_year')
+            period_year_db = str(py).strip() if py is not None else None
             new_student = StudentModel(
                 deleted_status_id=0,
                 school_id=student_inputs.get('school_id'),
                 identification_number=student_inputs.get('identification_number'),
+                period_year=period_year_db,
                 added_date=datetime.now(),
                 updated_date=datetime.now()
             )
@@ -719,6 +780,47 @@ class StudentClass:
             if not existing_student:
                 return {"status": "error", "message": "No data found"}
 
+            # Valores efectivos tras la actualización (para validar duplicado)
+            eff_rut = (student_inputs.get('identification_number') or existing_student.identification_number or '').strip()
+            eff_period = student_inputs.get('period_year') if 'period_year' in student_inputs else existing_student.period_year
+            if eff_period is not None and not isinstance(eff_period, str):
+                eff_period = str(eff_period).strip() or None
+            elif eff_period is not None:
+                eff_period = (eff_period or '').strip() or None
+            eff_school = student_inputs.get('school_id') or existing_student.school_id
+            eff_course_id = None
+            if 'academic_info' in student_inputs and student_inputs['academic_info'] and student_inputs['academic_info'].get('course_id') is not None:
+                eff_course_id = student_inputs['academic_info']['course_id']
+            else:
+                existing_academic_for_check = self.db.query(StudentAcademicInfoModel).filter(
+                    StudentAcademicInfoModel.student_id == id
+                ).first()
+                if existing_academic_for_check:
+                    eff_course_id = existing_academic_for_check.course_id
+
+            if eff_rut:
+                dup_query = self.db.query(StudentModel).filter(
+                    StudentModel.id != id,
+                    StudentModel.school_id == eff_school,
+                    StudentModel.identification_number == eff_rut,
+                    StudentModel.deleted_status_id == 0,
+                )
+                if eff_period:
+                    dup_query = dup_query.filter(StudentModel.period_year == eff_period)
+                else:
+                    dup_query = dup_query.filter(StudentModel.period_year.is_(None))
+                if eff_course_id:
+                    dup_query = dup_query.join(
+                        StudentAcademicInfoModel,
+                        (StudentAcademicInfoModel.student_id == StudentModel.id)
+                        & (StudentAcademicInfoModel.course_id == eff_course_id),
+                    )
+                if dup_query.first():
+                    return {
+                        "status": "error",
+                        "message": "Ya existe un estudiante con ese RUT en el mismo curso y período.",
+                    }
+
             # Actualizar school_id si está presente
             if 'school_id' in student_inputs and student_inputs['school_id']:
                 existing_student.school_id = student_inputs['school_id']
@@ -726,6 +828,11 @@ class StudentClass:
             # Actualizar identification_number si está presente
             if 'identification_number' in student_inputs and student_inputs['identification_number']:
                 existing_student.identification_number = student_inputs['identification_number']
+
+            # Actualizar period_year si está presente (en BD es string)
+            if 'period_year' in student_inputs:
+                py = student_inputs.get('period_year')
+                existing_student.period_year = str(py).strip() if py is not None else None
 
             existing_student.updated_date = datetime.now()
 

@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, status
+from typing import Optional
+from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import JSONResponse
 from app.backend.db.database import get_db
 from sqlalchemy.orm import Session
@@ -29,7 +30,8 @@ def index(professional_list: ProfessionalList, session_user: UserLogin = Depends
         items_per_page=professional_list.per_page,
         identification_number=professional_list.identification_number,
         names=professional_list.names,
-        school_id=school_id
+        school_id=school_id,
+        period_year=professional_list.period_year,
     )
         
     message = "Complete professionals list retrieved successfully" if professional_list.page is None else "Professionals retrieved successfully"
@@ -58,7 +60,11 @@ def list_professionals(session_user: UserLogin = Depends(get_current_active_user
     )
 
 @professionals.get("/list")
-def get_all_list(session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
+def get_all_list(
+    period_year: Optional[int] = Query(None, description="Filtrar por año (ej. 2026)"),
+    session_user: UserLogin = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
     # Obtener school_id del usuario en sesión
     school_id = session_user.school_id if session_user else None
     
@@ -73,7 +79,7 @@ def get_all_list(session_user: UserLogin = Depends(get_current_active_user), db:
             }
         )
     
-    result = ProfessionalClass(db).get_all(page=0, school_id=school_id)
+    result = ProfessionalClass(db).get_all(page=0, school_id=school_id, period_year=period_year)
 
     if isinstance(result, dict) and result.get("status") == "error":
         return JSONResponse(

@@ -52,10 +52,11 @@ def list_students(
     rut: Optional[str] = Query(None, description="Filtrar por RUT"),
     names: Optional[str] = Query(None, description="Filtrar por nombres"),
     identification_number: Optional[str] = Query(None, description="Filtrar por número de identificación"),
+    period_year: Optional[int] = Query(None, description="Filtrar por año (ej. 2026)"),
     session_user: UserLogin = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
-    """Lista estudiantes. Filtro opcional por course_id, rut, names, identification_number."""
+    """Lista estudiantes. Filtro opcional por course_id, rut, names, identification_number, period_year."""
     customer_id = session_user.customer_id if session_user else None
     school_id = session_user.school_id if session_user else None
     if customer_id and not school_id:
@@ -72,6 +73,7 @@ def list_students(
         names=names,
         identification_number=identification_number,
         course_id=course_id if course_id is not None and course_id != -1 else None,
+        period_year=period_year,
     )
     if isinstance(result, dict) and result.get("status") == "error":
         error_message = result.get("message", "Error")
@@ -105,13 +107,14 @@ def index(student_item: StudentList, session_user: UserLogin = Depends(get_curre
             school_id = schools_list[0].get('id')
     
     result = StudentClass(db).get_all(
-        page=page_value, 
+        page=page_value,
         items_per_page=student_item.per_page,
         school_id=school_id,
         rut=student_item.rut,
         names=student_item.names,
         identification_number=student_item.identification_number,
-        course_id=student_item.course_id
+        course_id=student_item.course_id,
+        period_year=student_item.period_year,
     )
 
     if isinstance(result, dict) and result.get("status") == "error":
@@ -364,9 +367,11 @@ def update(
         # Si el campo va a academic_info
         elif field_key in academic_fields:
             academic_info[field_key] = value
-        # Si es identification_number, va directo a la tabla students
+        # Campos que van directo a la tabla students
         elif field_key == 'identification_number':
             mapped_inputs['identification_number'] = value
+        elif field_key == 'period_year':
+            mapped_inputs['period_year'] = value
     
     # Agregar personal_data si hay campos
     if personal_data:

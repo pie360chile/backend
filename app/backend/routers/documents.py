@@ -23,7 +23,12 @@ from app.backend.classes.pedagogical_evaluation_classroom_first_grade_class impo
 from app.backend.classes.pedagogical_evaluation_classroom_second_grade_class import PedagogicalEvaluationClassroomSecondGradeClass
 from app.backend.classes.pedagogical_evaluation_classroom_third_grade_class import PedagogicalEvaluationClassroomThirdGradeClass
 from app.backend.classes.pedagogical_evaluation_classroom_fourth_grade_class import PedagogicalEvaluationClassroomFourthGradeClass
+from app.backend.classes.pedagogical_evaluation_classroom_fifth_grade_class import PedagogicalEvaluationClassroomFifthGradeClass
+from app.backend.classes.pedagogical_evaluation_classroom_sixth_grade_class import PedagogicalEvaluationClassroomSixthGradeClass
+from app.backend.classes.pedagogical_evaluation_classroom_seventh_grade_class import PedagogicalEvaluationClassroomSeventhGradeClass
+from app.backend.classes.pedagogical_evaluation_classroom_eighth_grade_class import PedagogicalEvaluationClassroomEighthGradeClass
 from app.backend.classes.pedagogical_evaluation_classroom_first_grade_secondary_class import PedagogicalEvaluationClassroomFirstGradeSecondaryClass
+from app.backend.classes.pedagogical_evaluation_classroom_second_grade_secondary_class import PedagogicalEvaluationClassroomSecondGradeSecondaryClass
 from app.backend.db.database import get_db
 from app.backend.db.models import (
     FolderModel,
@@ -3671,8 +3676,152 @@ async def generate_document(
                 media_type="application/pdf",
             )
         
-        # Si document_id = 38, generar Pauta de evaluacion pedagogica - Docente de aula - 1ero Medio (PDF)
+        # Si document_id = 35, generar Pauta de evaluacion pedagogica - Docente de aula - 5to Basico (PDF)
+        if document_id == 35:
+            pe5_service = PedagogicalEvaluationClassroomFifthGradeClass(db)
+            pe5_result = pe5_service.get_by_student_id(student_id)
+            if isinstance(pe5_result, dict) and pe5_result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    content={
+                        "status": 404,
+                        "message": MSG_NO_DOC,
+                        "data": None,
+                    },
+                )
+            doc_data_35 = dict(pe5_result)
+            result = DocumentsClass.generate_document_pdf(
+                document_id=35,
+                document_data=doc_data_35,
+                db=db,
+                template_path=None,
+                output_directory="files/system/students",
+            )
+            if result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    content={
+                        "status": 500,
+                        "message": result.get("message", MSG_ERROR_GEN),
+                        "data": None,
+                    },
+                )
+            return FileResponse(
+                path=result["file_path"],
+                filename=result["filename"],
+                media_type="application/pdf",
+            )
+        
+        # Si document_id = 36, generar Pauta de evaluacion pedagogica - Docente de aula - 6to Basico (PDF)
+        if document_id == 36:
+            pe6_service = PedagogicalEvaluationClassroomSixthGradeClass(db)
+            pe6_result = pe6_service.get_by_student_id(student_id)
+            if isinstance(pe6_result, dict) and pe6_result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    content={
+                        "status": 404,
+                        "message": MSG_NO_DOC,
+                        "data": None,
+                    },
+                )
+            doc_data_36 = dict(pe6_result)
+            result = DocumentsClass.generate_document_pdf(
+                document_id=36,
+                document_data=doc_data_36,
+                db=db,
+                template_path=None,
+                output_directory="files/system/students",
+            )
+            if result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    content={
+                        "status": 500,
+                        "message": result.get("message", MSG_ERROR_GEN),
+                        "data": None,
+                    },
+                )
+            return FileResponse(
+                path=result["file_path"],
+                filename=result["filename"],
+                media_type="application/pdf",
+            )
+        
+        # Si document_id = 37, generar Pauta de evaluacion pedagogica - Docente de aula - 7mo Basico (PDF)
+        if document_id == 37:
+            pe7_service = PedagogicalEvaluationClassroomSeventhGradeClass(db)
+            pe7_result = pe7_service.get_by_student_id(student_id)
+            if isinstance(pe7_result, dict) and pe7_result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    content={
+                        "status": 404,
+                        "message": MSG_NO_DOC,
+                        "data": None,
+                    },
+                )
+            doc_data_37 = dict(pe7_result)
+            result = DocumentsClass.generate_document_pdf(
+                document_id=37,
+                document_data=doc_data_37,
+                db=db,
+                template_path=None,
+                output_directory="files/system/students",
+            )
+            if result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    content={
+                        "status": 500,
+                        "message": result.get("message", MSG_ERROR_GEN),
+                        "data": None,
+                    },
+                )
+            return FileResponse(
+                path=result["file_path"],
+                filename=result["filename"],
+                media_type="application/pdf",
+            )
+        
+        # Si document_id = 38, generar Pauta de evaluacion pedagogica - Docente de aula - 8vo Basico (PDF)
         if document_id == 38:
+            pe8_service = PedagogicalEvaluationClassroomEighthGradeClass(db)
+            pe8_result = pe8_service.get_by_student_id(student_id)
+            if isinstance(pe8_result, dict) and pe8_result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    content={
+                        "status": 404,
+                        "message": MSG_NO_DOC,
+                        "data": None,
+                    },
+                )
+            doc_data_38 = dict(pe8_result)
+            result = DocumentsClass.generate_document_pdf(
+                document_id=38,
+                document_data=doc_data_38,
+                db=db,
+                template_path=None,
+                output_directory="files/system/students",
+            )
+            if result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    content={
+                        "status": 500,
+                        "message": result.get("message", MSG_ERROR_GEN),
+                        "data": None,
+                    },
+                )
+            return FileResponse(
+                path=result["file_path"],
+                filename=result["filename"],
+                media_type="application/pdf",
+            )
+        
+        # Si document_id = 39, generar Pauta de evaluacion pedagogica - Docente de aula - 1ero Medio (PDF)
+        if document_id == 39:
             pe1s_service = PedagogicalEvaluationClassroomFirstGradeSecondaryClass(db)
             pe1s_result = pe1s_service.get_by_student_id(student_id)
             if isinstance(pe1s_result, dict) and pe1s_result.get("status") == "error":
@@ -3684,10 +3833,46 @@ async def generate_document(
                         "data": None,
                     },
                 )
-            doc_data_38 = dict(pe1s_result)
+            doc_data_39 = dict(pe1s_result)
             result = DocumentsClass.generate_document_pdf(
-                document_id=38,
-                document_data=doc_data_38,
+                document_id=39,
+                document_data=doc_data_39,
+                db=db,
+                template_path=None,
+                output_directory="files/system/students",
+            )
+            if result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    content={
+                        "status": 500,
+                        "message": result.get("message", MSG_ERROR_GEN),
+                        "data": None,
+                    },
+                )
+            return FileResponse(
+                path=result["file_path"],
+                filename=result["filename"],
+                media_type="application/pdf",
+            )
+        
+        # Si document_id = 40, generar Pauta de evaluacion pedagogica - Docente de aula - 2do Medio (PDF)
+        if document_id == 40:
+            pe2s_service = PedagogicalEvaluationClassroomSecondGradeSecondaryClass(db)
+            pe2s_result = pe2s_service.get_by_student_id(student_id)
+            if isinstance(pe2s_result, dict) and pe2s_result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    content={
+                        "status": 404,
+                        "message": MSG_NO_DOC,
+                        "data": None,
+                    },
+                )
+            doc_data_40 = dict(pe2s_result)
+            result = DocumentsClass.generate_document_pdf(
+                document_id=40,
+                document_data=doc_data_40,
                 db=db,
                 template_path=None,
                 output_directory="files/system/students",
