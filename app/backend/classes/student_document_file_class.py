@@ -1,7 +1,15 @@
-from typing import Optional, Any, List, Dict
+from typing import Optional, Any, List, Dict, Union
 from sqlalchemy.orm import Session
 from datetime import datetime
 from app.backend.db.models import FolderModel, DocumentModel, BirthCertificateDocumentModel, HealthEvaluationModel
+
+
+def _folder_period_str(period_year: Optional[Union[int, str]]) -> Optional[str]:
+    """Normaliza período escolar para la columna folders.period_year (string en BD)."""
+    if period_year is None:
+        return None
+    s = str(period_year).strip()
+    return s if s else None
 
 
 class FolderClass:
@@ -39,17 +47,27 @@ class FolderClass:
             error_message = str(e)
             return {"status": "error", "message": error_message}
 
-    def get_by_student_and_document(self, student_id: int, document_id: int) -> Any:
+    def get_by_student_and_document(
+        self,
+        student_id: int,
+        document_id: int,
+        period_year: Optional[Union[int, str]] = None,
+    ) -> Any:
         """
         Obtiene todos los archivos de documento para un estudiante y documento específico.
         Solo retorna documentos que tienen archivo (file no null).
+        Si period_year está definido, solo versiones de ese año escolar.
         """
         try:
-            document_files = self.db.query(FolderModel).filter(
+            q = self.db.query(FolderModel).filter(
                 FolderModel.student_id == student_id,
                 FolderModel.document_id == document_id,
-                FolderModel.file.isnot(None)  # Solo documentos con archivo
-            ).order_by(FolderModel.version_id.desc()).all()
+                FolderModel.file.isnot(None),  # Solo documentos con archivo
+            )
+            py = _folder_period_str(period_year)
+            if py is not None:
+                q = q.filter(FolderModel.period_year == py)
+            document_files = q.order_by(FolderModel.version_id.desc()).all()
 
             return [
                 {
@@ -122,7 +140,7 @@ class FolderClass:
         school_id: Optional[int] = None,
         course_id: Optional[int] = None,
         professional_id: Optional[int] = None,
-        period_year: Optional[str] = None,
+        period_year: Optional[Union[int, str]] = None,
     ) -> Any:
         """
         Almacena un archivo de documento con control de versiones.
@@ -131,19 +149,25 @@ class FolderClass:
         o actualiza la versión más reciente si no hay ninguno con file vacío.
         """
         pro_id = 0 if professional_id is None else int(professional_id)
+        py = _folder_period_str(period_year)
         try:
             # Si es health evaluation (document_id = 4), buscar registro con file vacío para actualizar
             if document_id == 4:
                 # Buscar registro con file vacío (null) para este estudiante y documento
-                folder_without_file = self.db.query(FolderModel).filter(
+                q_empty = self.db.query(FolderModel).filter(
                     FolderModel.student_id == student_id,
                     FolderModel.document_id == document_id,
-                    FolderModel.file.is_(None)
-                ).first()
+                    FolderModel.file.is_(None),
+                )
+                if py is not None:
+                    q_empty = q_empty.filter(FolderModel.period_year == py)
+                folder_without_file = q_empty.first()
                 
                 if folder_without_file:
                     # Actualizar el registro existente con file vacío
                     folder_without_file.file = file_path
+                    if py is not None:
+                        folder_without_file.period_year = py
                     folder_without_file.updated_date = datetime.now()
                     
                     self.db.commit()
@@ -157,14 +181,19 @@ class FolderClass:
                     }
                 else:
                     # Si no hay registro con file vacío, actualizar la versión más reciente
-                    last_version = self.db.query(FolderModel).filter(
+                    q_lv = self.db.query(FolderModel).filter(
                         FolderModel.student_id == student_id,
-                        FolderModel.document_id == document_id
-                    ).order_by(FolderModel.version_id.desc()).first()
+                        FolderModel.document_id == document_id,
+                    )
+                    if py is not None:
+                        q_lv = q_lv.filter(FolderModel.period_year == py)
+                    last_version = q_lv.order_by(FolderModel.version_id.desc()).first()
                     
                     if last_version:
                         # Actualizar el registro más reciente
                         last_version.file = file_path
+                        if py is not None:
+                            last_version.period_year = py
                         last_version.updated_date = datetime.now()
                         
                         self.db.commit()
@@ -187,7 +216,7 @@ class FolderClass:
                             detail_id=None,
                             professional_id=pro_id,
                             file=file_path,
-                            period_year=period_year,
+                            period_year=py,
                             added_date=datetime.now(),
                             updated_date=datetime.now(),
                             deleted_date=None,
@@ -205,11 +234,14 @@ class FolderClass:
                         }
             else:
                 # Para otros documentos, crear nueva versión como antes
-                # Buscar la última versión para este estudiante y documento
-                last_version = self.db.query(FolderModel).filter(
+                # Buscar la última versión para este estudiante y documento (y período si aplica)
+                q_lv = self.db.query(FolderModel).filter(
                     FolderModel.student_id == student_id,
-                    FolderModel.document_id == document_id
-                ).order_by(FolderModel.version_id.desc()).first()
+                    FolderModel.document_id == document_id,
+                )
+                if py is not None:
+                    q_lv = q_lv.filter(FolderModel.period_year == py)
+                last_version = q_lv.order_by(FolderModel.version_id.desc()).first()
                 
                 # Determinar el nuevo version_id
                 if last_version:
@@ -227,7 +259,7 @@ class FolderClass:
                     detail_id=None,
                     professional_id=pro_id,
                     file=file_path,
-                    period_year=period_year,
+                    period_year=py,
                     added_date=datetime.now(),
                     updated_date=datetime.now(),
                     deleted_date=None,
@@ -287,7 +319,12 @@ class FolderClass:
                 "message": str(e)
             }
 
-    def check_document_existence(self, student_id: int, document_type_id: int) -> Any:
+    def check_document_existence(
+        self,
+        student_id: int,
+        document_type_id: int,
+        period_year: Optional[Union[int, str]] = None,
+    ) -> Any:
         """
         Verifica si un estudiante ya tiene documentos de un tipo específico.
         Busca TODOS los document_id que pertenecen al document_type_id solicitado en la tabla documents,
@@ -295,9 +332,11 @@ class FolderClass:
         - document_id = 1: busca en birth_certificate_documents
         - document_id = 4: busca en health_evaluations
         - Otros: busca en folders
+        Si period_year está definido, las búsquedas en folders se filtran por ese año.
         Retorna todos los documentos encontrados del tipo solicitado y también los que NO tiene.
         """
         try:
+            py = _folder_period_str(period_year)
             all_documents = []
             missing_documents = []
             
@@ -339,11 +378,14 @@ class FolderClass:
                     
                     if birth_cert:
                         # Buscar el registro correspondiente en folders para obtener file y version_id
-                        folder_record = self.db.query(FolderModel).filter(
+                        fq = self.db.query(FolderModel).filter(
                             FolderModel.student_id == student_id,
                             FolderModel.detail_id == birth_cert.id,
-                            FolderModel.file.isnot(None)  # Solo si tiene archivo
-                        ).order_by(FolderModel.version_id.desc()).first()
+                            FolderModel.file.isnot(None),  # Solo si tiene archivo
+                        )
+                        if py is not None:
+                            fq = fq.filter(FolderModel.period_year == py)
+                        folder_record = fq.order_by(FolderModel.version_id.desc()).first()
                         
                         # Obtener el document_name desde la tabla documents (solo no eliminados)
                         doc_info = self.db.query(DocumentModel).filter(
@@ -375,11 +417,14 @@ class FolderClass:
                     
                     if health_eval:
                         # Buscar el registro correspondiente en folders para obtener file y version_id
-                        folder_record = self.db.query(FolderModel).filter(
+                        hq = self.db.query(FolderModel).filter(
                             FolderModel.student_id == student_id,
                             FolderModel.detail_id == health_eval.id,
-                            FolderModel.file.isnot(None)  # Solo si tiene archivo
-                        ).order_by(FolderModel.version_id.desc()).first()
+                            FolderModel.file.isnot(None),  # Solo si tiene archivo
+                        )
+                        if py is not None:
+                            hq = hq.filter(FolderModel.period_year == py)
+                        folder_record = hq.order_by(FolderModel.version_id.desc()).first()
                         
                         # Obtener el document_name desde la tabla documents (solo no eliminados)
                         doc_info = self.db.query(DocumentModel).filter(
@@ -411,7 +456,7 @@ class FolderClass:
                 
                 # Para document_id 7 y otros: existencia = está en folders; si no está, va a missing
                 else:
-                    folder_records = self.db.query(
+                    folder_q = self.db.query(
                         FolderModel.id,
                         FolderModel.school_id,
                         FolderModel.course_id,
@@ -431,10 +476,11 @@ class FolderClass:
                         FolderModel.student_id == student_id,
                         FolderModel.document_id == document_id,
                         DocumentModel.deleted_date.is_(None),  # Solo documentos no eliminados
-                        FolderModel.file.isnot(None)  # Solo documentos con archivo
-                    ).order_by(
-                        FolderModel.version_id.desc()
-                    ).all()
+                        FolderModel.file.isnot(None),  # Solo documentos con archivo
+                    )
+                    if py is not None:
+                        folder_q = folder_q.filter(FolderModel.period_year == py)
+                    folder_records = folder_q.order_by(FolderModel.version_id.desc()).all()
                     
                     # Obtener solo la última versión de este document_id
                     if folder_records:

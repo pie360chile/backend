@@ -1,5 +1,5 @@
-from pydantic import BaseModel, Field, EmailStr, validator
-from typing import Union, List, Dict, Optional
+from pydantic import BaseModel, Field, EmailStr, validator, ConfigDict, AliasChoices
+from typing import Union, List, Dict, Optional, Any
 from datetime import datetime, date
 from decimal import Decimal
 from fastapi import Form
@@ -128,14 +128,19 @@ class CourseList(BaseModel):
     course_name: Optional[str] = None
     teaching_id: Optional[int] = None
     per_page: int = 10
+    period_year: Optional[int] = Field(
+        None, ge=2000, le=2100, description="Año del período escolar (filtro listado)"
+    )
 
 class StoreCourse(BaseModel):
     teaching_id: int
     course_name: str
+    period_year: Optional[int] = Field(None, ge=2000, le=2100)
 
 class UpdateCourse(BaseModel):
     teaching_id: int = None
     course_name: str = None
+    period_year: Optional[int] = Field(None, ge=2000, le=2100)
 
 # Commune schemas
 class CommuneList(BaseModel):
@@ -1428,6 +1433,70 @@ class StoreSupportArea(BaseModel):
 
 class UpdateSupportArea(BaseModel):
     support_area: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# dynamic_forms (formularios dinámicos — JSON fields)
+# ---------------------------------------------------------------------------
+
+class DynamicFormFieldOptionSchema(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    label: str
+    value: str
+
+
+class DynamicFormFieldSchema(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: Optional[str] = None
+    question: str
+    fieldType: str = Field(validation_alias=AliasChoices("fieldType", "field_type"))
+    options: List[DynamicFormFieldOptionSchema] = Field(default_factory=list)
+    required: bool = False
+
+
+class StoreDynamicForm(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    name: str
+    description: Optional[str] = ""
+    fields: List[DynamicFormFieldSchema]
+    periodYear: int = Field(..., ge=2000, le=2100, validation_alias=AliasChoices("periodYear", "period_year"))
+    courseId: int = Field(..., ge=1, validation_alias=AliasChoices("courseId", "course_id"))
+    notifyStudentIds: Optional[List[int]] = Field(
+        None, validation_alias=AliasChoices("notifyStudentIds", "notify_student_ids")
+    )
+
+
+class UpdateDynamicForm(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    name: Optional[str] = None
+    description: Optional[str] = None
+    fields: Optional[List[DynamicFormFieldSchema]] = None
+    periodYear: int = Field(..., ge=2000, le=2100, validation_alias=AliasChoices("periodYear", "period_year"))
+    courseId: int = Field(..., ge=1, validation_alias=AliasChoices("courseId", "course_id"))
+    notifyStudentIds: Optional[List[int]] = Field(
+        None, validation_alias=AliasChoices("notifyStudentIds", "notify_student_ids")
+    )
+
+
+class SubmitDynamicFormAnswers(BaseModel):
+    """Envío de respuestas del formulario para un estudiante."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    studentId: int = Field(..., ge=1, validation_alias=AliasChoices("studentId", "student_id"))
+    answers: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ResendFormWhatsApp(BaseModel):
+    """Reenviar plantilla WhatsApp al apoderado (estudiante en espera)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    studentId: int = Field(..., ge=1, validation_alias=AliasChoices("studentId", "student_id"))
 
 
 # ---------------------------------------------------------------------------

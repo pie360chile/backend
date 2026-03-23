@@ -316,6 +316,7 @@ class CourseModel(Base):
     school_id = Column(Integer)
     teaching_id = Column(Integer)
     course_name = Column(String(255))
+    period_year = Column(Integer, nullable=True)
     added_date = Column(DateTime())
     updated_date = Column(DateTime())
 
@@ -1084,6 +1085,39 @@ class SupportAreaModel(Base):
     added_date = Column(DateTime, nullable=True)
     updated_date = Column(DateTime, nullable=True)
     deleted_date = Column(DateTime, nullable=True)
+
+
+class DynamicFormModel(Base):
+    """Formularios dinámicos (preguntas configurables). Campos en JSON (fields_json)."""
+
+    __tablename__ = 'dynamic_forms'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    school_id = Column(Integer, nullable=True)
+    course_id = Column(Integer, nullable=True)
+    period_year = Column(Integer, nullable=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    fields_json = Column(Text, nullable=False)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+
+class DynamicFormSubmissionModel(Base):
+    """Respuestas enviadas a un formulario dinámico (un registro por estudiante y formulario)."""
+
+    __tablename__ = 'dynamic_form_submissions'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    dynamic_form_id = Column(Integer, nullable=False)
+    student_id = Column(Integer, nullable=False)
+    school_id = Column(Integer, nullable=True)
+    period_year = Column(Integer, nullable=True)
+    answers_json = Column(Text, nullable=False)
+    submitted_by_user_id = Column(Integer, nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
 
 
 class DifferentiatedStrategiesImplementationModel(Base):
@@ -2777,3 +2811,43 @@ class AnamnesisHouseholdMemberModel(Base):
     age = Column(String(50), nullable=True)
     schooling = Column(String(100), nullable=True)
     occupation = Column(String(255), nullable=True)
+
+
+class ProfessionalDocumentAssignmentModel(Base):
+    """Asignación documento–estudiante por profesional, curso y período (status_id 0/1)."""
+
+    __tablename__ = 'professional_document_assignments'
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    period_year = Column(Integer, nullable=False)
+    course_id = Column(Integer, nullable=False)
+    professional_id = Column(Integer, nullable=False)
+    student_id = Column(Integer, nullable=False)
+    document_type_id = Column(Integer, nullable=False)
+    document_catalog_id = Column(Integer, nullable=False, default=0)
+    status_id = Column(Integer, nullable=False, default=0)
+    deadline_at = Column(Date, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+
+
+class AlertModel(Base):
+    """Alertas in-app (campana): tipo, texto, vínculo a recurso, estatus revisada."""
+
+    __tablename__ = 'alerts'
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    school_id = Column(Integer, nullable=True)
+    professional_id = Column(Integer, nullable=False)
+    course_id = Column(Integer, nullable=False)
+    reference_id = Column(BigInteger, nullable=False)
+    status_id = Column(Integer, nullable=False, default=0)
+    period_year = Column(Integer, nullable=False)
+    alert_type = Column(String(64), nullable=False)
+    title = Column(String(512), nullable=True)
+    message = Column(Text, nullable=True)
+    reference_kind = Column(String(64), nullable=False, default='professional_document_assignment')
+    extra = Column(Text, nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)

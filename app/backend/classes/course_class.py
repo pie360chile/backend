@@ -6,13 +6,14 @@ class CourseClass:
     def __init__(self, db):
         self.db = db
 
-    def get_all(self, page=0, items_per_page=10, school_id=None, course=None, teaching_id=None):
+    def get_all(self, page=0, items_per_page=10, school_id=None, course=None, teaching_id=None, period_year=None):
         try:
             query = self.db.query(
                 CourseModel.id,
                 CourseModel.school_id,
                 CourseModel.teaching_id,
                 CourseModel.course_name,
+                CourseModel.period_year,
                 CourseModel.added_date,
                 CourseModel.updated_date,
                 TeachingModel.teaching_name,
@@ -44,11 +45,15 @@ class CourseClass:
             if teaching_id is not None:
                 query = query.filter(CourseModel.teaching_id == teaching_id)
 
+            if period_year is not None:
+                query = query.filter(CourseModel.period_year == int(period_year))
+
             query = query.group_by(
                 CourseModel.id,
                 CourseModel.school_id,
                 CourseModel.teaching_id,
                 CourseModel.course_name,
+                CourseModel.period_year,
                 CourseModel.added_date,
                 CourseModel.updated_date,
                 TeachingModel.teaching_name
@@ -82,6 +87,7 @@ class CourseClass:
                     "id": course.id,
                     "teaching_id": course.teaching_id,
                     "course_name": course.course_name,
+                    "periodYear": getattr(course, "period_year", None),
                     "teaching_name": course.teaching_name,
                     "total_students": course.total_students,
                     "total_students_sen": getattr(course, "total_students_sen", 0) or 0,
@@ -106,6 +112,7 @@ class CourseClass:
                     "school_id": course.school_id,
                     "teaching_id": course.teaching_id,
                     "course_name": course.course_name,
+                    "periodYear": getattr(course, "period_year", None),
                     "teaching_name": course.teaching_name,
                     "total_students": course.total_students,
                     "total_students_sen": getattr(course, "total_students_sen", 0) or 0,
@@ -120,7 +127,7 @@ class CourseClass:
             error_message = str(e)
             return {"status": "error", "message": error_message}
     
-    def get_all_list(self, school_id=None, teaching_id=None):
+    def get_all_list(self, school_id=None, teaching_id=None, period_year=None):
         """Retorna todos los courses sin paginación ni búsqueda"""
         try:
             query = self.db.query(
@@ -128,6 +135,7 @@ class CourseClass:
                 CourseModel.school_id,
                 CourseModel.teaching_id,
                 CourseModel.course_name,
+                CourseModel.period_year,
                 CourseModel.added_date,
                 CourseModel.updated_date,
                 TeachingModel.teaching_name
@@ -143,6 +151,9 @@ class CourseClass:
             if teaching_id:
                 query = query.filter(CourseModel.teaching_id == teaching_id)
 
+            if period_year is not None:
+                query = query.filter(CourseModel.period_year == int(period_year))
+
             query = query.order_by(CourseModel.id)
             
             data = query.all()
@@ -152,6 +163,7 @@ class CourseClass:
                 "school_id": course.school_id,
                 "teaching_id": course.teaching_id,
                 "course_name": course.course_name,
+                "periodYear": getattr(course, "period_year", None),
                 "teaching_name": course.teaching_name,
                 "added_date": course.added_date.strftime("%Y-%m-%d %H:%M:%S") if course.added_date else None,
                 "updated_date": course.updated_date.strftime("%Y-%m-%d %H:%M:%S") if course.updated_date else None
@@ -163,19 +175,23 @@ class CourseClass:
             error_message = str(e)
             return {"status": "error", "message": error_message}
     
-    def get(self, id):
+    def get(self, id, period_year=None):
         try:
-            data_query = self.db.query(
+            q = self.db.query(
                 CourseModel.id,
                 CourseModel.school_id,
                 CourseModel.teaching_id,
                 CourseModel.course_name,
+                CourseModel.period_year,
                 CourseModel.added_date,
                 CourseModel.updated_date,
                 TeachingModel.teaching_name
             ).join(
                 TeachingModel, CourseModel.teaching_id == TeachingModel.id
-            ).filter(CourseModel.id == id).first()
+            ).filter(CourseModel.id == id)
+            if period_year is not None:
+                q = q.filter(CourseModel.period_year == int(period_year))
+            data_query = q.first()
 
             if data_query:
                 course_data = {
@@ -183,6 +199,7 @@ class CourseClass:
                     "school_id": data_query.school_id,
                     "teaching_id": data_query.teaching_id,
                     "course_name": data_query.course_name,
+                    "periodYear": getattr(data_query, "period_year", None),
                     "teaching_name": data_query.teaching_name,
                     "added_date": data_query.added_date.strftime("%Y-%m-%d %H:%M:%S") if data_query.added_date else None,
                     "updated_date": data_query.updated_date.strftime("%Y-%m-%d %H:%M:%S") if data_query.updated_date else None
@@ -199,10 +216,18 @@ class CourseClass:
         
     def store(self, course_inputs):
         try:
+            py = course_inputs.get('period_year')
+            period_year_val = None
+            if py is not None and str(py).strip() != '':
+                try:
+                    period_year_val = int(py)
+                except (TypeError, ValueError):
+                    period_year_val = None
             new_course = CourseModel(
                 school_id=course_inputs.get('school_id'),
                 teaching_id=course_inputs['teaching_id'],
                 course_name=course_inputs['course_name'],
+                period_year=period_year_val,
                 added_date=datetime.now(),
                 updated_date=datetime.now()
             )
@@ -252,7 +277,8 @@ class CourseClass:
                 return {"status": "error", "message": "No data found"}
 
             for key, value in course_inputs.items():
-                setattr(existing_course, key, value)
+                if key in ('school_id', 'teaching_id', 'course_name', 'period_year'):
+                    setattr(existing_course, key, value)
 
             existing_course.updated_date = datetime.now()
 

@@ -1,7 +1,17 @@
 from datetime import datetime
+from sqlalchemy import String, func
 from app.backend.db.models import ProfessionalModel, UserModel, SchoolModel, ProfessionalTeachingCourseModel, RolModel
 from app.backend.auth.auth_user import generate_bcrypt_hash
 import json
+
+
+def _rut_normalized_sql(column):
+    """Expresión SQL: RUT sin puntos, guiones ni espacios (minúsculas)."""
+    c = func.lower(func.cast(column, String))
+    c = func.replace(c, ".", "")
+    c = func.replace(c, "-", "")
+    c = func.replace(c, " ", "")
+    return c
 
 
 def _period_year_int(v):
@@ -15,11 +25,102 @@ def _period_year_int(v):
         return None
 
 
+def _normalize_rut(v):
+    """Quita puntos, guiones y espacios para comparar RUT entre users y professionals."""
+    if v is None:
+        return None
+    s = "".join(c for c in str(v).strip().lower() if c.isalnum())
+    return s if s else None
+
+
+def _rol_sees_all_professionals_list(rol, rol_id) -> bool:
+    """
+    True = puede ver todos los professionals del colegio (sin filtrar por RUT).
+    Alineado con authentications.py: rol_id 1 y 2, y rol Coordinador.
+    """
+    if rol_id is not None and rol_id in (1, 2):
+        return True
+    if rol and rol.rol:
+        rn = str(rol.rol).strip().lower()
+        if rn == "coordinador" or rn.startswith("coordinador"):
+            return True
+    return False
+
+
+def session_professional_scope_id(db, session_user):
+    """
+    Usuarios de establecimiento (Profesional, Evaluador, etc.) solo ven su fila en `professionals`.
+    Coordinador, admin (rol 1/2) ven el listado completo.
+
+    Devuelve:
+      - None: sin restricción (listado completo del colegio)
+      - int > 0: id en tabla professionals a filtrar
+      - -1: usuario restringido pero sin fila en professionals (lista vacía)
+    """
+    if not session_user:
+        return None
+
+    # Rol y RUT desde BD: el JWT a veces no trae rol_id o lo anula; sin rol_id el código antes devolvía
+    # None y se listaban todos los profesionales.
+    db_user = None
+    uid = getattr(session_user, "id", None)
+    if uid:
+        db_user = db.query(UserModel).filter(UserModel.id == uid).first()
+    if not db_user:
+        r_fallback = getattr(session_user, "rut", None)
+        if r_fallback:
+            db_user = db.query(UserModel).filter(UserModel.rut == r_fallback).first()
+
+    rol_id = None
+    if db_user is not None and db_user.rol_id is not None:
+        rol_id = db_user.rol_id
+    else:
+        rol_id = getattr(session_user, "rol_id", None)
+
+    school_id = getattr(session_user, "school_id", None)
+    if school_id is None and db_user is not None:
+        school_id = db_user.school_id
+
+    rut_raw = None
+    if db_user is not None and db_user.rut:
+        rut_raw = db_user.rut
+    else:
+        rut_raw = getattr(session_user, "rut", None)
+
+    rol = db.query(RolModel).filter(RolModel.id == rol_id).first() if rol_id is not None else None
+    if _rol_sees_all_professionals_list(rol, rol_id):
+        return None
+
+    rut_n = _normalize_rut(rut_raw)
+    if not rut_n or school_id is None:
+        return -1
+
+    prof = (
+        db.query(ProfessionalModel)
+        .filter(
+            ProfessionalModel.school_id == school_id,
+            _rut_normalized_sql(ProfessionalModel.identification_number) == rut_n,
+        )
+        .first()
+    )
+
+    return prof.id if prof else -1
+
+
 class ProfessionalClass:
     def __init__(self, db):
         self.db = db
 
-    def get_all(self, page=0, items_per_page=10, identification_number=None, names=None, school_id=None, period_year=None):
+    def get_all(
+        self,
+        page=0,
+        items_per_page=10,
+        identification_number=None,
+        names=None,
+        school_id=None,
+        period_year=None,
+        only_professional_id=None,
+    ):
         try:
             query = self.db.query(
                 ProfessionalModel.id,
@@ -41,15 +142,25 @@ class ProfessionalClass:
                 RolModel, ProfessionalModel.rol_id == RolModel.id
             )
 
+            # Usuario con rol Profesional: solo su propio registro
+            if only_professional_id is not None:
+                if only_professional_id < 0:
+                    query = query.filter(ProfessionalModel.id == -1)
+                else:
+                    query = query.filter(ProfessionalModel.id == only_professional_id)
+
             # Filtrar por school_id si se proporciona
             if school_id is not None:
                 query = query.filter(ProfessionalModel.school_id == school_id)
 
-            # Filtrar por period_year si se proporciona
-            if period_year is not None and str(period_year).strip():
-                query = query.filter(ProfessionalModel.period_year == str(period_year).strip())
-            elif period_year is not None:
-                query = query.filter(ProfessionalModel.period_year.is_(None))
+            # Filtrar por period_year si se proporciona (no aplicar si ya se restringe a un solo profesional:
+            # si no, un profesional logueado con period_year NULL o distinto no aparecería con ?period_year=2026)
+            restrict_one = only_professional_id is not None and only_professional_id > 0
+            if not restrict_one:
+                if period_year is not None and str(period_year).strip():
+                    query = query.filter(ProfessionalModel.period_year == str(period_year).strip())
+                elif period_year is not None:
+                    query = query.filter(ProfessionalModel.period_year.is_(None))
 
             # Aplicar filtros de búsqueda
             if identification_number and str(identification_number).strip():
@@ -416,12 +527,15 @@ class ProfessionalClass:
             self.db.rollback()
             return {"status": "error", "message": str(e)}
     
-    def get_totals(self, customer_id=None, school_id=None, rol_id=None):
+    def get_totals(self, customer_id=None, school_id=None, rol_id=None, only_professional_id=None):
         try:
             from app.backend.db.models import SchoolModel
-            
+
+            if only_professional_id is not None and only_professional_id < 0:
+                return {"total": 0}
+
             query = self.db.query(ProfessionalModel)
-            
+
             # Si rol_id = 1 (administrador), devolver todos sin filtrar
             # Si es rol_id = 2, filtrar por customer_id
             # Si es cualquier otro rol, filtrar por school_id
@@ -430,9 +544,12 @@ class ProfessionalClass:
                 query = query.filter(SchoolModel.customer_id == customer_id)
             elif rol_id not in [1, 2] and school_id:
                 query = query.filter(ProfessionalModel.school_id == school_id)
-            
+
+            if only_professional_id is not None and only_professional_id > 0:
+                query = query.filter(ProfessionalModel.id == only_professional_id)
+
             total = query.count()
-            
+
             return {"total": total}
 
         except Exception as e:

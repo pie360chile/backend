@@ -5,7 +5,7 @@ from app.backend.classes.user_class import UserClass
 from datetime import datetime, timedelta, date
 from typing import Union
 import os
-from jose import jwt
+from jose import jwt, JWTError
 import json
 import bcrypt
 from argon2 import PasswordHasher
@@ -57,6 +57,52 @@ class AuthenticationClass:
         token = jwt.encode(data_copy, os.environ['SECRET_KEY'], algorithm=os.environ['ALGORITHM'])
 
         return token
+
+    def create_password_reset_token(self, user_id: int, minutes: Union[int, None] = None):
+        """
+        JWT de un solo uso para recuperación de contraseña (claim purpose=password_reset).
+        Duración configurable con PASSWORD_RESET_TOKEN_MINUTES (por defecto 60).
+        Retorna (token, minutes_used) para alinear el texto del correo con el JWT.
+        """
+        if minutes is None:
+            try:
+                minutes = int(os.getenv("PASSWORD_RESET_TOKEN_MINUTES", "60"))
+            except ValueError:
+                minutes = 60
+        minutes_used = max(5, min(minutes, 60 * 24 * 7))  # entre 5 min y 7 días
+        payload = {
+            "sub": str(user_id),
+            "purpose": "password_reset",
+        }
+        token = self.create_token(payload, timedelta(minutes=minutes_used))
+        return token, minutes_used
+
+    def decode_password_reset_token(self, token: str) -> int:
+        """Decodifica y valida el JWT de recuperación; devuelve user id."""
+        try:
+            payload = jwt.decode(
+                token,
+                os.environ["SECRET_KEY"],
+                algorithms=[os.environ["ALGORITHM"]],
+            )
+        except JWTError:
+            raise HTTPException(
+                status_code=400,
+                detail="El enlace de recuperación no es válido o ha expirado.",
+            )
+        if payload.get("purpose") != "password_reset":
+            raise HTTPException(
+                status_code=400,
+                detail="El enlace de recuperación no es válido o ha expirado.",
+            )
+        raw = payload.get("sub")
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=400,
+                detail="El enlace de recuperación no es válido o ha expirado.",
+            )
 
     def update_password(self, user_inputs):
         existing_user = self.db.query(UserModel).filter(UserModel.visual_rut == user_inputs.visual_rut).one_or_none()

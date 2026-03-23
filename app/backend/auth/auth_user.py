@@ -64,7 +64,8 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
         raise HTTPException(status_code=401, detail="Could not validate credentials", headers={"WWW-Authenticate": "Bearer"})
     
     # Sobrescribir con los datos del token que pueden haber cambiado (como school_id al seleccionar escuela)
-    if 'rol_id' in decoded_token:
+    # No pisar rol_id con null: algunos tokens solo traen "sub" y dejan rol_id en null → rompe permisos
+    if 'rol_id' in decoded_token and decoded_token['rol_id'] is not None:
         user.rol_id = decoded_token['rol_id']
     if 'customer_id' in decoded_token:
         user.customer_id = decoded_token['customer_id']

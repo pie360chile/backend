@@ -6,6 +6,13 @@ from sqlalchemy.orm import Session
 import locale
 import re
 
+def _normalize_news_title(title: str) -> str:
+    """Unifica título para detectar duplicados (minúsculas, espacios repetidos)."""
+    if not title:
+        return ""
+    return " ".join(str(title).strip().lower().split())
+
+
 class NewsScraperClass:
     def __init__(self, db: Session):
         self.db = db
@@ -198,12 +205,25 @@ class NewsScraperClass:
                     
                     print(f"Título encontrado: {title[:50]}...")
                     
-                    # Verificar si la noticia ya existe en la base de datos
+                    # Verificar si la noticia ya existe (mismo título, activa)
+                    # 1) Coincidencia exacta en BD (rápido)
+                    # 2) Mismo título normalizado (espacios / mayúsculas) por si cambió el scraping
+                    norm = _normalize_news_title(title)
                     existing_news = self.db.query(NewsModel).filter(
                         NewsModel.title == title,
-                        NewsModel.deleted_status_id == 0
+                        NewsModel.deleted_status_id == 0,
                     ).first()
-                    
+                    if not existing_news and norm:
+                        candidates = (
+                            self.db.query(NewsModel)
+                            .filter(NewsModel.deleted_status_id == 0)
+                            .all()
+                        )
+                        for row in candidates:
+                            if _normalize_news_title(row.title or "") == norm:
+                                existing_news = row
+                                break
+
                     if existing_news:
                         print(f"Noticia ya existe: {title[:50]}...")
                         skipped_count += 1
