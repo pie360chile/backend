@@ -17,7 +17,7 @@ from app.backend.db.models import (
     SchoolModel,
     UserModel,
 )
-from datetime import timedelta
+from datetime import datetime, timedelta
 from app.backend.schemas import UserLogin
 import json
 import logging
@@ -45,19 +45,99 @@ authentications = APIRouter(
 
 
 @authentications.post("/forgot-password")
-def forgot_password(body: ForgotPasswordBody):
+def forgot_password(body: ForgotPasswordBody, db: Session = Depends(get_db)):
     """
-    Recuperación de contraseña: mensaje genérico (sin revelar si el correo existe).
-    TODO: buscar usuario por email, token de un solo uso y envío de correo.
+    Recuperación de contraseña: siempre responde igual (no revela si el correo existe).
+    Si el usuario existe y SMTP está configurado, envía correo HTML con enlace JWT.
     """
-    _ = body.email.strip().lower()
-    return JSONResponse(
-        status_code=status.HTTP_200_OK,
-        content={
-            "status": 200,
-            "message": "Si el correo está registrado en Pie360, recibirás instrucciones para restablecer tu contraseña.",
-        },
-    )
+    email_norm = body.email.strip().lower()
+    generic = {
+        "status": 200,
+        "message": "Si el correo está registrado en Pie360, recibirás instrucciones para restablecer tu contraseña.",
+    }
+
+    try:
+        user = (
+            db.query(UserModel)
+            .filter(
+                func.lower(UserModel.email) == email_norm,
+                UserModel.deleted_status_id == 0,
+            )
+            .first()
+        )
+        if user and (user.email or "").strip():
+            auth = AuthenticationClass(db)
+            token, minutes_used = auth.create_password_reset_token(user.id)
+            base = (os.getenv("FRONTEND_PUBLIC_URL") or "http://localhost:5173").rstrip("/")
+            reset_url = f"{base}/reset-pwd1?token={quote(token, safe='')}"
+
+            mailer = EmailServiceClass()
+            html = mailer.password_reset_email_html(
+                reset_url=reset_url,
+                user_name=(user.full_name or "").strip() or None,
+                expires_minutes=minutes_used,
+            )
+            sent = mailer.send_html(
+                user.email.strip(),
+                "Pie360 — Restablecer contraseña",
+                html,
+                text_plain=f"Restablece tu contraseña abriendo este enlace en el navegador:\n{reset_url}",
+            )
+            if not sent:
+                logger.warning(
+                    "forgot-password: usuario encontrado pero no se pudo enviar el correo (SMTP)."
+                )
+    except Exception:
+        logger.exception("forgot-password: error interno (no expuesto al cliente)")
+
+    return JSONResponse(status_code=status.HTTP_200_OK, content=generic)
+
+
+@authentications.post("/reset-password")
+def reset_password(body: ResetPasswordBody, db: Session = Depends(get_db)):
+    """Restablece contraseña con el token recibido por correo (JWT purpose=password_reset)."""
+    try:
+        auth = AuthenticationClass(db)
+        user_id = auth.decode_password_reset_token(body.token.strip())
+        user = (
+            db.query(UserModel)
+            .filter(UserModel.id == user_id, UserModel.deleted_status_id == 0)
+            .first()
+        )
+        if not user:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={
+                    "status": 400,
+                    "message": "No se pudo restablecer la contraseña. Solicita un nuevo enlace.",
+                    "data": None,
+                },
+            )
+        user.hashed_password = auth.generate_bcrypt_hash(body.new_password)
+        user.updated_date = datetime.utcnow()
+        db.commit()
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "status": 200,
+                "message": "Contraseña actualizada correctamente.",
+                "data": None,
+            },
+        )
+    except HTTPException as e:
+        return JSONResponse(
+            status_code=e.status_code,
+            content={"status": e.status_code, "message": e.detail, "data": None},
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "status": 500,
+                "message": f"Error al restablecer la contraseña: {str(e)}",
+                "data": None,
+            },
+        )
 
 
 @authentications.post("/login")
