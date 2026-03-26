@@ -28,6 +28,8 @@ from app.backend.db.models import AIConversationModel, KnowledgeDocumentModel
 from app.backend.schemas import UserLogin
 
 MAX_RESPONSE_CHARS = 1450
+# `responses.create` corta por max_output_tokens; por defecto suele ser bajo → ~1100–1250 chars y se queda corto vs MAX_RESPONSE_CHARS.
+EVALUATOR_CHAT_MAX_OUTPUT_TOKENS_DEFAULT = 900
 MAX_KNOWLEDGE_CONTEXT_CHARS = 120_000
 MAX_USER_MESSAGE_CHARS = 48_000
 # OpenAI API id for GPT-5 mini (override with EVALUATOR_CHAT_MODEL / NEE_EVALUATOR_MODEL).
@@ -192,7 +194,8 @@ Hard rules:
         "Recibe `question` (instrucción/tarea) y `user_context` (texto libre del usuario). "
         "Se prioriza síntesis detallada y personalizada por estudiante, usando los datos aportados. "
         "Ambos se envían al modelo junto con el contenido activo de `knowledge_documents`. "
-        "Hasta 1450 caracteres; se busca usar casi todo el cupo con cierre en oración completa (puede quedar ~1420 si cierra mejor). Requiere `OPENAI_API_KEY`. "
+        "Hasta 1450 caracteres; se pide `max_output_tokens` amplio para no cortar en la API. Variable opcional `EVALUATOR_CHAT_MAX_OUTPUT_TOKENS`. "
+        "Requiere `OPENAI_API_KEY`. "
         "Modelo: `EVALUATOR_CHAT_MODEL`, o `NEE_EVALUATOR_MODEL`, o por defecto GPT-5 mini (`gpt-5-mini`). "
         "La interacción se guarda en `ai_conversations`."
     ),
@@ -252,11 +255,17 @@ def evaluator_chat_message(
         os.getenv("NEE_EVALUATOR_MODEL", EVALUATOR_CHAT_DEFAULT_MODEL),
     )
 
+    max_out = EVALUATOR_CHAT_MAX_OUTPUT_TOKENS_DEFAULT
+    raw_env = os.getenv("EVALUATOR_CHAT_MAX_OUTPUT_TOKENS")
+    if raw_env and raw_env.strip().isdigit():
+        max_out = max(256, min(int(raw_env), 16_000))
+
     try:
         response = client.responses.create(
             model=model_name,
             input=model_input,
             instructions=instructions,
+            max_output_tokens=max_out,
         )
         raw = (response.output_text or "").strip()
     except Exception as e:
