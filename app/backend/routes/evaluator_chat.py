@@ -117,6 +117,38 @@ def _build_model_user_input(question: str, user_context: str) -> str:
     return block
 
 
+def _strip_trailing_ellipsis(text: str) -> str:
+    s = text.rstrip()
+    while s.endswith("…") or s.endswith("..."):
+        if s.endswith("…"):
+            s = s[:-1].rstrip()
+        else:
+            s = s[:-3].rstrip()
+    return s
+
+
+def _clamp_response_to_closed_max(text: str, max_len: int) -> str:
+    """Recorta a `max_len` cerrando en oración o palabra; nunca añade puntos suspensivos finales."""
+    t = _strip_trailing_ellipsis((text or "").strip())
+    if not t or len(t) <= max_len:
+        return t
+    chunk = t[:max_len]
+    for needle in ("? ", "! ", ".\n", ". "):
+        i = chunk.rfind(needle)
+        if i != -1:
+            closed = chunk[: i + 1].rstrip()
+            if closed:
+                return _strip_trailing_ellipsis(closed)
+    cut = chunk.rfind(" ")
+    if cut > 0:
+        out = chunk[:cut].rstrip()
+    else:
+        out = chunk[: max(1, max_len - 1)].rstrip()
+    if out and out[-1] not in ".!?":
+        out += "."
+    return _strip_trailing_ellipsis(out)
+
+
 def _build_system_instruction(knowledge_block: str) -> str:
     kb = knowledge_block.strip() or "(No hay documentos activos en knowledge_documents; responde con criterio profesional general sobre NEE/PIE en Chile, sin inventar normas específicas.)"
     return f"""You are a senior educational evaluator in Chile. Your expertise is special educational needs (NEE), inclusive education, PIE (Plan Individual de Apoyo), curricular adjustments, and evaluation aligned with Chilean school reality.
@@ -144,10 +176,12 @@ Every student is different: build the answer only from what this context shows f
 
 Hard rules:
 - Maximum length of your answer: {MAX_RESPONSE_CHARS} characters (including spaces). Do not exceed this limit.
+- Always finish with a complete, closed sentence (e.g. final period). Do not end with "...", "…", suspension points, trailing commas, or an obvious incomplete thought—plan length so the closing sentence fits inside the limit.
 - Do not cite internal system labels; write for teachers and coordinators.
 - Never equate EN PROCESO or REQUIERE APOYO with LOGRADO in the narrative for the same indicator.
 - With the short length cap, synthesize across the whole context the user sent: no omitting entire domains or whole evaluation rows unless INSTRUCTION/TASK narrows scope.
 - Do not open with a cover title or metadata banner (e.g. "Informe cualitativo breve (a) Habilidades cognitivas… — Nombre (curso) — Especialista (fecha)"). Start directly with the substantive qualitative prose; weave name, course, specialist, or date inside sentences only if the INSTRUCTION/TASK explicitly requires a formal header.
+- Do not give recommendations, advice, next steps, or phrases like "se recomienda", "se sugiere", "conviene", "es aconsejable" unless the INSTRUCTION/TASK asks for that kind of content—explicitly (e.g. recomendaciones, orientaciones, sugerencias) or clearly as the goal of the question (e.g. qué hacer, próximos pasos, cómo apoyar). If the task is only synthesis or qualitative description, stay descriptive-evaluative. Describing REQUIERE APOYO in rubric terms is allowed without adding unsolicited prescriptions.
 """
 
 
@@ -242,8 +276,7 @@ def evaluator_chat_message(
             },
         )
 
-    if len(raw) > MAX_RESPONSE_CHARS:
-        raw = raw[: MAX_RESPONSE_CHARS - 1].rstrip() + "…"
+    raw = _clamp_response_to_closed_max(raw, MAX_RESPONSE_CHARS)
 
     uid = getattr(session_user, "id", None) or getattr(session_user, "user_id", None) or 1
     sid = str(uuid.uuid4())
