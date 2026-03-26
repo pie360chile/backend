@@ -170,13 +170,13 @@ Status labels are NOT interchangeable. Map each item only to the status shown in
 - REQUIERE APOYO: not consolidated; stress need for explicit support, mediation, or adjustments; do not rewrite as success or "logra" / "demuestra de forma adecuada" for that same item.
 Do not narrate the checklist as if every line were LOGRADO. For each indicator that appears with a status, your wording must match LOGRADO vs EN PROCESO vs REQUIERE APOYO. Cover strengths and gaps: do not only list problems and skip LOGRADO items, and do not only praise while hiding REQUIERE APOYO or EN PROCESO. Keep Spanish agreement using impersonal forms ("Presenta…", "Se observa…"), neutral "el estudiante/la estudiante", or "el perfil", not proper names from the context.
 
-Comprehensive coverage: Read the entire USER-WRITTEN CONTEXT. The answer is strictly short ({MAX_RESPONSE_CHARS} characters max), so you cannot quote every indicator; still, do not fixate on one domain while ignoring others—at least briefly address each major domain or evaluation row present (cognitive-communicative, socioemotional, motor/sensory/autonomy, etc.), summarizing the real mix of LOGRADO / EN PROCESO / REQUIERE APOYO. Prefer dense, specific wording over generic filler.
+Comprehensive coverage: Read the entire USER-WRITTEN CONTEXT. You have up to {MAX_RESPONSE_CHARS} characters: use most of that space when the data support it—dense, specific wording; do not stop short with a thin paragraph if you can still add faithful detail under the cap. You cannot quote every indicator; still, address each major domain or evaluation row present (cognitive-communicative, socioemotional, motor/sensory/autonomy, etc.), summarizing the real mix of LOGRADO / EN PROCESO / REQUIERE APOYO.
 
 Every case is different: ground the answer in the statuses and domains in this context so profiles do not sound interchangeable. If two or more evaluations appear in one answer, separate them without proper names (e.g. contrasting patterns or domains), unless INSTRUCTION/TASK explicitly asks to identify people.
 
 Hard rules:
-- Maximum length of your answer: {MAX_RESPONSE_CHARS} characters (including spaces). Do not exceed this limit.
-- Always finish with a complete, closed sentence (e.g. final period). Do not end with "...", "…", suspension points, trailing commas, or an obvious incomplete thought—plan length so the closing sentence fits inside the limit.
+- Maximum length: {MAX_RESPONSE_CHARS} characters (including spaces), never more. Aim to land near that ceiling (e.g. ~1400–{MAX_RESPONSE_CHARS}) when content allows, so the quota is used well.
+- Always finish with a complete, closed sentence (final period, etc.). If a clean ending would land around 1420 instead of forcing 1460 and breaking mid-thought, prefer the shorter clean ending—never exceed {MAX_RESPONSE_CHARS}. Do not end with "...", "…", suspension points, or trailing commas.
 - Do not cite internal system labels; write for teachers and coordinators.
 - Never equate EN PROCESO or REQUIERE APOYO with LOGRADO in the narrative for the same indicator.
 - With the short length cap, synthesize across the whole context the user sent: no omitting entire domains or whole evaluation rows unless INSTRUCTION/TASK narrows scope.
@@ -192,7 +192,7 @@ Hard rules:
         "Recibe `question` (instrucción/tarea) y `user_context` (texto libre del usuario). "
         "Se prioriza síntesis detallada y personalizada por estudiante, usando los datos aportados. "
         "Ambos se envían al modelo junto con el contenido activo de `knowledge_documents`. "
-        "La respuesta se limita a 1450 caracteres. Requiere `OPENAI_API_KEY`. "
+        "Hasta 1450 caracteres; se busca usar casi todo el cupo con cierre en oración completa (puede quedar ~1420 si cierra mejor). Requiere `OPENAI_API_KEY`. "
         "Modelo: `EVALUATOR_CHAT_MODEL`, o `NEE_EVALUATOR_MODEL`, o por defecto GPT-5 mini (`gpt-5-mini`). "
         "La interacción se guarda en `ai_conversations`."
     ),
