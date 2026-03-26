@@ -27,9 +27,11 @@ from app.backend.db.database import get_db
 from app.backend.db.models import AIConversationModel, KnowledgeDocumentModel
 from app.backend.schemas import UserLogin
 
-MAX_RESPONSE_CHARS = 1260
+MAX_RESPONSE_CHARS = 1450
 MAX_KNOWLEDGE_CONTEXT_CHARS = 120_000
 MAX_USER_MESSAGE_CHARS = 48_000
+# OpenAI API id for GPT-4o (override with EVALUATOR_CHAT_MODEL / NEE_EVALUATOR_MODEL).
+EVALUATOR_CHAT_DEFAULT_MODEL = "gpt-4o"
 
 evaluator_chat = APIRouter(
     prefix="/chat",
@@ -56,7 +58,7 @@ class EvaluatorChatRequest(BaseModel):
         min_length=1,
         description=(
             "Texto libre que escribe el usuario: antecedentes, notas de evaluación, observaciones, etc. "
-            "El modelo debe integrarlo con la instrucción y los knowledge_documents."
+            "El modelo debe integrar todo el contexto relevante con la instrucción y los knowledge_documents."
         ),
         json_schema_extra={"example": "Estudiante con TEL; observaciones de aula: participa con apoyo visual…"},
     )
@@ -130,9 +132,21 @@ The user message has two labeled parts: INSTRUCTION/TASK and USER-WRITTEN CONTEX
 
 When USER-WRITTEN CONTEXT is tabular, pasted from spreadsheets, or lists per-item statuses (e.g. LOGRADO, EN PROCESO, REQUIERE APOYO), treat every row and column as data to respect—not filler. Name the specialist role, discipline, date(s), student/course identifiers, and the concrete status per area or item when that information appears. If the user pasted more than one evaluation or row (different dates or professionals), explicitly contrast how they differ; do not reuse the same generic paragraph you would use for another row. If two inputs differ only in subtle ways, still point out at least two specific divergences (e.g. domains or items that changed status).
 
+Status labels are NOT interchangeable. Map each item only to the status shown in that column/cell:
+- LOGRADO: competence observed as consolidated in context; you may use clear positive wording aligned with achievement.
+- EN PROCESO: still developing; describe as emerging, partial, or inconsistent, with support or practice still needed—never as fully achieved.
+- REQUIERE APOYO: not consolidated; stress need for explicit support, mediation, or adjustments; do not rewrite as success or "logra" / "demuestra de forma adecuada" for that same item.
+Do not narrate the checklist as if every line were LOGRADO. For each indicator that appears with a status, your wording must match LOGRADO vs EN PROCESO vs REQUIERE APOYO. Cover strengths and gaps: do not only list problems and skip LOGRADO items, and do not only praise while hiding REQUIERE APOYO or EN PROCESO. If the same student name appears in context, use it and keep grammatical agreement in Spanish.
+
+Comprehensive coverage: Read the entire USER-WRITTEN CONTEXT. The answer is strictly short ({MAX_RESPONSE_CHARS} characters max), so you cannot quote every indicator; still, do not fixate on one domain while ignoring others—at least briefly address each major domain or evaluation row present (cognitive-communicative, socioemotional, motor/sensory/autonomy, etc.), summarizing the real mix of LOGRADO / EN PROCESO / REQUIERE APOYO. Prefer dense, specific wording over generic filler.
+
+Every student is different: build the answer only from what this context shows for this learner (name, course, dates, specialist, pattern of statuses). Never recycle a template paragraph suitable for "any student." If two or more students appear, keep them clearly separated (by name) with distinct characterizations; do not merge them into one profile.
+
 Hard rules:
 - Maximum length of your answer: {MAX_RESPONSE_CHARS} characters (including spaces). Do not exceed this limit.
 - Do not cite internal system labels; write for teachers and coordinators.
+- Never equate EN PROCESO or REQUIERE APOYO with LOGRADO in the narrative for the same indicator.
+- With the short length cap, synthesize across the whole context the user sent: no omitting entire domains or whole evaluation rows unless INSTRUCTION/TASK narrows scope.
 """
 
 
@@ -141,8 +155,10 @@ Hard rules:
     summary="Chat evaluador (knowledge_documents + OpenAI)",
     description=(
         "Recibe `question` (instrucción/tarea) y `user_context` (texto libre del usuario). "
+        "Se prioriza síntesis detallada y personalizada por estudiante, usando los datos aportados. "
         "Ambos se envían al modelo junto con el contenido activo de `knowledge_documents`. "
-        "La respuesta se limita a 1260 caracteres. Requiere `OPENAI_API_KEY`. "
+        "La respuesta se limita a 1450 caracteres. Requiere `OPENAI_API_KEY`. "
+        "Modelo: `EVALUATOR_CHAT_MODEL`, o `NEE_EVALUATOR_MODEL`, o por defecto GPT-4o (`gpt-4o`). "
         "La interacción se guarda en `ai_conversations`."
     ),
 )
@@ -196,7 +212,10 @@ def evaluator_chat_message(
     instructions = _build_system_instruction(knowledge_block)
 
     client = openai_mod.OpenAI(api_key=api_key)
-    model_name = os.getenv("EVALUATOR_CHAT_MODEL", os.getenv("NEE_EVALUATOR_MODEL", "gpt-4o-mini"))
+    model_name = os.getenv(
+        "EVALUATOR_CHAT_MODEL",
+        os.getenv("NEE_EVALUATOR_MODEL", EVALUATOR_CHAT_DEFAULT_MODEL),
+    )
 
     try:
         response = client.responses.create(
