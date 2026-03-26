@@ -24,6 +24,7 @@ from app.backend.routes.native_language_proficiencies import native_language_pro
 from app.backend.routes.documents import documents
 from app.backend.routes.family_members import family_members
 from app.backend.routes.news import news
+from app.backend.routes.external_api import external_api
 from app.backend.routes.nationalities import nationalities
 from app.backend.routes.genders import genders
 from app.backend.routes.schools import schools
@@ -47,6 +48,7 @@ from app.backend.routes.student_document_files import student_document_files
 from app.backend.routes.folders import folders
 from app.backend.routes.health_evaluations import health_evaluations
 from app.backend.routes.artificial_intelligence import artificial_intelligence
+from app.backend.routes.evaluator_chat import evaluator_chat
 from app.backend.routes.events import events
 from app.backend.routes.bank_descriptions import bank_descriptions
 from app.backend.routes.progress_status_students import progress_status_students
@@ -200,6 +202,7 @@ app.include_router(native_language_proficiencies)
 app.include_router(documents)
 app.include_router(family_members)
 app.include_router(news)
+app.include_router(external_api)
 app.include_router(nationalities)
 app.include_router(genders)
 app.include_router(schools)
@@ -223,6 +226,7 @@ app.include_router(student_document_files)
 app.include_router(folders)
 app.include_router(health_evaluations)
 app.include_router(artificial_intelligence)
+app.include_router(evaluator_chat)
 app.include_router(events)
 app.include_router(bank_descriptions)
 app.include_router(progress_status_students)

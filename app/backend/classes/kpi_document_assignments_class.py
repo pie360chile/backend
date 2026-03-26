@@ -18,6 +18,7 @@ from app.backend.db.models import (
     DocumentTypeModel,
     ProfessionalDocumentAssignmentModel,
     ProfessionalModel,
+    SchoolModel,
 )
 
 
@@ -42,6 +43,7 @@ class KpiDocumentAssignmentsClass:
         year: int,
         month: int,
         professional_id_filter: Optional[int] = None,
+        school_id_filter: Optional[int] = None,
     ) -> Dict[str, Any]:
         try:
             y = int(year)
@@ -66,15 +68,19 @@ class KpiDocumentAssignmentsClass:
             if period_year is not None:
                 filters.insert(0, ProfessionalDocumentAssignmentModel.period_year == int(period_year))
 
-            q = (
-                self.db.query(
-                    ProfessionalDocumentAssignmentModel.course_id.label("course_id"),
-                    func.count(ProfessionalDocumentAssignmentModel.id).label("assigned"),
-                    loaded_expr,
-                )
-                .filter(*filters)
-                .group_by(ProfessionalDocumentAssignmentModel.course_id)
-            )
+            base_q = self.db.query(
+                ProfessionalDocumentAssignmentModel.course_id.label("course_id"),
+                func.count(ProfessionalDocumentAssignmentModel.id).label("assigned"),
+                loaded_expr,
+            ).filter(*filters)
+
+            if school_id_filter is not None:
+                base_q = base_q.join(
+                    CourseModel,
+                    CourseModel.id == ProfessionalDocumentAssignmentModel.course_id,
+                ).filter(CourseModel.school_id == int(school_id_filter))
+
+            q = base_q.group_by(ProfessionalDocumentAssignmentModel.course_id)
 
             rows = q.all()
             course_ids = [int(r.course_id) for r in rows if r.course_id is not None]
@@ -103,6 +109,83 @@ class KpiDocumentAssignmentsClass:
                     }
                 )
             out.sort(key=lambda x: x["course_name"].lower())
+            return {"status": "success", "data": out}
+        except Exception as e:
+            return {"status": "error", "message": str(e), "data": []}
+
+    def by_school(
+        self,
+        *,
+        period_year: Optional[int],
+        year: int,
+        month: int,
+        professional_id_filter: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Agrega asignaciones por establecimiento (school_id del curso)."""
+        try:
+            y = int(year)
+            m = int(month)
+            if m < 1 or m > 12:
+                return {"status": "error", "message": "Mes inválido", "data": []}
+            start, end_excl = _month_bounds(y, m)
+
+            loaded_expr = func.sum(
+                case((ProfessionalDocumentAssignmentModel.status_id == 1, 1), else_=0)
+            ).label("loaded")
+
+            filters = [
+                ProfessionalDocumentAssignmentModel.added_date.isnot(None),
+                ProfessionalDocumentAssignmentModel.added_date >= start,
+                ProfessionalDocumentAssignmentModel.added_date < end_excl,
+            ]
+            if professional_id_filter is not None:
+                filters.append(
+                    ProfessionalDocumentAssignmentModel.professional_id == int(professional_id_filter)
+                )
+            if period_year is not None:
+                filters.insert(0, ProfessionalDocumentAssignmentModel.period_year == int(period_year))
+
+            q = (
+                self.db.query(
+                    CourseModel.school_id.label("school_id"),
+                    func.count(ProfessionalDocumentAssignmentModel.id).label("assigned"),
+                    loaded_expr,
+                )
+                .select_from(ProfessionalDocumentAssignmentModel)
+                .join(CourseModel, CourseModel.id == ProfessionalDocumentAssignmentModel.course_id)
+                .filter(*filters)
+                .group_by(CourseModel.school_id)
+            )
+
+            rows = q.all()
+            school_ids = []
+            for r in rows:
+                sid = r.school_id
+                if sid is not None:
+                    school_ids.append(int(sid))
+            names: Dict[int, str] = {}
+            if school_ids:
+                for s in self.db.query(SchoolModel).filter(SchoolModel.id.in_(school_ids)).all():
+                    names[int(s.id)] = (s.school_name or "").strip() or f"Colegio #{s.id}"
+
+            out: List[Dict[str, Any]] = []
+            for r in rows:
+                sid_raw = r.school_id
+                sid = int(sid_raw) if sid_raw is not None else 0
+                assigned = int(r.assigned or 0)
+                loaded = int(r.loaded or 0)
+                pct = round(100.0 * loaded / assigned, 1) if assigned > 0 else 0.0
+                label = names.get(sid, f"Colegio #{sid}") if sid > 0 else "Sin establecimiento"
+                out.append(
+                    {
+                        "school_id": sid,
+                        "school_name": label,
+                        "assigned": assigned,
+                        "loaded": loaded,
+                        "rate_percent": pct,
+                    }
+                )
+            out.sort(key=lambda x: x["school_name"].lower())
             return {"status": "success", "data": out}
         except Exception as e:
             return {"status": "error", "message": str(e), "data": []}

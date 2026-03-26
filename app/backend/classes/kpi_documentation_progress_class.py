@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.backend.classes.student_class import StudentClass
 from app.backend.classes.student_document_file_class import FolderClass
-from app.backend.db.models import CourseModel
+from app.backend.db.models import CourseModel, SchoolModel
 
 # Misma convención que documents/list y EditStudent: sección transversal.
 DOCUMENT_SECTION_TRANSVERSAL = 1
@@ -48,7 +48,22 @@ class KpiDocumentationProgressClass:
             return []
         if not isinstance(raw, list):
             return []
-        return [x for x in raw if isinstance(x, dict) and x.get("id") is not None]
+        # KPI solo considera estudiantes con NEE asignada en academic_info.
+        out: List[Dict[str, Any]] = []
+        for x in raw:
+            if not isinstance(x, dict) or x.get("id") is None:
+                continue
+            academic = x.get("academic_info") or {}
+            nee_id = academic.get("special_educational_need_id")
+            if nee_id is None:
+                continue
+            try:
+                if int(nee_id) <= 0:
+                    continue
+            except Exception:
+                continue
+            out.append(x)
+        return out
 
     def by_course(
         self,
@@ -103,6 +118,68 @@ class KpiDocumentationProgressClass:
                     }
                 )
 
+            return {"status": "success", "data": out}
+        except Exception as e:
+            return {"status": "error", "message": str(e), "data": []}
+
+    def by_school(
+        self,
+        *,
+        school_ids: List[int],
+        period_year: int,
+    ) -> Dict[str, Any]:
+        """Una fila por establecimiento: suma de todos los cursos (documentación transversal, alumnos con NEE)."""
+        try:
+            py = int(period_year)
+            ids = sorted({int(s) for s in school_ids if s is not None and int(s) > 0})
+            out: List[Dict[str, Any]] = []
+
+            for sid in ids:
+                sch = (
+                    self.db.query(SchoolModel)
+                    .filter(SchoolModel.id == sid)
+                    .first()
+                )
+                sname = (
+                    (sch.school_name or "").strip() or f"Colegio #{sid}"
+                    if sch
+                    else f"Colegio #{sid}"
+                )
+                res = self.by_course(school_id=sid, period_year=py)
+                rows = res.get("data") or [] if res.get("status") == "success" else []
+                if not rows:
+                    out.append(
+                        {
+                            "school_id": sid,
+                            "school_name": sname,
+                            "student_count": 0,
+                            "loaded": 0,
+                            "missing": 0,
+                            "expected_total": 0,
+                            "rate_percent": 0.0,
+                        }
+                    )
+                    continue
+                tot_students = sum(int(r.get("student_count") or 0) for r in rows)
+                tot_loaded = sum(int(r.get("loaded") or 0) for r in rows)
+                tot_missing = sum(int(r.get("missing") or 0) for r in rows)
+                expected = tot_loaded + tot_missing
+                rate = (
+                    round(100.0 * tot_loaded / expected, 1) if expected > 0 else 0.0
+                )
+                out.append(
+                    {
+                        "school_id": sid,
+                        "school_name": sname,
+                        "student_count": tot_students,
+                        "loaded": tot_loaded,
+                        "missing": tot_missing,
+                        "expected_total": expected,
+                        "rate_percent": rate,
+                    }
+                )
+
+            out.sort(key=lambda x: (x.get("school_name") or "").lower())
             return {"status": "success", "data": out}
         except Exception as e:
             return {"status": "error", "message": str(e), "data": []}

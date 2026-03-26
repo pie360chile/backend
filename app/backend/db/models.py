@@ -509,10 +509,21 @@ class StudentAcademicInfoModel(Base):
     student_id = Column(Integer)
     special_educational_need_id = Column(Integer)
     course_id = Column(Integer)
+    platform_status_id = Column(Integer, nullable=True)
+    resolution_number = Column(String(255), nullable=True)
     sip_admission_year = Column(Integer)
     diagnostic_date = Column(Date, nullable=True)
+    psychopedagogical_evaluation_status = Column(String(50), nullable=True)
+    psychopedagogical_evaluation_year = Column(Integer, nullable=True)
     added_date = Column(DateTime)
     updated_date = Column(DateTime)
+
+
+class PlatformStatusModel(Base):
+    __tablename__ = 'platform_statuses'
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100))
 
 class StudentPersonalInfoModel(Base):
     __tablename__ = 'student_personal_data'

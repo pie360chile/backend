@@ -354,8 +354,12 @@ class StudentList(BaseModel):
 class StudentAcademicInfo(BaseModel):
     special_educational_need_id: Optional[int] = None
     course_id: Optional[int] = None
+    platform_status_id: Optional[int] = None
+    resolution_number: Optional[str] = None
     sip_admission_year: Optional[int] = None
     diagnostic_date: Optional[date] = None
+    psychopedagogical_evaluation_status: Optional[str] = None
+    psychopedagogical_evaluation_year: Optional[int] = None
 
 class StudentPersonalInfo(BaseModel):
     region_id: Optional[int] = None
@@ -383,6 +387,11 @@ class StoreStudent(BaseModel):
     mother_lastname: str
     course_id: Optional[int] = None
     period_year: Optional[int] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    born_date: Optional[str] = None
+    # Si True (por defecto), antes de crear se consulta la API Inspection y se completan datos disponibles
+    sync_inspection: bool = True
 
 class UpdateStudent(BaseModel):
     # Campos que vienen del frontend ya mapeados a nombres de BD
@@ -407,8 +416,12 @@ class UpdateStudent(BaseModel):
     # Campos académicos
     special_educational_need_id: Optional[int] = None
     course_id: Optional[int] = None
+    platform_status_id: Optional[int] = None
+    resolution_number: Optional[str] = None
     sip_admission_year: Optional[int] = None
     diagnostic_date: Optional[date] = None
+    psychopedagogical_evaluation_status: Optional[str] = None
+    psychopedagogical_evaluation_year: Optional[int] = None
 
 # Customer schemas
 class CustomerList(BaseModel):

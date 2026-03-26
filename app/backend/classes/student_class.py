@@ -60,8 +60,12 @@ class StudentClass:
                 StudentAcademicInfoModel.id.label('academic_id'),
                 StudentAcademicInfoModel.special_educational_need_id,
                 StudentAcademicInfoModel.course_id,
+                StudentAcademicInfoModel.platform_status_id,
+                StudentAcademicInfoModel.resolution_number,
                 StudentAcademicInfoModel.sip_admission_year,
                 StudentAcademicInfoModel.diagnostic_date,
+                StudentAcademicInfoModel.psychopedagogical_evaluation_status,
+                StudentAcademicInfoModel.psychopedagogical_evaluation_year,
                 SpecialEducationalNeedModel.special_educational_needs.label('special_educational_need_name'),
                 StudentPersonalInfoModel.id.label('personal_id'),
                 StudentPersonalInfoModel.region_id,
@@ -146,8 +150,12 @@ class StudentClass:
                         "special_educational_need_id": student.special_educational_need_id,
                         "special_educational_need_name": (getattr(student, "special_educational_need_name", None) or "").strip() or None,
                         "course_id": student.course_id,
+                        "platform_status_id": getattr(student, "platform_status_id", None),
+                        "resolution_number": getattr(student, "resolution_number", None),
                         "sip_admission_year": student.sip_admission_year,
-                        "diagnostic_date": student.diagnostic_date.isoformat() if getattr(student, "diagnostic_date", None) else None
+                        "diagnostic_date": student.diagnostic_date.isoformat() if getattr(student, "diagnostic_date", None) else None,
+                        "psychopedagogical_evaluation_status": getattr(student, "psychopedagogical_evaluation_status", None),
+                        "psychopedagogical_evaluation_year": getattr(student, "psychopedagogical_evaluation_year", None),
                     } if student.academic_id else None,
                     "personal_data": {
                         "id": student.personal_id,
@@ -195,8 +203,12 @@ class StudentClass:
                         "special_educational_need_id": student.special_educational_need_id,
                         "special_educational_need_name": (getattr(student, "special_educational_need_name", None) or "").strip() or None,
                         "course_id": student.course_id,
+                        "platform_status_id": getattr(student, "platform_status_id", None),
+                        "resolution_number": getattr(student, "resolution_number", None),
                         "sip_admission_year": student.sip_admission_year,
-                        "diagnostic_date": student.diagnostic_date.isoformat() if getattr(student, "diagnostic_date", None) else None
+                        "diagnostic_date": student.diagnostic_date.isoformat() if getattr(student, "diagnostic_date", None) else None,
+                        "psychopedagogical_evaluation_status": getattr(student, "psychopedagogical_evaluation_status", None),
+                        "psychopedagogical_evaluation_year": getattr(student, "psychopedagogical_evaluation_year", None),
                     } if student.academic_id else None,
                     "personal_data": {
                         "id": student.personal_id,
@@ -242,8 +254,12 @@ class StudentClass:
                 StudentAcademicInfoModel.id.label('academic_id'),
                 StudentAcademicInfoModel.special_educational_need_id,
                 StudentAcademicInfoModel.course_id,
+                StudentAcademicInfoModel.platform_status_id,
+                StudentAcademicInfoModel.resolution_number,
                 StudentAcademicInfoModel.sip_admission_year,
                 StudentAcademicInfoModel.diagnostic_date,
+                StudentAcademicInfoModel.psychopedagogical_evaluation_status,
+                StudentAcademicInfoModel.psychopedagogical_evaluation_year,
                 SpecialEducationalNeedModel.special_educational_needs.label('special_educational_need_name'),
                 StudentPersonalInfoModel.id.label('personal_id'),
                 StudentPersonalInfoModel.region_id,
@@ -315,8 +331,12 @@ class StudentClass:
                         "special_educational_need_id": student.special_educational_need_id,
                         "special_educational_need_name": (getattr(student, "special_educational_need_name", None) or "").strip() or None,
                         "course_id": student.course_id,
+                        "platform_status_id": getattr(student, "platform_status_id", None),
+                        "resolution_number": getattr(student, "resolution_number", None),
                         "sip_admission_year": student.sip_admission_year,
-                        "diagnostic_date": student.diagnostic_date.isoformat() if getattr(student, "diagnostic_date", None) else None
+                        "diagnostic_date": student.diagnostic_date.isoformat() if getattr(student, "diagnostic_date", None) else None,
+                        "psychopedagogical_evaluation_status": getattr(student, "psychopedagogical_evaluation_status", None),
+                        "psychopedagogical_evaluation_year": getattr(student, "psychopedagogical_evaluation_year", None),
                     } if student.academic_id else None,
                     "personal_data": {
                     "id": student.personal_id,
@@ -578,8 +598,12 @@ class StudentClass:
                 StudentAcademicInfoModel.id.label('academic_id'),
                 StudentAcademicInfoModel.special_educational_need_id,
                 StudentAcademicInfoModel.course_id,
+                StudentAcademicInfoModel.platform_status_id,
+                StudentAcademicInfoModel.resolution_number,
                 StudentAcademicInfoModel.sip_admission_year,
                 StudentAcademicInfoModel.diagnostic_date,
+                StudentAcademicInfoModel.psychopedagogical_evaluation_status,
+                StudentAcademicInfoModel.psychopedagogical_evaluation_year,
                 SpecialEducationalNeedModel.special_educational_needs.label('special_educational_need_name'),
                 StudentPersonalInfoModel.id.label('personal_id'),
                 StudentPersonalInfoModel.region_id,
@@ -627,8 +651,12 @@ class StudentClass:
                         "special_educational_need_id": data_query.special_educational_need_id,
                         "special_educational_need_name": (getattr(data_query, "special_educational_need_name", None) or "").strip() or None,
                         "course_id": data_query.course_id,
+                        "platform_status_id": getattr(data_query, "platform_status_id", None),
+                        "resolution_number": getattr(data_query, "resolution_number", None),
                         "sip_admission_year": data_query.sip_admission_year,
-                        "diagnostic_date": data_query.diagnostic_date.isoformat() if getattr(data_query, "diagnostic_date", None) else None
+                        "diagnostic_date": data_query.diagnostic_date.isoformat() if getattr(data_query, "diagnostic_date", None) else None,
+                        "psychopedagogical_evaluation_status": getattr(data_query, "psychopedagogical_evaluation_status", None),
+                        "psychopedagogical_evaluation_year": getattr(data_query, "psychopedagogical_evaluation_year", None),
                     } if data_query.academic_id else None,
                     "personal_data": {
                         "id": data_query.personal_id,
@@ -716,7 +744,7 @@ class StudentClass:
             self.db.commit()
             self.db.refresh(new_student)
 
-            # Crear información personal con los campos enviados
+            # Crear información personal con los campos enviados (email/tel/fecha pueden venir de sync Inspection)
             new_personal = StudentPersonalInfoModel(
                 student_id=new_student.id,
                 identification_number=student_inputs.get('identification_number'),
@@ -724,6 +752,9 @@ class StudentClass:
                 father_lastname=student_inputs.get('father_lastname'),
                 mother_lastname=student_inputs.get('mother_lastname'),
                 nationality_id=student_inputs.get('nationality_id'),
+                email=student_inputs.get('email'),
+                phone=student_inputs.get('phone'),
+                born_date=student_inputs.get('born_date'),
             )
             self.db.add(new_personal)
 
@@ -735,10 +766,16 @@ class StudentClass:
                     course_id=course_id,
                     special_educational_need_id=student_inputs.get('special_educational_need_id'),
                     sip_admission_year=student_inputs.get('sip_admission_year'),
+                    platform_status_id=student_inputs.get('platform_status_id'),
+                    resolution_number=student_inputs.get('resolution_number'),
                     diagnostic_date=self._parse_date(student_inputs.get('diagnostic_date')),
+                    psychopedagogical_evaluation_status=student_inputs.get('psychopedagogical_evaluation_status'),
+                    psychopedagogical_evaluation_year=student_inputs.get('psychopedagogical_evaluation_year'),
                     added_date=datetime.now(),
                     updated_date=datetime.now()
                 )
+                if getattr(new_academic, "psychopedagogical_evaluation_status", None) != 'realizada':
+                    new_academic.psychopedagogical_evaluation_year = None
                 self.db.add(new_academic)
 
             self.db.commit()
@@ -849,10 +886,21 @@ class StudentClass:
                         existing_academic.special_educational_need_id = academic_info['special_educational_need_id']
                     if 'course_id' in academic_info:
                         existing_academic.course_id = academic_info['course_id']
+                    if 'platform_status_id' in academic_info:
+                        existing_academic.platform_status_id = academic_info['platform_status_id']
+                    if 'resolution_number' in academic_info:
+                        existing_academic.resolution_number = academic_info['resolution_number']
                     if 'sip_admission_year' in academic_info:
                         existing_academic.sip_admission_year = academic_info['sip_admission_year']
                     if 'diagnostic_date' in academic_info:
                         existing_academic.diagnostic_date = self._parse_date(academic_info['diagnostic_date'])
+                    if 'psychopedagogical_evaluation_status' in academic_info:
+                        existing_academic.psychopedagogical_evaluation_status = academic_info['psychopedagogical_evaluation_status']
+                    if 'psychopedagogical_evaluation_year' in academic_info:
+                        existing_academic.psychopedagogical_evaluation_year = academic_info['psychopedagogical_evaluation_year']
+                    status_value = getattr(existing_academic, "psychopedagogical_evaluation_status", None)
+                    if status_value != 'realizada':
+                        existing_academic.psychopedagogical_evaluation_year = None
                     existing_academic.updated_date = datetime.now()
                 else:
                     # Crear nuevo registro
@@ -860,11 +908,17 @@ class StudentClass:
                         student_id=id,
                         special_educational_need_id=academic_info.get('special_educational_need_id'),
                         course_id=academic_info.get('course_id'),
+                        platform_status_id=academic_info.get('platform_status_id'),
+                        resolution_number=academic_info.get('resolution_number'),
                         sip_admission_year=academic_info.get('sip_admission_year'),
                         diagnostic_date=self._parse_date(academic_info.get('diagnostic_date')),
+                        psychopedagogical_evaluation_status=academic_info.get('psychopedagogical_evaluation_status'),
+                        psychopedagogical_evaluation_year=academic_info.get('psychopedagogical_evaluation_year'),
                         added_date=datetime.now(),
                         updated_date=datetime.now()
                     )
+                    if getattr(new_academic, "psychopedagogical_evaluation_status", None) != 'realizada':
+                        new_academic.psychopedagogical_evaluation_year = None
                     self.db.add(new_academic)
 
             # Actualizar información personal

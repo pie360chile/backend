@@ -69,7 +69,7 @@ def forgot_password(body: ForgotPasswordBody, db: Session = Depends(get_db)):
             auth = AuthenticationClass(db)
             token, minutes_used = auth.create_password_reset_token(user.id)
             base = (os.getenv("FRONTEND_PUBLIC_URL") or "http://localhost:5173").rstrip("/")
-            reset_url = f"{base}/reset-pwd1?token={quote(token, safe='')}"
+            reset_url = f"{base}/reset-password?token={quote(token, safe='')}"
 
             mailer = EmailServiceClass()
             html = mailer.password_reset_email_html(

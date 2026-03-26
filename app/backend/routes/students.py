@@ -7,7 +7,7 @@ from app.backend.schemas import UserLogin, StudentList, StoreStudent, UpdateStud
 from app.backend.classes.student_class import StudentClass
 from app.backend.auth.auth_user import get_current_active_user
 from app.backend.classes.school_class import SchoolClass
-from app.backend.db.models import ProfessionalModel, ProfessionalTeachingCourseModel, CourseModel, SchoolModel
+from app.backend.db.models import ProfessionalModel, ProfessionalTeachingCourseModel, CourseModel, SchoolModel, PlatformStatusModel
 from pathlib import Path
 from datetime import datetime
 
@@ -90,6 +90,21 @@ def list_students(
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={"status": 200, "message": "OK", "data": result},
+    )
+
+
+@students.get("/platform-statuses")
+def list_platform_statuses(
+    session_user: UserLogin = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Listado simple de estados de plataforma para selects."""
+    _ = session_user
+    rows = db.query(PlatformStatusModel).order_by(PlatformStatusModel.id.asc()).all()
+    data = [{"id": r.id, "name": r.name} for r in rows]
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={"status": 200, "message": "Platform statuses list retrieved successfully", "data": data},
     )
 
 
@@ -251,7 +266,20 @@ def store(
     db: Session = Depends(get_db)
 ):
     student_inputs = student_item.dict()
-    
+    inspection_prefill_snapshot = None
+
+    # Opcional: completar con datos de API Inspection (mismo RUT)
+    if student_item.sync_inspection:
+        from app.backend.classes.inspection_api_client import InspectionApiClient, merge_inspection_into_student_inputs
+
+        insp = InspectionApiClient()
+        if insp.is_configured():
+            api_res = insp.fetch_student_data(student_inputs.get("identification_number") or "")
+            student_inputs = merge_inspection_into_student_inputs(student_inputs, api_res)
+            inspection_prefill_snapshot = api_res
+        else:
+            inspection_prefill_snapshot = None
+
     # Obtener school_id del customer_id del usuario en sesión
     customer_id = session_user.customer_id if session_user else None
     school_id = None
@@ -262,7 +290,8 @@ def store(
     
     # Agregar school_id a student_inputs
     student_inputs['school_id'] = school_id
-    
+    student_inputs.pop('sync_inspection', None)
+
     result = StudentClass(db).store(student_inputs)
 
     if isinstance(result, dict) and result.get("status") == "error":
@@ -275,12 +304,16 @@ def store(
             }
         )
 
+    payload_data = dict(result) if isinstance(result, dict) else result
+    if student_item.sync_inspection and isinstance(payload_data, dict):
+        payload_data = {**payload_data, "inspection_prefill": inspection_prefill_snapshot}
+
     return JSONResponse(
         status_code=status.HTTP_201_CREATED,
         content={
             "status": 201,
             "message": "Student created successfully",
-            "data": result
+            "data": payload_data
         }
     )
 
@@ -358,7 +391,16 @@ def update(
                            'language_usually_used', 'proficiency_language_used_id']
     
     # Campos que van a academic_info (student_academic_data)
-    academic_fields = ['special_educational_need_id', 'course_id', 'sip_admission_year', 'diagnostic_date']
+    academic_fields = [
+        'special_educational_need_id',
+        'course_id',
+        'platform_status_id',
+        'resolution_number',
+        'sip_admission_year',
+        'diagnostic_date',
+        'psychopedagogical_evaluation_status',
+        'psychopedagogical_evaluation_year',
+    ]
     
     for field_key, value in student_inputs.items():
         # Si el campo va a personal_data

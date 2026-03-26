@@ -28,6 +28,11 @@ def kpi_by_course(
         le=2100,
         description="Opcional: filtrar por period_year de la asignación (el front del KPI no lo envía)",
     ),
+    school_id: Optional[int] = Query(
+        None,
+        ge=1,
+        description="Opcional: solo cursos de este establecimiento",
+    ),
     session_user: UserLogin = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
@@ -40,6 +45,50 @@ def kpi_by_course(
     prof_filter = scope if scope and scope > 0 else None
     svc = KpiDocumentAssignmentsClass(db)
     result = svc.by_course(
+        period_year=period_year,
+        year=year,
+        month=month,
+        professional_id_filter=prof_filter,
+        school_id_filter=school_id,
+    )
+    if result.get("status") == "error":
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "status": 500,
+                "message": result.get("message", "Error"),
+                "data": result.get("data"),
+            },
+        )
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={"status": 200, "message": "OK", "data": result.get("data")},
+    )
+
+
+@kpi_document_assignments.get("/by-school")
+def kpi_by_school(
+    year: int = Query(..., ge=2000, le=2100),
+    month: int = Query(..., ge=1, le=12),
+    period_year: Optional[int] = Query(
+        None,
+        ge=2000,
+        le=2100,
+        description="Opcional: filtrar por period_year de la asignación",
+    ),
+    session_user: UserLogin = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Resumen por establecimiento (administración): agrega todos los cursos del colegio."""
+    scope = session_professional_scope_id(db, session_user)
+    if scope == -1:
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"status": 200, "message": "OK", "data": []},
+        )
+    prof_filter = scope if scope and scope > 0 else None
+    svc = KpiDocumentAssignmentsClass(db)
+    result = svc.by_school(
         period_year=period_year,
         year=year,
         month=month,
