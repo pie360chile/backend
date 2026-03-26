@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 import uuid
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 try:
     from dotenv import load_dotenv
@@ -28,8 +28,9 @@ from app.backend.db.models import AIConversationModel, KnowledgeDocumentModel
 from app.backend.schemas import UserLogin
 
 MAX_RESPONSE_CHARS = 1450
-# `responses.create` corta por max_output_tokens; por defecto suele ser bajo → ~1100–1250 chars y se queda corto vs MAX_RESPONSE_CHARS.
-EVALUATOR_CHAT_MAX_OUTPUT_TOKENS_DEFAULT = 900
+# GPT-5: max_output_tokens cuenta también razonamiento interno; 900 puede dejar el mensaje visible vacío.
+EVALUATOR_CHAT_MAX_OUTPUT_TOKENS_DEFAULT = 4096
+EVALUATOR_CHAT_FALLBACK_MODEL = "gpt-4o-mini"
 MAX_KNOWLEDGE_CONTEXT_CHARS = 120_000
 MAX_USER_MESSAGE_CHARS = 48_000
 # OpenAI API id for GPT-5 mini (override with EVALUATOR_CHAT_MODEL / NEE_EVALUATOR_MODEL).
@@ -151,6 +152,33 @@ def _clamp_response_to_closed_max(text: str, max_len: int) -> str:
     return _strip_trailing_ellipsis(out)
 
 
+def _reasoning_effort_for_model(model_name: str) -> Optional[str]:
+    """Razonamiento interno consume el mismo cupo que el texto; bajar esfuerzo deja más para la respuesta."""
+    m = (model_name or "").lower()
+    if not (m.startswith("gpt-5") or m.startswith("o1") or m.startswith("o3") or m.startswith("o4")):
+        return None
+    effort = os.getenv("EVALUATOR_CHAT_REASONING_EFFORT", "low").strip().lower()
+    allowed = ("none", "minimal", "low", "medium", "high", "xhigh")
+    return effort if effort in allowed else "low"
+
+
+def _extract_openai_response_text(response: object) -> str:
+    """output_text suele bastar; si el API/SDK usa bloques distintos, recorremos `output`."""
+    primary = getattr(response, "output_text", None)
+    if primary and str(primary).strip():
+        return str(primary).strip()
+    parts: List[str] = []
+    for item in getattr(response, "output", None) or []:
+        if getattr(item, "type", None) == "message":
+            for c in getattr(item, "content", None) or []:
+                ctype = getattr(c, "type", None)
+                if ctype == "output_text":
+                    parts.append(getattr(c, "text", "") or "")
+                elif ctype == "refusal":
+                    parts.append(getattr(c, "refusal", "") or "")
+    return "".join(parts).strip()
+
+
 def _build_system_instruction(knowledge_block: str) -> str:
     kb = knowledge_block.strip() or "(No hay documentos activos en knowledge_documents; responde con criterio profesional general sobre NEE/PIE en Chile, sin inventar normas específicas.)"
     return f"""You are a senior educational evaluator in Chile. Your expertise is special educational needs (NEE), inclusive education, PIE (Plan Individual de Apoyo), curricular adjustments, and evaluation aligned with Chilean school reality.
@@ -194,7 +222,7 @@ Hard rules:
         "Recibe `question` (instrucción/tarea) y `user_context` (texto libre del usuario). "
         "Se prioriza síntesis detallada y personalizada por estudiante, usando los datos aportados. "
         "Ambos se envían al modelo junto con el contenido activo de `knowledge_documents`. "
-        "Hasta 1450 caracteres; se pide `max_output_tokens` amplio para no cortar en la API. Variable opcional `EVALUATOR_CHAT_MAX_OUTPUT_TOKENS`. "
+        "Hasta 1450 caracteres; GPT-5 usa `max_output_tokens` alto y `EVALUATOR_CHAT_REASONING_EFFORT` (p. ej. low). Ver `EVALUATOR_CHAT_MAX_OUTPUT_TOKENS`. "
         "Requiere `OPENAI_API_KEY`. "
         "Modelo: `EVALUATOR_CHAT_MODEL`, o `NEE_EVALUATOR_MODEL`, o por defecto GPT-5 mini (`gpt-5-mini`). "
         "La interacción se guarda en `ai_conversations`."
@@ -261,13 +289,16 @@ def evaluator_chat_message(
         max_out = max(256, min(int(raw_env), 16_000))
 
     try:
-        response = client.responses.create(
-            model=model_name,
-            input=model_input,
-            instructions=instructions,
-            max_output_tokens=max_out,
-        )
-        raw = (response.output_text or "").strip()
+        create_kwargs = {
+            "model": model_name,
+            "input": model_input,
+            "instructions": instructions,
+            "max_output_tokens": max_out,
+        }
+        reff = _reasoning_effort_for_model(model_name)
+        if reff is not None:
+            create_kwargs["reasoning"] = {"effort": reff}
+        response = client.responses.create(**create_kwargs)
     except Exception as e:
         err = str(e)
         hint = None
@@ -282,6 +313,89 @@ def evaluator_chat_message(
                 "status": 502,
                 "message": f"OpenAI error: {err}",
                 "data": {"hint": hint} if hint else None,
+            },
+        )
+
+    err_obj = getattr(response, "error", None)
+    if err_obj is not None:
+        em = getattr(err_obj, "message", None) or str(err_obj)
+        return JSONResponse(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            content={
+                "status": 502,
+                "message": f"OpenAI response error: {em}",
+                "data": {"response_id": getattr(response, "id", None)},
+            },
+        )
+
+    st = getattr(response, "status", None)
+    if st == "failed":
+        return JSONResponse(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            content={
+                "status": 502,
+                "message": "OpenAI response status failed",
+                "data": {"response_id": getattr(response, "id", None)},
+            },
+        )
+
+    raw = _extract_openai_response_text(response)
+    if not raw:
+        # Retry #1: more output budget + very low reasoning effort
+        retry_response = None
+        try:
+            retry_kwargs = {
+                "model": model_name,
+                "input": model_input,
+                "instructions": instructions,
+                "max_output_tokens": max(8192, max_out),
+                "reasoning": {"effort": "minimal"},
+            }
+            retry_response = client.responses.create(**retry_kwargs)
+            retry_raw = _extract_openai_response_text(retry_response)
+            if retry_raw:
+                response = retry_response
+                raw = retry_raw
+        except Exception:
+            retry_response = None
+
+    if not raw:
+        # Retry #2: fallback non-reasoning-heavy model
+        fallback_model = os.getenv("EVALUATOR_CHAT_FALLBACK_MODEL", EVALUATOR_CHAT_FALLBACK_MODEL).strip()
+        if fallback_model:
+            try:
+                fallback_response = client.responses.create(
+                    model=fallback_model,
+                    input=model_input,
+                    instructions=instructions,
+                    max_output_tokens=max(2048, max_out),
+                )
+                fallback_raw = _extract_openai_response_text(fallback_response)
+                if fallback_raw:
+                    response = fallback_response
+                    raw = fallback_raw
+                    model_name = fallback_model
+            except Exception:
+                pass
+
+    if not raw:
+        inc = getattr(response, "incomplete_details", None)
+        reason = getattr(inc, "reason", None) if inc is not None else None
+        return JSONResponse(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            content={
+                "status": 502,
+                "message": "El modelo no devolvió texto visible.",
+                "data": {
+                    "hint": (
+                        "Se intentó reintento automático (más tokens, menor reasoning y fallback de modelo) pero siguió vacío. "
+                        "Aumenta EVALUATOR_CHAT_MAX_OUTPUT_TOKENS o usa EVALUATOR_CHAT_MODEL=gpt-4o-mini para este flujo."
+                    ),
+                    "openai_status": st,
+                    "incomplete_reason": reason,
+                    "response_id": getattr(response, "id", None),
+                    "max_output_tokens_used": max_out,
+                },
             },
         )
 

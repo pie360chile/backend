@@ -4,12 +4,40 @@ from app.backend.db.database import get_db
 from sqlalchemy.orm import Session
 from app.backend.schemas import UserLogin, CommuneList, StoreCommune, UpdateCommune
 from app.backend.classes.commune_class import CommuneClass
+from app.backend.classes.inspection_api_client import InspectionApiClient
 from app.backend.auth.auth_user import get_current_active_user
 
 communes = APIRouter(
     prefix="/communes",
     tags=["Communes"]
 )
+
+
+@communes.get("/endpoint/list")
+def endpoint_list(session_user: UserLogin = Depends(get_current_active_user)):
+    """
+    Catálogo remoto de comunas desde Inspection API (/listado/comunas).
+    """
+    client = InspectionApiClient()
+    if not client.is_configured():
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "status": 503,
+                "message": "Inspection API not configured (INSPECTION_API_USERNAME / INSPECTION_API_PASSWORD)",
+                "data": None,
+            }
+        )
+
+    result = client.fetch_communes_list()
+    return JSONResponse(
+        status_code=status.HTTP_200_OK if result.get("ok") else status.HTTP_502_BAD_GATEWAY,
+        content={
+            "status": 200 if result.get("ok") else 502,
+            "message": result.get("message", "OK"),
+            "data": result,
+        }
+    )
 
 @communes.post("/")
 def index(commune: CommuneList, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):

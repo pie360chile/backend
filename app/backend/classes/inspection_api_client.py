@@ -171,6 +171,49 @@ class InspectionApiClient:
         except requests.RequestException as e:
             return {"ok": False, "message": str(e), "data": None}
 
+    def _get_with_bearer(self, remote_path: str) -> Dict[str, Any]:
+        token = self.get_bearer_token()
+        if not token:
+            return {"ok": False, "message": "Inspection API authentication failed (check credentials)", "data": None}
+
+        remote_path = remote_path.lstrip("/")
+        url = f"{self.base_url}/{remote_path}"
+        headers = {"Authorization": f"Bearer {token}"}
+
+        try:
+            r = requests.get(url, headers=headers, timeout=self.timeout)
+            try:
+                body = r.json()
+            except Exception:
+                return {"ok": False, "message": f"Non-JSON response: {r.text[:200]}", "data": None}
+
+            if r.status_code == 401:
+                with self._lock:
+                    self.__class__._token = None
+                    self.__class__._expires_at = None
+                token2 = self.get_bearer_token()
+                if token2:
+                    r = requests.get(
+                        url,
+                        headers={"Authorization": f"Bearer {token2}"},
+                        timeout=self.timeout,
+                    )
+                    try:
+                        body = r.json()
+                    except Exception:
+                        return {"ok": False, "message": "Retry after 401 failed", "data": None}
+
+            if r.status_code >= 400:
+                return {
+                    "ok": False,
+                    "message": body.get("message") or f"HTTP {r.status_code}",
+                    "data": body.get("data"),
+                }
+
+            return body if isinstance(body, dict) else {"ok": False, "message": "Invalid response body", "data": None}
+        except requests.RequestException as e:
+            return {"ok": False, "message": str(e), "data": None}
+
     def fetch_student_data(self, rut: str) -> Dict[str, Any]:
         """POST /getDatosAlumno — remote path fixed by Inspection."""
         return self._post_multipart_rut("getDatosAlumno", rut)
@@ -178,6 +221,14 @@ class InspectionApiClient:
     def fetch_professional_data(self, rut: str) -> Dict[str, Any]:
         """POST /getDatosFuncionario — staff/professional by RUT (remote path fixed by Inspection)."""
         return self._post_multipart_rut("getDatosFuncionario", rut)
+
+    def fetch_communes_list(self) -> Dict[str, Any]:
+        """GET /listado/comunas — catálogo remoto de comunas."""
+        return self._get_with_bearer("listado/comunas")
+
+    def fetch_regions_list(self) -> Dict[str, Any]:
+        """GET /listado/provincias — catálogo remoto (provincias/regiones según API Inspection)."""
+        return self._get_with_bearer("listado/provincias")
 
 
 def _first_value(data: Dict[str, Any], keys: tuple) -> Optional[str]:
