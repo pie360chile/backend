@@ -30,8 +30,8 @@ from app.backend.schemas import UserLogin
 MAX_RESPONSE_CHARS = 1450
 MAX_KNOWLEDGE_CONTEXT_CHARS = 120_000
 MAX_USER_MESSAGE_CHARS = 48_000
-# OpenAI API id for GPT-4o (override with EVALUATOR_CHAT_MODEL / NEE_EVALUATOR_MODEL).
-EVALUATOR_CHAT_DEFAULT_MODEL = "gpt-4o"
+# OpenAI API id for GPT-5 mini (override with EVALUATOR_CHAT_MODEL / NEE_EVALUATOR_MODEL).
+EVALUATOR_CHAT_DEFAULT_MODEL = "gpt-5-mini"
 
 evaluator_chat = APIRouter(
     prefix="/chat",
@@ -158,7 +158,7 @@ Hard rules:
         "Se prioriza síntesis detallada y personalizada por estudiante, usando los datos aportados. "
         "Ambos se envían al modelo junto con el contenido activo de `knowledge_documents`. "
         "La respuesta se limita a 1450 caracteres. Requiere `OPENAI_API_KEY`. "
-        "Modelo: `EVALUATOR_CHAT_MODEL`, o `NEE_EVALUATOR_MODEL`, o por defecto GPT-4o (`gpt-4o`). "
+        "Modelo: `EVALUATOR_CHAT_MODEL`, o `NEE_EVALUATOR_MODEL`, o por defecto GPT-5 mini (`gpt-5-mini`). "
         "La interacción se guarda en `ai_conversations`."
     ),
 )
@@ -225,12 +225,19 @@ def evaluator_chat_message(
         )
         raw = (response.output_text or "").strip()
     except Exception as e:
+        err = str(e)
+        hint = None
+        if "429" in err or "rate_limit" in err.lower() or "too large" in err.lower():
+            hint = (
+                "Límite de tokens (TPM) o contexto demasiado grande. "
+                "Acorta `user_context`, desactiva knowledge_documents que no necesites, o aumenta límites en https://platform.openai.com/account/rate-limits"
+            )
         return JSONResponse(
             status_code=status.HTTP_502_BAD_GATEWAY,
             content={
                 "status": 502,
-                "message": f"OpenAI error: {str(e)}",
-                "data": None,
+                "message": f"OpenAI error: {err}",
+                "data": {"hint": hint} if hint else None,
             },
         )
 
