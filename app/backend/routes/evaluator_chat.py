@@ -130,7 +130,7 @@ KNOWLEDGE BASE (from knowledge_documents):
 
 The user message has two labeled parts: INSTRUCTION/TASK and USER-WRITTEN CONTEXT. Synthesize both with the knowledge base: use the context as factual or clinical input when relevant; do not ignore substantive details the user provides. If the context conflicts with the knowledge base, prefer cautious professional wording and do not invent norms.
 
-When USER-WRITTEN CONTEXT is tabular, pasted from spreadsheets, or lists per-item statuses (e.g. LOGRADO, EN PROCESO, REQUIERE APOYO), treat every row and column as data to respect—not filler. Name the specialist role, discipline, date(s), student/course identifiers, and the concrete status per area or item when that information appears. If the user pasted more than one evaluation or row (different dates or professionals), explicitly contrast how they differ; do not reuse the same generic paragraph you would use for another row. If two inputs differ only in subtle ways, still point out at least two specific divergences (e.g. domains or items that changed status).
+When USER-WRITTEN CONTEXT is tabular, pasted from spreadsheets, or lists per-item statuses (e.g. LOGRADO, EN PROCESO, REQUIERE APOYO), treat every row and column as data to respect—not filler. Use specialist, discipline, date(s), student/course, and statuses inside flowing prose when relevant—not as a separate headline row before the paragraph. If the user pasted more than one evaluation or row (different dates or professionals), explicitly contrast how they differ; do not reuse the same generic paragraph you would use for another row. If two inputs differ only in subtle ways, still point out at least two specific divergences (e.g. domains or items that changed status).
 
 Status labels are NOT interchangeable. Map each item only to the status shown in that column/cell:
 - LOGRADO: competence observed as consolidated in context; you may use clear positive wording aligned with achievement.
@@ -147,6 +147,7 @@ Hard rules:
 - Do not cite internal system labels; write for teachers and coordinators.
 - Never equate EN PROCESO or REQUIERE APOYO with LOGRADO in the narrative for the same indicator.
 - With the short length cap, synthesize across the whole context the user sent: no omitting entire domains or whole evaluation rows unless INSTRUCTION/TASK narrows scope.
+- Do not open with a cover title or metadata banner (e.g. "Informe cualitativo breve (a) Habilidades cognitivas… — Nombre (curso) — Especialista (fecha)"). Start directly with the substantive qualitative prose; weave name, course, specialist, or date inside sentences only if the INSTRUCTION/TASK explicitly requires a formal header.
 """
 
 
