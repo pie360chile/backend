@@ -22,13 +22,6 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-try:
-    import openai
-
-    OPENAI_AVAILABLE = True
-except ImportError:
-    OPENAI_AVAILABLE = False
-
 from app.backend.auth.auth_user import get_current_active_user
 from app.backend.db.database import get_db
 from app.backend.db.models import AIConversationModel, KnowledgeDocumentModel
@@ -97,6 +90,16 @@ def _load_knowledge_context(db: Session) -> str:
     return joined
 
 
+def _try_import_openai():
+    """Import at call time so the same interpreter as the request handles missing installs."""
+    try:
+        import openai
+
+        return openai, None
+    except ImportError as e:
+        return None, str(e)
+
+
 def _build_model_user_input(question: str, user_context: str) -> str:
     """Arma el mensaje de usuario para el modelo: tarea + contexto escrito, separados y claros."""
     q = (question or "").strip()
@@ -125,6 +128,8 @@ KNOWLEDGE BASE (from knowledge_documents):
 
 The user message has two labeled parts: INSTRUCTION/TASK and USER-WRITTEN CONTEXT. Synthesize both with the knowledge base: use the context as factual or clinical input when relevant; do not ignore substantive details the user provides. If the context conflicts with the knowledge base, prefer cautious professional wording and do not invent norms.
 
+When USER-WRITTEN CONTEXT is tabular, pasted from spreadsheets, or lists per-item statuses (e.g. LOGRADO, EN PROCESO, REQUIERE APOYO), treat every row and column as data to respect—not filler. Name the specialist role, discipline, date(s), student/course identifiers, and the concrete status per area or item when that information appears. If the user pasted more than one evaluation or row (different dates or professionals), explicitly contrast how they differ; do not reuse the same generic paragraph you would use for another row. If two inputs differ only in subtle ways, still point out at least two specific divergences (e.g. domains or items that changed status).
+
 Hard rules:
 - Maximum length of your answer: {MAX_RESPONSE_CHARS} characters (including spaces). Do not exceed this limit.
 - Do not cite internal system labels; write for teachers and coordinators.
@@ -146,7 +151,8 @@ def evaluator_chat_message(
     session_user: UserLogin = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
-    if not OPENAI_AVAILABLE:
+    openai_mod, openai_import_error = _try_import_openai()
+    if openai_mod is None:
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
@@ -157,7 +163,7 @@ def evaluator_chat_message(
                     "pip install 'openai>=2.0.0' or pip install -r requirements.txt "
                     "(on Linux/systemd: activate the project venv first, then restart gunicorn/uvicorn)."
                 ),
-                "data": None,
+                "data": {"import_error": openai_import_error} if openai_import_error else None,
             },
         )
 
@@ -189,7 +195,7 @@ def evaluator_chat_message(
     knowledge_block = _load_knowledge_context(db)
     instructions = _build_system_instruction(knowledge_block)
 
-    client = openai.OpenAI(api_key=api_key)
+    client = openai_mod.OpenAI(api_key=api_key)
     model_name = os.getenv("EVALUATOR_CHAT_MODEL", os.getenv("NEE_EVALUATOR_MODEL", "gpt-4o-mini"))
 
     try:
