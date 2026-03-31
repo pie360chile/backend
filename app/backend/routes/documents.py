@@ -1,7 +1,29 @@
-from typing import Optional
+from typing import Optional, Any
 from fastapi import APIRouter, status, UploadFile, File, Form, Depends, Body, Query
 from fastapi.responses import JSONResponse, FileResponse
 from app.backend.classes.documents_class import DocumentsClass
+from app.backend.classes.docx_register_book_layout import (
+    clone_register_book_section_b_blocks,
+    clone_course_record_support_tables,
+    clone_pai_support_tables,
+    expand_raeg_intervention_rows,
+    expand_learning_achievement_rows,
+    apply_learning_achievement_period_top_spacing,
+    clone_course_activity_record_blocks,
+    clone_course_community_activity_blocks,
+    clone_course_acta_reunion_blocks,
+    expand_rafc_participant_rows,
+    expand_tcee_participant_rows,
+    expand_arn_participant_rows,
+)
+from app.backend.classes.course_activity_record_class import (
+    _load_attendees,
+    _row_to_dict,
+    attendee_phone_cell,
+    attendee_rut_cell,
+    attendees_rafcnia_line,
+    attendees_rafcnit_line,
+)
 from app.backend.classes.student_class import StudentClass
 from app.backend.classes.health_evaluation_class import HealthEvaluationClass
 from app.backend.classes.progress_status_student_class import ProgressStatusStudentClass
@@ -19,6 +41,7 @@ from app.backend.classes.conners_teacher_evaluation_class import ConnersTeacherE
 from app.backend.classes.cesp_class import CespClass
 from app.backend.classes.action_incident_class import ActionIncidentClass
 from app.backend.classes.idtel_report_class import IdtelReportClass
+from app.backend.classes.psychomotor_evaluation_report_class import PsychomotorEvaluationReportClass
 from app.backend.classes.pedagogical_evaluation_classroom_first_grade_class import PedagogicalEvaluationClassroomFirstGradeClass
 from app.backend.classes.pedagogical_evaluation_classroom_second_grade_class import PedagogicalEvaluationClassroomSecondGradeClass
 from app.backend.classes.pedagogical_evaluation_classroom_third_grade_class import PedagogicalEvaluationClassroomThirdGradeClass
@@ -37,13 +60,46 @@ from app.backend.db.models import (
     GenderModel,
     NationalityModel,
     ProfessionalModel,
+    UserModel,
     StudentModel,
     ProfessionalTeachingCourseModel,
     CoordinatorsCourseModel,
     MeetingSchedulalingModel,
     MeetingSchedualingAgreementModel,
     MeetingSchedualingRegisterProfessionalModel,
-    RegularTeacherDiversifiedStrategyModel,
+    DiversifiedStrategyModel,
+    CollaborativeWorkModel,
+    SupportOrganizationModel,
+    DiversityCriterionModel,
+    DiversityStrategyOptionModel,
+    CourseDiversityResponseModel,
+    CourseDiversityResponseStudentModel,
+    CourseDiversityObservationModel,
+    AdjustmentAspectModel,
+    CourseAdjustmentModel,
+    CourseAdjustmentStudentModel,
+    CurricularAdequacyTypeModel,
+    CourseCurricularAdequacyModel,
+    CourseCurricularAdequacySubjectModel,
+    CourseCurricularAdequacyStudentModel,
+    EvalDiversityTypeModel,
+    CourseEvalDiversityModel,
+    CourseEvalDiversityObservationModel,
+    CourseIndividualSupportModel,
+    CourseIndividualSupportStudentModel,
+    FamilyCommunityStrategyTypeModel,
+    CourseFamilyCommunityModel,
+    CourseFamilyCommunityObservationModel,
+    CourseTeacherRecordActivityModel,
+    CourseTeacherRecordObservationModel,
+    CourseRecordSupportModel,
+    CourseRecordSupportStudentModel,
+    CourseRecordSupportInterventionModel,
+    CourseLearningAchievementModel,
+    CourseActivityFamilyModel,
+    CourseActivityCommunityModel,
+    CourseActivityOtherModel,
+    DifferentiatedStrategiesImplementationModel,
     SubjectModel,
     FamilyMemberModel,
     CourseModel,
@@ -55,6 +111,7 @@ from app.backend.db.models import (
     SpecialEducationalNeedModel,
     StudentGuardianModel,
     InterconsultationModel,
+    SupportAreaModel,
 )
 from app.backend.auth.auth_user import get_current_active_user
 from app.backend.schemas import (
@@ -64,21 +121,31 @@ from app.backend.schemas import (
     UploadDocumentRequest
 )
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from pathlib import Path
 import tempfile
 import os
 import re
 import json
 import logging
-import sys
 from datetime import datetime, date
+from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
-def _debug(label: str, obj):
-    print(f"[DEBUG am-docx] {label}: {obj!r}", file=sys.stderr, flush=True)
+
+def _catalog_row_is_informe_evaluacion_psicomotriz(document_id: int, db: Session) -> bool:
+    """True si `document_id` es la fila del catálogo `documents` para Informe de evaluación psicomotriz."""
+    row = (
+        db.query(DocumentModel)
+        .filter(DocumentModel.id == document_id, DocumentModel.deleted_date.is_(None))
+        .first()
+    )
+    return bool(row and (row.document or "").strip() == "Informe de evaluación psicomotriz")
+
+
 import uuid
-from shutil import move
+from shutil import copy as shutil_copy, move
 
 documents = APIRouter(
     prefix="/documents",
@@ -1174,6 +1241,50 @@ def _generate_anamnesis_docx_internal(student_id: int, db: Session) -> dict:
         return {"status": "error", "message": str(e), "status_code": 500}
 
 
+def _split_course_activity_records_for_register_book(
+    db: Session, course_id: int
+) -> tuple[list[tuple[str, Any]], list, list, list]:
+    """
+    Libro de registro IV/V: lee tres tablas (sin columna section) y arma los tres bloques del Word.
+
+    - course_activity_family    → _rafc_rows  → tags rafcf_* / rafcne_* …
+    - course_activity_community → _tcee_rows → tags tcee*
+    - course_activity_other     → _ar_rows   → tags arf_* / arn_* …
+
+    _car_all: mezcla (etiqueta lógica, fila ORM) ordenada por fecha e id descendente (solo depuración/vista).
+    """
+    _rafc_rows = (
+        db.query(CourseActivityFamilyModel)
+        .filter(CourseActivityFamilyModel.course_id == course_id)
+        .order_by(CourseActivityFamilyModel.date.desc(), CourseActivityFamilyModel.id.desc())
+        .all()
+    )
+    _tcee_rows = (
+        db.query(CourseActivityCommunityModel)
+        .filter(CourseActivityCommunityModel.course_id == course_id)
+        .order_by(CourseActivityCommunityModel.date.desc(), CourseActivityCommunityModel.id.desc())
+        .all()
+    )
+    _ar_rows = (
+        db.query(CourseActivityOtherModel)
+        .filter(CourseActivityOtherModel.course_id == course_id)
+        .order_by(CourseActivityOtherModel.date.desc(), CourseActivityOtherModel.id.desc())
+        .all()
+    )
+    _car_all: list[tuple[str, Any]] = []
+    for _rec in _rafc_rows:
+        _car_all.append(("family", _rec))
+    for _rec in _tcee_rows:
+        _car_all.append(("community", _rec))
+    for _rec in _ar_rows:
+        _car_all.append(("other", _rec))
+    _car_all.sort(
+        key=lambda t: (t[1].date or date.min, t[1].id or 0),
+        reverse=True,
+    )
+    return _car_all, _rafc_rows, _tcee_rows, _ar_rows
+
+
 def _generate_register_book_impl(course_id: int, db: Session):
     """Lógica común para generar el libro de registro por course_id. Rellena regular, specialist, specialized_assistant y coordinadores (school, daem, support_networks)."""
     template_path = Path("files/original_student_files") / "register_book.docx"
@@ -1203,14 +1314,222 @@ def _generate_register_book_impl(course_id: int, db: Session):
     replacements["support_networks_coordinator_full_name"] = ""
     replacements["support_networks_coordinator_email"] = ""
     replacements["support_networks_coordinator_phone"] = ""
-    # Días de la semana por mes (march, april, may, june, july) - primer periodo (period_id=1) desde meeting_schedualings
-    _weekdays = ["monday", "tuesday", "wednesday", "thursday", "friday"]
-    _months = [(3, "march"), (4, "april"), (5, "may"), (6, "june"), (7, "july")]
+    # Panorama del curso (documento: Estilos y modos / Fortalezas / Necesidades de apoyo)
+    replacements["emac"] = ""
+    replacements["fc"] = ""
+    replacements["nac"] = ""
+    replacements["EMAC"] = ""
+    replacements["FC"] = ""
+    replacements["NAC"] = ""
+    # Colaboración: Estrategias y/o acciones (sección c) — satc_1..6
+    for i in range(1, 7):
+        replacements[f"satc_{i}"] = ""
+    # II b) Registros dinámicos: cada registro = rarpo_k + 11 filas (rarpf/rarphp/rarpad/rarpnfd). Máx. configurable.
+    _RB_ROWS_PER_REGISTER = 11
+    _RB_MAX_REGISTERS = 20
+    _RB_MAX_ACTIVITY_ROWS = _RB_ROWS_PER_REGISTER * _RB_MAX_REGISTERS
+    for _rk in range(1, _RB_MAX_REGISTERS + 1):
+        replacements[f"rarpo_{_rk}"] = ""
+        replacements[f"rarpas_{_rk}"] = ""
+
+    ds_row = (
+        db.query(DiversifiedStrategyModel)
+        .filter(DiversifiedStrategyModel.course_id == course_id)
+        .order_by(DiversifiedStrategyModel.id.desc())
+        .first()
+    )
+    if ds_row:
+        emac_val = (ds_row.planning_learning_styles or "").strip()
+        fc_val = (ds_row.planning_strengths or "").strip()
+        nac_val = (ds_row.planning_support_needs or "").strip()
+        replacements["emac"] = emac_val
+        replacements["fc"] = fc_val
+        replacements["nac"] = nac_val
+        replacements["EMAC"] = emac_val
+        replacements["FC"] = fc_val
+        replacements["NAC"] = nac_val
+
+    cw_row = (
+        db.query(CollaborativeWorkModel)
+        .filter(CollaborativeWorkModel.course_id == course_id)
+        .order_by(CollaborativeWorkModel.id.desc())
+        .first()
+    )
+    if cw_row:
+        replacements["satc_1"] = (cw_row.planning_collab_co_teaching or "").strip()
+        replacements["satc_2"] = (cw_row.planning_collab_assistants or "").strip()
+        replacements["satc_3"] = (cw_row.planning_collab_students or "").strip()
+        replacements["satc_4"] = (cw_row.planning_collab_family or "").strip()
+        replacements["satc_5"] = (cw_row.planning_collab_community or "").strip()
+        replacements["satc_6"] = (cw_row.planning_observations or "").strip()
+    # II b) Registro por asignatura (mismas pestañas que la UI): observaciones y tabla por subject_id — no usar collaborative_works para rarpo_*
+    _obs_sids = [
+        t[0]
+        for t in db.query(CourseTeacherRecordObservationModel.subject_id)
+        .filter(CourseTeacherRecordObservationModel.course_id == course_id)
+        .distinct()
+        .all()
+    ]
+    _act_sids = [
+        t[0]
+        for t in db.query(CourseTeacherRecordActivityModel.subject_id)
+        .filter(CourseTeacherRecordActivityModel.course_id == course_id)
+        .distinct()
+        .all()
+    ]
+    # Orden: por primer registro (id mínimo) de actividad u observación en el curso por asignatura — suele coincidir con pestañas; no alfabético.
+    _rb_sid_set = set(_obs_sids) | set(_act_sids)
+    _rb_scored = []
+    for _sid in _rb_sid_set:
+        _min_a = (
+            db.query(func.min(CourseTeacherRecordActivityModel.id))
+            .filter(
+                CourseTeacherRecordActivityModel.course_id == course_id,
+                CourseTeacherRecordActivityModel.subject_id == _sid,
+            )
+            .scalar()
+        )
+        _min_o = (
+            db.query(func.min(CourseTeacherRecordObservationModel.id))
+            .filter(
+                CourseTeacherRecordObservationModel.course_id == course_id,
+                CourseTeacherRecordObservationModel.subject_id == _sid,
+            )
+            .scalar()
+        )
+        _cands = [x for x in (_min_a, _min_o) if x is not None]
+        _rank = min(_cands) if _cands else 10**12
+        _rb_scored.append((_rank, _sid))
+    _rb_scored.sort(key=lambda x: (x[0], x[1]))
+    _rb_subject_ids = [x[1] for x in _rb_scored]
+    _rb_subject_blocks = []
+    for _sid in _rb_subject_ids:
+        _sj = db.query(SubjectModel).filter(SubjectModel.id == _sid).first()
+        _slbl = (_sj.subject or "").strip() if _sj else str(_sid)
+        _rb_subject_blocks.append((_sid, _slbl))
+    for _idx, (_sid, _slabel) in enumerate(_rb_subject_blocks[:_RB_MAX_REGISTERS]):
+        _k = _idx + 1
+        replacements[f"rarpas_{_k}"] = _slabel
+        _obs_row = (
+            db.query(CourseTeacherRecordObservationModel)
+            .filter(
+                CourseTeacherRecordObservationModel.course_id == course_id,
+                CourseTeacherRecordObservationModel.subject_id == _sid,
+            )
+            .first()
+        )
+        if _obs_row:
+            replacements[f"rarpo_{_k}"] = (_obs_row.observations or "").strip()
+
+    # Tabla: por cada asignatura, hasta 11 filas; bloque 1 → filas 1–11, bloque 2 → 12–22, … (alineado con rarpo_k / rarpas_k)
+    def _register_book_teacher_names_line(raw) -> str:
+        if raw is None or (isinstance(raw, str) and not raw.strip()):
+            return ""
+        if isinstance(raw, list):
+            parts = []
+            for item in raw:
+                if isinstance(item, dict):
+                    n = (item.get("name") or item.get("nombre") or "").strip()
+                    if n:
+                        parts.append(n)
+                elif item:
+                    parts.append(str(item).strip())
+            return ", ".join(parts)
+        try:
+            data = json.loads(raw) if isinstance(raw, str) else None
+            if isinstance(data, list):
+                return _register_book_teacher_names_line(data)
+        except (json.JSONDecodeError, TypeError):
+            pass
+        return str(raw).strip()
+
+    for _ri in range(1, _RB_MAX_ACTIVITY_ROWS + 1):
+        replacements[f"rarpf_{_ri}"] = ""
+        replacements[f"rarphp_{_ri}"] = ""
+        replacements[f"rarpad_{_ri}"] = ""
+        replacements[f"rarpnfd_{_ri}"] = ""
+    for _bidx, (_sid, _slabel) in enumerate(_rb_subject_blocks[:_RB_MAX_REGISTERS]):
+        _base = _bidx * _RB_ROWS_PER_REGISTER
+        _cta_sub = (
+            db.query(CourseTeacherRecordActivityModel)
+            .filter(
+                CourseTeacherRecordActivityModel.course_id == course_id,
+                CourseTeacherRecordActivityModel.subject_id == _sid,
+            )
+            .order_by(CourseTeacherRecordActivityModel.date.asc(), CourseTeacherRecordActivityModel.id.asc())
+            .limit(_RB_ROWS_PER_REGISTER)
+            .all()
+        )
+        for _j, _cta in enumerate(_cta_sub):
+            _n = _base + _j + 1
+            if _n > _RB_MAX_ACTIVITY_ROWS:
+                break
+            if _cta.date:
+                replacements[f"rarpf_{_n}"] = _cta.date.strftime("%d/%m/%Y")
+            _ph = getattr(_cta, "pedagogical_hours", None)
+            if _ph is not None:
+                replacements[f"rarphp_{_n}"] = str(_ph).strip()
+            replacements[f"rarpad_{_n}"] = (getattr(_cta, "description", None) or "").strip()
+            replacements[f"rarpnfd_{_n}"] = _register_book_teacher_names_line(getattr(_cta, "teacher_names", None))
+
+    # b) Organización de los apoyos: support_organizations (hasta 13 filas por curso)
+    for i in range(1, 14):
+        replacements[f"oaaa_{i}"] = ""
+        replacements[f"haar_{i}"] = ""
+        replacements[f"hafa_{i}"] = ""
+        replacements[f"tae_{i}"] = ""
+    sup_org_rows = (
+        db.query(SupportOrganizationModel, SubjectModel)
+        .outerjoin(SubjectModel, SupportOrganizationModel.subject_id == SubjectModel.id)
+        .filter(
+            SupportOrganizationModel.course_id == course_id,
+            SupportOrganizationModel.deleted_date.is_(None),
+        )
+        .order_by(SupportOrganizationModel.id)
+        .limit(13)
+        .all()
+    )
+    for idx, (sup, subj) in enumerate(sup_org_rows):
+        if idx >= 13:
+            break
+        n = idx + 1
+        ambito = ""
+        if subj and (subj.subject or "").strip():
+            ambito = (subj.subject or "").strip()
+        elif getattr(sup, "subject_id", None):
+            ambito = str(sup.subject_id).strip()
+        replacements[f"oaaa_{n}"] = ambito
+        replacements[f"haar_{n}"] = (sup.hours_support_regular_classroom or "").strip()
+        replacements[f"hafa_{n}"] = (sup.hours_support_outside_classroom or "").strip()
+        replacements[f"tae_{n}"] = (sup.specialized_support_types or "").strip()
+
+    # Días de la semana por mes para todo el año (january..december),
+    # cubriendo toda la semana (monday..sunday) desde meeting_schedualings.
+    _weekdays = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+    _months = [
+        (1, "january"),
+        (2, "february"),
+        (3, "march"),
+        (4, "april"),
+        (5, "may"),
+        (6, "june"),
+        (7, "july"),
+        (8, "august"),
+        (9, "september"),
+        (10, "october"),
+        (11, "november"),
+        (12, "december"),
+    ]
     for _, month_name in _months:
         for wd in _weekdays:
             replacements[f"{month_name}_{wd}_date"] = ""
             replacements[f"{month_name}_{wd}_time"] = ""
-    meetings_first_period = (
+    def _fill_slot(month_name: str, wd_name: str, row: MeetingSchedulalingModel):
+        replacements[f"{month_name}_{wd_name}_date"] = row.meeting_date.strftime("%d/%m/%Y")
+        replacements[f"{month_name}_{wd_name}_time"] = (row.meeting_time or "").strip()
+
+    # Periodo 1 -> enero..julio (por mes real)
+    meetings_p1 = (
         db.query(MeetingSchedulalingModel)
         .filter(
             MeetingSchedulalingModel.course_id == course_id,
@@ -1221,24 +1540,56 @@ def _generate_register_book_impl(course_id: int, db: Session):
         .order_by(MeetingSchedulalingModel.meeting_date)
         .all()
     )
-    for row in meetings_first_period:
+    for row in meetings_p1:
         d = row.meeting_date
         if not d or not hasattr(d, "month"):
             continue
-        if d.month not in (3, 4, 5, 6, 7):
+        if d.month not in (1, 2, 3, 4, 5, 6, 7):
             continue
-        # Python: weekday() 0=Monday, 4=Friday, 5=Saturday, 6=Sunday
         wd_idx = d.weekday()
-        if wd_idx > 4:
+        if wd_idx > 6:
             continue
         month_name = next((m[1] for m in _months if m[0] == d.month), None)
         if not month_name:
             continue
+        _fill_slot(month_name, _weekdays[wd_idx], row)
+
+    # Periodo 2 -> agosto..diciembre.
+    meetings_p2 = (
+        db.query(MeetingSchedulalingModel)
+        .filter(
+            MeetingSchedulalingModel.course_id == course_id,
+            MeetingSchedulalingModel.period_id == 2,
+            MeetingSchedulalingModel.meeting_date.isnot(None),
+            MeetingSchedulalingModel.deleted_date.is_(None),
+        )
+        .order_by(MeetingSchedulalingModel.meeting_date)
+        .all()
+    )
+    unmatched_p2 = []
+    for row in meetings_p2:
+        d = row.meeting_date
+        if not d or not hasattr(d, "month"):
+            continue
+        wd_idx = d.weekday()
+        if wd_idx > 6:
+            continue
+        if d.month in (8, 9, 10, 11, 12):
+            month_name = next((m[1] for m in _months if m[0] == d.month), None)
+            if month_name:
+                _fill_slot(month_name, _weekdays[wd_idx], row)
+        else:
+            # Fallback: si en periodo 2 guardaron fechas fuera de agosto..diciembre,
+            # se ubican en el primer mes disponible de agosto..diciembre para ese día.
+            unmatched_p2.append((row, wd_idx))
+
+    _months_p2 = ["august", "september", "october", "november", "december"]
+    for row, wd_idx in unmatched_p2:
         wd_name = _weekdays[wd_idx]
-        tag_date = f"{month_name}_{wd_name}_date"
-        tag_time = f"{month_name}_{wd_name}_time"
-        replacements[tag_date] = d.strftime("%d/%m/%Y")
-        replacements[tag_time] = (row.meeting_time or "").strip()
+        for mname in _months_p2:
+            if not replacements.get(f"{mname}_{wd_name}_date"):
+                _fill_slot(mname, wd_name, row)
+                break
     # Profesores regulares (teacher_type_id=1)
     ptc_regular = (
         db.query(ProfessionalTeachingCourseModel, ProfessionalModel)
@@ -1324,12 +1675,16 @@ def _generate_register_book_impl(course_id: int, db: Session):
             replacements[f"{prefix}_coordinator_full_name"] = full_name
             replacements[f"{prefix}_coordinator_email"] = (cc.email or prof.email or "").strip()
             replacements[f"{prefix}_coordinator_phone"] = (cc.phone or prof.phone or "").strip()
-    # Reuniones 1 a 5: fecha, asistentes y acuerdos desde meeting_schedualings (period_id=1), meeting_schedualing_registers_professionals y meeting_schedualing_agreements
-    for i in range(1, 6):
+    # Reuniones 1 a 10:
+    # - 1..5  => periodo 1
+    # - 6..10 => periodo 2
+    # meeting_schedualing_registers_professionals + meeting_schedualing_agreements.
+    for i in range(1, 11):
         replacements[f"reunion_date_{i}"] = ""
         replacements[f"reunion_attendees_{i}"] = ""
         replacements[f"reunion_agreements_{i}"] = ""
-    meetings_for_reunion = (
+
+    meetings_for_reunion_p1 = (
         db.query(MeetingSchedulalingModel)
         .filter(
             MeetingSchedulalingModel.course_id == course_id,
@@ -1340,16 +1695,25 @@ def _generate_register_book_impl(course_id: int, db: Session):
         .limit(5)
         .all()
     )
-    for idx, meeting in enumerate(meetings_for_reunion):
-        if idx >= 5:
-            break
-        i = idx + 1
+
+    meetings_for_reunion_p2 = (
+        db.query(MeetingSchedulalingModel)
+        .filter(
+            MeetingSchedulalingModel.course_id == course_id,
+            MeetingSchedulalingModel.period_id == 2,
+            MeetingSchedulalingModel.deleted_date.is_(None),
+        )
+        .order_by(MeetingSchedulalingModel.meeting_date)
+        .limit(5)
+        .all()
+    )
+
+    def _fill_reunion_slot(i: int, meeting: MeetingSchedulalingModel):
         if meeting.meeting_date:
             replacements[f"reunion_date_{i}"] = meeting.meeting_date.strftime("%d/%m/%Y")
         # Asistentes: meeting_schedualing_registers_professionals con meeting_schedualing_register_id = meeting.id, join professionals
-        reg_profs = (
-            db.query(MeetingSchedualingRegisterProfessionalModel, ProfessionalModel)
-            .join(ProfessionalModel, MeetingSchedualingRegisterProfessionalModel.professional_id == ProfessionalModel.id)
+        reg_rows = (
+            db.query(MeetingSchedualingRegisterProfessionalModel)
             .filter(
                 MeetingSchedualingRegisterProfessionalModel.meeting_schedualing_register_id == meeting.id,
                 MeetingSchedualingRegisterProfessionalModel.deleted_date.is_(None),
@@ -1357,8 +1721,15 @@ def _generate_register_book_impl(course_id: int, db: Session):
             .all()
         )
         names = []
-        for _rp, prof in reg_profs:
-            fn = f"{prof.names or ''} {prof.lastnames or ''}".strip()
+        for rp in reg_rows:
+            fn = ""
+            prof = db.query(ProfessionalModel).filter(ProfessionalModel.id == rp.professional_id).first()
+            if prof:
+                fn = f"{prof.names or ''} {prof.lastnames or ''}".strip()
+            else:
+                usr = db.query(UserModel).filter(UserModel.id == rp.professional_id).first()
+                if usr:
+                    fn = (usr.full_name or "").strip()
             if fn:
                 names.append(fn)
         replacements[f"reunion_attendees_{i}"] = ", ".join(names)
@@ -1373,37 +1744,946 @@ def _generate_register_book_impl(course_id: int, db: Session):
         )
         agreements_text = "; ".join((r.agreements or "").strip() for r in agreements_rows if (r.agreements or "").strip())
         replacements[f"reunion_agreements_{i}"] = agreements_text
-    # Estrategias diversificadas profesor regular (registro b): regular_teacher_diversified_strategies por curso, 1 a 5
-    for i in range(1, 6):
+
+    for idx, meeting in enumerate(meetings_for_reunion_p1):
+        if idx >= 5:
+            break
+        _fill_reunion_slot(idx + 1, meeting)
+
+    for idx, meeting in enumerate(meetings_for_reunion_p2):
+        if idx >= 5:
+            break
+        _fill_reunion_slot(idx + 6, meeting)
+
+    # a) Estrategias diversidad en el aula común: columna 1 — cseacpea_1..3 (casillas), cseacpea_4 (Otro, texto)
+    replacements["cseacpea_1"] = ""
+    replacements["cseacpea_2"] = ""
+    replacements["cseacpea_3"] = ""
+    replacements["cseacpea_4"] = ""
+    div_criteria = (
+        db.query(DiversityCriterionModel)
+        .filter(DiversityCriterionModel.deleted_date.is_(None))
+        .order_by(DiversityCriterionModel.sort_order)
+        .all()
+    )
+    div_responses = (
+        db.query(CourseDiversityResponseModel)
+        .filter(
+            CourseDiversityResponseModel.course_id == course_id,
+            CourseDiversityResponseModel.deleted_date.is_(None),
+        )
+        .all()
+    )
+    _div_by_cid = {r.diversity_criterion_id: r for r in div_responses}
+    for i in range(3):
+        if i >= len(div_criteria):
+            break
+        c = div_criteria[i]
+        r = _div_by_cid.get(c.id)
+        replacements[f"cseacpea_{i + 1}"] = "1" if r and getattr(r, "criterion_selected", 0) else ""
+    _otro_crit = next(
+        (c for c in div_criteria if (c.key or "").strip().lower() in ("otro", "other", "otra")),
+        None,
+    )
+    if _otro_crit is None and len(div_criteria) >= 4:
+        _otro_crit = div_criteria[3]
+    if _otro_crit:
+        _r_otro = _div_by_cid.get(_otro_crit.id)
+        if _r_otro:
+            replacements["cseacpea_4"] = (_r_otro.how_text or "").strip()
+
+    # a) columna 2 — cseacpeas_1..8 (casillas), cseacpeas_9 (Otros)
+    for _i in range(1, 10):
+        replacements[f"cseacpeas_{_i}"] = ""
+    _strategy_opts_ordered = (
+        db.query(DiversityStrategyOptionModel)
+        .join(
+            DiversityCriterionModel,
+            DiversityStrategyOptionModel.diversity_criterion_id == DiversityCriterionModel.id,
+        )
+        .filter(
+            DiversityStrategyOptionModel.deleted_date.is_(None),
+            DiversityCriterionModel.deleted_date.is_(None),
+        )
+        .order_by(DiversityCriterionModel.sort_order, DiversityStrategyOptionModel.sort_order)
+        .all()
+    )
+    _otro_strat = next(
+        (o for o in _strategy_opts_ordered if "otro" in (o.label or "").lower()),
+        None,
+    )
+    _opts_col2_1_8 = [o for o in _strategy_opts_ordered if _otro_strat is None or o.id != _otro_strat.id][:8]
+    for _idx, _opt in enumerate(_opts_col2_1_8):
+        _r = _div_by_cid.get(_opt.diversity_criterion_id)
+        replacements[f"cseacpeas_{_idx + 1}"] = (
+            "1"
+            if _r
+            and getattr(_r, "criterion_selected", 0)
+            and getattr(_r, "diversity_strategy_option_id", None) == _opt.id
+            else ""
+        )
+    _opt_otros_col2 = _otro_strat
+    if _opt_otros_col2 is None and len(_strategy_opts_ordered) >= 9:
+        _opt_otros_col2 = _strategy_opts_ordered[8]
+    if _opt_otros_col2:
+        _r9 = _div_by_cid.get(_opt_otros_col2.diversity_criterion_id)
+        replacements["cseacpeas_9"] = (
+            "1"
+            if _r9
+            and getattr(_r9, "criterion_selected", 0)
+            and getattr(_r9, "diversity_strategy_option_id", None) == _opt_otros_col2.id
+            else ""
+        )
+
+    # a) columna 3 — ¿Cómo? — csmafa_1..9
+    for _i in range(1, 10):
+        replacements[f"csmafa_{_i}"] = ""
+    for _i in range(3):
+        if _i >= len(div_criteria):
+            break
+        _c = div_criteria[_i]
+        _r = _div_by_cid.get(_c.id)
+        if _r:
+            replacements[f"csmafa_{_i + 1}"] = (_r.how_text or "").strip()
+    if _otro_crit:
+        _r_o = _div_by_cid.get(_otro_crit.id)
+        if _r_o:
+            replacements["csmafa_4"] = (_r_o.how_text or "").strip()
+    _adj_aspects = (
+        db.query(AdjustmentAspectModel)
+        .filter(AdjustmentAspectModel.deleted_date.is_(None))
+        .order_by(AdjustmentAspectModel.sort_order)
+        .all()
+    )
+    _adj_rows = (
+        db.query(CourseAdjustmentModel)
+        .filter(
+            CourseAdjustmentModel.course_id == course_id,
+            CourseAdjustmentModel.deleted_date.is_(None),
+        )
+        .all()
+    )
+    _adj_by_asp = {a.adjustment_aspect_id: a for a in _adj_rows}
+
+    def _csmafa_adj_value(_asp_idx: int) -> str:
+        if _asp_idx >= len(_adj_aspects):
+            return ""
+        _adj = _adj_by_asp.get(_adj_aspects[_asp_idx].id)
+        if not _adj:
+            return ""
+        return (getattr(_adj, "value", None) or "").strip()
+
+    for _j in range(3):
+        replacements[f"csmafa_{5 + _j}"] = _csmafa_adj_value(_j)
+    _asp_otro_adj = next(
+        (a for a in _adj_aspects if "otro" in (a.key or "").lower()),
+        _adj_aspects[3] if len(_adj_aspects) >= 4 else None,
+    )
+    # Ajustes — segunda columna (casillas) — ea_1..3 (materiales / tiempo / tarea), ea_4 (Otro)
+    replacements["ea_1"] = ""
+    replacements["ea_2"] = ""
+    replacements["ea_3"] = ""
+    replacements["ea_4"] = ""
+    _aspects_ea123 = [a for a in _adj_aspects if _asp_otro_adj is None or a.id != _asp_otro_adj.id][:3]
+    for _ea_i, _ea_asp in enumerate(_aspects_ea123):
+        _ea_row = _adj_by_asp.get(_ea_asp.id)
+        replacements[f"ea_{_ea_i + 1}"] = "1" if _ea_row else ""
+    if _asp_otro_adj:
+        replacements["ea_4"] = "1" if _adj_by_asp.get(_asp_otro_adj.id) else ""
+
+    if _asp_otro_adj:
+        _ad8 = _adj_by_asp.get(_asp_otro_adj.id)
+        if _ad8:
+            _v8 = (getattr(_ad8, "value", None) or "").strip()
+            _o8 = (getattr(_ad8, "other_aspect_text", None) or "").strip()
+            replacements["csmafa_8"] = " ".join(x for x in (_v8, _o8) if x).strip()
+    _div_obs = (
+        db.query(CourseDiversityObservationModel)
+        .filter(CourseDiversityObservationModel.course_id == course_id)
+        .first()
+    )
+    if _div_obs and (_div_obs.observations or "").strip():
+        replacements["csmafa_9"] = (_div_obs.observations or "").strip()
+
+    # a) columna 4 — ¿A quiénes? — qse_1..9 (nombres de estudiantes)
+    def _qse_student_names_line(_sids: list) -> str:
+        if not _sids:
+            return ""
+        _parts: list = []
+        for _sid in _sids:
+            if not _sid:
+                continue
+            _p = (
+                db.query(StudentPersonalInfoModel)
+                .filter(StudentPersonalInfoModel.student_id == _sid)
+                .first()
+            )
+            if _p:
+                _fn = f"{_p.names or ''} {_p.father_lastname or ''} {_p.mother_lastname or ''}".strip()
+                if _fn:
+                    _parts.append(_fn)
+        return ", ".join(_parts)
+
+    def _qse_sids_div_resp(_resp_id: int | None) -> list:
+        if not _resp_id:
+            return []
+        return [
+            t[0]
+            for t in db.query(CourseDiversityResponseStudentModel.student_id)
+            .filter(CourseDiversityResponseStudentModel.course_diversity_response_id == _resp_id)
+            .all()
+        ]
+
+    def _qse_sids_adj(_adj_id: int | None) -> list:
+        if not _adj_id:
+            return []
+        return [
+            t[0]
+            for t in db.query(CourseAdjustmentStudentModel.student_id)
+            .filter(CourseAdjustmentStudentModel.course_adjustment_id == _adj_id)
+            .all()
+        ]
+
+    for _qi in range(1, 10):
+        replacements[f"qse_{_qi}"] = ""
+    for _qi in range(3):
+        if _qi >= len(div_criteria):
+            break
+        _cr = _div_by_cid.get(div_criteria[_qi].id)
+        if _cr:
+            replacements[f"qse_{_qi + 1}"] = _qse_student_names_line(_qse_sids_div_resp(_cr.id))
+    if _otro_crit:
+        _cr_o = _div_by_cid.get(_otro_crit.id)
+        if _cr_o:
+            replacements["qse_4"] = _qse_student_names_line(_qse_sids_div_resp(_cr_o.id))
+    for _qj in range(3):
+        if _qj >= len(_adj_aspects):
+            break
+        _adj_q = _adj_by_asp.get(_adj_aspects[_qj].id)
+        if _adj_q:
+            replacements[f"qse_{5 + _qj}"] = _qse_student_names_line(_qse_sids_adj(_adj_q.id))
+    if _asp_otro_adj:
+        _ad_q8 = _adj_by_asp.get(_asp_otro_adj.id)
+        if _ad_q8:
+            replacements["qse_8"] = _qse_student_names_line(_qse_sids_adj(_ad_q8.id))
+    _seen_qse = set()
+    _qse_course_sids: list = []
+    for (_qsid,) in (
+        db.query(StudentAcademicInfoModel.student_id)
+        .filter(StudentAcademicInfoModel.course_id == course_id)
+        .all()
+    ):
+        if _qsid and _qsid not in _seen_qse:
+            _seen_qse.add(_qsid)
+            _qse_course_sids.append(_qsid)
+    replacements["qse_9"] = _qse_student_names_line(_qse_course_sids)
+    # Fila "Otras estrategias y criterios": 1ª columna = osc_1, 2ª columna = osce_1
+    replacements["osc_1"] = replacements["csmafa_9"]
+    replacements["osce_1"] = replacements["qse_9"]
+    # Campo general OBSERVACIONES (mismo texto que observaciones de diversidad del curso)
+    replacements["edo_1"] = replacements["csmafa_9"]
+
+    # 2. Registro de apoyos (course_record_support + interventions) — raegee_*, raegeop_*, raegef_*, …
+    _RAEG_MAX_BLOCKS = 30
+    _RAEG_MAX_ROWS = 25
+    for _bb in range(1, _RAEG_MAX_BLOCKS + 1):
+        replacements[f"raegee_{_bb}"] = ""
+        replacements[f"raegeoa_{_bb}"] = ""
+    replacements["raegeop_1_1"] = ""
+    for _bb in range(2, _RAEG_MAX_BLOCKS + 1):
+        replacements[f"raegeop_{_bb}_1"] = ""
+    for _bb in range(1, _RAEG_MAX_BLOCKS + 1):
+        for _br in range(1, _RAEG_MAX_ROWS + 1):
+            if _bb == 1:
+                replacements[f"raegef_1_{_br}"] = ""
+                replacements[f"raegel_1_{_br}"] = ""
+                replacements[f"raegear_1_{_br}"] = ""
+                replacements[f"raegep_1_{_br}"] = ""
+            else:
+                replacements[f"raegef_{_bb}_{_br}"] = ""
+                replacements[f"raegel_{_bb}_{_br}"] = ""
+                replacements[f"raegear_{_bb}_{_br}"] = ""
+                replacements[f"raegep_{_bb}_{_br}"] = ""
+
+    _raeg_blocks: list = []
+    _support_areas_raeg = (
+        db.query(SupportAreaModel)
+        .filter(SupportAreaModel.deleted_date.is_(None))
+        .order_by(SupportAreaModel.support_area.asc())
+        .all()
+    )
+    for _sa in _support_areas_raeg:
+        _rec_cr = (
+            db.query(CourseRecordSupportModel)
+            .filter(
+                CourseRecordSupportModel.course_id == course_id,
+                CourseRecordSupportModel.support_area_id == _sa.id,
+            )
+            .first()
+        )
+        _stids_cr: list = []
+        if _rec_cr:
+            _stids_cr = [
+                t[0]
+                for t in db.query(CourseRecordSupportStudentModel.student_id)
+                .filter(CourseRecordSupportStudentModel.course_record_support_id == _rec_cr.id)
+                .all()
+            ]
+        _intvs_cr = (
+            db.query(CourseRecordSupportInterventionModel)
+            .filter(
+                CourseRecordSupportInterventionModel.course_id == course_id,
+                CourseRecordSupportInterventionModel.support_area_id == _sa.id,
+            )
+            .order_by(CourseRecordSupportInterventionModel.date.asc(), CourseRecordSupportInterventionModel.id.asc())
+            .all()
+        )
+        _obj_cr = ((_rec_cr.learning_objectives or "").strip()) if _rec_cr else ""
+        if not _stids_cr and not _intvs_cr and not _obj_cr:
+            continue
+        _raeg_blocks.append(
+            {
+                "student_ids": _stids_cr,
+                "objectives": _obj_cr,
+                "interventions": _intvs_cr,
+            }
+        )
+    if len(_raeg_blocks) > _RAEG_MAX_BLOCKS:
+        logger.warning(
+            "register_book: se omiten registros de apoyos más allá de %s áreas",
+            _RAEG_MAX_BLOCKS,
+        )
+        _raeg_blocks = _raeg_blocks[:_RAEG_MAX_BLOCKS]
+
+    _n_raeg_blocks = max(1, len(_raeg_blocks))
+
+    def _raeg_fmt_date(_d) -> str:
+        if _d is None:
+            return ""
+        if hasattr(_d, "strftime"):
+            return _d.strftime("%d/%m/%Y")
+        return str(_d)
+
+    _raeg_pid = set()
+    for _blk in _raeg_blocks:
+        for _iv in _blk["interventions"]:
+            if getattr(_iv, "professional_id", None):
+                _raeg_pid.add(_iv.professional_id)
+    _raeg_prof_names: dict = {}
+    if _raeg_pid:
+        for _p in db.query(ProfessionalModel).filter(ProfessionalModel.id.in_(_raeg_pid)).all():
+            _nm = f"{getattr(_p, 'names', '') or ''} {getattr(_p, 'lastnames', '') or ''}".strip()
+            _raeg_prof_names[_p.id] = _nm or getattr(_p, "name", None) or str(_p.id)
+
+    for _bi, _blk in enumerate(_raeg_blocks, start=1):
+        replacements[f"raegee_{_bi}"] = _qse_student_names_line(_blk["student_ids"])
+        if _bi == 1:
+            replacements["raegeop_1_1"] = _blk["objectives"]
+        else:
+            replacements[f"raegeop_{_bi}_1"] = _blk["objectives"]
+        _ints = _blk["interventions"]
+        _fh = _ints[0].pedagogical_hours if _ints else None
+        replacements[f"raegeoa_{_bi}"] = str(_fh).strip() if _fh is not None else ""
+        for _ri, _iv in enumerate(_ints, start=1):
+            if _ri > _RAEG_MAX_ROWS:
+                break
+            _act = (_iv.activities_description or "").strip()
+            _pn = _raeg_prof_names.get(_iv.professional_id) if _iv.professional_id else ""
+            if _bi == 1:
+                replacements[f"raegef_1_{_ri}"] = _raeg_fmt_date(_iv.date)
+                replacements[f"raegel_1_{_ri}"] = (_iv.place or "").strip()
+                replacements[f"raegear_1_{_ri}"] = _act
+                replacements[f"raegep_1_{_ri}"] = _pn
+            else:
+                replacements[f"raegef_{_bi}_{_ri}"] = _raeg_fmt_date(_iv.date)
+                replacements[f"raegel_{_bi}_{_ri}"] = (_iv.place or "").strip()
+                replacements[f"raegear_{_bi}_{_ri}"] = _act
+                replacements[f"raegep_{_bi}_{_ri}"] = _pn
+
+    # 3. Registro de logros de aprendizaje — rlane_1_*, rllr_1_*, rlcs_1_*
+    _RLA_MAX_ROWS = 50
+    for _r in range(1, _RLA_MAX_ROWS + 1):
+        replacements[f"rlane_1_{_r}"] = ""
+        replacements[f"rllr_1_{_r}"] = ""
+        replacements[f"rlcs_1_{_r}"] = ""
+    _la_rows = (
+        db.query(CourseLearningAchievementModel)
+        .filter(CourseLearningAchievementModel.course_id == course_id)
+        .order_by(
+            CourseLearningAchievementModel.period_id.asc(),
+            CourseLearningAchievementModel.student_id.asc(),
+            CourseLearningAchievementModel.id.asc(),
+        )
+        .all()
+    )
+    if len(_la_rows) > _RLA_MAX_ROWS:
+        logger.warning(
+            "register_book: se omiten logros de aprendizaje más allá de %s filas",
+            _RLA_MAX_ROWS,
+        )
+        _la_rows = _la_rows[:_RLA_MAX_ROWS]
+    # Filas donde empieza un período distinto al anterior → espacio superior en el DOCX (sin filas vacías)
+    _rla_margin_top_rows: list[int] = []
+    for _i, _la in enumerate(_la_rows):
+        if _i == 0:
+            continue
+        _pid = int(_la.period_id) if _la.period_id is not None else None
+        _prev_pid = (
+            int(_la_rows[_i - 1].period_id) if _la_rows[_i - 1].period_id is not None else None
+        )
+        if _pid is not None and _prev_pid is not None and _pid != _prev_pid:
+            _rla_margin_top_rows.append(_i + 1)
+
+    _rla_period_labels = {1: "1er período", 2: "2do período", 3: "3er período"}
+    for _ri, _la in enumerate(_la_rows, start=1):
+        _nm = _qse_student_names_line([_la.student_id])
+        _pid = int(_la.period_id) if _la.period_id is not None else None
+        _plab = _rla_period_labels.get(_pid, f"Período {_pid}" if _pid is not None else "")
+        replacements[f"rlane_1_{_ri}"] = " - ".join(x for x in (_nm, _plab) if x)
+        replacements[f"rllr_1_{_ri}"] = (_la.achievements or "").strip()
+        replacements[f"rlcs_1_{_ri}"] = (_la.comments or "").strip()
+    _n_rla_rows = max(1, len(_la_rows))
+
+    # IV/V — Tres tablas → tres bloques del DOCX (mapeo columnas BD → controles Word):
+    #   course_activity_family    — Sección 1 IV familia:    rafcf_{i}_1 | rafcne/rafcnia/rafcnit | rafcniob=objectives … rafcnir=results
+    #   course_activity_community — Sección 2 IV comunidad:  tceef_{i}_1 | tceen/tceeap/tceete | tceeo … tceer=results
+    #   course_activity_other     — Sección 3 V acta:        arf_{i}_1 | arn/arpa/arr/art | arm / ara / arc
+    #   i = bloque 1..N por tabla; orden por fila: date desc, id desc dentro de cada consulta.
+    _RAFC_MAX_BLOCKS = 20
+    _RAFC_MAX_PARTICIPANT_ROWS = 30
+    _rafc_text_keys = ("rafcniob", "rafcniac", "rafcniacc", "rafcnir")
+    for _bb in range(1, _RAFC_MAX_BLOCKS + 1):
+        replacements[f"rafcf_{_bb}_1"] = ""
+        for _k in _rafc_text_keys:
+            replacements[f"{_k}_{_bb}_1"] = ""
+        for _rr in range(1, _RAFC_MAX_PARTICIPANT_ROWS + 1):
+            replacements[f"rafcne_{_bb}_{_rr}"] = ""
+            replacements[f"rafcnia_{_bb}_{_rr}"] = ""
+            replacements[f"rafcnit_{_bb}_{_rr}"] = ""
+    _TCEE_MAX_BLOCKS = 20
+    _tcee_text_keys = ("tceeo", "tceea", "tceeac", "tceer")
+    for _bb in range(1, _TCEE_MAX_BLOCKS + 1):
+        replacements[f"tceef_{_bb}_1"] = ""
+        for _k in _tcee_text_keys:
+            replacements[f"{_k}_{_bb}_1"] = ""
+        for _rr in range(1, _RAFC_MAX_PARTICIPANT_ROWS + 1):
+            replacements[f"tceen_{_bb}_{_rr}"] = ""
+            replacements[f"tceeap_{_bb}_{_rr}"] = ""
+            replacements[f"tceete_{_bb}_{_rr}"] = ""
+
+    _AR_MAX_BLOCKS = 20
+    for _bb in range(1, _AR_MAX_BLOCKS + 1):
+        replacements[f"arf_{_bb}_1"] = ""
+        for _k in ("arm", "ara", "arc"):
+            replacements[f"{_k}_{_bb}_1"] = ""
+        for _rr in range(1, _RAFC_MAX_PARTICIPANT_ROWS + 1):
+            replacements[f"arn_{_bb}_{_rr}"] = ""
+            replacements[f"arpa_{_bb}_{_rr}"] = ""
+            replacements[f"arr_{_bb}_{_rr}"] = ""
+            replacements[f"art_{_bb}_{_rr}"] = ""
+
+    _car_all, _rafc_rows, _tcee_rows, _ar_rows = _split_course_activity_records_for_register_book(
+        db, course_id
+    )
+    if len(_rafc_rows) > _RAFC_MAX_BLOCKS:
+        logger.warning(
+            "register_book: se omiten registros de actividades familia más allá de %s",
+            _RAFC_MAX_BLOCKS,
+        )
+        _rafc_rows = _rafc_rows[:_RAFC_MAX_BLOCKS]
+    if len(_tcee_rows) > _TCEE_MAX_BLOCKS:
+        logger.warning(
+            "register_book: se omiten registros de actividades comunidad más allá de %s",
+            _TCEE_MAX_BLOCKS,
+        )
+        _tcee_rows = _tcee_rows[:_TCEE_MAX_BLOCKS]
+    if len(_ar_rows) > _AR_MAX_BLOCKS:
+        logger.warning(
+            "register_book: se omiten registros de actas (other) más allá de %s",
+            _AR_MAX_BLOCKS,
+        )
+        _ar_rows = _ar_rows[:_AR_MAX_BLOCKS]
+
+    # Debug CAR: uvicorn en Windows suele NO mostrar print(); se escribe archivo + log WARNING.
+    _car_dbg_path = Path("files/system/students") / "register_book_car_debug.txt"
+    try:
+        _car_dbg_path.parent.mkdir(parents=True, exist_ok=True)
+        _lines = [
+            "=== register_book: IV/V actividades (3 tablas) ===",
+            f"course_id={course_id}",
+            "",
+            "TABLAS → PLANTILLA WORD:",
+            "  course_activity_family    → IV familia   (rafcf_*, rafcne_*, rafcniob/ac/acc/nir)",
+            "  course_activity_community → IV comunidad (tceef_*, tceen_*, tceeo/a/ac/er)",
+            "  course_activity_other     → V acta       (arf_*, arn_*, arm/ara/arc)",
+            "",
+            f"Total filas (suma 3 tablas): {len(_car_all)}",
+            f"Ids por tabla: family={[r.id for r in _rafc_rows]} "
+            f"community={[r.id for r in _tcee_rows]} other={[r.id for r in _ar_rows]}",
+            "",
+            "--- Cada fila ---",
+        ]
+        for _sec, _rec in _car_all:
+            _lines.append(
+                f"id={_rec.id} section={_sec!r} date={getattr(_rec, 'date', None)}"
+            )
+            _lines.append(f"  objectives={getattr(_rec, 'objectives', None)!r}")
+            _lines.append(f"  activities={getattr(_rec, 'activities', None)!r}")
+            _lines.append(f"  agreements={getattr(_rec, 'agreements', None)!r}")
+            _lines.append(f"  results={getattr(_rec, 'results', None)!r}")
+            _lines.append(f"  attendees={getattr(_rec, 'attendees', None)!r}")
+            _lines.append("")
+        _lines.append("--- Cómo quedan los bloques (i=1..N por tipo) ---")
+        _lines.append(
+            "family:    registro índice i → rafcf_i_1, rafcne_i_fila… (objetivos=objectives, …)"
+        )
+        _lines.append(
+            "community: registro índice i → tceef_i_1, tceen_i_fila… (objetivos=objectives, …)"
+        )
+        _lines.append(
+            "other:     registro índice i → arf_i_1, arn_i_fila… (arm=motivo=objectives, ara=agreements, arc=results)"
+        )
+        _txt = "\n".join(_lines) + "\n"
+        _car_dbg_path.write_text(_txt, encoding="utf-8")
+        logger.warning(
+            "register_book CAR: debug escrito en %s (stdout no siempre visible con uvicorn)",
+            _car_dbg_path.resolve(),
+        )
+    except OSError as _e:
+        logger.warning("register_book CAR: no se pudo escribir debug: %s", _e)
+
+    def _rafc_fmt_date(_d) -> str:
+        if _d is None:
+            return ""
+        if hasattr(_d, "strftime"):
+            return _d.strftime("%d/%m/%Y")
+        return str(_d)
+
+    def _rafc_field_text(v) -> str:
+        if v is None:
+            return ""
+        if isinstance(v, (bytes, bytearray)):
+            return v.decode("utf-8", errors="replace").replace("\u00a0", " ").strip()
+        return str(v).replace("\u00a0", " ").strip()
+
+    for _bi, _rec in enumerate(_rafc_rows, start=1):
+        replacements[f"rafcf_{_bi}_1"] = _rafc_fmt_date(_rec.date)
+        _att = _load_attendees(_rec.attendees)
+        if len(_att) > _RAFC_MAX_PARTICIPANT_ROWS:
+            logger.warning(
+                "register_book: se omiten participantes más allá de %s en actividad id=%s",
+                _RAFC_MAX_PARTICIPANT_ROWS,
+                getattr(_rec, "id", None),
+            )
+            _att = _att[:_RAFC_MAX_PARTICIPANT_ROWS]
+        _rows = _att if _att else [None]
+        for _rj, _one in enumerate(_rows, start=1):
+            if _one is None:
+                replacements[f"rafcne_{_bi}_{_rj}"] = ""
+                replacements[f"rafcnia_{_bi}_{_rj}"] = ""
+                replacements[f"rafcnit_{_bi}_{_rj}"] = ""
+            else:
+                replacements[f"rafcne_{_bi}_{_rj}"] = str(_one.get("name") or "").strip()
+                replacements[f"rafcnia_{_bi}_{_rj}"] = attendees_rafcnia_line([_one])
+                replacements[f"rafcnit_{_bi}_{_rj}"] = attendees_rafcnit_line([_one])
+        replacements[f"rafcniob_{_bi}_1"] = _rafc_field_text(getattr(_rec, "objectives", None))
+        replacements[f"rafcniac_{_bi}_1"] = _rafc_field_text(getattr(_rec, "activities", None))
+        replacements[f"rafcniacc_{_bi}_1"] = _rafc_field_text(getattr(_rec, "agreements", None))
+        replacements[f"rafcnir_{_bi}_1"] = _rafc_field_text(getattr(_rec, "results", None))
+    _n_rafc_blocks = max(1, len(_rafc_rows))
+
+    for _bi, _rec in enumerate(_tcee_rows, start=1):
+        replacements[f"tceef_{_bi}_1"] = _rafc_fmt_date(_rec.date)
+        _att = _load_attendees(_rec.attendees)
+        if len(_att) > _RAFC_MAX_PARTICIPANT_ROWS:
+            logger.warning(
+                "register_book: se omiten participantes más allá de %s en actividad comunidad id=%s",
+                _RAFC_MAX_PARTICIPANT_ROWS,
+                getattr(_rec, "id", None),
+            )
+            _att = _att[:_RAFC_MAX_PARTICIPANT_ROWS]
+        _rows = _att if _att else [None]
+        for _rj, _one in enumerate(_rows, start=1):
+            if _one is None:
+                replacements[f"tceen_{_bi}_{_rj}"] = ""
+                replacements[f"tceeap_{_bi}_{_rj}"] = ""
+                replacements[f"tceete_{_bi}_{_rj}"] = ""
+            else:
+                replacements[f"tceen_{_bi}_{_rj}"] = str(_one.get("name") or "").strip()
+                replacements[f"tceeap_{_bi}_{_rj}"] = attendees_rafcnia_line([_one])
+                replacements[f"tceete_{_bi}_{_rj}"] = attendees_rafcnit_line([_one])
+        replacements[f"tceeo_{_bi}_1"] = _rafc_field_text(getattr(_rec, "objectives", None))
+        replacements[f"tceea_{_bi}_1"] = _rafc_field_text(getattr(_rec, "activities", None))
+        replacements[f"tceeac_{_bi}_1"] = _rafc_field_text(getattr(_rec, "agreements", None))
+        replacements[f"tceer_{_bi}_1"] = _rafc_field_text(getattr(_rec, "results", None))
+    _n_tcee_blocks = max(1, len(_tcee_rows))
+
+    for _bi, _rec in enumerate(_ar_rows, start=1):
+        replacements[f"arf_{_bi}_1"] = _rafc_fmt_date(_rec.date)
+        _att = _load_attendees(_rec.attendees)
+        if len(_att) > _RAFC_MAX_PARTICIPANT_ROWS:
+            logger.warning(
+                "register_book: se omiten participantes más allá de %s en acta (other) id=%s",
+                _RAFC_MAX_PARTICIPANT_ROWS,
+                getattr(_rec, "id", None),
+            )
+            _att = _att[:_RAFC_MAX_PARTICIPANT_ROWS]
+        _rows = _att if _att else [None]
+        for _rj, _one in enumerate(_rows, start=1):
+            if _one is None:
+                replacements[f"arn_{_bi}_{_rj}"] = ""
+                replacements[f"arpa_{_bi}_{_rj}"] = ""
+                replacements[f"arr_{_bi}_{_rj}"] = ""
+                replacements[f"art_{_bi}_{_rj}"] = ""
+            else:
+                replacements[f"arn_{_bi}_{_rj}"] = str(_one.get("name") or "").strip()
+                replacements[f"arpa_{_bi}_{_rj}"] = attendees_rafcnia_line([_one])
+                replacements[f"arr_{_bi}_{_rj}"] = attendee_rut_cell(_one)
+                replacements[f"art_{_bi}_{_rj}"] = attendee_phone_cell(_one)
+        replacements[f"arm_{_bi}_1"] = _rafc_field_text(getattr(_rec, "objectives", None))
+        replacements[f"ara_{_bi}_1"] = _rafc_field_text(getattr(_rec, "agreements", None))
+        replacements[f"arc_{_bi}_1"] = _rafc_field_text(getattr(_rec, "results", None))
+    _n_ar_blocks = max(1, len(_ar_rows))
+
+    # b) Adecuaciones curriculares — euaac_1..4, eaaam_1..4, peu_1..4, euae_1..4 (4 tipos por sort_order)
+    for _k in range(1, 5):
+        replacements[f"euaac_{_k}"] = ""
+        replacements[f"eaaam_{_k}"] = ""
+        replacements[f"peu_{_k}"] = ""
+        replacements[f"euae_{_k}"] = ""
+    _ca_types = (
+        db.query(CurricularAdequacyTypeModel)
+        .filter(CurricularAdequacyTypeModel.deleted_date.is_(None))
+        .order_by(CurricularAdequacyTypeModel.sort_order)
+        .limit(4)
+        .all()
+    )
+    _ca_rows = (
+        db.query(CourseCurricularAdequacyModel)
+        .filter(
+            CourseCurricularAdequacyModel.course_id == course_id,
+            CourseCurricularAdequacyModel.deleted_date.is_(None),
+        )
+        .all()
+    )
+    _ca_by_type = {a.curricular_adequacy_type_id: a for a in _ca_rows}
+
+    def _ca_subject_labels(_adj_id: int | None) -> str:
+        if not _adj_id:
+            return ""
+        _sids = [
+            t[0]
+            for t in db.query(CourseCurricularAdequacySubjectModel.subject_id)
+            .filter(CourseCurricularAdequacySubjectModel.course_curricular_adequacy_id == _adj_id)
+            .all()
+        ]
+        if not _sids:
+            return ""
+        _parts: list = []
+        for _sub_id in _sids:
+            _sj = db.query(SubjectModel).filter(SubjectModel.id == _sub_id).first()
+            if _sj and (_sj.subject or "").strip():
+                _parts.append((_sj.subject or "").strip())
+        return ", ".join(_parts)
+
+    for _ci, _t in enumerate(_ca_types):
+        if _ci >= 4:
+            break
+        _n = _ci + 1
+        _adj = _ca_by_type.get(_t.id)
+        if _adj:
+            replacements[f"euaac_{_n}"] = "1" if getattr(_adj, "applied", 0) else ""
+            _scope = (getattr(_adj, "scope_text", None) or "").strip()
+            replacements[f"eaaam_{_n}"] = _scope if _scope else _ca_subject_labels(_adj.id)
+            replacements[f"peu_{_n}"] = (getattr(_adj, "strategies_text", None) or "").strip()
+            _stu_ids = [
+                t[0]
+                for t in db.query(CourseCurricularAdequacyStudentModel.student_id)
+                .filter(CourseCurricularAdequacyStudentModel.course_curricular_adequacy_id == _adj.id)
+                .all()
+            ]
+            replacements[f"euae_{_n}"] = _qse_student_names_line(_stu_ids)
+
+    # c) Estrategias y procedimientos de evaluación — epea_1..2 (por tipo), epea_3 = OBSERVACIONES
+    replacements["epea_1"] = ""
+    replacements["epea_2"] = ""
+    replacements["epea_3"] = ""
+    _eval_div_types = (
+        db.query(EvalDiversityTypeModel)
+        .filter(EvalDiversityTypeModel.deleted_date.is_(None))
+        .order_by(EvalDiversityTypeModel.sort_order)
+        .limit(2)
+        .all()
+    )
+    _eval_div_rows = (
+        db.query(CourseEvalDiversityModel)
+        .filter(
+            CourseEvalDiversityModel.course_id == course_id,
+            CourseEvalDiversityModel.deleted_date.is_(None),
+        )
+        .all()
+    )
+    _eval_by_type = {e.eval_diversity_type_id: e for e in _eval_div_rows}
+    for _ei, _evt in enumerate(_eval_div_types):
+        if _ei >= 2:
+            break
+        _evr = _eval_by_type.get(_evt.id)
+        replacements[f"epea_{_ei + 1}"] = (
+            (getattr(_evr, "strategies_text", None) or "").strip() if _evr else ""
+        )
+    _eval_div_obs = (
+        db.query(CourseEvalDiversityObservationModel)
+        .filter(
+            CourseEvalDiversityObservationModel.course_id == course_id,
+            CourseEvalDiversityObservationModel.deleted_date.is_(None),
+        )
+        .first()
+    )
+    if _eval_div_obs and (_eval_div_obs.observations or "").strip():
+        replacements["epea_3"] = (_eval_div_obs.observations or "").strip()
+
+    # 4. Plan de Apoyo Individual — un cuadro por alumno (no mezclar nombres). Hasta 5 filas por tabla;
+    #    si un alumno tiene más de 5 apoyos, se usan tablas extra solo para ese alumno.
+    _pai_rows = (
+        db.query(CourseIndividualSupportModel)
+        .filter(
+            CourseIndividualSupportModel.course_id == course_id,
+            CourseIndividualSupportModel.deleted_date.is_(None),
+        )
+        .order_by(CourseIndividualSupportModel.id)
+        .all()
+    )
+
+    def _pai_fmt_date(_d) -> str:
+        if _d is None:
+            return ""
+        if hasattr(_d, "strftime"):
+            return _d.strftime("%d/%m/%Y")
+        return str(_d)
+
+    def _pai_student_sort_key(_sid: int) -> tuple:
+        _p = (
+            db.query(StudentPersonalInfoModel)
+            .filter(StudentPersonalInfoModel.student_id == _sid)
+            .first()
+        )
+        if not _p:
+            return ("", _sid)
+        _nm = f"{_p.names or ''} {_p.father_lastname or ''} {_p.mother_lastname or ''}".strip().lower()
+        return (_nm, _sid)
+
+    _sid_to_rows: dict[int, list] = defaultdict(list)
+    for _psr in _pai_rows:
+        for (_sid,) in (
+            db.query(CourseIndividualSupportStudentModel.student_id)
+            .filter(CourseIndividualSupportStudentModel.course_individual_support_id == _psr.id)
+            .all()
+        ):
+            if not _sid:
+                continue
+            _lst = _sid_to_rows[_sid]
+            if not any(_r.id == _psr.id for _r in _lst):
+                _lst.append(_psr)
+    for _sid in _sid_to_rows:
+        _sid_to_rows[_sid].sort(key=lambda r: r.id)
+
+    _pai_blocks: list[tuple[int, list]] = []
+    for _sid in sorted(_sid_to_rows.keys(), key=_pai_student_sort_key):
+        _rows = _sid_to_rows[_sid]
+        for _chunk_start in range(0, len(_rows), 5):
+            _pai_blocks.append((_sid, _rows[_chunk_start : _chunk_start + 5]))
+
+    _n_pai_blocks = max(1, len(_pai_blocks))
+    _max_paih = max(5, 5 * _n_pai_blocks)
+    for _pp in range(1, _n_pai_blocks + 1):
+        replacements[f"paie_{_pp}"] = ""
+        replacements[f"aer_{_pp}"] = ""
+        replacements[f"paio_{_pp}"] = ""
+    for _pp in range(1, _max_paih + 1):
+        replacements[f"paih_{_pp}"] = ""
+        replacements[f"paifi_{_pp}"] = ""
+        replacements[f"paift_{_pp}"] = ""
+
+    for _bi, (_one_sid, _slice) in enumerate(_pai_blocks):
+        for _j, _psr in enumerate(_slice):
+            _pn = _bi * 5 + _j + 1
+            replacements[f"paih_{_pn}"] = (_psr.horario or "").strip()
+            replacements[f"paifi_{_pn}"] = _pai_fmt_date(_psr.fecha_inicio)
+            replacements[f"paift_{_pn}"] = _pai_fmt_date(_psr.fecha_termino)
+        replacements[f"paie_{_bi + 1}"] = _qse_student_names_line([_one_sid])
+        if len(_slice) >= 5:
+            replacements[f"aer_{_bi + 1}"] = (_slice[4].observations or "").strip()
+        _obs_pie = [(_r.observations or "").strip() for _r in _slice[:4] if (_r.observations or "").strip()]
+        replacements[f"paio_{_bi + 1}"] = "; ".join(_obs_pie)
+
+    # 5. Familia y comunidad — etfd_1..4 (Descripción), etfs_1..4 (Seguimiento), etfe_1..4 (Evaluación)
+    for _fc in range(1, 5):
+        replacements[f"etfd_{_fc}"] = ""
+        replacements[f"etfs_{_fc}"] = ""
+        replacements[f"etfe_{_fc}"] = ""
+    _fc_types = (
+        db.query(FamilyCommunityStrategyTypeModel)
+        .filter(FamilyCommunityStrategyTypeModel.deleted_date.is_(None))
+        .order_by(FamilyCommunityStrategyTypeModel.sort_order)
+        .limit(4)
+        .all()
+    )
+    _fc_rows = (
+        db.query(CourseFamilyCommunityModel)
+        .filter(
+            CourseFamilyCommunityModel.course_id == course_id,
+            CourseFamilyCommunityModel.deleted_date.is_(None),
+        )
+        .all()
+    )
+    _fc_by_type = {r.family_community_strategy_type_id: r for r in _fc_rows}
+    for _fi, _fty in enumerate(_fc_types):
+        if _fi >= 4:
+            break
+        _frow = _fc_by_type.get(_fty.id)
+        _fn = _fi + 1
+        if _frow:
+            replacements[f"etfd_{_fn}"] = (_frow.descripcion or "").strip()
+            replacements[f"etfs_{_fn}"] = (_frow.seguimiento or "").strip()
+            replacements[f"etfe_{_fn}"] = (_frow.evaluacion or "").strip()
+    # Plantilla register_book.docx: control «OBSERVACIONES» = tag etfo (sin sufijo _1)
+    replacements["etfo"] = ""
+    replacements["etfo_1"] = ""
+    _fc_obs = (
+        db.query(CourseFamilyCommunityObservationModel)
+        .filter(
+            CourseFamilyCommunityObservationModel.course_id == course_id,
+            CourseFamilyCommunityObservationModel.deleted_date.is_(None),
+        )
+        .first()
+    )
+    if _fc_obs and (_fc_obs.observations or "").strip():
+        _etfo_txt = (_fc_obs.observations or "").strip()
+        replacements["etfo"] = _etfo_txt
+        replacements["etfo_1"] = _etfo_txt
+
+    # Estrategias diversificadas (registro b): hasta 8 filas en orden de slot; asignatura vía ptc_regular si aplica
+    for i in range(1, 9):
         replacements[f"regular_diversified_subject_{i}"] = ""
         replacements[f"regular_diversified_strategy_{i}"] = ""
         replacements[f"regular_diversified_period_{i}"] = ""
         replacements[f"regular_diversified_criteria_{i}"] = ""
-    rtd_rows = (
-        db.query(RegularTeacherDiversifiedStrategyModel, SubjectModel)
-        .outerjoin(SubjectModel, RegularTeacherDiversifiedStrategyModel.subject_id == SubjectModel.id)
-        .filter(
-            RegularTeacherDiversifiedStrategyModel.course_id == course_id,
-        )
-        .order_by(RegularTeacherDiversifiedStrategyModel.id)
-        .limit(5)
+        # Alias simples usados en algunos templates
+        replacements[f"strategy_{i}"] = ""
+        replacements[f"aada_{i}"] = ""
+        replacements[f"pta_{i}"] = ""
+        replacements[f"cee_{i}"] = ""
+    # II a) Acciones de aplicación / evaluación de estrategias (plantilla: aesdt_1..17, aesdter_1..17)
+    for _ai in range(1, 18):
+        replacements[f"aesdt_{_ai}"] = ""
+        replacements[f"aesdter_{_ai}"] = ""
+    # aesdt_* / aesdter_*: differentiated_strategies_implementations (CourseSettings III.1.a:
+    # applied_strategies = estrategia, actions_taken = evaluación). La tabla no tiene course_id
+    # en el modelo actual; misma lista global que el front al cargar la sección.
+    impl_rows = (
+        db.query(DifferentiatedStrategiesImplementationModel)
+        .filter(DifferentiatedStrategiesImplementationModel.deleted_date.is_(None))
+        .order_by(DifferentiatedStrategiesImplementationModel.id)
         .all()
     )
-    for idx, (rtd, subj) in enumerate(rtd_rows):
-        if idx >= 5:
-            break
-        i = idx + 1
-        replacements[f"regular_diversified_subject_{i}"] = (subj.subject if subj and subj.subject else "").strip()
-        replacements[f"regular_diversified_strategy_{i}"] = (rtd.strategy or "").strip()
-        replacements[f"regular_diversified_period_{i}"] = (rtd.period or "").strip()
-        replacements[f"regular_diversified_criteria_{i}"] = (rtd.criteria or "").strip()
+
+    def _impl_period_bucket(row: DifferentiatedStrategiesImplementationModel) -> int:
+        pid = row.period_id
+        if pid in (1, 2, 3):
+            return int(pid)
+        return 1
+
+    # Plantilla: 1er período → aesdt_1..6; 2do → aesdt_7..12; 3er → aesdt_13..17
+    _PERIOD_SLOT_RANGE = {1: (1, 6), 2: (7, 12), 3: (13, 17)}
+    _per_count = {1: 0, 2: 0, 3: 0}
+    _by_slot: list[tuple[int, DifferentiatedStrategiesImplementationModel]] = []
+
+    for impl in impl_rows:
+        pid = _impl_period_bucket(impl)
+        start, end = _PERIOD_SLOT_RANGE[pid]
+        local = _per_count[pid]
+        slot = start + local
+        if slot > end:
+            continue
+        _per_count[pid] += 1
+        _by_slot.append((slot, impl))
+
+    _by_slot.sort(key=lambda t: t[0])
+
+    for seq_idx, (i, impl) in enumerate(_by_slot):
+        _strat = (impl.applied_strategies or "").strip()
+        _crit = (impl.actions_taken or "").strip()
+        _per = str(impl.period_id) if impl.period_id in (1, 2, 3) else ""
+
+        subject_txt = ""
+        if seq_idx < len(ptc_regular):
+            _ptc, _prof = ptc_regular[seq_idx]
+            subject_txt = (_ptc.subject or "").strip()
+        elif _strat:
+            subject_txt = _strat
+
+        replacements[f"aesdt_{i}"] = _strat
+        replacements[f"aesdter_{i}"] = _crit
+
+        if seq_idx < 8:
+            j = seq_idx + 1
+            replacements[f"regular_diversified_subject_{j}"] = subject_txt
+            replacements[f"regular_diversified_strategy_{j}"] = _strat
+            replacements[f"regular_diversified_period_{j}"] = _per
+            replacements[f"regular_diversified_criteria_{j}"] = _crit
+            replacements[f"strategy_{j}"] = _strat
+            replacements[f"aada_{j}"] = subject_txt
+            replacements[f"pta_{j}"] = _per
+            replacements[f"cee_{j}"] = _crit
     out_dir = Path("files/system/students")
     out_dir.mkdir(parents=True, exist_ok=True)
     course = db.query(CourseModel).filter(CourseModel.id == course_id).first()
     course_name = (course.course_name or f"curso_{course_id}").replace(" ", "_")
     safe_name = re.sub(r"[^\w\-]", "", course_name)[:50]
     out_file = out_dir / f"libro_registro_{safe_name}_{uuid.uuid4().hex[:8]}.docx"
-    result = DocumentsClass.fill_docx_form(str(template_path), replacements, str(out_file))
+    # Clonar cuadros rarpo_* (un bloque por asignatura con datos en la UI)
+    work_docx = out_dir / f"_rb_work_{uuid.uuid4().hex[:8]}.docx"
+    result = {"status": "error", "message": "Error generando libro de registro"}
+    try:
+        shutil_copy(template_path, work_docx)
+        _n_rarpo_blocks = min(len(_rb_subject_blocks), _RB_MAX_REGISTERS)
+        clone_register_book_section_b_blocks(work_docx, _n_rarpo_blocks, _RB_ROWS_PER_REGISTER)
+        clone_pai_support_tables(work_docx, _n_pai_blocks)
+        clone_course_record_support_tables(work_docx, _n_raeg_blocks)
+        for _ix, _blk in enumerate(_raeg_blocks, start=1):
+            _nri = len(_blk["interventions"])
+            if _nri > 1:
+                expand_raeg_intervention_rows(
+                    work_docx,
+                    _ix,
+                    min(_nri, _RAEG_MAX_ROWS),
+                )
+        expand_learning_achievement_rows(work_docx, 1, _n_rla_rows)
+        apply_learning_achievement_period_top_spacing(work_docx, _rla_margin_top_rows)
+        clone_course_activity_record_blocks(work_docx, _n_rafc_blocks)
+        clone_course_community_activity_blocks(work_docx, _n_tcee_blocks)
+        clone_course_acta_reunion_blocks(work_docx, _n_ar_blocks)
+        for _ix, _rec in enumerate(_rafc_rows, start=1):
+            _n_att = len(_load_attendees(_rec.attendees))
+            _npr = max(1, min(_n_att, _RAFC_MAX_PARTICIPANT_ROWS) if _n_att else 1)
+            if _npr > 1:
+                expand_rafc_participant_rows(work_docx, _ix, _npr)
+        for _ix, _rec in enumerate(_tcee_rows, start=1):
+            _n_att = len(_load_attendees(_rec.attendees))
+            _npr = max(1, min(_n_att, _RAFC_MAX_PARTICIPANT_ROWS) if _n_att else 1)
+            if _npr > 1:
+                expand_tcee_participant_rows(work_docx, _ix, _npr)
+        for _ix, _rec in enumerate(_ar_rows, start=1):
+            _n_att = len(_load_attendees(_rec.attendees))
+            _npr = max(1, min(_n_att, _RAFC_MAX_PARTICIPANT_ROWS) if _n_att else 1)
+            if _npr > 1:
+                expand_arn_participant_rows(work_docx, _ix, _npr)
+        result = DocumentsClass.fill_docx_form(str(work_docx), replacements, str(out_file))
+    finally:
+        try:
+            work_docx.unlink(missing_ok=True)
+        except OSError:
+            pass
     if result.get("status") == "error":
         return None, result.get("message", "Error generando libro de registro")
     return str(out_file), None
@@ -1467,6 +2747,46 @@ async def generate_register_book(
         )
 
 
+@documents.get("/register_book_car_preview/{course_id}")
+async def register_book_car_preview(
+    course_id: int,
+    db: Session = Depends(get_db),
+    session_user: UserLogin = Depends(get_current_active_user),
+):
+    """
+    JSON: cómo se reparten los registros de actividad del curso en las 3 subsecciones del libro
+    (family / community / other) y qué tags DOCX usa cada una. No genera DOCX.
+    GET /api/documents/register_book_car_preview/{course_id}
+    """
+    _car_all, _rafc_rows, _tcee_rows, _ar_rows = _split_course_activity_records_for_register_book(
+        db, course_id
+    )
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "status": 200,
+            "course_id": course_id,
+            "tables": {
+                "family": "course_activity_family",
+                "community": "course_activity_community",
+                "other": "course_activity_other",
+            },
+            "mapping": {
+                "1_family": "IV familia ← course_activity_family: rafcf_{i}_1, rafcne/rafcnia/rafcnit, rafcniob…rafcnir",
+                "2_community": "IV comunidad ← course_activity_community: tceef_{i}_1, tceen/…, tceeo…tceer",
+                "3_other": "V acta ← course_activity_other: arf_{i}_1, arn/…, arm/ara/arc",
+            },
+            "bucket_ids": {
+                "family": [r.id for r in _rafc_rows],
+                "community": [r.id for r in _tcee_rows],
+                "other": [r.id for r in _ar_rows],
+            },
+            "rows_all": [_row_to_dict(r, _sec) for _sec, r in _car_all],
+            "debug_file_after_generate": "files/system/students/register_book_car_debug.txt",
+        },
+    )
+
+
 @documents.get("/generate/{student_id}/{document_id}")
 async def generate_document(
     student_id: int,
@@ -1502,7 +2822,7 @@ async def generate_document(
         # Documentos 3,4,7,8,18,19,22,23,24,25,27 se pueden generar aunque no existan en la tabla documents
         known_generable = (3, 4, 7, 8, 9, 18, 19, 20, 22, 23, 24, 25, 27, 29, 31)
         if isinstance(document_result, dict) and document_result.get("status") == "error":
-            if document_id in known_generable:
+            if document_id in known_generable or _catalog_row_is_informe_evaluacion_psicomotriz(document_id, db):
                 document_result = {"document_type_id": document_id}
             else:
                 return JSONResponse(
@@ -3297,6 +4617,82 @@ async def generate_document(
             report_data.pop("responsible_professionals", None)
             result = DocumentsClass.generate_document_pdf(
                 document_id=9,
+                document_data=report_data,
+                db=db,
+                template_path=None,
+                output_directory="files/system/students"
+            )
+            if result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    content={
+                        "status": 500,
+                        "message": result.get("message", MSG_ERROR_GEN),
+                        "data": None
+                    }
+                )
+            return FileResponse(
+                path=result["file_path"],
+                filename=result["filename"],
+                media_type="application/pdf"
+            )
+
+        # Informe de evaluación psicomotriz (catálogo por nombre en `documents`)
+        if _catalog_row_is_informe_evaluacion_psicomotriz(document_id, db):
+            psico_service = PsychomotorEvaluationReportClass(db)
+            psico_result = psico_service.get_by_student_id(student_id)
+            if isinstance(psico_result, dict) and psico_result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    content={
+                        "status": 404,
+                        "message": MSG_NO_DOC,
+                        "data": None
+                    }
+                )
+            report_data = psico_result.copy() if isinstance(psico_result, dict) else {}
+            report_data.pop("id", None)
+            report_data.pop("added_date", None)
+            report_data.pop("updated_date", None)
+            if report_data.get("course_id"):
+                course = db.query(CourseModel).filter(CourseModel.id == report_data["course_id"]).first()
+                if course and course.course_name:
+                    report_data["course_name"] = course.course_name
+                report_data.pop("course_id", None)
+            else:
+                report_data["course_name"] = report_data.get("course_name") or ""
+            estab = report_data.get("establishment_id")
+            if estab is not None and str(estab).strip().isdigit():
+                try:
+                    sid = int(estab)
+                    school = db.query(SchoolModel).filter(SchoolModel.id == sid).first()
+                    if school and school.school_name:
+                        report_data["establishment_id"] = school.school_name
+                except (ValueError, TypeError):
+                    pass
+            rp = report_data.get("responsible_professionals")
+            if rp is not None:
+                ids = rp if isinstance(rp, list) else []
+                if isinstance(rp, str):
+                    try:
+                        ids = json.loads(rp)
+                    except Exception:
+                        ids = []
+                names = []
+                for pid in ids:
+                    try:
+                        prof_id = int(pid)
+                        professional = db.query(ProfessionalModel).filter(ProfessionalModel.id == prof_id).first()
+                        if professional:
+                            fn = f"{professional.names or ''} {professional.lastnames or ''}".strip()
+                            if fn:
+                                names.append(fn)
+                    except (ValueError, TypeError):
+                        pass
+                report_data["responsible_professionals_names"] = ", ".join(names) if names else ""
+            report_data.pop("responsible_professionals", None)
+            result = DocumentsClass.generate_document_pdf(
+                document_id=document_id,
                 document_data=report_data,
                 db=db,
                 template_path=None,

@@ -1,5 +1,5 @@
 from app.backend.db.database import Base
-from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Date, Time, ForeignKey, Float, Boolean, Text, Numeric
+from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Date, Time, ForeignKey, Float, Boolean, Text, Numeric, Enum
 from datetime import datetime
 
 class AIConversationModel(Base):
@@ -888,6 +888,7 @@ class CourseIndividualSupportModel(Base):
     horario = Column(String(255), nullable=True)
     fecha_inicio = Column(Date, nullable=True)
     fecha_termino = Column(Date, nullable=True)
+    observations = Column(Text, nullable=True)
     added_date = Column(DateTime, nullable=True)
     updated_date = Column(DateTime, nullable=True)
     deleted_date = Column(DateTime, nullable=True)
@@ -963,6 +964,59 @@ class CourseTeacherRecordActivityModel(Base):
     description = Column(Text, nullable=True)
     created_at = Column(DateTime, nullable=True)
     updated_at = Column(DateTime, nullable=True)
+
+
+class CourseActivityFamilyModel(Base):
+    """IV.1 Trabajo con la familia, apoderados y/o estudiante."""
+
+    __tablename__ = 'course_activity_family'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    course_id = Column(Integer, ForeignKey('courses.id', ondelete='CASCADE'), nullable=False)
+    date = Column(Date, nullable=True)
+    attendees = Column(Text, nullable=True)
+    objectives = Column(Text, nullable=True)
+    activities = Column(Text, nullable=True)
+    agreements = Column(Text, nullable=True)
+    results = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
+
+
+class CourseActivityCommunityModel(Base):
+    """IV.2 Trabajo con la comunidad y el entorno escolar."""
+
+    __tablename__ = 'course_activity_community'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    course_id = Column(Integer, ForeignKey('courses.id', ondelete='CASCADE'), nullable=False)
+    date = Column(Date, nullable=True)
+    attendees = Column(Text, nullable=True)
+    objectives = Column(Text, nullable=True)
+    activities = Column(Text, nullable=True)
+    agreements = Column(Text, nullable=True)
+    results = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
+
+
+class CourseActivityOtherModel(Base):
+    """V.3 Otras reuniones (acta)."""
+
+    __tablename__ = 'course_activity_other'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    course_id = Column(Integer, ForeignKey('courses.id', ondelete='CASCADE'), nullable=False)
+    date = Column(Date, nullable=True)
+    attendees = Column(Text, nullable=True)
+    objectives = Column(Text, nullable=True)
+    activities = Column(Text, nullable=True)
+    agreements = Column(Text, nullable=True)
+    results = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
+
+
 
 
 class CourseLearningAchievementModel(Base):
@@ -1880,6 +1934,17 @@ class IdtelReportModel(Base):
     document_type_id = Column(Integer, nullable=True)  # 9
     form_data = Column(Text, nullable=True)  # JSON con todos los campos del formulario
     quantitative_locked = Column(Boolean, default=False, nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+
+
+class PsychomotorEvaluationReportModel(Base):
+    """Informe de evaluación psicomotriz (áreas motoras, síntesis, sugerencias)."""
+    __tablename__ = 'psychomotor_evaluation_report'
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer, nullable=False)
+    document_type_id = Column(Integer, nullable=True)
+    form_data = Column(Text, nullable=True)  # JSON con todos los campos del formulario
     added_date = Column(DateTime, nullable=True)
     updated_date = Column(DateTime, nullable=True)
 

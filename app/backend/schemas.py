@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, EmailStr, validator, ConfigDict, AliasChoices
+from pydantic import BaseModel, Field, EmailStr, validator, field_validator, ConfigDict, AliasChoices
 from typing import Union, List, Dict, Optional, Any
 from datetime import datetime, date
 from decimal import Decimal
@@ -1144,20 +1144,26 @@ class UpdateDiversifiedStrategy(BaseModel):
 
 class StoreRegularTeacherDiversifiedStrategy(BaseModel):
     """Tabla regular_teacher_diversified_strategies. school_id del body o de la sesión."""
+    model_config = ConfigDict(populate_by_name=True)
+
     school_id: Optional[int] = None
     course_id: int
     subject_id: Optional[int] = None
     strategy: Optional[str] = None
     period: Optional[str] = None
+    period_id: Optional[int] = Field(None, validation_alias=AliasChoices("period_id", "periodId"))
     criteria: Optional[str] = None
 
 
 class UpdateRegularTeacherDiversifiedStrategy(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     school_id: Optional[int] = None
     course_id: Optional[int] = None
     subject_id: Optional[int] = None
     strategy: Optional[str] = None
     period: Optional[str] = None
+    period_id: Optional[int] = Field(None, validation_alias=AliasChoices("period_id", "periodId"))
     criteria: Optional[str] = None
 
 
@@ -1291,6 +1297,7 @@ class StoreCourseIndividualSupport(BaseModel):
     horario: Optional[str] = None
     fecha_inicio: Optional[str] = None  # ISO date string
     fecha_termino: Optional[str] = None
+    observations: Optional[str] = None
     student_ids: Optional[List[int]] = None
 
 
@@ -1299,6 +1306,7 @@ class UpdateCourseIndividualSupport(BaseModel):
     horario: Optional[str] = None
     fecha_inicio: Optional[str] = None
     fecha_termino: Optional[str] = None
+    observations: Optional[str] = None
     student_ids: Optional[List[int]] = None
 
 
@@ -1386,6 +1394,62 @@ class UpdateCourseTeacherRecordActivity(BaseModel):
     pedagogical_hours: Optional[float] = None
     teacher_names: Optional[List[str]] = None
     description: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# IV. Registro de actividades (familia/comunidad)
+# ---------------------------------------------------------------------------
+
+class CourseActivityAttendee(BaseModel):
+    id: Optional[int] = 0
+    name: str
+    # 1 = Apoderado, 2 = Profesional del establecimiento (course_activity_records.attendees JSON)
+    participant_type: Optional[int] = Field(None, ge=1, le=2, description="1 Apoderado, 2 Profesional")
+    rut: Optional[str] = None  # V.3 otras reuniones: RUT en JSON de asistentes
+    # Plantilla IV: columna «apoderado o profesional» / «Teléfono-Mail»
+    role: Optional[str] = None
+    tipo: Optional[str] = None  # sinónimo de role (UI en español); se unifica al guardar en JSON como role
+    phone: Optional[str] = None
+    telefono: Optional[str] = None  # sinónimo de phone
+    email: Optional[str] = None
+    mail: Optional[str] = None  # sinónimo de email
+
+
+class StoreCourseActivityRecord(BaseModel):
+    course_id: int
+    section: str = "family"
+    date: Optional[str] = None  # YYYY-MM-DD
+    attendees: Optional[List[CourseActivityAttendee]] = None
+    objectives: Optional[str] = None
+    activities: Optional[str] = None
+    agreements: Optional[str] = None
+    results: Optional[str] = None
+
+    @field_validator("section", mode="before")
+    @classmethod
+    def _coerce_course_activity_section(cls, v: Any) -> str:
+        from app.backend.classes.course_activity_record_class import normalize_course_activity_section
+
+        return normalize_course_activity_section(v)
+
+
+class UpdateCourseActivityRecord(BaseModel):
+    section: Optional[str] = None
+    date: Optional[str] = None
+    attendees: Optional[List[CourseActivityAttendee]] = None
+    objectives: Optional[str] = None
+    activities: Optional[str] = None
+    agreements: Optional[str] = None
+    results: Optional[str] = None
+
+    @field_validator("section", mode="before")
+    @classmethod
+    def _coerce_course_activity_section(cls, v: Any) -> Any:
+        if v is None:
+            return None
+        from app.backend.classes.course_activity_record_class import normalize_course_activity_section
+
+        return normalize_course_activity_section(v)
 
 
 # ---------------------------------------------------------------------------
@@ -2092,6 +2156,15 @@ class StoreIdtelReport(BaseModel):
     student_id: int
     document_type_id: Optional[int] = 9
     quantitative_locked: Optional[bool] = None
+
+    class Config:
+        extra = "allow"
+
+
+class StorePsychomotorEvaluationReport(BaseModel):
+    """Informe de evaluación psicomotriz. Acepta todos los campos del formulario (JSON en BD)."""
+    student_id: int
+    document_type_id: Optional[int] = None
 
     class Config:
         extra = "allow"

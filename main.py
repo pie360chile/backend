@@ -89,6 +89,7 @@ from app.backend.routes.dynamic_forms import dynamic_forms
 from app.backend.routes.differentiated_strategies_implementations import differentiated_strategies_implementations
 from app.backend.routes.course_teacher_record_observations import course_teacher_record_observations
 from app.backend.routes.course_teacher_record_activities import course_teacher_record_activities
+from app.backend.routes.course_activity_records import course_activity_records
 from app.backend.routes.course_record_supports import course_record_supports
 from app.backend.routes.course_learning_achievements import course_learning_achievements
 from app.backend.routes.psychopedagogical_evaluations import psychopedagogical_evaluations
@@ -96,6 +97,7 @@ from app.backend.routes.conners_teacher_evaluations import conners_teacher_evalu
 from app.backend.routes.diagnosis_summary import diagnosis_summary
 from app.backend.routes.cesp import cesp
 from app.backend.routes.idtel_reports import idtel_reports
+from app.backend.routes.psychomotor_evaluation_reports import psychomotor_evaluation_reports
 from app.backend.routes.pedagogical_evaluation_classroom_first_grade import pedagogical_evaluation_classroom_first_grade
 from app.backend.routes.pedagogical_evaluation_classroom_second_grade import pedagogical_evaluation_classroom_second_grade
 from app.backend.routes.pedagogical_evaluation_classroom_third_grade import pedagogical_evaluation_classroom_third_grade
@@ -267,6 +269,7 @@ app.include_router(dynamic_forms)
 app.include_router(differentiated_strategies_implementations)
 app.include_router(course_teacher_record_observations)
 app.include_router(course_teacher_record_activities)
+app.include_router(course_activity_records)
 app.include_router(course_record_supports)
 app.include_router(course_learning_achievements)
 app.include_router(psychopedagogical_evaluations)
@@ -274,6 +277,7 @@ app.include_router(conners_teacher_evaluations)
 app.include_router(diagnosis_summary)
 app.include_router(cesp)
 app.include_router(idtel_reports)
+app.include_router(psychomotor_evaluation_reports)
 app.include_router(pedagogical_evaluation_classroom_first_grade)
 app.include_router(pedagogical_evaluation_classroom_second_grade)
 app.include_router(pedagogical_evaluation_classroom_third_grade)

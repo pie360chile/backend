@@ -16,9 +16,24 @@ def _date_str(v, fmt="%Y-%m-%d %H:%M:%S"):
     return str(v)
 
 
+IMPL_EVAL_MAX_PER_PERIOD = 6
+
+
 class DifferentiatedStrategiesImplementationClass:
     def __init__(self, db: Session):
         self.db = db
+
+    def _count_for_period(self, period_id: Optional[int], exclude_id: Optional[int] = None) -> int:
+        q = self.db.query(DifferentiatedStrategiesImplementationModel).filter(
+            DifferentiatedStrategiesImplementationModel.deleted_date.is_(None),
+        )
+        if period_id is None:
+            q = q.filter(DifferentiatedStrategiesImplementationModel.period_id.is_(None))
+        else:
+            q = q.filter(DifferentiatedStrategiesImplementationModel.period_id == period_id)
+        if exclude_id is not None:
+            q = q.filter(DifferentiatedStrategiesImplementationModel.id != exclude_id)
+        return q.count()
 
     def get_all(self, page: int = 0, items_per_page: int = 100, actions_taken: Optional[str] = None, applied_strategies: Optional[str] = None) -> Any:
         """Lista implementaciones activas (deleted_date is None)."""
@@ -108,6 +123,11 @@ class DifferentiatedStrategiesImplementationClass:
         try:
             period_id = data.get("period_id")
             period_id = int(period_id) if period_id is not None else None
+            if self._count_for_period(period_id) >= IMPL_EVAL_MAX_PER_PERIOD:
+                return {
+                    "status": "error",
+                    "message": f"Máximo {IMPL_EVAL_MAX_PER_PERIOD} registros por período.",
+                }
             actions_taken = (data.get("actions_taken") or "").strip() or None
             applied_strategies = (data.get("applied_strategies") or "").strip() or None
             now = datetime.now()
@@ -134,7 +154,14 @@ class DifferentiatedStrategiesImplementationClass:
             if not row:
                 return {"status": "error", "message": "Registro no encontrado."}
             if "period_id" in data:
-                row.period_id = int(data["period_id"]) if data["period_id"] is not None else None
+                new_period = int(data["period_id"]) if data["period_id"] is not None else None
+                old_period = row.period_id
+                if new_period != old_period and self._count_for_period(new_period, exclude_id=id) >= IMPL_EVAL_MAX_PER_PERIOD:
+                    return {
+                        "status": "error",
+                        "message": f"Máximo {IMPL_EVAL_MAX_PER_PERIOD} registros por período.",
+                    }
+                row.period_id = new_period
             if "actions_taken" in data:
                 row.actions_taken = (data["actions_taken"] or "").strip() or None
             if "applied_strategies" in data:

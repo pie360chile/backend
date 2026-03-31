@@ -119,7 +119,7 @@ class InspectionApiClient:
         with self._lock:
             return self._token
 
-    def _post_multipart_rut(self, remote_path: str, rut: str) -> Dict[str, Any]:
+    def _post_multipart_rut(self, remote_path: str, rut: str, anio: int | None = None) -> Dict[str, Any]:
         """
         POST {base}/{remote_path} with form field rut (multipart). Used for getDatosAlumno, getDatosFuncionario, etc.
         """
@@ -134,7 +134,10 @@ class InspectionApiClient:
         remote_path = remote_path.lstrip("/")
         url = f"{self.base_url}/{remote_path}"
         headers = {"Authorization": f"Bearer {token}"}
-        files = {"rut": (None, rut)}
+        files = {
+            "rut": (None, rut),
+            **({"anio": (None, str(anio))} if anio is not None else {}),
+        }
 
         try:
             r = requests.post(url, headers=headers, files=files, timeout=self.timeout)
@@ -214,9 +217,9 @@ class InspectionApiClient:
         except requests.RequestException as e:
             return {"ok": False, "message": str(e), "data": None}
 
-    def fetch_student_data(self, rut: str) -> Dict[str, Any]:
+    def fetch_student_data(self, rut: str, anio: int | None = None) -> Dict[str, Any]:
         """POST /getDatosAlumno — remote path fixed by Inspection."""
-        return self._post_multipart_rut("getDatosAlumno", rut)
+        return self._post_multipart_rut("getDatosAlumno", rut, anio)
 
     def fetch_professional_data(self, rut: str) -> Dict[str, Any]:
         """POST /getDatosFuncionario — staff/professional by RUT (remote path fixed by Inspection)."""

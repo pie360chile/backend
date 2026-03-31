@@ -1,0 +1,44 @@
+=== register_book: IV/V actividades (3 tablas) ===
+course_id=14
+
+TABLAS → PLANTILLA WORD:
+  course_activity_family    → IV familia   (rafcf_*, rafcne_*, rafcniob/ac/acc/nir)
+  course_activity_community → IV comunidad (tceef_*, tceen_*, tceeo/a/ac/er)
+  course_activity_other     → V acta       (arf_*, arn_*, arm/ara/arc)
+
+Total filas (suma 3 tablas): 4
+Ids por tabla: family=[5, 6] community=[7] other=[8]
+
+--- Cada fila ---
+id=5 section='family' date=2026-03-29
+  objectives='123'
+  activities='456'
+  agreements='789'
+  results='101112'
+  attendees='[{"id": 26, "name": "Ricardo Perez", "participant_type": 2, "phone": "2222"}]'
+
+id=7 section='community' date=2026-03-28
+  objectives='2'
+  activities='2'
+  agreements='2'
+  results='2'
+  attendees='[{"id": 27, "name": "Maria N/A", "participant_type": 2, "phone": "99999999999"}]'
+
+id=8 section='other' date=2026-03-13
+  objectives='232'
+  activities='3232'
+  agreements='232'
+  results='3232'
+  attendees='[{"id": 26, "name": "Ricardo Perez", "participant_type": 2, "phone": "2222"}]'
+
+id=6 section='family' date=2026-03-07
+  objectives='2323'
+  activities='232'
+  agreements='3232323'
+  results='2'
+  attendees='[{"id": 27, "name": "Maria N/A", "participant_type": 2, "phone": "99999999999"}, {"id": 0, "name": "Francisca Petronila Probando", "participant_type": 1, "phone": "123"}]'
+
+--- Cómo quedan los bloques (i=1..N por tipo) ---
+family:    registro índice i → rafcf_i_1, rafcne_i_fila… (objetivos=objectives, …)
+community: registro índice i → tceef_i_1, tceen_i_fila… (objetivos=objectives, …)
+other:     registro índice i → arf_i_1, arn_i_fila… (arm=motivo=objectives, ara=agreements, arc=results)

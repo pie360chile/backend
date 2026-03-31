@@ -55,6 +55,9 @@ def _load_teacher_names(v) -> Optional[List[str]]:
         return None
 
 
+TEACHER_RECORD_ACTIVITIES_MAX = 11
+
+
 def _row_to_dict(r: CourseTeacherRecordActivityModel) -> dict:
     return {
         "id": r.id,
@@ -112,6 +115,20 @@ class CourseTeacherRecordActivityClass:
             teacher_names = _parse_teacher_names(data.get("teacher_names"))
             description = (data.get("description") or "").strip() or None
             now = datetime.now()
+
+            existing_count = (
+                self.db.query(CourseTeacherRecordActivityModel)
+                .filter(
+                    CourseTeacherRecordActivityModel.course_id == course_id,
+                    CourseTeacherRecordActivityModel.subject_id == subject_id,
+                )
+                .count()
+            )
+            if existing_count >= TEACHER_RECORD_ACTIVITIES_MAX:
+                return {
+                    "status": "error",
+                    "message": f"Máximo {TEACHER_RECORD_ACTIVITIES_MAX} actividades por asignatura.",
+                }
 
             row = CourseTeacherRecordActivityModel(
                 course_id=course_id,

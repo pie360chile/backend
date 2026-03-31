@@ -27,6 +27,7 @@ def _support_to_dict(r: CourseIndividualSupportModel, support_area_name: Optiona
         "horario": r.horario,
         "fecha_inicio": _serialize_date(r.fecha_inicio),
         "fecha_termino": _serialize_date(r.fecha_termino),
+        "observations": r.observations,
         "added_date": _serialize_date(r.added_date),
         "updated_date": _serialize_date(r.updated_date),
         "deleted_date": _serialize_date(r.deleted_date),
@@ -39,6 +40,15 @@ def _get_support_area_name(db: Session, support_area_id: Optional[int]) -> Optio
         return None
     row = db.query(SupportAreaModel).filter(SupportAreaModel.id == support_area_id).first()
     return row.support_area if row else None
+
+
+def _validate_support_area_id(db: Session, support_area_id: Optional[int]) -> Optional[str]:
+    """None es válido; si hay id, debe existir en support_areas."""
+    if support_area_id is None:
+        return None
+    if db.query(SupportAreaModel.id).filter(SupportAreaModel.id == support_area_id).first() is None:
+        return "El área de apoyo (support_area_id) no existe en el catálogo."
+    return None
 
 
 def _parse_date(s: Optional[str]) -> Optional[date]:
@@ -114,9 +124,13 @@ class CourseIndividualSupportClass:
             course_id = int(course_id)
             support_area_id = data.get("support_area_id")
             support_area_id = int(support_area_id) if support_area_id is not None else None
+            _err = _validate_support_area_id(self.db, support_area_id)
+            if _err:
+                return {"status": "error", "message": _err}
             horario = (data.get("horario") or "").strip() or None
             fecha_inicio = _parse_date(data.get("fecha_inicio"))
             fecha_termino = _parse_date(data.get("fecha_termino"))
+            observations = (data.get("observations") or "").strip() or None
             student_ids = data.get("student_ids") or []
             now = datetime.now()
 
@@ -126,6 +140,7 @@ class CourseIndividualSupportClass:
                 horario=horario,
                 fecha_inicio=fecha_inicio,
                 fecha_termino=fecha_termino,
+                observations=observations,
                 added_date=now,
                 updated_date=now,
                 deleted_date=None,
@@ -148,13 +163,19 @@ class CourseIndividualSupportClass:
             if not row:
                 return {"status": "error", "message": "Registro no encontrado."}
             if "support_area_id" in data:
-                row.support_area_id = int(data["support_area_id"]) if data["support_area_id"] is not None else None
+                _said = int(data["support_area_id"]) if data["support_area_id"] is not None else None
+                _err = _validate_support_area_id(self.db, _said)
+                if _err:
+                    return {"status": "error", "message": _err}
+                row.support_area_id = _said
             if "horario" in data:
                 row.horario = (data["horario"] or "").strip() or None
             if "fecha_inicio" in data:
                 row.fecha_inicio = _parse_date(data["fecha_inicio"])
             if "fecha_termino" in data:
                 row.fecha_termino = _parse_date(data["fecha_termino"])
+            if "observations" in data:
+                row.observations = (data.get("observations") or "").strip() or None
             row.updated_date = datetime.now()
             self.db.commit()
             if "student_ids" in data:

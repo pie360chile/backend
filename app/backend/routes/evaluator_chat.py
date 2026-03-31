@@ -27,7 +27,7 @@ from app.backend.db.database import get_db
 from app.backend.db.models import AIConversationModel, KnowledgeDocumentModel
 from app.backend.schemas import UserLogin
 
-MAX_RESPONSE_CHARS = 1450
+MAX_RESPONSE_CHARS = 1300
 # GPT-5: max_output_tokens cuenta también razonamiento interno; 900 puede dejar el mensaje visible vacío.
 EVALUATOR_CHAT_MAX_OUTPUT_TOKENS_DEFAULT = 4096
 EVALUATOR_CHAT_FALLBACK_MODEL = "gpt-4o-mini"
@@ -205,8 +205,8 @@ Comprehensive coverage: Read the entire USER-WRITTEN CONTEXT. You have up to {MA
 Every case is different: ground the answer in the statuses and domains in this context so profiles do not sound interchangeable. If two or more evaluations appear in one answer, separate them without proper names (e.g. contrasting patterns or domains), unless INSTRUCTION/TASK explicitly asks to identify people.
 
 Hard rules:
-- Maximum length: {MAX_RESPONSE_CHARS} characters (including spaces), never more. Aim to land near that ceiling (e.g. ~1400–{MAX_RESPONSE_CHARS}) when content allows, so the quota is used well.
-- Always finish with a complete, closed sentence (final period, etc.). If a clean ending would land around 1420 instead of forcing 1460 and breaking mid-thought, prefer the shorter clean ending—never exceed {MAX_RESPONSE_CHARS}. Do not end with "...", "…", suspension points, or trailing commas.
+- Maximum length: {MAX_RESPONSE_CHARS} characters (including spaces), never more. Aim to land near that ceiling (e.g. ~1250–{MAX_RESPONSE_CHARS}) when content allows, so the quota is used well.
+- Always finish with a complete, closed sentence (final period, etc.). If a clean ending would land around 1260 instead of forcing a longer ending and breaking mid-thought, prefer the shorter clean ending—never exceed {MAX_RESPONSE_CHARS}. Do not end with "...", "…", suspension points, or trailing commas.
 - Do not cite internal system labels; write for teachers and coordinators.
 - Never equate EN PROCESO or REQUIERE APOYO with LOGRADO in the narrative for the same indicator.
 - With the short length cap, synthesize across the whole context the user sent: no omitting entire domains or whole evaluation rows unless INSTRUCTION/TASK narrows scope.
@@ -222,7 +222,7 @@ Hard rules:
         "Recibe `question` (instrucción/tarea) y `user_context` (texto libre del usuario). "
         "Se prioriza síntesis detallada y personalizada por estudiante, usando los datos aportados. "
         "Ambos se envían al modelo junto con el contenido activo de `knowledge_documents`. "
-        "Hasta 1450 caracteres; GPT-5 usa `max_output_tokens` alto y `EVALUATOR_CHAT_REASONING_EFFORT` (p. ej. low). Ver `EVALUATOR_CHAT_MAX_OUTPUT_TOKENS`. "
+        "Hasta 1300 caracteres; GPT-5 usa `max_output_tokens` alto y `EVALUATOR_CHAT_REASONING_EFFORT` (p. ej. low). Ver `EVALUATOR_CHAT_MAX_OUTPUT_TOKENS`. "
         "Requiere `OPENAI_API_KEY`. "
         "Modelo: `EVALUATOR_CHAT_MODEL`, o `NEE_EVALUATOR_MODEL`, o por defecto GPT-5 mini (`gpt-5-mini`). "
         "La interacción se guarda en `ai_conversations`."

@@ -136,7 +136,25 @@ class DocumentsClass:
                     db=db,
                     output_directory=output_directory
                 )
-            
+
+            # Informe de evaluación psicomotriz (detección por nombre en catálogo `documents`)
+            if db is not None:
+                _inf = (
+                    db.query(DocumentModel)
+                    .filter(
+                        DocumentModel.id == document_id,
+                        DocumentModel.deleted_date.is_(None),
+                    )
+                    .first()
+                )
+                if _inf and (_inf.document or "").strip() == "Informe de evaluación psicomotriz":
+                    return DocumentsClass._generate_psychomotor_evaluation_report_from_scratch(
+                        document_id=document_id,
+                        report_data=document_data,
+                        db=db,
+                        output_directory=output_directory,
+                    )
+
             # Si es documento 23 (Certificado de egreso PIE), usar función específica
             if document_id == 23:
                 return DocumentsClass._generate_school_integration_exit_certificate_from_scratch(
@@ -4895,6 +4913,218 @@ class DocumentsClass:
                 "message": f"Error generando informe IDTEL: {str(e)}",
                 "filename": None,
                 "file_path": None
+            }
+
+    @staticmethod
+    def _generate_psychomotor_evaluation_report_from_scratch(
+        document_id: int,
+        report_data: Dict[str, Any],
+        db: Optional[Session] = None,
+        output_directory: str = "files/system/students"
+    ) -> Dict[str, Any]:
+        """
+        Genera PDF del Informe de evaluación psicomotriz con ReportLab.
+        """
+        try:
+            if not REPORTLAB_AVAILABLE:
+                return {
+                    "status": "error",
+                    "message": "ReportLab no está instalado. Instala con: pip install reportlab",
+                    "filename": None,
+                    "file_path": None,
+                }
+
+            def _suggestions_text(v) -> str:
+                if v is None:
+                    return ""
+                if isinstance(v, list):
+                    lines = [str(x).strip() for x in v if str(x).strip()]
+                    return "\n".join(f"• {t}" for t in lines) if lines else ""
+                return str(v).strip()
+
+            student_name = str(report_data.get("student_full_name", "estudiante")).replace(" ", "_")
+            unique_filename = f"informe_psicomotriz_{student_name}_{uuid.uuid4().hex[:8]}.pdf"
+            output_file = Path(output_directory) / unique_filename
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+            doc = SimpleDocTemplate(
+                str(output_file),
+                pagesize=A4,
+                rightMargin=2.5 * cm,
+                leftMargin=2.5 * cm,
+                topMargin=3 * cm,
+                bottomMargin=2.5 * cm,
+            )
+            elements = []
+            styles = getSampleStyleSheet()
+            title_style = ParagraphStyle(
+                "PsicoEvalTitle",
+                parent=styles["Heading1"],
+                fontSize=16,
+                textColor=colors.HexColor("#000000"),
+                spaceAfter=25,
+                spaceBefore=15,
+                alignment=TA_CENTER,
+                fontName="Helvetica-Bold",
+            )
+            section_style = ParagraphStyle(
+                "PsicoEvalSection",
+                parent=styles["Normal"],
+                fontSize=12,
+                textColor=colors.HexColor("#000000"),
+                spaceAfter=12,
+                spaceBefore=15,
+                fontName="Helvetica-Bold",
+                alignment=TA_LEFT,
+                backColor=colors.HexColor("#E8E8E8"),
+                borderPadding=6,
+            )
+            subtitle_style = ParagraphStyle(
+                "PsicoEvalSubtitle",
+                parent=styles["Normal"],
+                fontSize=10,
+                textColor=colors.HexColor("#000000"),
+                spaceAfter=6,
+                spaceBefore=10,
+                fontName="Helvetica-Bold",
+            )
+            normal_style = ParagraphStyle(
+                "PsicoEvalNormal",
+                parent=styles["Normal"],
+                fontSize=10,
+                textColor=colors.HexColor("#000000"),
+                alignment=TA_LEFT,
+                leading=12,
+                spaceAfter=4,
+            )
+            label_style = ParagraphStyle(
+                "PsicoEvalLabel",
+                parent=styles["Normal"],
+                fontSize=10,
+                textColor=colors.HexColor("#000000"),
+                alignment=TA_LEFT,
+                fontName="Helvetica-Bold",
+                backColor=colors.HexColor("#F5F5F5"),
+                borderPadding=4,
+            )
+
+            def get_value(key: str, default: str = "") -> str:
+                v = report_data.get(key)
+                if v is None:
+                    return default
+                return str(v).strip() if v else default
+
+            def format_date(date_val) -> str:
+                if not date_val:
+                    return ""
+                try:
+                    s = str(date_val).strip()[:10]
+                    if not s:
+                        return ""
+                    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+                        try:
+                            dt = datetime.strptime(s, fmt).date()
+                            return dt.strftime("%d/%m/%Y")
+                        except Exception:
+                            continue
+                    return s
+                except Exception:
+                    return str(date_val) if date_val else ""
+
+            def add_section(title: str):
+                elements.append(Paragraph(title, section_style))
+                elements.append(Spacer(1, 0.2 * inch))
+
+            def add_text_block(label: str, text: str):
+                if not text:
+                    return
+                elements.append(Paragraph(f"<b>{label}</b>", subtitle_style))
+                elements.append(Paragraph(DocumentsClass._escape_html_for_paragraph(text), normal_style))
+                elements.append(Spacer(1, 0.15 * inch))
+
+            elements.append(Paragraph("Informe de evaluación psicomotriz", title_style))
+            elements.append(Spacer(1, 0.4 * inch))
+
+            add_section("I. Identificación del/la estudiante")
+            id_data = []
+            id_spans = []
+
+            def _add_row(lbl: str, val: str):
+                if val is None:
+                    val = ""
+                val = str(val).strip()
+                r = len(id_data)
+                id_data.append([Paragraph(f"<b>{lbl}</b>", label_style), ""])
+                id_spans.append(("SPAN", (0, r), (1, r)))
+                id_data.append([Paragraph(DocumentsClass._escape_html_for_paragraph(val or "—"), normal_style), ""])
+                id_spans.append(("SPAN", (0, r + 1), (1, r + 1)))
+
+            _add_row("Nombre", get_value("student_full_name"))
+            _add_row("RUT", get_value("student_identification_number"))
+            _add_row("Fecha de nacimiento", format_date(get_value("student_born_date")))
+            _add_row("Edad", get_value("student_age"))
+            _add_row("Establecimiento", get_value("establishment_id"))
+            _add_row("Curso", get_value("course_name"))
+            _add_row("Profesional/es responsable/s", get_value("responsible_professionals_names"))
+            _add_row("Fecha de informe", format_date(get_value("report_date")))
+            if id_data:
+                tbl = Table(id_data, colWidths=[7.5 * cm, 7.5 * cm])
+                tbl.setStyle(
+                    TableStyle(
+                        [
+                            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                            ("TOPPADDING", (0, 0), (-1, -1), 8),
+                            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CCCCCC")),
+                        ]
+                        + id_spans
+                    )
+                )
+                elements.append(tbl)
+            elements.append(Spacer(1, 0.3 * inch))
+
+            add_section("II. Desarrollo del informe")
+            add_text_block("Motivo de la evaluación", get_value("reason_evaluation"))
+            add_text_block("Instrumentos de evaluación utilizados", get_value("evaluation_instruments"))
+            add_text_block("Antecedentes relevantes", get_value("relevant_background"))
+            add_text_block("Conductas observadas durante la evaluación", get_value("behaviors_observed"))
+
+            add_section("III. Análisis de áreas")
+            add_text_block("Análisis general", get_value("area_analysis_general"))
+            add_text_block("Desempeño motor grueso", get_value("area_gross_motor"))
+            add_text_block("Integración motora y sensorial", get_value("area_motor_sensory_integration"))
+            add_text_block("Habilidades motoras finas relacionadas", get_value("area_fine_motor_skills"))
+            add_text_block("Desarrollo postural", get_value("area_postural_development"))
+            add_text_block("Adaptaciones físicas al entorno escolar", get_value("area_physical_adaptations"))
+            add_text_block("Desempeño funcional en actividades escolares", get_value("area_functional_school"))
+            add_text_block("Desarrollo del esquema corporal", get_value("area_body_schema"))
+
+            add_section("IV. Síntesis diagnóstica y/o conclusiones")
+            add_text_block("Síntesis", get_value("diagnostic_synthesis"))
+
+            sug_fam = _suggestions_text(report_data.get("suggestions_family"))
+            sug_est = _suggestions_text(report_data.get("suggestions_establishment"))
+            if sug_fam or sug_est:
+                add_section("V. Sugerencias")
+                if sug_fam:
+                    add_text_block("Sugerencias a la familia", sug_fam)
+                if sug_est:
+                    add_text_block("Sugerencias al establecimiento", sug_est)
+
+            doc.build(elements)
+            return {
+                "status": "success",
+                "message": "PDF informe psicomotriz generado correctamente",
+                "filename": unique_filename,
+                "file_path": str(output_file),
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Error generando informe psicomotriz: {str(e)}",
+                "filename": None,
+                "file_path": None,
             }
 
     @staticmethod

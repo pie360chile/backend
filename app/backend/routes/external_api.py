@@ -27,6 +27,7 @@ external_api = APIRouter(
 
 class RutBody(BaseModel):
     rut: str
+    anio: int | None = None
 
 
 def _not_configured_response() -> JSONResponse:
@@ -52,11 +53,11 @@ def _json_from_inspection_result(result: dict) -> JSONResponse:
     )
 
 
-def _fetch_inspection_student_response(rut: str) -> JSONResponse:
+def _fetch_inspection_student_response(rut: str, anio: int | None = None) -> JSONResponse:
     client = InspectionApiClient()
     if not client.is_configured():
         return _not_configured_response()
-    return _json_from_inspection_result(client.fetch_student_data(rut))
+    return _json_from_inspection_result(client.fetch_student_data(rut, anio))
 
 
 def _fetch_inspection_professional_response(rut: str) -> JSONResponse:
@@ -86,10 +87,11 @@ def inspection_status(session_user: UserLogin = Depends(get_current_active_user)
 @external_api.get("/inspection/student")
 def inspection_student_get(
     rut: str = Query(..., description="Student RUT (with or without formatting)"),
+    anio: int | None = Query(None, description="Año/período para consulta de inspección"),
     session_user: UserLogin = Depends(get_current_active_user),
 ):
     """Fetch student data from Inspection API (Bearer + remote student endpoint)."""
-    return _fetch_inspection_student_response(rut)
+    return _fetch_inspection_student_response(rut, anio)
 
 
 @external_api.post("/inspection/student")
@@ -98,16 +100,17 @@ def inspection_student_post(
     session_user: UserLogin = Depends(get_current_active_user),
 ):
     """Same as GET with JSON body: {\"rut\": \"12.345.678-9\"}."""
-    return _fetch_inspection_student_response(body.rut)
+    return _fetch_inspection_student_response(body.rut, body.anio)
 
 
 @external_api.get("/student")
 def student_short_get(
     rut: str = Query(..., description="Student RUT (with or without formatting)"),
+    anio: int | None = Query(None, description="Año/período para consulta de inspección"),
     session_user: UserLogin = Depends(get_current_active_user),
 ):
     """Short alias for GET /external_api/inspection/student."""
-    return _fetch_inspection_student_response(rut)
+    return _fetch_inspection_student_response(rut, anio)
 
 
 @external_api.post("/student")
@@ -116,7 +119,7 @@ def student_short_post(
     session_user: UserLogin = Depends(get_current_active_user),
 ):
     """Short alias for POST /external_api/inspection/student."""
-    return _fetch_inspection_student_response(body.rut)
+    return _fetch_inspection_student_response(body.rut, body.anio)
 
 
 @external_api.get("/inspection/professional")

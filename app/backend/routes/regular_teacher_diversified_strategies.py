@@ -10,9 +10,6 @@ from app.backend.schemas import (
 from app.backend.classes.regular_teacher_diversified_strategy_class import (
     RegularTeacherDiversifiedStrategyClass,
 )
-from app.backend.classes.differentiated_strategies_implementation_class import (
-    DifferentiatedStrategiesImplementationClass,
-)
 from sqlalchemy.orm import Session
 from typing import Optional
 
@@ -27,12 +24,15 @@ def get_list(
     school_id: Optional[int] = Query(None, description="-1 o omitir = no filtrar"),
     course_id: Optional[int] = Query(None, description="-1 o omitir = no filtrar"),
     subject_id: Optional[int] = Query(None, description="-1 o omitir = no filtrar"),
+    period_id: Optional[int] = Query(None, description="1, 2 o 3 — filtrar por pestaña de período"),
     session_user: UserLogin = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
-    """Lista registros. Filtros opcionales por school_id, course_id y subject_id."""
+    """Lista registros. Filtros opcionales por school_id, course_id, subject_id y period_id."""
     try:
-        result = RegularTeacherDiversifiedStrategyClass(db).get(school_id=school_id, course_id=course_id, subject_id=subject_id)
+        result = RegularTeacherDiversifiedStrategyClass(db).get(
+            school_id=school_id, course_id=course_id, subject_id=subject_id, period_id=period_id
+        )
         if result.get("status") == "error":
             return JSONResponse(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -64,12 +64,15 @@ def get_list(
 @regular_teacher_diversified_strategies.get("/by_course/{course_id}")
 def get_by_course_id(
     course_id: int,
+    period_id: Optional[int] = Query(None, description="1, 2 o 3 — filtrar por pestaña de período"),
     session_user: UserLogin = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
-    """Obtiene la lista de registros para un course_id."""
+    """Obtiene registros del curso; con period_id solo los de ese período (p. ej. pestaña 2do)."""
     try:
-        result = RegularTeacherDiversifiedStrategyClass(db).get_by_course_id(course_id=course_id)
+        result = RegularTeacherDiversifiedStrategyClass(db).get_by_course_id(
+            course_id=course_id, period_id=period_id
+        )
         if result.get("status") == "error":
             return JSONResponse(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -148,17 +151,6 @@ def store(
                     "data": None,
                 },
             )
-        # b) Registro de estrategias diversificadas: insertar en differentiated_strategies_implementations por cada periodo (1, 2 y 3)
-        strategy_text = (payload.get("strategy") or "").strip() or None
-        if strategy_text:
-            actions_taken = (payload.get("period") or "").strip() or (payload.get("criteria") or "").strip() or None
-            impl_class = DifferentiatedStrategiesImplementationClass(db)
-            for period_id in (1, 2, 3):
-                impl_class.store({
-                    "period_id": period_id,
-                    "applied_strategies": strategy_text,
-                    "actions_taken": actions_taken,
-                })
         created = result.get("data")
         return JSONResponse(
             status_code=status.HTTP_201_CREATED,
