@@ -63,8 +63,10 @@ def _require_nee_catalog_access(session_user: UserModel, db: Session) -> None:
 @special_educational_needs.post("/")
 def index(need: SpecialEducationalNeedList, session_user: UserModel = Depends(get_current_active_user), db: Session = Depends(get_db)):
     _require_nee_catalog_access(session_user, db)
-    page_value = 0 if need.page is None else need.page
     sid = _school_id_from_user(session_user)
+    if sid is None:
+        raise HTTPException(status_code=400, detail="Se requiere colegio en la sesión (school_id)")
+    page_value = 0 if need.page is None else need.page
     result = SpecialEducationalNeedClass(db).get_all(
         page=page_value,
         items_per_page=need.per_page,
@@ -140,6 +142,8 @@ def store(need: StoreSpecialEducationalNeed, session_user: UserModel = Depends(g
 def edit(id: int, session_user: UserModel = Depends(get_current_active_user), db: Session = Depends(get_db)):
     _require_nee_catalog_access(session_user, db)
     sid = _school_id_from_user(session_user)
+    if sid is None:
+        raise HTTPException(status_code=400, detail="Se requiere colegio en la sesión (school_id)")
     result = SpecialEducationalNeedClass(db).get(id, school_id=sid)
 
     if isinstance(result, dict) and (result.get("error") or result.get("status") == "error"):
@@ -165,6 +169,8 @@ def edit(id: int, session_user: UserModel = Depends(get_current_active_user), db
 def update(id: int, need: UpdateSpecialEducationalNeed, session_user: UserModel = Depends(get_current_active_user), db: Session = Depends(get_db)):
     _require_nee_catalog_access(session_user, db)
     sid = _school_id_from_user(session_user)
+    if sid is None:
+        raise HTTPException(status_code=400, detail="Se requiere colegio en la sesión (school_id)")
     need_inputs = need.dict(exclude_unset=True)
     result = SpecialEducationalNeedClass(db).update(id, need_inputs, school_id=sid)
 
@@ -191,6 +197,8 @@ def update(id: int, need: UpdateSpecialEducationalNeed, session_user: UserModel 
 def delete(id: int, session_user: UserModel = Depends(get_current_active_user), db: Session = Depends(get_db)):
     _require_nee_catalog_access(session_user, db)
     sid = _school_id_from_user(session_user)
+    if sid is None:
+        raise HTTPException(status_code=400, detail="Se requiere colegio en la sesión (school_id)")
     result = SpecialEducationalNeedClass(db).delete(id, school_id=sid)
 
     if isinstance(result, dict) and result.get("status") == "error":

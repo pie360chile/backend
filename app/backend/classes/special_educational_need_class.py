@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import or_
+from sqlalchemy import false as sql_false
 
 from app.backend.db.models import SpecialEducationalNeedModel
 
@@ -22,15 +22,10 @@ class SpecialEducationalNeedClass:
         self.db = db
 
     def _scope_filter(self, query, school_id):
-        """Lista del colegio en sesión + filas legacy sin school_id (hasta migrar)."""
+        """Only rows for the active school. No school in session → empty set (no cross-tenant reads)."""
         if school_id is not None:
-            return query.filter(
-                or_(
-                    SpecialEducationalNeedModel.school_id == school_id,
-                    SpecialEducationalNeedModel.school_id.is_(None),
-                )
-            )
-        return query
+            return query.filter(SpecialEducationalNeedModel.school_id == school_id)
+        return query.filter(sql_false())
 
     def get_all(
         self,
