@@ -1120,6 +1120,7 @@ class SpecialEducationalNeedModel(Base):
     __tablename__ = 'special_educational_needs'
 
     id = Column(Integer, primary_key=True)
+    school_id = Column(Integer, nullable=True)
     special_educational_need_type_id = Column(Integer)
     deleted_status_id = Column(Integer)
     special_educational_needs = Column(String(255))

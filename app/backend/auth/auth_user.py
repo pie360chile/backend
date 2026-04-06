@@ -5,6 +5,7 @@ from app.backend.db.models import UserModel
 import os
 from jose import jwt, JWTError
 from app.backend.db.database import get_db
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 import bcrypt
 from argon2 import PasswordHasher
@@ -60,7 +61,7 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
 
     user = get_user(username)
 
-    if user is None:
+    if not user:
         raise HTTPException(status_code=401, detail="Could not validate credentials", headers={"WWW-Authenticate": "Bearer"})
     
     # Sobrescribir con los datos del token que pueden haber cambiado (como school_id al seleccionar escuela)
@@ -83,14 +84,47 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
 def get_current_active_user(current_user: UserModel = Depends(get_current_user)):
     return current_user
 
-def get_user(rut):
+def get_user(sub: str):
+    """
+    Resuelve el usuario del JWT `sub`.
+    - Tokens nuevos: `sub` es el correo (`users.email`); varias cuentas pueden compartir RUT.
+    - Compatibilidad: `sub` numérico = id de usuario; `sub` sin @ = RUT (tokens antiguos).
+    """
     db: Session = next(get_db())
+    if sub is None or str(sub).strip() == "":
+        return ""
 
-    user = db.query(UserModel). \
-                    filter(UserModel.rut == rut). \
-                    filter(UserModel.deleted_status_id == 0). \
-                    first()
-    
+    s = str(sub).strip()
+    if "@" in s:
+        user = (
+            db.query(UserModel)
+            .filter(func.lower(UserModel.email) == s.lower())
+            .filter(UserModel.deleted_status_id == 0)
+            .first()
+        )
+        if user:
+            return user
+        return ""
+
+    try:
+        uid = int(s)
+        user = (
+            db.query(UserModel)
+            .filter(UserModel.id == uid)
+            .filter(UserModel.deleted_status_id == 0)
+            .first()
+        )
+        if user:
+            return user
+    except ValueError:
+        pass
+
+    user = (
+        db.query(UserModel)
+        .filter(UserModel.rut == s)
+        .filter(UserModel.deleted_status_id == 0)
+        .first()
+    )
     if not user:
         return ""
     return user

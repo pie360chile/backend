@@ -18,7 +18,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     access_token_expires = timedelta(minutes=30)
     
     # Preparar datos para el token
-    token_data = {'sub': str(user['user_data']['rut'])}
+    token_data = {'sub': str(user['user_data']['email'])}
     
     # Agregar career_type_id al token si existe, sino null
     career_type_id = user['user_data'].get('career_type_id')
@@ -55,7 +55,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 def logout(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = AuthenticationClass(db).authenticate_user(form_data.username, form_data.password)
     access_token_expires = timedelta(minutes=30)
-    access_token_jwt = AuthenticationClass(db).create_token({'sub': str(user.rut)}, access_token_expires)
+    access_token_jwt = AuthenticationClass(db).create_token({'sub': str(user['user_data']['email'])}, access_token_expires)
 
     return {
         "access_token": access_token_jwt, 

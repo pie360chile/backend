@@ -670,10 +670,12 @@ class SpecialEducationalNeedList(BaseModel):
 class StoreSpecialEducationalNeed(BaseModel):
     special_educational_need_type_id: Optional[int] = None
     special_educational_needs: str
+    school_id: Optional[int] = None
 
 class UpdateSpecialEducationalNeed(BaseModel):
     special_educational_need_type_id: Optional[int] = None
     special_educational_needs: Optional[str] = None
+    school_id: Optional[int] = None
 
 # Diagnosis Summary schemas (cupos por NEE, curso y año)
 class DiagnosisSummaryList(BaseModel):

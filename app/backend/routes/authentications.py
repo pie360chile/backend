@@ -204,7 +204,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 
         token_expires = timedelta(minutes=9999999)
         token_data = {
-            'sub': str(user["user_data"]["rut"]),
+            'sub': str(user["user_data"]["email"]),
             'rol_id': user_rol_id,
             'customer_id': customer_id,
             'school_id': school_id,
@@ -271,8 +271,8 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 @authentications.post("/select-school/{school_id}")
 def select_school(school_id: int, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
     try:
-        # Obtener datos frescos del usuario desde la base de datos usando el rut del token
-        user_fresh = UserClass(db).get('rut', session_user.rut)
+        # Por id de usuario (varias cuentas pueden compartir el mismo RUT)
+        user_fresh = UserClass(db).get('id', session_user.id)
         
         if not user_fresh or user_fresh == "No se encontraron datos para el campo especificado." or user_fresh.startswith("Error:"):
             raise HTTPException(status_code=401, detail="User not found")
@@ -354,7 +354,7 @@ def select_school(school_id: int, session_user: UserLogin = Depends(get_current_
         # Generar nuevo token con el mismo tiempo de expiración e incluir school_id
         token_expires = timedelta(minutes=9999999)
         token_data = {
-            'sub': str(user_data_fresh["rut"]),
+            'sub': str(user_data_fresh["email"]),
             'rol_id': user_rol_id,
             'customer_id': customer_id,
             'school_id': school_id,
@@ -413,14 +413,13 @@ def logout(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depen
     try:
         user = AuthenticationClass(db).authenticate_user(form_data.username, form_data.password)
         access_token_expires = timedelta(minutes=9999999)
-        access_token_jwt = AuthenticationClass(db).create_token({'sub': str(user.rut)}, access_token_expires)
+        ud = user["user_data"]
+        access_token_jwt = AuthenticationClass(db).create_token({'sub': str(ud["email"])}, access_token_expires)
 
         data = {
-            "access_token": access_token_jwt, 
-            "rut": user.rut,
-            "visual_rut": user.visual_rut,
-            "rol_id": user.rol_id,
-            "nickname": user.nickname,
+            "access_token": access_token_jwt,
+            "rut": ud.get("rut"),
+            "rol_id": ud.get("rol_id"),
             "token_type": "bearer"
         }
 
