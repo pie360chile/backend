@@ -1,5 +1,5 @@
 from app.backend.db.database import Base
-from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Date, Time, ForeignKey, Float, Boolean, Text, Numeric, Enum
+from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Date, Time, ForeignKey, Float, Boolean, Text, Numeric, Enum, UniqueConstraint
 from datetime import datetime
 
 class AIConversationModel(Base):
@@ -32,6 +32,31 @@ class KnowledgeDocumentModel(Base):
     is_active = Column(Boolean, default=True)  # Si está activo
     added_date = Column(DateTime)
     updated_date = Column(DateTime)
+
+
+class EvaluatorChatPsychopedSectionUseModel(Base):
+    """
+    Una fila por (usuario, estudiante, apartado del informe 27): evita repetir la misma
+    pregunta/sección del chat evaluador para el mismo estudiante tras refrescar o nueva sesión.
+    """
+
+    __tablename__ = "evaluator_chat_psychoped_section_uses"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "student_id",
+            "field_key",
+            name="uq_eval_psychoped_user_student_field",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, nullable=False)
+    student_id = Column(Integer, nullable=False)
+    field_key = Column(String(80), nullable=False)
+    question_label = Column(String(512), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.now)
+
 
 class AccountTypeModel(Base):
     __tablename__ = 'account_types'

@@ -23,20 +23,26 @@ from app.backend.schemas import UserLogin, KnowledgeDocumentList
 from app.backend.db.database import get_db
 from app.backend.db.models import AIConversationModel, KnowledgeDocumentModel
 
-# Inicializar ChromaDB
+# Inicializar ChromaDB (no debe impedir arrancar el API si falla onnxruntime u otras dependencias)
+CHROMADB_AVAILABLE = False
+chroma_client = None
+chroma_collection = None
 try:
     import chromadb
-    CHROMADB_AVAILABLE = True
-    # Configurar ChromaDB (persistente)
+
     chroma_client = chromadb.PersistentClient(path="./chroma_db")
     chroma_collection = chroma_client.get_or_create_collection(
         name="documentos_pie",
-        metadata={"description": "Base de conocimiento PIE360"}
+        metadata={"description": "Base de conocimiento PIE360"},
     )
-except ImportError:
-    CHROMADB_AVAILABLE = False
-    chroma_client = None
-    chroma_collection = None
+    CHROMADB_AVAILABLE = True
+except Exception as _chroma_init_err:
+    import logging
+
+    logging.getLogger(__name__).warning(
+        "ChromaDB no inicializado (RAG desactivado): %s",
+        _chroma_init_err,
+    )
 
 artificial_intelligence = APIRouter(
     prefix="/artificial_intelligence",
@@ -259,7 +265,7 @@ async def upload_knowledge_document(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 content={
                     "status": 500,
-                    "message": "ChromaDB no está instalado. Instala con: pip install chromadb",
+                    "message": "ChromaDB no está disponible. Instala chromadb y onnxruntime (pip install chromadb onnxruntime) o revisa el log de arranque.",
                     "data": None
                 }
             )
@@ -537,7 +543,7 @@ async def add_knowledge_document(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 content={
                     "status": 500,
-                    "message": "ChromaDB no está instalado. Instala con: pip install chromadb",
+                    "message": "ChromaDB no está disponible. Instala chromadb y onnxruntime (pip install chromadb onnxruntime) o revisa el log de arranque.",
                     "data": None
                 }
             )
@@ -728,7 +734,7 @@ async def consultar_con_rag(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 content={
                     "status": 500,
-                    "message": "ChromaDB no está instalado",
+                    "message": "ChromaDB no está disponible. Instala chromadb y onnxruntime o revisa el log de arranque.",
                     "data": None
                 }
             )

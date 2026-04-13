@@ -3766,6 +3766,20 @@ async def generate_document(
                 except Exception:
                     return str(val) if val else ""
 
+            def _psychoped_html_to_plain(val: Any) -> str:
+                """Campos IV–VI pueden guardarse como HTML (editor enriquecido); Word usa texto plano."""
+                s = str(val or "").strip()
+                if not s or "<" not in s:
+                    return s
+                try:
+                    from bs4 import BeautifulSoup
+
+                    return BeautifulSoup(s, "html.parser").get_text("\n", strip=True)
+                except Exception:
+                    import re
+
+                    return re.sub(r"<[^>]+>", " ", s).strip()
+
             psychoped_service = PsychopedagogicalEvaluationClass(db)
             psychoped_result = psychoped_service.get_by_student_id(student_id=student_id, latest_only=True)
             eval_data = psychoped_result.get("data") if psychoped_result.get("status") == "success" else None
@@ -3831,18 +3845,18 @@ async def generate_document(
 
             instruments_applied = str(eval_data.get("instruments_applied") or "").strip()
             school_history_background = str(eval_data.get("school_history_background") or "").strip()
-            cognitive_analysis = str(eval_data.get("cognitive_analysis") or "").strip()
-            personal_analysis = str(eval_data.get("personal_analysis") or "").strip()
-            motor_analysis = str(eval_data.get("motor_analysis") or "").strip()
-            conclusion = str(eval_data.get("conclusion") or "").strip()
-            cognitive_synthesis = str(eval_data.get("cognitive_synthesis") or "").strip()
-            personal_synthesis = str(eval_data.get("personal_synthesis") or "").strip()
-            motor_synthesis = str(eval_data.get("motor_synthesis") or "").strip()
-            suggestions_to_school = str(eval_data.get("suggestions_to_school") or "").strip()
-            suggestions_to_classroom_team = str(eval_data.get("suggestions_to_classroom_team") or "").strip()
-            suggestions_to_family = str(eval_data.get("suggestions_to_family") or "").strip()
-            suggestions_to_student = str(eval_data.get("suggestions_to_student") or "").strip()
-            other_suggestions = str(eval_data.get("other_suggestions") or "").strip()
+            cognitive_analysis = _psychoped_html_to_plain(eval_data.get("cognitive_analysis"))
+            personal_analysis = _psychoped_html_to_plain(eval_data.get("personal_analysis"))
+            motor_analysis = _psychoped_html_to_plain(eval_data.get("motor_analysis"))
+            conclusion = _psychoped_html_to_plain(eval_data.get("conclusion"))
+            cognitive_synthesis = _psychoped_html_to_plain(eval_data.get("cognitive_synthesis"))
+            personal_synthesis = _psychoped_html_to_plain(eval_data.get("personal_synthesis"))
+            motor_synthesis = _psychoped_html_to_plain(eval_data.get("motor_synthesis"))
+            suggestions_to_school = _psychoped_html_to_plain(eval_data.get("suggestions_to_school"))
+            suggestions_to_classroom_team = _psychoped_html_to_plain(eval_data.get("suggestions_to_classroom_team"))
+            suggestions_to_family = _psychoped_html_to_plain(eval_data.get("suggestions_to_family"))
+            suggestions_to_student = _psychoped_html_to_plain(eval_data.get("suggestions_to_student"))
+            other_suggestions = _psychoped_html_to_plain(eval_data.get("other_suggestions"))
 
             professional_full_name = ""
             professional_identification_number = ""
@@ -3918,6 +3932,57 @@ async def generate_document(
                 "professional_registration_number": professional_registration_number,
                 "professional_specialty": professional_specialty,
             }
+            # Etiquetas de controles de contenido en Word (a menudo en español / distinto snake_case)
+            # → claves usadas en `replacements`. Clave = tag normalizado (minúsculas, sin tildes, guiones bajos).
+            psychoped_content_control_aliases = {
+                "nombre_identidad_estudiante": "student_full_name",
+                "nombre_de_identidad_estudiante": "student_full_name",
+                "nombre_identidad_del_estudiante": "student_full_name",
+                "nombre_completo_estudiante": "student_full_name",
+                "nombre_y_apellidos_del_estudiante": "student_full_name",
+                "nombre_social_del_estudiante": "student_social_name",
+                "nombre_social_estudiante": "student_social_name",
+                "nombre_social": "student_social_name",
+                "fecha_de_nacimiento": "birth_day",
+                "fecha_nacimiento": "birth_day",
+                "edad": "student_age",
+                "edad_del_estudiante": "student_age",
+                "establecimiento_educacional": "student_school",
+                "establecimiento": "student_school",
+                "nombre_establecimiento": "student_school",
+                "colegio": "student_school",
+                "curso_nivel": "student_course",
+                "curso_o_nivel": "student_course",
+                "curso": "student_course",
+                "nivel": "student_course",
+                "fecha_de_evaluacion": "evaluation_date",
+                "fecha_evaluacion": "evaluation_date",
+                "diagnostico": "diagnostic",
+                "diagnosis": "diagnostic",
+                "fecha_de_emision_de_diagnostico": "issue_date",
+                "fecha_emision_diagnostico": "issue_date",
+                "fecha_emision_del_diagnostico": "issue_date",
+                "fecha_emision_de_diagnostico": "issue_date",
+                "analisis_cognitivo": "cognitive_analysis",
+                "analisis_cognitivo_comunicativo": "cognitive_analysis",
+                "analisis_personal_socioemocional": "personal_analysis",
+                "analisis_motor_autonomia_sensorial": "motor_analysis",
+                "sintesis_cognitiva": "cognitive_synthesis",
+                "sintesis_personal": "personal_synthesis",
+                "sintesis_motora": "motor_synthesis",
+                "sugerencias_al_establecimiento": "suggestions_to_school",
+                "sugerencias_al_equipo_de_aula": "suggestions_to_classroom_team",
+                "sugerencias_al_estudiante": "suggestions_to_student",
+                "sugerencias_a_la_familia": "suggestions_to_family",
+                "otras_sugerencias": "other_suggestions",
+                "conclusion_informe": "conclusion",
+                "instrumentos_aplicados": "instruments_applied",
+                "antecedentes_historia_escolar": "school_history_background",
+                "nombre_profesional": "professional_full_name",
+                "rut_profesional": "professional_identification_number",
+                "registro_profesional": "professional_registration_number",
+                "especialidad_profesional": "professional_specialty",
+            }
             # Pedagógica: filas 1 a 10
             for row in range(1, 11):
                 for col in range(1, 5):
@@ -3948,7 +4013,19 @@ async def generate_document(
             out_dir.mkdir(parents=True, exist_ok=True)
             safe_name = re.sub(r'[^\w\s-]', '', (student_full_name or "evaluacion_psico")).replace(" ", "_")[:30]
             out_file = out_dir / f"evaluacion_psicopedagogica_{safe_name}_{uuid.uuid4().hex[:8]}.docx"
-            result = DocumentsClass.fill_docx_form(str(template_path), replacements, str(out_file))
+            psychoped_remove_placeholders = [
+                "Haz clic o pulse aquí para escribir texto.",
+                "Haz clic o pulse aquí para escribir texto",
+                "Pulse o haga clic aquí para escribir texto.",
+                "Haga clic aquí para escribir texto.",
+            ]
+            result = DocumentsClass.fill_docx_form(
+                str(template_path),
+                replacements,
+                str(out_file),
+                remove_literal_strings=psychoped_remove_placeholders,
+                content_control_tag_aliases=psychoped_content_control_aliases,
+            )
             if result.get("status") == "error":
                 return JSONResponse(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

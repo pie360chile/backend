@@ -8773,11 +8773,13 @@ class DocumentsClass:
         replacements: Dict[str, str],
         output_path: str,
         remove_literal_strings: Optional[List[str]] = None,
+        content_control_tag_aliases: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         """
         Rellena un formulario DOCX reemplazando etiquetas/placeholders.
         Soporta: {etiqueta}, [etiqueta], <<etiqueta>>, {{etiqueta}}, CONTENT CONTROLS por tag.
         Si remove_literal_strings está definido, se eliminan esas cadenas del texto (ej. placeholder "Haz clic o pulse aquí...").
+        content_control_tag_aliases: mapa etiqueta XML normalizada -> clave existente en replacements (p. ej. doc 27 en español).
         """
         try:
             doc = Document(template_path)
@@ -8796,8 +8798,17 @@ class DocumentsClass:
                 full_text = para.text
                 new_text = replace_in_text(full_text)
                 if full_text != new_text:
+                    new_text = (new_text or "").replace("\r\n", "\n").replace("\r", "\n")
                     para.clear()
-                    para.add_run(new_text)
+                    if not new_text:
+                        return
+                    # Un solo run con "\\n" suele verse "pegado" en Word; saltos explícitos (w:br).
+                    first = True
+                    for segment in new_text.split("\n"):
+                        if not first:
+                            para.add_run().add_break()
+                        first = False
+                        para.add_run(segment)
 
             for paragraph in doc.paragraphs:
                 process_paragraph(paragraph)
@@ -8869,6 +8880,316 @@ class DocumentsClass:
                                         break
                         return True
 
+                    def _normalize_cc_tag(tag: str) -> str:
+                        import re
+                        import unicodedata
+
+                        t = (tag or "").strip().lower()
+                        t = unicodedata.normalize("NFKD", t)
+                        t = "".join(c for c in t if unicodedata.category(c) != "Mn")
+                        t = re.sub(r"[^a-z0-9]+", "_", t)
+                        return re.sub(r"_+", "_", t).strip("_")
+
+                    def _sdt_fill_with_line_breaks(
+                        sdt_content_el,
+                        text_body: str,
+                        field_key: Optional[str] = None,
+                    ) -> None:
+                        """
+                        - Cada '\\n' → un w:p (sin w:br en un solo párrafo) + justificado, salvo si el SDT
+                          contiene tabla: entonces no se borran hijos (no romper filas/celdas).
+                        - Al copiar w:pPr de la plantilla se quitan sangrías/tab (w:ind, w:tabs) que en celdas
+                          estrechas dejan solo visible la primera letra.
+                        - Con content_control_tag_aliases (doc 27): según field_key — textos largos (análisis,
+                          sugerencias, etc.) se regeneran enteros y van justificados; identificación y campos
+                          cortos van a la izquierda; solo se reemplaza el párrafo de ayuda si el SDT comparte
+                          tabla con otras celdas (sin vaciar el resto del XML).
+                        """
+                        from copy import deepcopy
+
+                        psychoped_sdt = bool(content_control_tag_aliases)
+
+                        raw = (text_body or "").replace("\r\n", "\n").replace("\r", "\n")
+                        segments = raw.split("\n")
+
+                        def _paragraph_visible_text(p_el) -> str:
+                            return "".join((t.text or "") for t in p_el.iter(qn("w:t")))
+
+                        def _ppr_set_jc_val(p_pr_el, jc_val: str) -> None:
+                            for jc in list(p_pr_el.findall(qn("w:jc"))):
+                                p_pr_el.remove(jc)
+                            jc_el = OxmlElement("w:jc")
+                            jc_el.set(qn("w:val"), jc_val)
+                            p_pr_el.append(jc_el)
+
+                        def _ppr_set_justify_both(p_pr_el) -> None:
+                            _ppr_set_jc_val(p_pr_el, "both")
+
+                        def _ppr_strip_cell_artifacts(p_pr_el) -> None:
+                            for nm in ("w:ind", "w:tabs", "w:numPr", "w:adjustRightInd"):
+                                for el in list(p_pr_el.findall(qn(nm))):
+                                    p_pr_el.remove(el)
+
+                        def _is_label_like_all_caps_line(s: str) -> bool:
+                            """Etiquetas tipo 'NOMBRE DE IDENTIDAD…' (mayúsculas); no son el placeholder del valor."""
+                            s = (s or "").strip()
+                            if len(s) < 10:
+                                return False
+                            letters = [c for c in s if c.isalpha()]
+                            if len(letters) < 8:
+                                return False
+                            up = sum(1 for c in letters if c.isupper())
+                            return (up / len(letters)) > 0.82
+
+                        def _paragraph_has_placeholder(fl: str) -> bool:
+                            return any(
+                                ph in fl
+                                for ph in (
+                                    "haz clic",
+                                    "pulse aqu",
+                                    "escribir texto",
+                                    "click here",
+                                    "tap here",
+                                    "click or tap",
+                                    "clic aqu",
+                                )
+                            )
+
+                        if psychoped_sdt:
+                            fk = (field_key or "").strip()
+                            PSYCHOPED_LONG_TEXT_KEYS = frozenset(
+                                {
+                                    "cognitive_analysis",
+                                    "personal_analysis",
+                                    "motor_analysis",
+                                    "conclusion",
+                                    "cognitive_synthesis",
+                                    "personal_synthesis",
+                                    "motor_synthesis",
+                                    "suggestions_to_school",
+                                    "suggestions_to_classroom_team",
+                                    "suggestions_to_family",
+                                    "suggestions_to_student",
+                                    "other_suggestions",
+                                    "instruments_applied",
+                                    "school_history_background",
+                                    "diagnostic",
+                                }
+                            )
+                            has_tbl = sdt_content_el.find(qn("w:tbl")) is not None
+
+                            def _psychoped_sweep_placeholder_wt() -> None:
+                                for wt in list(sdt_content_el.iter(qn("w:t"))):
+                                    tx = (wt.text or "").strip()
+                                    if not tx or len(tx) > 200:
+                                        continue
+                                    low = tx.lower()
+                                    if _paragraph_has_placeholder(low):
+                                        wt.text = ""
+
+                            # Textos largos sin tabla interna: vaciar el SDT y párrafos nuevos (sin "Haz clic…"),
+                            # justificado (bloques narrativos de la sección inferior del informe).
+                            if fk in PSYCHOPED_LONG_TEXT_KEYS and not has_tbl:
+                                for child in list(sdt_content_el):
+                                    sdt_content_el.remove(child)
+                                for segment in segments:
+                                    new_p = OxmlElement("w:p")
+                                    ppr = OxmlElement("w:pPr")
+                                    _ppr_set_justify_both(ppr)
+                                    new_p.append(ppr)
+                                    r_text = OxmlElement("w:r")
+                                    t_el = OxmlElement("w:t")
+                                    if segment:
+                                        t_el.text = segment
+                                        t_el.set(qn("xml:space"), "preserve")
+                                    r_text.append(t_el)
+                                    new_p.append(r_text)
+                                    sdt_content_el.append(new_p)
+                                return
+
+                            # Identificación, escalas, textos en SDT con tabla, etc.: solo el párrafo con ayuda.
+                            paragraphs_here = list(sdt_content_el.iter(qn("w:p")))
+                            if not paragraphs_here:
+                                new_p = OxmlElement("w:p")
+                                sdt_content_el.append(new_p)
+                                paragraphs_here = [new_p]
+                            target_p = None
+                            for p in paragraphs_here:
+                                full = _paragraph_visible_text(p)
+                                low = full.lower()
+                                if _paragraph_has_placeholder(low):
+                                    target_p = p
+                                    break
+                            if target_p is None:
+                                for p in paragraphs_here:
+                                    full = _paragraph_visible_text(p).strip()
+                                    if not full:
+                                        target_p = p
+                                        break
+                                    if _is_label_like_all_caps_line(full):
+                                        continue
+                                    target_p = p
+                                    break
+                                if target_p is None:
+                                    target_p = paragraphs_here[-1]
+                            old_ppr = target_p.find(qn("w:pPr"))
+                            if old_ppr is not None:
+                                target_p.remove(old_ppr)
+                            ppr = OxmlElement("w:pPr")
+                            # Largos (p. ej. con tabla dentro del SDT): justificado. Identificación arriba: izquierda.
+                            if fk in PSYCHOPED_LONG_TEXT_KEYS:
+                                _ppr_set_justify_both(ppr)
+                            else:
+                                _ppr_set_jc_val(ppr, "left")
+                            target_p.insert(0, ppr)
+                            for c in list(target_p):
+                                if c.tag == qn("w:pPr") or str(c.tag).endswith("}pPr"):
+                                    continue
+                                target_p.remove(c)
+                            first_seg = True
+                            for seg in segments:
+                                if not first_seg:
+                                    rb = OxmlElement("w:r")
+                                    rb.append(OxmlElement("w:br"))
+                                    target_p.append(rb)
+                                first_seg = False
+                                r = OxmlElement("w:r")
+                                t = OxmlElement("w:t")
+                                if seg:
+                                    t.text = seg
+                                    t.set(qn("xml:space"), "preserve")
+                                r.append(t)
+                                target_p.append(r)
+                            _psychoped_sweep_placeholder_wt()
+                            return
+
+                        def _pick_target_paragraph_for_value() -> Optional[Any]:
+                            """
+                            El párrafo del valor suele tener el texto de ayuda de Word (Haz clic…).
+                            Si hay varios (etiqueta + ayuda duplicada), se elige el de menor longitud (suele ser solo el placeholder).
+                            Con tabla dentro del SDT: se prioriza la última celda de cada fila (típico etiqueta | valor).
+                            NO vaciar w:t antes de llamar a esto: si todo está vacío, max() elige el primero
+                            (casi siempre la etiqueta de la fila) y solo se ve una letra en la celda equivocada.
+                            """
+                            tbl = sdt_content_el.find(qn("w:tbl"))
+                            if tbl is not None:
+                                haz_candidates: List[Any] = []
+                                for tr in tbl.iter(qn("w:tr")):
+                                    tcs = tr.findall(qn("w:tc"))
+                                    if not tcs:
+                                        continue
+                                    cell_order = [tcs[-1]] + [c for c in tcs[:-1]]
+                                    for tc in cell_order:
+                                        for p in tc.iter(qn("w:p")):
+                                            full = _paragraph_visible_text(p)
+                                            fl = full.lower()
+                                            if _paragraph_has_placeholder(fl):
+                                                haz_candidates.append((len(full), p))
+                                if haz_candidates:
+                                    return min(haz_candidates, key=lambda x: x[0])[1]
+
+                            paras = list(sdt_content_el.iter(qn("w:p")))
+                            if not paras:
+                                return None
+                            haz_candidates = []
+                            for p in paras:
+                                full = _paragraph_visible_text(p)
+                                fl = full.lower()
+                                if _paragraph_has_placeholder(fl):
+                                    haz_candidates.append((len(full), p))
+                            if haz_candidates:
+                                return min(haz_candidates, key=lambda x: x[0])[1]
+                            for p in paras:
+                                full = _paragraph_visible_text(p).strip()
+                                if not full:
+                                    continue
+                                if _is_label_like_all_caps_line(full):
+                                    continue
+                                return p
+                            return paras[-1]
+
+                        def _sdt_fill_flat_keep_structure() -> None:
+                            """SDT con tabla u otro XML anidado: solo rellenar el párrafo destino con w:br."""
+                            paragraphs = list(sdt_content_el.iter(qn("w:p")))
+                            if not paragraphs:
+                                return
+                            target_p = _pick_target_paragraph_for_value()
+                            if target_p is None:
+                                return
+                            for p in paragraphs:
+                                if p is not target_p:
+                                    for wt in p.iter(qn("w:t")):
+                                        wt.text = ""
+                            old_ppr = target_p.find(qn("w:pPr"))
+                            if old_ppr is not None:
+                                target_p.remove(old_ppr)
+                            ppr = OxmlElement("w:pPr")
+                            if psychoped_sdt:
+                                _ppr_set_justify_both(ppr)
+                            else:
+                                if old_ppr is not None:
+                                    ppr = deepcopy(old_ppr)
+                                    _ppr_strip_cell_artifacts(ppr)
+                                _ppr_set_justify_both(ppr)
+                            target_p.insert(0, ppr)
+                            for c in list(target_p):
+                                if c.tag == qn("w:pPr") or str(c.tag).endswith("}pPr"):
+                                    continue
+                                target_p.remove(c)
+                            first = True
+                            for seg in segments:
+                                if not first:
+                                    rb = OxmlElement("w:r")
+                                    rb.append(OxmlElement("w:br"))
+                                    target_p.append(rb)
+                                first = False
+                                r = OxmlElement("w:r")
+                                t = OxmlElement("w:t")
+                                if seg:
+                                    t.text = seg
+                                    t.set(qn("xml:space"), "preserve")
+                                r.append(t)
+                                target_p.append(r)
+
+                        if sdt_content_el.find(qn("w:tbl")) is not None:
+                            _sdt_fill_flat_keep_structure()
+                            return
+
+                        paragraphs = list(sdt_content_el.iter(qn("w:p")))
+                        if not paragraphs:
+                            paragraphs = [OxmlElement("w:p")]
+                            sdt_content_el.append(paragraphs[0])
+                        _picked_ref = _pick_target_paragraph_for_value()
+                        ref_p = _picked_ref if _picked_ref is not None else paragraphs[0]
+
+                        if psychoped_sdt:
+                            p_pr_prototype = OxmlElement("w:pPr")
+                            _ppr_set_justify_both(p_pr_prototype)
+                        else:
+                            p_pr_template = ref_p.find(qn("w:pPr"))
+                            if p_pr_template is not None:
+                                p_pr_prototype = deepcopy(p_pr_template)
+                                _ppr_strip_cell_artifacts(p_pr_prototype)
+                                _ppr_set_justify_both(p_pr_prototype)
+                            else:
+                                p_pr_prototype = OxmlElement("w:pPr")
+                                _ppr_set_justify_both(p_pr_prototype)
+
+                        for child in list(sdt_content_el):
+                            sdt_content_el.remove(child)
+
+                        for segment in segments:
+                            new_p = OxmlElement("w:p")
+                            new_p.append(deepcopy(p_pr_prototype))
+                            r_text = OxmlElement("w:r")
+                            t_el = OxmlElement("w:t")
+                            if segment:
+                                t_el.text = segment
+                                t_el.set(qn("xml:space"), "preserve")
+                            r_text.append(t_el)
+                            new_p.append(r_text)
+                            sdt_content_el.append(new_p)
+
                     def process_sdt_body(parent):
                         for sdt in parent.iter(qn("w:sdt")):
                             sdtPr = sdt.find(qn("w:sdtPr"))
@@ -8880,12 +9201,23 @@ class DocumentsClass:
                             tag_val = (tag_el.get(qn("w:val")) or "").strip()
                             if not tag_val:
                                 continue
-                            # Coincidencia insensible a mayúsculas para que Document_1 = document_1
-                            rkey = next((k for k in replacements if k.strip().lower() == tag_val.strip().lower()), None)
+                            tag_n = _normalize_cc_tag(tag_val)
+                            rkey = next(
+                                (k for k in replacements if _normalize_cc_tag(k) == tag_n),
+                                None,
+                            )
+                            if rkey is None and content_control_tag_aliases:
+                                mapped = content_control_tag_aliases.get(tag_n)
+                                if mapped and mapped in replacements:
+                                    rkey = mapped
                             if rkey is None:
                                 continue
-                            val = str(replacements.get(rkey, "") or "").strip()
-                            is_checked = bool(val and val not in ("0", "false", "no", "off"))
+                            raw_val = str(replacements.get(rkey, "") or "")
+                            raw_val = raw_val.replace("\r\n", "\n").replace("\r", "\n")
+                            val_stripped = raw_val.strip()
+                            is_checked = bool(
+                                val_stripped and val_stripped.lower() not in ("0", "false", "no", "off")
+                            )
 
                             # Si es checkbox content control (w14:checkbox), activar/desactivar
                             if _set_checkbox_checked(sdt, sdtPr, is_checked):
@@ -8893,7 +9225,7 @@ class DocumentsClass:
 
                             # Campos de texto: si valor vacío, desenvolver el control para que no salga formulario editable
                             sdtContent = sdt.find(qn("w:sdtContent"))
-                            if sdtContent is not None and not val:
+                            if sdtContent is not None and not val_stripped:
                                 for wt in sdtContent.iter(qn("w:t")):
                                     wt.text = ""
                                 parent = sdt.getparent()
@@ -8905,45 +9237,40 @@ class DocumentsClass:
                                         parent.insert(idx + i, child)
                                 continue
 
-                            # Reemplazo de texto normal cuando hay valor
+                            # Reemplazo de texto: saltos \\n -> w:br (un \\n en un solo w:t no se ve en Word)
                             if sdtContent is not None:
-                                wt_list = list(sdtContent.iter(qn("w:t")))
-                                if wt_list:
-                                    for i, wt in enumerate(wt_list):
-                                        wt.text = val if i == 0 else ""
-                                else:
-                                    w_r = sdtContent.find(qn("w:r"))
-                                    if w_r is not None:
-                                        wt_el = w_r.find(qn("w:t"))
-                                        if wt_el is not None:
-                                            wt_el.text = val
-                                        else:
-                                            new_t = OxmlElement("w:t")
-                                            if val:
-                                                new_t.text = val
-                                            new_t.set(qn("xml:space"), "preserve")
-                                            w_r.append(new_t)
-                                    else:
-                                        for p in sdtContent.iter(qn("w:p")):
-                                            w_r = p.find(qn("w:r"))
-                                            if w_r is not None:
-                                                wt_el = w_r.find(qn("w:t"))
-                                                if wt_el is not None:
-                                                    wt_el.text = val
-                                                else:
-                                                    new_t = OxmlElement("w:t")
-                                                    if val:
-                                                        new_t.text = val
-                                                    new_t.set(qn("xml:space"), "preserve")
-                                                    w_r.append(new_t)
-                                                break
+                                try:
+                                    _sdt_fill_with_line_breaks(sdtContent, raw_val, rkey)
+                                except Exception as _sdt_fill_exc:
+                                    import logging
+
+                                    logging.getLogger(__name__).warning(
+                                        "fill_docx_form: SDT relleno con fallback (%s=%r…): %s",
+                                        rkey,
+                                        (raw_val or "")[:80],
+                                        _sdt_fill_exc,
+                                        exc_info=True,
+                                    )
+                                    for wt in sdtContent.iter(qn("w:t")):
+                                        wt.text = ""
+                                    wt_list = list(sdtContent.iter(qn("w:t")))
+                                    if wt_list:
+                                        wt_list[0].set(qn("xml:space"), "preserve")
+                                        wt_list[0].text = raw_val
+                                        for wt in wt_list[1:]:
+                                            wt.text = ""
                     process_sdt_body(doc.element.body)
                     for section in doc.sections:
                         for hf in (section.header, section.footer):
                             if hf is not None and hasattr(hf, "_element"):
                                 process_sdt_body(hf._element)
-                except Exception:
-                    pass
+                except Exception as _docx_extra_exc:
+                    import logging
+
+                    logging.getLogger(__name__).exception(
+                        "fill_docx_form: bloque DOCX_EXTRA (SDT/checkbox) falló: %s",
+                        _docx_extra_exc,
+                    )
 
             # Eliminar cadenas literales (ej. placeholder) cuando Procedencia no es Otro
             if remove_literal_strings:
@@ -8954,9 +9281,16 @@ class DocumentsClass:
                         if s:
                             new_text = new_text.replace(s, "")
                     if new_text != text:
+                        new_text = (new_text or "").replace("\r\n", "\n").replace("\r", "\n")
                         para.clear()
-                        if new_text:
-                            para.add_run(new_text)
+                        if not new_text:
+                            return
+                        first = True
+                        for segment in new_text.split("\n"):
+                            if not first:
+                                para.add_run().add_break()
+                            first = False
+                            para.add_run(segment)
                 for para in doc.paragraphs:
                     _strip_literal(para)
                 for table in doc.tables:

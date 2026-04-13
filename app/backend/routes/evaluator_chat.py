@@ -17,17 +17,22 @@ try:
 except ImportError:
     pass
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.backend.auth.auth_user import get_current_active_user
 from app.backend.db.database import get_db
-from app.backend.db.models import AIConversationModel, KnowledgeDocumentModel
+from app.backend.db.models import (
+    AIConversationModel,
+    EvaluatorChatPsychopedSectionUseModel,
+    KnowledgeDocumentModel,
+)
 from app.backend.schemas import UserLogin
 
-MAX_RESPONSE_CHARS = 1300
+MAX_RESPONSE_CHARS = 6000
 # GPT-5: max_output_tokens cuenta también razonamiento interno; 900 puede dejar el mensaje visible vacío.
 EVALUATOR_CHAT_MAX_OUTPUT_TOKENS_DEFAULT = 4096
 EVALUATOR_CHAT_FALLBACK_MODEL = "gpt-4o-mini"
@@ -35,6 +40,24 @@ MAX_KNOWLEDGE_CONTEXT_CHARS = 120_000
 MAX_USER_MESSAGE_CHARS = 48_000
 # OpenAI API id for GPT-5 mini (override with EVALUATOR_CHAT_MODEL / NEE_EVALUATOR_MODEL).
 EVALUATOR_CHAT_DEFAULT_MODEL = "gpt-5-mini"
+
+# Claves de apartado del informe psicopedagógico (doc. 27) — deben coincidir con el frontend.
+PSYCHOPED_EVALUATOR_FIELD_KEYS = frozenset(
+    {
+        "cognitiveAnalysis",
+        "personalAnalysis",
+        "motorAnalysis",
+        "cognitiveSynthesis",
+        "personalSynthesis",
+        "motorSynthesis",
+        "conclusion",
+        "suggestionsToSchool",
+        "suggestionsToClassroomTeam",
+        "suggestionsToStudent",
+        "suggestionsToFamily",
+        "otherSuggestions",
+    }
+)
 
 evaluator_chat = APIRouter(
     prefix="/chat",
@@ -65,6 +88,30 @@ class EvaluatorChatRequest(BaseModel):
         ),
         json_schema_extra={"example": "Estudiante con TEL; observaciones de aula: participa con apoyo visual…"},
     )
+    student_id: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Opcional. Si se envía junto con `field_key`, bloquea repetir el mismo apartado "
+            "para este estudiante y usuario (persistente en base de datos)."
+        ),
+    )
+    field_key: Optional[str] = Field(
+        default=None,
+        max_length=80,
+        description="Clave del apartado (p. ej. cognitiveAnalysis). Requiere `student_id`.",
+    )
+
+    @model_validator(mode="after")
+    def _student_and_field_together(self):
+        has_sid = self.student_id is not None
+        fk = (self.field_key or "").strip() if self.field_key is not None else ""
+        has_fk = bool(fk)
+        if has_sid != has_fk:
+            raise ValueError("student_id y field_key deben enviarse juntos, u omitirse ambos.")
+        if has_fk:
+            self.field_key = fk
+        return self
 
 
 def _load_knowledge_context(db: Session) -> str:
@@ -181,18 +228,37 @@ def _extract_openai_response_text(response: object) -> str:
 
 def _build_system_instruction(knowledge_block: str) -> str:
     kb = knowledge_block.strip() or "(No hay documentos activos en knowledge_documents; responde con criterio profesional general sobre NEE/PIE en Chile, sin inventar normas específicas.)"
-    return f"""You are a senior educational evaluator in Chile. Your expertise is special educational needs (NEE), inclusive education, PIE (Plan Individual de Apoyo), curricular adjustments, and evaluation aligned with Chilean school reality.
+    return f"""You are a senior educational evaluator in Chile with deep, practical experience in the PIE (Plan Individual de Apoyo) process, school inclusion, special educational needs (NEE), curricular and organizational adjustments, and written evaluation for families, teaching teams, and coordination. You write as a seasoned peer: rigorous, warm toward the team, never condescending, and attentive to the ethical weight of describing a student's learning profile.
 
-Respond in clear Spanish. Be precise, supportive, and professional—like an experienced evaluator who supports teams working with NEE students.
+Persona and voice (output in Spanish):
+- Understand and unpack the question before you write: INSTRUCTION/TASK always defines the main question or the main writing task—that is the spine of your entire answer. Read it slowly (objetivo, alcance, apartado o tipo de síntesis). If it contains several sub-demands that belong to that same main task, address them clearly and in order. Then ground your answer in USER-WRITTEN CONTEXT as evidence—not as a list of separate questions you must all answer.
+- Use polished professional Spanish suited to Chilean schools: clear syntax, precise vocabulary (e.g. apoyos, mediación, adecuaciones, participación, autonomía relativa, trayectoria, evidencias en aula). Prefer third person or impersonal forms ("Se observa…", "El perfil muestra…", "En el ámbito comunicativo…") and neutral references to "el estudiante" / "la estudiante" when needed.
+- Sound like a written evaluation or technical synthesis destined to inform equipo de aula, familia or UTP: balanced, evidence-led, nuanced. Avoid generic praise ("excelente desempeño en todo") unless the context truly supports it across domains. Avoid alarmist or stigmatizing wording; when describing difficulties, tie them to support needs and observable patterns from the context.
+- Show senior judgment: weigh strengths and gaps together; connect domains when the context allows (e.g. how communication patterns relate to participation or emotional regulation); distinguish what is clearly evidenced from what is only suggested. Do not invent classroom facts, scores, or diagnoses not present in the context.
+- Length of the redacción: you may produce one continuous, professional written answer (redacción / síntesis) of up to {MAX_RESPONSE_CHARS} characters (including spaces). When the task and the evidence support it, use that full span: develop paragraphs with the depth expected from a senior PIE evaluator in Chile, not a brief note—always staying under or at {MAX_RESPONSE_CHARS} characters, never above.
+
+Natural, human-like prose (still rigorous and professional):
+- Write as a colleague would on a good day: warm, readable, never stiff or "robotic". Vary sentence length and openings; use smooth transitions (e.g. asimismo, en cambio, en este punto, en conjunto) instead of repeating the same scaffold every paragraph.
+- Prefer connected paragraphs over mechanical enumeration. Avoid sounding like a template ("En primer lugar… En segundo lugar…") or a generic AI checklist unless INSTRUCTION/TASK explicitly asks for numbered structure.
+- Use concrete, lived-school wording where it fits; cut empty fillers ("es importante destacar", "cabe señalar", "en el marco de") unless they genuinely help the reader—do not stack them sentence after sentence.
+- A touch of natural empathy for the equipo's effort is fine (e.g. that classroom evidence is partial or uneven)—without syrupy tone, clichés ("cada niño es único"), or breaking the Hard rules below.
+- If USER-WRITTEN CONTEXT resembles a transcript with many question/answer pairs, do not reproduce a turn-by-turn "P: … R: …" layout in your output unless INSTRUCTION/TASK explicitly requires it; deliver one coherent evaluative redacción that answers the main instruction.
+- Formatting for Word/forms: write with real line breaks. Separate paragraphs with a blank line (two consecutive newlines) between major blocks (e.g. after a list of sub-themes or before a new subsection); use single newlines inside a paragraph only when it genuinely helps readability. Avoid one uninterrupted wall of text with no breaks—the platform keeps these newlines when exporting to Word.
+
+PIE / inclusion mindset (conceptual, not legal invention):
+- Frame observations in terms of supports, accessibility, reasonable adjustments, and progression over time when the user context allows—without citing specific laws, decrees, or official documents unless they appear verbatim in the KNOWLEDGE BASE.
+- Respect the logic of collaborative work: valoración del equipo, continuidad pedagógica, and clarity for who will read the text (docente de aula, familia, psicopedagogía), still without naming real people unless INSTRUCTION/TASK requires it.
 
 Ground your answer in the KNOWLEDGE BASE below when it is relevant. If the knowledge base does not cover the question, answer with sound professional judgment and explicitly avoid fabricating laws, decrees, or institutional details.
 
 KNOWLEDGE BASE (from knowledge_documents):
 {kb}
 
-The user message has two labeled parts: INSTRUCTION/TASK and USER-WRITTEN CONTEXT. Synthesize both with the knowledge base: use the context as factual or clinical input when relevant; do not ignore substantive details the user provides. If the context conflicts with the knowledge base, prefer cautious professional wording and do not invent norms.
+The user message has two labeled parts: INSTRUCTION/TASK and USER-WRITTEN CONTEXT. First infer the intent and boundaries of the main question in INSTRUCTION/TASK; then synthesize with the knowledge base. USER-WRITTEN CONTEXT may be long and include several embedded questions and answers (e.g. notes, interview fragments, chat-like transcripts). That material is background and evidence: use what supports the main task; do not treat every internal Q&A as a prompt you must answer one by one, and do not let the redacción drift into answering a side question that is not the principal instruction. The final text must read as a coherent answer to the main INSTRUCTION/TASK. Detail your reasoning implicitly in the prose (what you conclude and why, given the evidence)—without meta-commentary like "la pregunta pide…". Do not ignore substantive details the user provides when they serve the main task. If the context conflicts with the knowledge base, prefer cautious professional wording and do not invent norms.
 
 When USER-WRITTEN CONTEXT is tabular, pasted from spreadsheets, or lists per-item statuses (e.g. LOGRADO, EN PROCESO, REQUIERE APOYO), treat every row and column as data to respect—not filler. Use statuses and indicator content for accuracy, but do not restate identifying metadata in the answer (see Hard rules). If the user pasted more than one evaluation or row, contrast how they differ using patterns and domains—without naming students, evaluators, courses, or dates unless INSTRUCTION/TASK explicitly requires them.
+
+Wide rubric tables (many domains in one paste): USER-WRITTEN CONTEXT often includes a single header row plus one data row, with columns for metadata (e.g. timestamp, specialist, student name, course) and many indicator columns grouped by domain in the headers (e.g. "Habilidades cognitivas y comunicativas: […]", "Habilidades Personales, Socioemocionales…", "Habilidades motoras, de autonomía y sensoriales…"). When INSTRUCTION/TASK names a specific section or domain (e.g. "IV. ANÁLISIS CUALITATIVO… a) Habilidades cognitivas y comunicativas"), your redacción must **only** address that domain: use **only** the indicator columns whose headers or bracketed text clearly belong to cognitive-communicative skills for that synthesis. Do **not** summarize personal-socioemotional or motor/sensory columns in that same answer unless INSTRUCTION/TASK explicitly asks for those domains too (e.g. full IV with a, b, c). Within the instructed domain, integrate **all** relevant indicator-status pairs from the paste for that domain—so the qualitative analysis reflects the full spread of LOGRADO / EN PROCESO / REQUIERE APOYO for those columns, not a cherry-picked subset.
 
 Status labels are NOT interchangeable. Map each item only to the status shown in that column/cell:
 - LOGRADO: competence observed as consolidated in context; you may use clear positive wording aligned with achievement.
@@ -200,19 +266,49 @@ Status labels are NOT interchangeable. Map each item only to the status shown in
 - REQUIERE APOYO: not consolidated; stress need for explicit support, mediation, or adjustments; do not rewrite as success or "logra" / "demuestra de forma adecuada" for that same item.
 Do not narrate the checklist as if every line were LOGRADO. For each indicator that appears with a status, your wording must match LOGRADO vs EN PROCESO vs REQUIERE APOYO. Cover strengths and gaps: do not only list problems and skip LOGRADO items, and do not only praise while hiding REQUIERE APOYO or EN PROCESO. Keep Spanish agreement using impersonal forms ("Presenta…", "Se observa…"), neutral "el estudiante/la estudiante", or "el perfil", not proper names from the context.
 
-Comprehensive coverage: Read the entire USER-WRITTEN CONTEXT. You have up to {MAX_RESPONSE_CHARS} characters: use most of that space when the data support it—dense, specific wording; do not stop short with a thin paragraph if you can still add faithful detail under the cap. You cannot quote every indicator; still, address each major domain or evaluation row present (cognitive-communicative, socioemotional, motor/sensory/autonomy, etc.), summarizing the real mix of LOGRADO / EN PROCESO / REQUIERE APOYO.
+Comprehensive coverage within scope: Read the entire USER-WRITTEN CONTEXT to find evidence, but **write only within the scope of INSTRUCTION/TASK**. If the main task is a single domain (e.g. IV a) cognitive-communicative), deepen that domain across all its indicators in the table—do not dilute the answer by also narrating socioemotional or motor columns from the same paste. If INSTRUCTION/TASK explicitly requires several domains or the whole IV, then cover each requested domain with the same rigor. Your redacción may extend up to {MAX_RESPONSE_CHARS} characters: use most of that space when the data support it—rich, specific content with a readable rhythm (not a wall of keywords); do not stop short with a thin paragraph if you can still add faithful detail under the cap for the **asked** scope.
 
-Every case is different: ground the answer in the statuses and domains in this context so profiles do not sound interchangeable. If two or more evaluations appear in one answer, separate them without proper names (e.g. contrasting patterns or domains), unless INSTRUCTION/TASK explicitly asks to identify people.
+Every case is different: ground the answer in the statuses and indicators that fall under the instructed scope so profiles do not sound interchangeable. If two or more evaluations appear in one answer, separate them without proper names (e.g. contrasting patterns or domains), unless INSTRUCTION/TASK explicitly asks to identify people.
 
 Hard rules:
-- Maximum length: {MAX_RESPONSE_CHARS} characters (including spaces), never more. Aim to land near that ceiling (e.g. ~1250–{MAX_RESPONSE_CHARS}) when content allows, so the quota is used well.
-- Always finish with a complete, closed sentence (final period, etc.). If a clean ending would land around 1260 instead of forcing a longer ending and breaking mid-thought, prefer the shorter clean ending—never exceed {MAX_RESPONSE_CHARS}. Do not end with "...", "…", suspension points, or trailing commas.
+- Maximum length: {MAX_RESPONSE_CHARS} characters (including spaces), never more. Aim to land near that ceiling when the data support it, using most of the available space up to {MAX_RESPONSE_CHARS} when appropriate.
+- Always finish with a complete, closed sentence (final period, etc.). If a clean ending would exceed the cap by a few characters, prefer the shorter clean ending—never exceed {MAX_RESPONSE_CHARS}. Do not end with "...", "…", suspension points, or trailing commas.
 - Do not cite internal system labels; write for teachers and coordinators.
 - Never equate EN PROCESO or REQUIERE APOYO with LOGRADO in the narrative for the same indicator.
-- With the short length cap, synthesize across the whole context the user sent: no omitting entire domains or whole evaluation rows unless INSTRUCTION/TASK narrows scope.
+- With the available length cap, synthesize across all indicators that belong to the scope implied by INSTRUCTION/TASK (e.g. all cognitive-communicative columns when that is the task). Do not omit whole blocks of indicators **within that scope**. When INSTRUCTION/TASK narrows to one domain, you may ignore other domains in the paste for the narrative—only do not ignore indicators inside the requested domain.
 - Do not name the student, the evaluator/specialist, the course or grade (e.g. 2° F, 2° A), dates, or the report title (e.g. "Informe cualitativo breve", section letter as a heading). Omit "evaluado por…", "evaluadora:", parenthetical names, and similar. Start directly with qualitative substance—e.g. "Presenta un perfil…", "Fortalezas observadas (LOGRADO):", "En habilidades cognitivas y comunicativas…"—unless INSTRUCTION/TASK explicitly demands those identifiers.
 - Do not give recommendations, advice, next steps, or phrases like "se recomienda", "se sugiere", "conviene", "es aconsejable" unless the INSTRUCTION/TASK asks for that kind of content—explicitly (e.g. recomendaciones, orientaciones, sugerencias) or clearly as the goal of the question (e.g. qué hacer, próximos pasos, cómo apoyar). If the task is only synthesis or qualitative description, stay descriptive-evaluative. Describing REQUIERE APOYO in rubric terms is allowed without adding unsolicited prescriptions.
 """
+
+
+@evaluator_chat.get(
+    "/evaluator/psychoped-used-fields",
+    summary="Apartados del chat evaluador ya usados (informe 27, por estudiante)",
+    description=(
+        "Lista las claves `field_key` ya generadas con éxito por el usuario actual para el "
+        "`student_id` indicado. Sirve para deshabilitar opciones en el asistente tras recargar."
+    ),
+)
+def list_psychoped_evaluator_used_fields(
+    student_id: int = Query(..., ge=1, description="ID del estudiante"),
+    session_user: UserLogin = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    uid_raw = getattr(session_user, "id", None) or getattr(session_user, "user_id", None) or 1
+    user_id_int = int(uid_raw) if uid_raw is not None else 1
+    rows = (
+        db.query(EvaluatorChatPsychopedSectionUseModel.field_key)
+        .filter(
+            EvaluatorChatPsychopedSectionUseModel.user_id == user_id_int,
+            EvaluatorChatPsychopedSectionUseModel.student_id == student_id,
+        )
+        .all()
+    )
+    keys = [r[0] for r in rows if r[0]]
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={"status": 200, "message": "OK", "data": {"field_keys": keys}},
+    )
 
 
 @evaluator_chat.post(
@@ -222,10 +318,12 @@ Hard rules:
         "Recibe `question` (instrucción/tarea) y `user_context` (texto libre del usuario). "
         "Se prioriza síntesis detallada y personalizada por estudiante, usando los datos aportados. "
         "Ambos se envían al modelo junto con el contenido activo de `knowledge_documents`. "
-        "Hasta 1300 caracteres; GPT-5 usa `max_output_tokens` alto y `EVALUATOR_CHAT_REASONING_EFFORT` (p. ej. low). Ver `EVALUATOR_CHAT_MAX_OUTPUT_TOKENS`. "
+        "Hasta 6000 caracteres en la respuesta; GPT-5 usa `max_output_tokens` alto y `EVALUATOR_CHAT_REASONING_EFFORT` (p. ej. low). Ver `EVALUATOR_CHAT_MAX_OUTPUT_TOKENS`. "
         "Requiere `OPENAI_API_KEY`. "
         "Modelo: `EVALUATOR_CHAT_MODEL`, o `NEE_EVALUATOR_MODEL`, o por defecto GPT-5 mini (`gpt-5-mini`). "
-        "La interacción se guarda en `ai_conversations`."
+        "La interacción se guarda en `ai_conversations`. "
+        "Si se envían `student_id` y `field_key` (informe psicopedagógico doc. 27), se persiste el uso "
+        "y no se permite repetir el mismo apartado para ese estudiante (HTTP 409)."
     ),
 )
 def evaluator_chat_message(
@@ -273,6 +371,46 @@ def evaluator_chat_message(
             content={"status": 422, "message": "user_context is required", "data": None},
         )
 
+    uid_raw = getattr(session_user, "id", None) or getattr(session_user, "user_id", None) or 1
+    user_id_int = int(uid_raw) if uid_raw is not None else 1
+
+    psychoped_student_id = body.student_id
+    psychoped_field_key = (body.field_key or "").strip() if body.field_key else None
+    if psychoped_student_id is not None and psychoped_field_key:
+        if psychoped_field_key not in PSYCHOPED_EVALUATOR_FIELD_KEYS:
+            return JSONResponse(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                content={
+                    "status": 422,
+                    "message": "field_key no es un apartado permitido para el informe psicopedagógico.",
+                    "data": {"field_key": psychoped_field_key},
+                },
+            )
+        dup = (
+            db.query(EvaluatorChatPsychopedSectionUseModel)
+            .filter(
+                EvaluatorChatPsychopedSectionUseModel.user_id == user_id_int,
+                EvaluatorChatPsychopedSectionUseModel.student_id == psychoped_student_id,
+                EvaluatorChatPsychopedSectionUseModel.field_key == psychoped_field_key,
+            )
+            .first()
+        )
+        if dup is not None:
+            return JSONResponse(
+                status_code=status.HTTP_409_CONFLICT,
+                content={
+                    "status": 409,
+                    "message": (
+                        "Ya utilizaste el asistente para este apartado con este estudiante. "
+                        "No se puede volver a generar la misma sección."
+                    ),
+                    "data": {
+                        "field_key": psychoped_field_key,
+                        "student_id": psychoped_student_id,
+                    },
+                },
+            )
+
     model_input = _build_model_user_input(question, user_context)
     knowledge_block = _load_knowledge_context(db)
     instructions = _build_system_instruction(knowledge_block)
@@ -301,8 +439,20 @@ def evaluator_chat_message(
         response = client.responses.create(**create_kwargs)
     except Exception as e:
         err = str(e)
+        err_lower = err.lower()
+        if "insufficient_quota" in err_lower or (
+            "429" in err and "exceeded your current quota" in err_lower
+        ):
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={
+                    "status": 503,
+                    "message": "El chat no está disponible",
+                    "data": None,
+                },
+            )
         hint = None
-        if "429" in err or "rate_limit" in err.lower() or "too large" in err.lower():
+        if "429" in err or "rate_limit" in err_lower or "too large" in err_lower:
             hint = (
                 "Límite de tokens (TPM) o contexto demasiado grande. "
                 "Acorta `user_context`, desactiva knowledge_documents que no necesites, o aumenta límites en https://platform.openai.com/account/rate-limits"
@@ -401,19 +551,19 @@ def evaluator_chat_message(
 
     raw = _clamp_response_to_closed_max(raw, MAX_RESPONSE_CHARS)
 
-    uid = getattr(session_user, "id", None) or getattr(session_user, "user_id", None) or 1
-    sid = str(uuid.uuid4())
+    session_uuid = str(uuid.uuid4())
     tokens_used = None
     if hasattr(response, "usage") and response.usage:
         tokens_used = getattr(response.usage, "total_tokens", None)
 
-    try:
-        stored_input = f"[question]\n{question}\n\n[user_context]\n{user_context}"
-        if len(stored_input) > 65000:
-            stored_input = stored_input[:64900] + "\n\n[... truncado ...]"
-        row = AIConversationModel(
-            user_id=int(uid) if uid is not None else 1,
-            session_id=sid,
+    stored_input = f"[question]\n{question}\n\n[user_context]\n{user_context}"
+    if len(stored_input) > 65000:
+        stored_input = stored_input[:64900] + "\n\n[... truncado ...]"
+
+    def _build_ai_row() -> AIConversationModel:
+        return AIConversationModel(
+            user_id=user_id_int,
+            session_id=session_uuid,
             previous_response_id=getattr(response, "id", None),
             input_text=stored_input,
             instruction="evaluator_chat",
@@ -423,10 +573,36 @@ def evaluator_chat_message(
             added_date=datetime.now(),
             updated_date=datetime.now(),
         )
+
+    conv_id = None
+    try:
+        row = _build_ai_row()
         db.add(row)
+        if psychoped_student_id is not None and psychoped_field_key:
+            ql = question if len(question) <= 512 else question[:512]
+            db.add(
+                EvaluatorChatPsychopedSectionUseModel(
+                    user_id=user_id_int,
+                    student_id=psychoped_student_id,
+                    field_key=psychoped_field_key,
+                    question_label=ql,
+                    created_at=datetime.now(),
+                )
+            )
         db.commit()
         db.refresh(row)
         conv_id = row.id
+    except IntegrityError:
+        db.rollback()
+        try:
+            row_only = _build_ai_row()
+            db.add(row_only)
+            db.commit()
+            db.refresh(row_only)
+            conv_id = row_only.id
+        except Exception:
+            db.rollback()
+            conv_id = None
     except Exception:
         db.rollback()
         conv_id = None

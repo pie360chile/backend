@@ -32,6 +32,26 @@ VALID_SCALE_TYPES = ("pedagogical", "social_communicative")
 VALID_VALUES = ("1", "2", "3", "N/O")
 
 
+def _optional_short_str(value: Any) -> Optional[str]:
+    """Cortos (nombres, códigos): trim extremos; vacío -> None."""
+    if value is None:
+        return None
+    s = value if isinstance(value, str) else str(value)
+    s = s.strip()
+    return None if s == "" else s
+
+
+def _optional_longtext(value: Any) -> Optional[str]:
+    """
+    Textos largos y HTML (TipTap): sin strip() para no perder espacios/saltos al inicio/fin ni NBSP.
+    Solo '' o None se guardan como NULL.
+    """
+    if value is None:
+        return None
+    s = value if isinstance(value, str) else str(value)
+    return None if s == "" else s
+
+
 def _build_scales_from_flat(data: dict) -> List[dict]:
     """Construye el array scales desde claves planas del frontend (pedagogical_scale_1..10, social_communicative_scale_1..10)."""
     if data.get("scales") and isinstance(data["scales"], list) and len(data["scales"]) > 0:
@@ -237,31 +257,31 @@ class PsychopedagogicalEvaluationClass:
 
             row = PsychopedagogicalEvaluationInfoModel(
                 student_id=student_id,
-                social_name=(data.get("social_name") or "").strip() or None,
-                age=(data.get("age") or "").strip() or None,
+                social_name=_optional_short_str(data.get("social_name")),
+                age=_optional_short_str(data.get("age")),
                 evaluation_date=_parse_date(data.get("evaluation_date")),
-                diagnosis=(data.get("diagnosis") or "").strip() or None,
+                diagnosis=_optional_short_str(data.get("diagnosis")),
                 diagnosis_issue_date=_parse_date(data.get("diagnosis_issue_date")),
-                admission_type=(data.get("admission_type") or "").strip() or None,
-                admission_type_other=(data.get("admission_type_other") or "").strip() or None,
-                instruments_applied=(data.get("instruments_applied") or "").strip() or None,
-                school_history_background=(data.get("school_history_background") or "").strip() or None,
-                cognitive_analysis=(data.get("cognitive_analysis") or "").strip() or None,
-                personal_analysis=(data.get("personal_analysis") or "").strip() or None,
-                motor_analysis=(data.get("motor_analysis") or "").strip() or None,
-                cognitive_synthesis=(data.get("cognitive_synthesis") or "").strip() or None,
-                personal_synthesis=(data.get("personal_synthesis") or "").strip() or None,
-                motor_synthesis=(data.get("motor_synthesis") or "").strip() or None,
-                suggestions_to_school=(data.get("suggestions_to_school") or "").strip() or None,
-                suggestions_to_classroom_team=(data.get("suggestions_to_classroom_team") or "").strip() or None,
-                suggestions_to_student=(data.get("suggestions_to_student") or "").strip() or None,
-                suggestions_to_family=(data.get("suggestions_to_family") or "").strip() or None,
-                other_suggestions=(data.get("other_suggestions") or "").strip() or None,
-                conclusion=(data.get("conclusion") or "").strip() or None,
+                admission_type=_optional_short_str(data.get("admission_type")),
+                admission_type_other=_optional_short_str(data.get("admission_type_other")),
+                instruments_applied=_optional_longtext(data.get("instruments_applied")),
+                school_history_background=_optional_longtext(data.get("school_history_background")),
+                cognitive_analysis=_optional_longtext(data.get("cognitive_analysis")),
+                personal_analysis=_optional_longtext(data.get("personal_analysis")),
+                motor_analysis=_optional_longtext(data.get("motor_analysis")),
+                cognitive_synthesis=_optional_longtext(data.get("cognitive_synthesis")),
+                personal_synthesis=_optional_longtext(data.get("personal_synthesis")),
+                motor_synthesis=_optional_longtext(data.get("motor_synthesis")),
+                suggestions_to_school=_optional_longtext(data.get("suggestions_to_school")),
+                suggestions_to_classroom_team=_optional_longtext(data.get("suggestions_to_classroom_team")),
+                suggestions_to_student=_optional_longtext(data.get("suggestions_to_student")),
+                suggestions_to_family=_optional_longtext(data.get("suggestions_to_family")),
+                other_suggestions=_optional_longtext(data.get("other_suggestions")),
+                conclusion=_optional_longtext(data.get("conclusion")),
                 professional_id=int(data["professional_id"]) if data.get("professional_id") is not None else None,
-                professional_identification_number=(data.get("professional_identification_number") or "").strip() or None,
-                professional_registration_number=(data.get("professional_registration_number") or "").strip() or None,
-                professional_specialty=(data.get("professional_specialty") or "").strip() or None,
+                professional_identification_number=_optional_short_str(data.get("professional_identification_number")),
+                professional_registration_number=_optional_short_str(data.get("professional_registration_number")),
+                professional_specialty=_optional_short_str(data.get("professional_specialty")),
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow(),
             )
@@ -291,8 +311,14 @@ class PsychopedagogicalEvaluationClass:
                 return {"status": "error", "message": "Registro no encontrado.", "data": None}
 
             def set_str(key, attr):
-                if key in data and data[key] is not None:
-                    setattr(row, attr, (data[key] or "").strip() or None)
+                if key not in data:
+                    return
+                setattr(row, attr, _optional_short_str(data[key]))
+
+            def set_longtext(key, attr):
+                if key in data:
+                    setattr(row, attr, _optional_longtext(data[key]))
+
             def set_date(key, attr):
                 if key in data and data[key] is not None:
                     setattr(row, attr, _parse_date(data[key]))
@@ -307,20 +333,20 @@ class PsychopedagogicalEvaluationClass:
             set_date("diagnosis_issue_date", "diagnosis_issue_date")
             set_str("admission_type", "admission_type")
             set_str("admission_type_other", "admission_type_other")
-            set_str("instruments_applied", "instruments_applied")
-            set_str("school_history_background", "school_history_background")
-            set_str("cognitive_analysis", "cognitive_analysis")
-            set_str("personal_analysis", "personal_analysis")
-            set_str("motor_analysis", "motor_analysis")
-            set_str("cognitive_synthesis", "cognitive_synthesis")
-            set_str("personal_synthesis", "personal_synthesis")
-            set_str("motor_synthesis", "motor_synthesis")
-            set_str("suggestions_to_school", "suggestions_to_school")
-            set_str("suggestions_to_classroom_team", "suggestions_to_classroom_team")
-            set_str("suggestions_to_student", "suggestions_to_student")
-            set_str("suggestions_to_family", "suggestions_to_family")
-            set_str("other_suggestions", "other_suggestions")
-            set_str("conclusion", "conclusion")
+            set_longtext("instruments_applied", "instruments_applied")
+            set_longtext("school_history_background", "school_history_background")
+            set_longtext("cognitive_analysis", "cognitive_analysis")
+            set_longtext("personal_analysis", "personal_analysis")
+            set_longtext("motor_analysis", "motor_analysis")
+            set_longtext("cognitive_synthesis", "cognitive_synthesis")
+            set_longtext("personal_synthesis", "personal_synthesis")
+            set_longtext("motor_synthesis", "motor_synthesis")
+            set_longtext("suggestions_to_school", "suggestions_to_school")
+            set_longtext("suggestions_to_classroom_team", "suggestions_to_classroom_team")
+            set_longtext("suggestions_to_student", "suggestions_to_student")
+            set_longtext("suggestions_to_family", "suggestions_to_family")
+            set_longtext("other_suggestions", "other_suggestions")
+            set_longtext("conclusion", "conclusion")
             set_int("professional_id", "professional_id")
             set_str("professional_identification_number", "professional_identification_number")
             set_str("professional_registration_number", "professional_registration_number")
