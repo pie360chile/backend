@@ -58,6 +58,23 @@ class EvaluatorChatPsychopedSectionUseModel(Base):
     created_at = Column(DateTime, nullable=False, default=datetime.now)
 
 
+class EvaluatorChatAuditModel(Base):
+    """
+    Auditoría de cada uso exitoso del chat evaluador: usuario, tipo de documento,
+    estudiante, apartado (si aplica) y pregunta enviada.
+    """
+
+    __tablename__ = "evaluator_chat_audits"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, nullable=False)
+    document_type_id = Column(Integer, nullable=True)
+    student_id = Column(Integer, nullable=True)
+    field_key = Column(String(80), nullable=True)
+    question = Column(Text, nullable=False)
+    added_date = Column(DateTime, nullable=False, default=datetime.now)
+
+
 class AccountTypeModel(Base):
     __tablename__ = 'account_types'
 

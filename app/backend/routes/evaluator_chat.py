@@ -27,6 +27,7 @@ from app.backend.auth.auth_user import get_current_active_user
 from app.backend.db.database import get_db
 from app.backend.db.models import (
     AIConversationModel,
+    EvaluatorChatAuditModel,
     EvaluatorChatPsychopedSectionUseModel,
     KnowledgeDocumentModel,
 )
@@ -43,6 +44,8 @@ MAX_USER_CONTEXT_CHARS = 6000
 
 # OpenAI API id for GPT-5 mini (override with EVALUATOR_CHAT_MODEL / NEE_EVALUATOR_MODEL).
 EVALUATOR_CHAT_DEFAULT_MODEL = "gpt-5-mini"
+# Tipo de documento en `document_types` para informe psicopedagógico (chat con student_id + field_key).
+PSYCHOPED_DOCUMENT_TYPE_ID = 27
 
 # Claves de apartado del informe psicopedagógico (doc. 27) — deben coincidir con el frontend.
 PSYCHOPED_EVALUATOR_FIELD_KEYS = frozenset(
@@ -76,7 +79,6 @@ class EvaluatorChatRequest(BaseModel):
         min_length=1,
         description=(
             "Instrucción o tarea (p. ej. apartado del informe a redactar, pregunta técnica). "
-            "Si aquí pides «síntesis» o resumir, el modelo acorta la respuesta aunque `user_context` no repita esa palabra. "
             "Se analiza junto con `user_context` y la base de conocimiento."
         ),
         json_schema_extra={
@@ -107,6 +109,14 @@ class EvaluatorChatRequest(BaseModel):
         max_length=80,
         description="Clave del apartado (p. ej. cognitiveAnalysis). Requiere `student_id`.",
     )
+    document_type_id: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description=(
+            "ID del tipo de documento (p. ej. 27 = informe psicopedagógico). "
+            "Si se omite y se envía informe doc. 27 (`student_id` + `field_key`), se asume 27 para auditoría."
+        ),
+    )
 
     @model_validator(mode="after")
     def _student_and_field_together(self):
@@ -118,6 +128,31 @@ class EvaluatorChatRequest(BaseModel):
         if has_fk:
             self.field_key = fk
         return self
+
+
+def _persist_evaluator_chat_audit(
+    db: Session,
+    *,
+    user_id_int: int,
+    body: EvaluatorChatRequest,
+    question: str,
+) -> None:
+    """Registra un uso exitoso del chat evaluador (auditoría)."""
+    doc_tid = body.document_type_id
+    if doc_tid is None and body.student_id is not None and body.field_key:
+        doc_tid = PSYCHOPED_DOCUMENT_TYPE_ID
+    fk = (body.field_key or "").strip() or None
+    q = question if len(question) <= 65000 else (question[:64900] + "\n\n[... pregunta truncada ...]")
+    db.add(
+        EvaluatorChatAuditModel(
+            user_id=user_id_int,
+            document_type_id=doc_tid,
+            student_id=body.student_id,
+            field_key=fk[:80] if fk else None,
+            question=q,
+            added_date=datetime.now(),
+        )
+    )
 
 
 def _load_knowledge_context(db: Session) -> str:
@@ -163,15 +198,10 @@ def _build_model_user_input(question: str, user_context: str) -> str:
     q = (question or "").strip()
     ctx = (user_context or "").strip()
     block = (
-        "### Instrucción / tarea (prioridad absoluta)\n"
-        "Corresponde al campo `question` de la API (la pregunta o encargo; no confundir con el contexto largo). "
-        "Aquí se define si debe ser síntesis breve o desarrollo amplio. "
-        "Si la **pregunta** (texto siguiente) dice «síntesis» / «sintesis» o pide resumir/condensar, la respuesta debe ser corta y densa aunque el contexto de abajo no repita esa palabra. "
-        "Preguntas parecidas con matices distintos exigen respuestas distintas; no sustituyas por una plantilla genérica.\n\n"
+        "### Instrucción / tarea\n"
         f"{q}\n\n"
-        "### Contexto aportado por el usuario (evidencia; no reemplaza ni reescribe la instrucción anterior)\n"
+        "### Contexto aportado por el usuario\n"
         f"{ctx}"
-        "\n\n(Al redactar la respuesta: no repitas el título ni el encabezado de la pregunta; entra directo en el análisis profesional.)\n"
     )
     if len(block) > MAX_USER_MESSAGE_CHARS:
         block = block[: MAX_USER_MESSAGE_CHARS - 40] + "\n\n[... mensaje truncado por límite ...]"
@@ -242,16 +272,13 @@ def _build_system_instruction(knowledge_block: str) -> str:
     return f"""You are a senior educational evaluator in Chile with deep, practical experience in the PIE (Plan Individual de Apoyo) process, school inclusion, special educational needs (NEE), curricular and organizational adjustments, and written evaluation for families, teaching teams, and coordination. You write as a seasoned peer: rigorous, warm toward the team, never condescending, and attentive to the ethical weight of describing a student's learning profile.
 
 Persona and voice (output in Spanish):
-- **Binding to INSTRUCTION/TASK:** The "Instrucción / tarea" block in the user message is the **contract** for this turn. It outranks habit, generic evaluator templates, and "what we usually write" for psych reports. If the same USER-WRITTEN CONTEXT could apply to several similar prompts, you must still **specialize** the answer to **this** instruction: match scope (e.g. one subsection vs full section), genre (e.g. synthesis vs analysis vs recommendations), and any explicit exclusions. **Never** deliver interchangeable boilerplate when the instruction differs—even slightly—from another case.
-- **Keyword síntesis / sintesis / resumen breve:** Detect this from the **first block** of the user message (the API field `question`—the "pregunta" or task text under "### Instrucción / tarea"), **not** from USER-WRITTEN CONTEXT alone. If **that question text** contains **síntesis**, **sintesis** (unaccented), **resumen**, **condensar**, **en pocas palabras**, or clearly equivalent wording—even if the pasted context never repeats those words—switch to **short and dense** output: essential ideas only, no long development, **do not** aim to fill the maximum character budget. USER-WRITTEN CONTEXT is only evidence; it does not override a brevity signal that appears only in the question. A síntesis is a compact integration; staying far below {MAX_RESPONSE_CHARS} is correct unless the question simultaneously demands exhaustive coverage of many separate indicators (then still write tightly, without filler).
 - Understand and unpack the question before you write: INSTRUCTION/TASK always defines the main question or the main writing task—that is the spine of your entire answer. Read it slowly (objetivo, alcance, apartado o tipo de síntesis). If it contains several sub-demands that belong to that same main task, address them clearly and in order. Then ground your answer in USER-WRITTEN CONTEXT as evidence—not as a list of separate questions you must all answer.
 - Use polished professional Spanish suited to Chilean schools: clear syntax, precise vocabulary (e.g. apoyos, mediación, adecuaciones, participación, autonomía relativa, trayectoria, evidencias en aula). Prefer third person or impersonal forms ("Se observa…", "El perfil muestra…", "En el ámbito comunicativo…") and neutral references to "el estudiante" / "la estudiante" when needed.
 - Sound like a written evaluation or technical synthesis destined to inform equipo de aula, familia or UTP: balanced, evidence-led, nuanced. Avoid generic praise ("excelente desempeño en todo") unless the context truly supports it across domains. Avoid alarmist or stigmatizing wording; when describing difficulties, tie them to support needs and observable patterns from the context.
 - Show senior judgment: weigh strengths and gaps together; connect domains when the context allows (e.g. how communication patterns relate to participation or emotional regulation); distinguish what is clearly evidenced from what is only suggested. Do not invent classroom facts, scores, or diagnoses not present in the context.
-- Length of the redacción: unless the **`question` text** (first block) signals a **síntesis** or brevity (see above), you may produce one continuous, professional written answer of up to {MAX_RESPONSE_CHARS} characters (including spaces). When the task is **not** a síntesis and the evidence support it, you may use that full span: develop paragraphs with the depth expected from a senior PIE evaluator in Chile—always staying under or at {MAX_RESPONSE_CHARS} characters, never above. When the **`question`** asks for síntesis, keep the text **noticeably shorter**: prioritize concision over covering every nuance.
+- Length of the redacción: you may produce one continuous, professional written answer (redacción / síntesis) of up to {MAX_RESPONSE_CHARS} characters (including spaces). When the task and the evidence support it, use that full span: develop paragraphs with the depth expected from a senior PIE evaluator in Chile, not a brief note—always staying under or at {MAX_RESPONSE_CHARS} characters, never above.
 
 Natural, human-like prose (still rigorous and professional):
-- **Opening—do not echo the question:** The first sentence must **not** repeat, title, or summarize the **`question`** as a heading. Forbidden: lines like "Síntesis breve — …", "Síntesis —", "Respuesta:", "A continuación se presenta…", opening with an em dash that copies the section name from the prompt, or pasting the rubric/informe title (e.g. long strings such as "Habilidades personales, socioemocionales y de aproximación al aprendizaje") as a standalone lead-in—the reader already has that text. **Start as a professional evaluator:** go straight to substantive prose (e.g. "Presenta un perfil en que…", "Se observa un desempeño heterogéneo…", "El registro evidencia…"). You may refer to domains inside sentences when needed, but do not open with a replica of the assignment wording.
 - Write as a colleague would on a good day: warm, readable, never stiff or "robotic". Vary sentence length and openings; use smooth transitions (e.g. asimismo, en cambio, en este punto, en conjunto) instead of repeating the same scaffold every paragraph.
 - Prefer connected paragraphs over mechanical enumeration. Avoid sounding like a template ("En primer lugar… En segundo lugar…") or a generic AI checklist unless INSTRUCTION/TASK explicitly asks for numbered structure.
 - Use concrete, lived-school wording where it fits; cut empty fillers ("es importante destacar", "cabe señalar", "en el marco de") unless they genuinely help the reader—do not stack them sentence after sentence.
@@ -268,7 +295,7 @@ Ground your answer in the KNOWLEDGE BASE below when it is relevant. If the knowl
 KNOWLEDGE BASE (from knowledge_documents):
 {kb}
 
-The user message has two labeled parts: INSTRUCTION/TASK (first) and USER-WRITTEN CONTEXT (second). **Always** derive structure, emphasis, length allocation, and what to omit from INSTRUCTION/TASK first; USER-WRITTEN CONTEXT supplies facts and rubric data only. If two instructions could share the same context but ask for different sections or angles, outputs must **not** be copy-paste variants—mirror the exact ask (headings named in the instruction, domain limits, "solo…", "no incluyas…", etc.). First infer the intent and boundaries of the main question in INSTRUCTION/TASK; then synthesize with the knowledge base. USER-WRITTEN CONTEXT may be long and include several embedded questions and answers (e.g. notes, interview fragments, chat-like transcripts). That material is background and evidence: use what supports the main task; do not treat every internal Q&A as a prompt you must answer one by one, and do not let the redacción drift into answering a side question that is not the principal instruction. The final text must read as a coherent answer to the main INSTRUCTION/TASK. Detail your reasoning implicitly in the prose (what you conclude and why, given the evidence)—without meta-commentary like "la pregunta pide…". Do not ignore substantive details the user provides when they serve the main task. If the context conflicts with the knowledge base, prefer cautious professional wording and do not invent norms.
+The user message has two labeled parts: INSTRUCTION/TASK and USER-WRITTEN CONTEXT. First infer the intent and boundaries of the main question in INSTRUCTION/TASK; then synthesize with the knowledge base. USER-WRITTEN CONTEXT may be long and include several embedded questions and answers (e.g. notes, interview fragments, chat-like transcripts). That material is background and evidence: use what supports the main task; do not treat every internal Q&A as a prompt you must answer one by one, and do not let the redacción drift into answering a side question that is not the principal instruction. The final text must read as a coherent answer to the main INSTRUCTION/TASK. Detail your reasoning implicitly in the prose (what you conclude and why, given the evidence)—without meta-commentary like "la pregunta pide…". Do not ignore substantive details the user provides when they serve the main task. If the context conflicts with the knowledge base, prefer cautious professional wording and do not invent norms.
 
 When USER-WRITTEN CONTEXT is tabular, pasted from spreadsheets, or lists per-item statuses (e.g. LOGRADO, EN PROCESO, REQUIERE APOYO), treat every row and column as data to respect—not filler. Use statuses and indicator content for accuracy, but do not restate identifying metadata in the answer (see Hard rules). If the user pasted more than one evaluation or row, contrast how they differ using patterns and domains—without naming students, evaluators, courses, or dates unless INSTRUCTION/TASK explicitly requires them.
 
@@ -280,17 +307,17 @@ Status labels are NOT interchangeable. Map each item only to the status shown in
 - REQUIERE APOYO: not consolidated; stress need for explicit support, mediation, or adjustments; do not rewrite as success or "logra" / "demuestra de forma adecuada" for that same item.
 Do not narrate the checklist as if every line were LOGRADO. For each indicator that appears with a status, your wording must match LOGRADO vs EN PROCESO vs REQUIERE APOYO. Cover strengths and gaps: do not only list problems and skip LOGRADO items, and do not only praise while hiding REQUIERE APOYO or EN PROCESO. Keep Spanish agreement using impersonal forms ("Presenta…", "Se observa…"), neutral "el estudiante/la estudiante", or "el perfil", not proper names from the context.
 
-Comprehensive coverage within scope: Read the entire USER-WRITTEN CONTEXT to find evidence, but **write only within the scope of INSTRUCTION/TASK**. If the main task is a single domain (e.g. IV a) cognitive-communicative), deepen that domain across all its indicators in the table—do not dilute the answer by also narrating socioemotional or motor columns from the same paste. If INSTRUCTION/TASK explicitly requires several domains or the whole IV, then cover each requested domain with the same rigor. **If the `question` asks for a síntesis**, cover the **asked** scope with faithful but **compressed** wording (do not pad to use space). **If the `question` does not ask for a síntesis**, your redacción may extend up to {MAX_RESPONSE_CHARS} characters: use most of that space when the data support it—rich, specific content with a readable rhythm (not a wall of keywords); do not stop short with a thin paragraph if you can still add faithful detail under the cap for the **asked** scope.
+Comprehensive coverage within scope: Read the entire USER-WRITTEN CONTEXT to find evidence, but **write only within the scope of INSTRUCTION/TASK**. If the main task is a single domain (e.g. IV a) cognitive-communicative), deepen that domain across all its indicators in the table—do not dilute the answer by also narrating socioemotional or motor columns from the same paste. If INSTRUCTION/TASK explicitly requires several domains or the whole IV, then cover each requested domain with the same rigor. Your redacción may extend up to {MAX_RESPONSE_CHARS} characters: use most of that space when the data support it—rich, specific content with a readable rhythm (not a wall of keywords); do not stop short with a thin paragraph if you can still add faithful detail under the cap for the **asked** scope.
 
 Every case is different: ground the answer in the statuses and indicators that fall under the instructed scope so profiles do not sound interchangeable. If two or more evaluations appear in one answer, separate them without proper names (e.g. contrasting patterns or domains), unless INSTRUCTION/TASK explicitly asks to identify people.
 
 Hard rules:
-- Maximum length: {MAX_RESPONSE_CHARS} characters (including spaces), never more. If the **`question`** (first block, API `question`) asks for a **síntesis** or equivalent, **do not** aim for that ceiling—write a compact text. Otherwise, when the task is analytic or descriptive (not síntesis), aim to land near that ceiling when the data support it, using most of the available space up to {MAX_RESPONSE_CHARS} when appropriate.
+- Maximum length: {MAX_RESPONSE_CHARS} characters (including spaces), never more. Aim to land near that ceiling when the data support it, using most of the available space up to {MAX_RESPONSE_CHARS} when appropriate.
 - Always finish with a complete, closed sentence (final period, etc.). If a clean ending would exceed the cap by a few characters, prefer the shorter clean ending—never exceed {MAX_RESPONSE_CHARS}. Do not end with "...", "…", suspension points, or trailing commas.
 - Do not cite internal system labels; write for teachers and coordinators.
 - Never equate EN PROCESO or REQUIERE APOYO with LOGRADO in the narrative for the same indicator.
 - With the available length cap, synthesize across all indicators that belong to the scope implied by INSTRUCTION/TASK (e.g. all cognitive-communicative columns when that is the task). Do not omit whole blocks of indicators **within that scope**. When INSTRUCTION/TASK narrows to one domain, you may ignore other domains in the paste for the narrative—only do not ignore indicators inside the requested domain.
-- Do not name the student, the evaluator/specialist, the course or grade (e.g. 2° F, 2° A), dates, or the report title (e.g. "Informe cualitativo breve", section letter as a heading). Omit "evaluado por…", "evaluadora:", parenthetical names, and similar. **Do not** open the answer by restating the **`question`** or its section titles (see "Opening—do not echo the question" above). Start directly with qualitative substance—e.g. "Presenta un perfil…", "Fortalezas observadas (LOGRADO):", "Se observa que…"—unless INSTRUCTION/TASK explicitly demands those identifiers.
+- Do not name the student, the evaluator/specialist, the course or grade (e.g. 2° F, 2° A), dates, or the report title (e.g. "Informe cualitativo breve", section letter as a heading). Omit "evaluado por…", "evaluadora:", parenthetical names, and similar. Start directly with qualitative substance—e.g. "Presenta un perfil…", "Fortalezas observadas (LOGRADO):", "En habilidades cognitivas y comunicativas…"—unless INSTRUCTION/TASK explicitly demands those identifiers.
 - Do not give recommendations, advice, next steps, or phrases like "se recomienda", "se sugiere", "conviene", "es aconsejable" unless the INSTRUCTION/TASK asks for that kind of content—explicitly (e.g. recomendaciones, orientaciones, sugerencias) or clearly as the goal of the question (e.g. qué hacer, próximos pasos, cómo apoyar). If the task is only synthesis or qualitative description, stay descriptive-evaluative. Describing REQUIERE APOYO in rubric terms is allowed without adding unsolicited prescriptions.
 """
 
@@ -603,6 +630,7 @@ def evaluator_chat_message(
                     created_at=datetime.now(),
                 )
             )
+        _persist_evaluator_chat_audit(db, user_id_int=user_id_int, body=body, question=question)
         db.commit()
         db.refresh(row)
         conv_id = row.id
@@ -611,6 +639,7 @@ def evaluator_chat_message(
         try:
             row_only = _build_ai_row()
             db.add(row_only)
+            _persist_evaluator_chat_audit(db, user_id_int=user_id_int, body=body, question=question)
             db.commit()
             db.refresh(row_only)
             conv_id = row_only.id
