@@ -1524,6 +1524,8 @@ class PsychopedagogicalEvaluationInfoModel(Base):
     instruments_applied = Column(Text, nullable=True)
     school_history_background = Column(Text, nullable=True)
     cognitive_analysis = Column(Text, nullable=True)
+    cognitive_quantitative_matrix = Column(Text, nullable=True)
+    cognitive_general_scales = Column(Text, nullable=True)
     personal_analysis = Column(Text, nullable=True)
     motor_analysis = Column(Text, nullable=True)
     cognitive_synthesis = Column(Text, nullable=True)

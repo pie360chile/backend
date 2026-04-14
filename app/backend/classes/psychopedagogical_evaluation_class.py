@@ -90,6 +90,8 @@ def _info_to_dict(row: PsychopedagogicalEvaluationInfoModel) -> dict:
         "instruments_applied": row.instruments_applied,
         "school_history_background": row.school_history_background,
         "cognitive_analysis": row.cognitive_analysis,
+        "cognitive_quantitative_matrix": row.cognitive_quantitative_matrix,
+        "cognitive_general_scales": row.cognitive_general_scales,
         "personal_analysis": row.personal_analysis,
         "motor_analysis": row.motor_analysis,
         "cognitive_synthesis": row.cognitive_synthesis,
@@ -267,6 +269,8 @@ class PsychopedagogicalEvaluationClass:
                 instruments_applied=_optional_longtext(data.get("instruments_applied")),
                 school_history_background=_optional_longtext(data.get("school_history_background")),
                 cognitive_analysis=_optional_longtext(data.get("cognitive_analysis")),
+                cognitive_quantitative_matrix=_optional_longtext(data.get("cognitive_quantitative_matrix")),
+                cognitive_general_scales=_optional_longtext(data.get("cognitive_general_scales")),
                 personal_analysis=_optional_longtext(data.get("personal_analysis")),
                 motor_analysis=_optional_longtext(data.get("motor_analysis")),
                 cognitive_synthesis=_optional_longtext(data.get("cognitive_synthesis")),
@@ -336,6 +340,8 @@ class PsychopedagogicalEvaluationClass:
             set_longtext("instruments_applied", "instruments_applied")
             set_longtext("school_history_background", "school_history_background")
             set_longtext("cognitive_analysis", "cognitive_analysis")
+            set_longtext("cognitive_quantitative_matrix", "cognitive_quantitative_matrix")
+            set_longtext("cognitive_general_scales", "cognitive_general_scales")
             set_longtext("personal_analysis", "personal_analysis")
             set_longtext("motor_analysis", "motor_analysis")
             set_longtext("cognitive_synthesis", "cognitive_synthesis")

@@ -37,6 +37,15 @@ from app.backend.classes.family_report_class import FamilyReportClass
 from app.backend.classes.interconsultation_class import InterconsultationClass
 from app.backend.classes.guardian_attendance_certificate_class import GuardianAttendanceCertificateClass
 from app.backend.classes.psychopedagogical_evaluation_class import PsychopedagogicalEvaluationClass
+from app.backend.utils.psychoped_cognitive_quantitative import (
+    AC_CONTENT_CONTROL_HOLD,
+    CHART_PLACEHOLDER,
+    inject_evalua_matrix_word_table,
+    insert_chart_placeholder_paragraph_image,
+    parse_evalua_psychoped_matrices,
+    render_evalua_pt_line_chart_png,
+    strip_chart_placeholder_from_docx,
+)
 from app.backend.classes.conners_teacher_evaluation_class import ConnersTeacherEvaluationClass
 from app.backend.classes.cesp_class import CespClass
 from app.backend.classes.action_incident_class import ActionIncidentClass
@@ -3752,6 +3761,7 @@ async def generate_document(
 
         # Si document_id = 27, generar documento de evaluación psicopedagógica (psychopedagogical_evaluation.docx)
         if document_id == 27:
+            cognitive_chart_tmp: Optional[str] = None
             def _fmt_date_d27(val):
                 if not val:
                     return ""
@@ -3846,6 +3856,23 @@ async def generate_document(
             instruments_applied = str(eval_data.get("instruments_applied") or "").strip()
             school_history_background = str(eval_data.get("school_history_background") or "").strip()
             cognitive_analysis = _psychoped_html_to_plain(eval_data.get("cognitive_analysis"))
+            cognitive_chart_placeholder_text = ""
+            inject_ac_table = False
+            parsed_cq = parse_evalua_psychoped_matrices(eval_data)
+            if parsed_cq and parsed_cq.has_table_numbers():
+                inject_ac_table = True
+                if parsed_cq.has_chart_numbers():
+                    cognitive_chart_placeholder_text = CHART_PLACEHOLDER
+                    fd, tmp_png = tempfile.mkstemp(suffix=".png")
+                    os.close(fd)
+                    if render_evalua_pt_line_chart_png(parsed_cq, tmp_png):
+                        cognitive_chart_tmp = tmp_png
+                    else:
+                        try:
+                            os.unlink(tmp_png)
+                        except OSError:
+                            pass
+                        cognitive_chart_placeholder_text = ""
             personal_analysis = _psychoped_html_to_plain(eval_data.get("personal_analysis"))
             motor_analysis = _psychoped_html_to_plain(eval_data.get("motor_analysis"))
             conclusion = _psychoped_html_to_plain(eval_data.get("conclusion"))
@@ -3916,6 +3943,8 @@ async def generate_document(
                 "instruments_applied": instruments_applied,
                 "school_history_background": school_history_background,
                 "cognitive_analysis": cognitive_analysis,
+                "ac": AC_CONTENT_CONTROL_HOLD if inject_ac_table else "",
+                "acg": cognitive_chart_placeholder_text,
                 "personal_analysis": personal_analysis,
                 "motor_analysis": motor_analysis,
                 "conclusion": conclusion,
@@ -3965,6 +3994,8 @@ async def generate_document(
                 "fecha_emision_de_diagnostico": "issue_date",
                 "analisis_cognitivo": "cognitive_analysis",
                 "analisis_cognitivo_comunicativo": "cognitive_analysis",
+                "ac": "ac",
+                "acg": "acg",
                 "analisis_personal_socioemocional": "personal_analysis",
                 "analisis_motor_autonomia_sensorial": "motor_analysis",
                 "sintesis_cognitiva": "cognitive_synthesis",
@@ -4035,6 +4066,20 @@ async def generate_document(
                         "data": None
                     }
                 )
+            out_path = result.get("file_path")
+            if out_path and inject_ac_table and parsed_cq:
+                inject_evalua_matrix_word_table(str(out_path), parsed_cq)
+            if cognitive_chart_tmp and out_path:
+                try:
+                    if not insert_chart_placeholder_paragraph_image(str(out_path), cognitive_chart_tmp):
+                        strip_chart_placeholder_from_docx(str(out_path))
+                finally:
+                    try:
+                        os.unlink(cognitive_chart_tmp)
+                    except OSError:
+                        pass
+            elif out_path and CHART_PLACEHOLDER in (replacements.get("acg") or ""):
+                strip_chart_placeholder_from_docx(str(out_path))
             return FileResponse(
                 path=result["file_path"],
                 filename=result["filename"],
