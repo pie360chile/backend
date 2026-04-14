@@ -8955,6 +8955,51 @@ class DocumentsClass:
                                 )
                             )
 
+                        def _pick_target_paragraph_for_value() -> Optional[Any]:
+                            """
+                            El párrafo del valor suele tener el texto de ayuda de Word (Haz clic…).
+                            Si hay varios (etiqueta + ayuda duplicada), se elige el de menor longitud (suele ser solo el placeholder).
+                            Con tabla dentro del SDT: se prioriza la última celda de cada fila (típico etiqueta | valor).
+                            NO vaciar w:t antes de llamar a esto: si todo está vacío, max() elige el primero
+                            (casi siempre la etiqueta de la fila) y solo se ve una letra en la celda equivocada.
+                            """
+                            tbl = sdt_content_el.find(qn("w:tbl"))
+                            if tbl is not None:
+                                haz_candidates: List[Any] = []
+                                for tr in tbl.iter(qn("w:tr")):
+                                    tcs = tr.findall(qn("w:tc"))
+                                    if not tcs:
+                                        continue
+                                    cell_order = [tcs[-1]] + [c for c in tcs[:-1]]
+                                    for tc in cell_order:
+                                        for p in tc.iter(qn("w:p")):
+                                            full = _paragraph_visible_text(p)
+                                            fl = full.lower()
+                                            if _paragraph_has_placeholder(fl):
+                                                haz_candidates.append((len(full), p))
+                                if haz_candidates:
+                                    return min(haz_candidates, key=lambda x: x[0])[1]
+
+                            paras = list(sdt_content_el.iter(qn("w:p")))
+                            if not paras:
+                                return None
+                            haz_candidates = []
+                            for p in paras:
+                                full = _paragraph_visible_text(p)
+                                fl = full.lower()
+                                if _paragraph_has_placeholder(fl):
+                                    haz_candidates.append((len(full), p))
+                            if haz_candidates:
+                                return min(haz_candidates, key=lambda x: x[0])[1]
+                            for p in paras:
+                                full = _paragraph_visible_text(p).strip()
+                                if not full:
+                                    continue
+                                if _is_label_like_all_caps_line(full):
+                                    continue
+                                return p
+                            return paras[-1]
+
                         if psychoped_sdt:
                             fk = (field_key or "").strip()
                             PSYCHOPED_LONG_TEXT_KEYS = frozenset(
@@ -9010,16 +9055,23 @@ class DocumentsClass:
                             # Identificación, escalas, textos en SDT con tabla, etc.: solo el párrafo con ayuda.
                             paragraphs_here = list(sdt_content_el.iter(qn("w:p")))
                             if not paragraphs_here:
+                                # SDT en línea: a veces sdtContent es solo w:r (sin w:p). Si se añade w:p
+                                # sin quitar esos runs, Word sigue mostrando el placeholder y no el valor.
+                                for child in list(sdt_content_el):
+                                    sdt_content_el.remove(child)
                                 new_p = OxmlElement("w:p")
                                 sdt_content_el.append(new_p)
                                 paragraphs_here = [new_p]
                             target_p = None
-                            for p in paragraphs_here:
-                                full = _paragraph_visible_text(p)
-                                low = full.lower()
-                                if _paragraph_has_placeholder(low):
-                                    target_p = p
-                                    break
+                            if has_tbl:
+                                target_p = _pick_target_paragraph_for_value()
+                            if target_p is None:
+                                for p in paragraphs_here:
+                                    full = _paragraph_visible_text(p)
+                                    low = full.lower()
+                                    if _paragraph_has_placeholder(low):
+                                        target_p = p
+                                        break
                             if target_p is None:
                                 for p in paragraphs_here:
                                     full = _paragraph_visible_text(p).strip()
@@ -9062,51 +9114,6 @@ class DocumentsClass:
                                 target_p.append(r)
                             _psychoped_sweep_placeholder_wt()
                             return
-
-                        def _pick_target_paragraph_for_value() -> Optional[Any]:
-                            """
-                            El párrafo del valor suele tener el texto de ayuda de Word (Haz clic…).
-                            Si hay varios (etiqueta + ayuda duplicada), se elige el de menor longitud (suele ser solo el placeholder).
-                            Con tabla dentro del SDT: se prioriza la última celda de cada fila (típico etiqueta | valor).
-                            NO vaciar w:t antes de llamar a esto: si todo está vacío, max() elige el primero
-                            (casi siempre la etiqueta de la fila) y solo se ve una letra en la celda equivocada.
-                            """
-                            tbl = sdt_content_el.find(qn("w:tbl"))
-                            if tbl is not None:
-                                haz_candidates: List[Any] = []
-                                for tr in tbl.iter(qn("w:tr")):
-                                    tcs = tr.findall(qn("w:tc"))
-                                    if not tcs:
-                                        continue
-                                    cell_order = [tcs[-1]] + [c for c in tcs[:-1]]
-                                    for tc in cell_order:
-                                        for p in tc.iter(qn("w:p")):
-                                            full = _paragraph_visible_text(p)
-                                            fl = full.lower()
-                                            if _paragraph_has_placeholder(fl):
-                                                haz_candidates.append((len(full), p))
-                                if haz_candidates:
-                                    return min(haz_candidates, key=lambda x: x[0])[1]
-
-                            paras = list(sdt_content_el.iter(qn("w:p")))
-                            if not paras:
-                                return None
-                            haz_candidates = []
-                            for p in paras:
-                                full = _paragraph_visible_text(p)
-                                fl = full.lower()
-                                if _paragraph_has_placeholder(fl):
-                                    haz_candidates.append((len(full), p))
-                            if haz_candidates:
-                                return min(haz_candidates, key=lambda x: x[0])[1]
-                            for p in paras:
-                                full = _paragraph_visible_text(p).strip()
-                                if not full:
-                                    continue
-                                if _is_label_like_all_caps_line(full):
-                                    continue
-                                return p
-                            return paras[-1]
 
                         def _sdt_fill_flat_keep_structure() -> None:
                             """SDT con tabla u otro XML anidado: solo rellenar el párrafo destino con w:br."""

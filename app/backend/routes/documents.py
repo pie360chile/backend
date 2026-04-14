@@ -1,4 +1,5 @@
 from typing import Optional, Any
+import unicodedata
 from fastapi import APIRouter, status, UploadFile, File, Form, Depends, Body, Query
 from fastapi.responses import JSONResponse, FileResponse
 from app.backend.classes.documents_class import DocumentsClass
@@ -3840,18 +3841,24 @@ async def generate_document(
             diagnostic = str(eval_data.get("diagnosis") or "").strip()
             issue_date = _fmt_date_d27(eval_data.get("diagnosis_issue_date"))
 
-            # admission_type_1, admission_type_2, admission_type_3 son campos de texto: solo el que corresponde a admission_type se rellena con el valor de admission_type_other
+            # admission_type_1..3: columna del motivo (INGRESO / REEVALUACIÓN / OTRO). Texto libre en
+            # admission_type_other; si solo está marcada la opción, se muestra X para que el Word no quede vacío.
             admission_type_raw = str(eval_data.get("admission_type") or "").strip().lower()
+            admission_type_key = "".join(
+                c
+                for c in unicodedata.normalize("NFKD", admission_type_raw)
+                if unicodedata.category(c) != "Mn"
+            )
             admission_type_other_val = str(eval_data.get("admission_type_other") or "").strip()
             admission_type_1 = ""
             admission_type_2 = ""
             admission_type_3 = ""
-            if admission_type_raw in ("ingreso", "1"):
-                admission_type_1 = admission_type_other_val
-            elif admission_type_raw in ("reevaluacion", "reevaluación", "2"):
-                admission_type_2 = admission_type_other_val
-            elif admission_type_raw in ("otro", "other", "3"):
-                admission_type_3 = admission_type_other_val
+            if admission_type_key in ("ingreso", "1"):
+                admission_type_1 = admission_type_other_val or "X"
+            elif admission_type_key in ("reevaluacion", "2"):
+                admission_type_2 = admission_type_other_val or "X"
+            elif admission_type_key in ("otro", "other", "3"):
+                admission_type_3 = admission_type_other_val or "X"
 
             instruments_applied = str(eval_data.get("instruments_applied") or "").strip()
             school_history_background = str(eval_data.get("school_history_background") or "").strip()
