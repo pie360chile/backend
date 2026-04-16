@@ -116,7 +116,7 @@ class PsychopedagogicalEvaluationIAClass:
                 "message": "OpenAI no está disponible. Instala: pip install openai",
                 "synthesis": None,
             }
-        api_key = os.getenv("OPENAI_API_KEY")
+        api_key = os.getenv("OPENAI_API_KEY2")
         if not api_key:
             return {
                 "status": "error",

@@ -82,7 +82,7 @@ async def analyze_text(
             )
         
         # Obtener API key de OpenAI desde variables de entorno
-        api_key = os.getenv("OPENAI_API_KEY")
+        api_key = os.getenv("OPENAI_API_KEY2")
         
         if not api_key:
             return JSONResponse(
@@ -348,7 +348,7 @@ Contenido del documento:
 Responde SOLO con el JSON, sin texto adicional."""
 
                 # Usar OpenAI para extraer metadatos
-                api_key = os.getenv("OPENAI_API_KEY")
+                api_key = os.getenv("OPENAI_API_KEY2")
                 if api_key and OPENAI_AVAILABLE:
                     client = openai.OpenAI(api_key=api_key)
                     response = client.responses.create(
@@ -427,7 +427,7 @@ Contenido del documento:
 
 Título:"""
 
-                    api_key = os.getenv("OPENAI_API_KEY")
+                    api_key = os.getenv("OPENAI_API_KEY2")
                     if api_key and OPENAI_AVAILABLE:
                         client = openai.OpenAI(api_key=api_key)
                         response = client.responses.create(
@@ -571,7 +571,7 @@ Contenido del documento:
 Responde SOLO con el JSON, sin texto adicional."""
 
                 # Usar OpenAI para extraer metadatos
-                api_key = os.getenv("OPENAI_API_KEY")
+                api_key = os.getenv("OPENAI_API_KEY2")
                 if api_key and OPENAI_AVAILABLE:
                     client = openai.OpenAI(api_key=api_key)
                     response = client.responses.create(
@@ -740,7 +740,7 @@ async def consultar_con_rag(
             )
         
         # Obtener API key
-        api_key = os.getenv("OPENAI_API_KEY")
+        api_key = os.getenv("OPENAI_API_KEY2")
         if not api_key:
             return JSONResponse(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
