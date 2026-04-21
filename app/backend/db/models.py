@@ -361,6 +361,7 @@ class CourseModel(Base):
     period_year = Column(Integer, nullable=True)
     added_date = Column(DateTime())
     updated_date = Column(DateTime())
+    deleted_status_id = Column(Integer)
 
 class CommuneModel(Base):
     __tablename__ = 'communes'
@@ -1543,6 +1544,8 @@ class PsychopedagogicalEvaluationInfoModel(Base):
     cognitive_analysis = Column(Text, nullable=True)
     cognitive_quantitative_matrix = Column(Text, nullable=True)
     cognitive_general_scales = Column(Text, nullable=True)
+    # Nombre de archivo en files/system/students (misma convención que folders.file) para IV imagen cuantitativa.
+    cognitive_quantitative_image_file = Column(String(255), nullable=True)
     personal_analysis = Column(Text, nullable=True)
     motor_analysis = Column(Text, nullable=True)
     cognitive_synthesis = Column(Text, nullable=True)

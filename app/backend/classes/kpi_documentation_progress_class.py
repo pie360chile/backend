@@ -76,7 +76,7 @@ class KpiDocumentationProgressClass:
             py = int(period_year)
             courses = (
                 self.db.query(CourseModel)
-                .filter(CourseModel.school_id == int(school_id))
+                .filter(CourseModel.school_id == int(school_id), CourseModel.deleted_status_id == 0)
                 .order_by(CourseModel.course_name.asc())
                 .all()
             )
@@ -200,6 +200,7 @@ class KpiDocumentationProgressClass:
                 .filter(
                     CourseModel.id == cid,
                     CourseModel.school_id == int(school_id),
+                    CourseModel.deleted_status_id == 0,
                 )
                 .first()
             )

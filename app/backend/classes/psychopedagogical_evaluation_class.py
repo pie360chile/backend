@@ -1,11 +1,13 @@
 """Document 27: Psychopedagogical Evaluation Information – info + scale (VII/VIII)."""
 
 from datetime import datetime, date
+from pathlib import Path
 from typing import Optional, Any, List
 from sqlalchemy.orm import Session
 from app.backend.db.models import (
     PsychopedagogicalEvaluationInfoModel,
     PsychopedagogicalEvaluationScaleModel,
+    FolderModel,
 )
 
 
@@ -30,6 +32,18 @@ def _parse_date(s: Optional[str]) -> Optional[date]:
 
 VALID_SCALE_TYPES = ("pedagogical", "social_communicative")
 VALID_VALUES = ("1", "2", "3", "N/O")
+
+_STUDENTS_FILES_DIR = Path("files/system/students")
+_DOC27_COGNITIVE_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
+
+
+def _psychoped_iv_image_filename_safe(student_id: int, filename: str) -> bool:
+    fn = (filename or "").strip()
+    if not fn or Path(fn).name != fn or ".." in fn or "/" in fn or "\\" in fn:
+        return False
+    if Path(fn).suffix.lower() not in _DOC27_COGNITIVE_IMAGE_EXTS:
+        return False
+    return fn.startswith(f"{student_id}_")
 
 
 def _optional_short_str(value: Any) -> Optional[str]:
@@ -92,6 +106,7 @@ def _info_to_dict(row: PsychopedagogicalEvaluationInfoModel) -> dict:
         "cognitive_analysis": row.cognitive_analysis,
         "cognitive_quantitative_matrix": row.cognitive_quantitative_matrix,
         "cognitive_general_scales": row.cognitive_general_scales,
+        "cognitive_quantitative_image_file": row.cognitive_quantitative_image_file,
         "personal_analysis": row.personal_analysis,
         "motor_analysis": row.motor_analysis,
         "cognitive_synthesis": row.cognitive_synthesis,
@@ -271,6 +286,7 @@ class PsychopedagogicalEvaluationClass:
                 cognitive_analysis=_optional_longtext(data.get("cognitive_analysis")),
                 cognitive_quantitative_matrix=_optional_longtext(data.get("cognitive_quantitative_matrix")),
                 cognitive_general_scales=_optional_longtext(data.get("cognitive_general_scales")),
+                cognitive_quantitative_image_file=_optional_short_str(data.get("cognitive_quantitative_image_file")),
                 personal_analysis=_optional_longtext(data.get("personal_analysis")),
                 motor_analysis=_optional_longtext(data.get("motor_analysis")),
                 cognitive_synthesis=_optional_longtext(data.get("cognitive_synthesis")),
@@ -342,6 +358,7 @@ class PsychopedagogicalEvaluationClass:
             set_longtext("cognitive_analysis", "cognitive_analysis")
             set_longtext("cognitive_quantitative_matrix", "cognitive_quantitative_matrix")
             set_longtext("cognitive_general_scales", "cognitive_general_scales")
+            set_str("cognitive_quantitative_image_file", "cognitive_quantitative_image_file")
             set_longtext("personal_analysis", "personal_analysis")
             set_longtext("motor_analysis", "motor_analysis")
             set_longtext("cognitive_synthesis", "cognitive_synthesis")
@@ -389,3 +406,98 @@ class PsychopedagogicalEvaluationClass:
         except Exception as e:
             self.db.rollback()
             return {"status": "error", "message": str(e)}
+
+    def get_cognitive_quantitative_image_path(self, student_id: int) -> Optional[str]:
+        """
+        Ruta absoluta de la imagen IV: primero `cognitive_quantitative_image_file` en la evaluación;
+        si no hay o el archivo falta, la última imagen en `folders` para documento catálogo 27.
+        """
+        row = (
+            self.db.query(PsychopedagogicalEvaluationInfoModel)
+            .filter(PsychopedagogicalEvaluationInfoModel.student_id == student_id)
+            .order_by(PsychopedagogicalEvaluationInfoModel.id.desc())
+            .first()
+        )
+        if row:
+            fn = (getattr(row, "cognitive_quantitative_image_file", None) or "").strip()
+            if fn and _psychoped_iv_image_filename_safe(student_id, fn):
+                p = _STUDENTS_FILES_DIR / fn
+                try:
+                    if p.is_file():
+                        return str(p.resolve())
+                except OSError:
+                    pass
+        for folder_row in (
+            self.db.query(FolderModel)
+            .filter(
+                FolderModel.student_id == student_id,
+                FolderModel.document_id == 27,
+                FolderModel.file.isnot(None),
+                FolderModel.deleted_date.is_(None),
+            )
+            .order_by(FolderModel.version_id.desc())
+            .all()
+        ):
+            fn2 = (folder_row.file or "").strip()
+            if not fn2 or Path(fn2).suffix.lower() not in _DOC27_COGNITIVE_IMAGE_EXTS:
+                continue
+            if not _psychoped_iv_image_filename_safe(student_id, fn2):
+                continue
+            p2 = _STUDENTS_FILES_DIR / fn2
+            try:
+                if p2.is_file():
+                    return str(p2.resolve())
+            except OSError:
+                continue
+        return None
+
+    def clear_cognitive_quantitative_image(self, student_id: int) -> Any:
+        """
+        Quita la referencia en BD, marca como eliminadas las filas de `folders` asociadas
+        al mismo nombre de archivo (doc 27) y borra el archivo en disco si existe.
+        """
+        try:
+            row = (
+                self.db.query(PsychopedagogicalEvaluationInfoModel)
+                .filter(PsychopedagogicalEvaluationInfoModel.student_id == student_id)
+                .order_by(PsychopedagogicalEvaluationInfoModel.id.desc())
+                .first()
+            )
+            if not row:
+                return {"status": "success", "message": "Sin evaluación.", "cleared": False}
+            fn = (getattr(row, "cognitive_quantitative_image_file", None) or "").strip()
+            if not fn:
+                return {"status": "success", "message": "No había imagen registrada.", "cleared": False}
+            if not _psychoped_iv_image_filename_safe(student_id, fn):
+                return {"status": "error", "message": "Nombre de archivo no válido.", "cleared": False}
+
+            row.cognitive_quantitative_image_file = None
+            row.updated_at = datetime.utcnow()
+
+            now = datetime.utcnow()
+            folder_rows = (
+                self.db.query(FolderModel)
+                .filter(
+                    FolderModel.student_id == student_id,
+                    FolderModel.document_id == 27,
+                    FolderModel.file == fn,
+                    FolderModel.deleted_date.is_(None),
+                )
+                .all()
+            )
+            for fr in folder_rows:
+                fr.deleted_date = now
+                fr.updated_date = now
+
+            fp = _STUDENTS_FILES_DIR / fn
+            try:
+                if fp.is_file():
+                    fp.unlink()
+            except OSError:
+                pass
+
+            self.db.commit()
+            return {"status": "success", "message": "Imagen eliminada.", "cleared": True}
+        except Exception as e:
+            self.db.rollback()
+            return {"status": "error", "message": str(e), "cleared": False}

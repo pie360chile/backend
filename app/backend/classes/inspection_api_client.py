@@ -8,6 +8,9 @@ Env:
   INSPECTION_API_USERNAME
   INSPECTION_API_PASSWORD
   INSPECTION_API_TIMEOUT   (seconds, default 30)
+  INSPECTION_API_TEACHINGS_PATH  (default: listado/tipos-ensenanzas) — GET tipos de enseñanza (doc. Inspection)
+  INSPECTION_API_COURSES_PATH   (default: listado/cursos) — POST multipart colegio + anio
+  INSPECTION_API_STUDENTS_PATH  (default: listado/alumnos) — POST multipart anio
 """
 
 from __future__ import annotations
@@ -174,6 +177,52 @@ class InspectionApiClient:
         except requests.RequestException as e:
             return {"ok": False, "message": str(e), "data": None}
 
+    def _post_multipart_form(self, remote_path: str, fields: Dict[str, Any]) -> Dict[str, Any]:
+        """POST multipart/form-data con campos arbitrarios (solo texto), Bearer auth."""
+        token = self.get_bearer_token()
+        if not token:
+            return {"ok": False, "message": "Inspection API authentication failed (check credentials)", "data": None}
+
+        remote_path = remote_path.lstrip("/")
+        url = f"{self.base_url}/{remote_path}"
+        headers = {"Authorization": f"Bearer {token}"}
+        files = {k: (None, str(v)) for k, v in fields.items() if v is not None}
+
+        try:
+            r = requests.post(url, headers=headers, files=files, timeout=self.timeout)
+            try:
+                body = r.json()
+            except Exception:
+                return {"ok": False, "message": f"Non-JSON response: {r.text[:200]}", "data": None}
+
+            if r.status_code == 401:
+                with self._lock:
+                    self.__class__._token = None
+                    self.__class__._expires_at = None
+                token2 = self.get_bearer_token()
+                if token2:
+                    r = requests.post(
+                        url,
+                        headers={"Authorization": f"Bearer {token2}"},
+                        files=files,
+                        timeout=self.timeout,
+                    )
+                    try:
+                        body = r.json()
+                    except Exception:
+                        return {"ok": False, "message": "Retry after 401 failed", "data": None}
+
+            if r.status_code >= 400:
+                return {
+                    "ok": False,
+                    "message": body.get("message") or f"HTTP {r.status_code}",
+                    "data": body.get("data"),
+                }
+
+            return body if isinstance(body, dict) else {"ok": False, "message": "Invalid response body", "data": None}
+        except requests.RequestException as e:
+            return {"ok": False, "message": str(e), "data": None}
+
     def _get_with_bearer(self, remote_path: str) -> Dict[str, Any]:
         token = self.get_bearer_token()
         if not token:
@@ -232,6 +281,21 @@ class InspectionApiClient:
     def fetch_regions_list(self) -> Dict[str, Any]:
         """GET /listado/provincias — catálogo remoto (provincias/regiones según API Inspection)."""
         return self._get_with_bearer("listado/provincias")
+
+    def fetch_teachings_list(self) -> Dict[str, Any]:
+        """GET listado de tipos de enseñanzas (Inspection: /api/listado/tipos-ensenanzas)."""
+        path = (_env("INSPECTION_API_TEACHINGS_PATH") or "listado/tipos-ensenanzas").lstrip("/")
+        return self._get_with_bearer(path)
+
+    def fetch_courses_list(self, colegio_id: int, anio: int) -> Dict[str, Any]:
+        """POST listado de cursos (Inspection: multipart colegio, anio)."""
+        path = (_env("INSPECTION_API_COURSES_PATH") or "listado/cursos").lstrip("/")
+        return self._post_multipart_form(path, {"colegio": int(colegio_id), "anio": int(anio)})
+
+    def fetch_students_list(self, anio: int) -> Dict[str, Any]:
+        """POST listado de alumnos (Inspection: multipart anio)."""
+        path = (_env("INSPECTION_API_STUDENTS_PATH") or "listado/alumnos").lstrip("/")
+        return self._post_multipart_form(path, {"anio": int(anio)})
 
 
 def _first_value(data: Dict[str, Any], keys: tuple) -> Optional[str]:

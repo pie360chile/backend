@@ -42,6 +42,7 @@ from app.backend.utils.psychoped_cognitive_quantitative import (
     AC_CONTENT_CONTROL_HOLD,
     CHART_PLACEHOLDER,
     inject_evalua_matrix_word_table,
+    inject_image_into_content_control_by_tag,
     insert_chart_placeholder_paragraph_image,
     parse_evalua_psychoped_matrices,
     render_evalua_pt_line_chart_png,
@@ -122,6 +123,7 @@ from app.backend.db.models import (
     StudentGuardianModel,
     InterconsultationModel,
     SupportAreaModel,
+    PsychopedagogicalEvaluationInfoModel,
 )
 from app.backend.auth.auth_user import get_current_active_user
 from app.backend.schemas import (
@@ -144,6 +146,109 @@ from collections import defaultdict
 logger = logging.getLogger(__name__)
 
 
+def _canonical_student_document_filename(
+    student_id: int,
+    catalog_document_id: int,
+    document_type_id: Optional[int],
+    file_extension: str,
+    period_year: Optional[int] = None,
+) -> str:
+    """
+    Nombre estable en disco para el mismo estudiante + documento del catálogo (+ año escolar si aplica).
+    Al regenerar o volver a subir, se sobrescribe el mismo fichero.
+    """
+    ext = (file_extension or ".pdf").lower()
+    if not ext.startswith("."):
+        ext = f".{ext}"
+    dt = int(document_type_id) if document_type_id is not None else 0
+    if period_year is not None:
+        return f"{student_id}_{catalog_document_id}_{dt}_y{int(period_year)}{ext}"
+    return f"{student_id}_{catalog_document_id}_{dt}{ext}"
+
+
+def _coerce_pdf_to_stable_storage(
+    result: dict,
+    student_id: int,
+    catalog_document_id: int,
+    document_type_id: Optional[int],
+    period_year: Optional[int] = None,
+) -> None:
+    """Si hay un PDF generado en `result`, lo deja en la ruta canónica (sobrescribe destino). Mutación in-place."""
+    if result.get("status") == "error" or not result.get("file_path"):
+        return
+    src = Path(result["file_path"])
+    if not src.is_file() or src.suffix.lower() != ".pdf":
+        return
+    dest = Path("files/system/students") / _canonical_student_document_filename(
+        student_id, catalog_document_id, document_type_id, ".pdf", period_year
+    )
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        if src.resolve() == dest.resolve():
+            result["filename"] = dest.name
+            return
+        if dest.exists():
+            dest.unlink()
+        move(str(src), str(dest))
+        result["file_path"] = str(dest)
+        result["filename"] = dest.name
+    except OSError:
+        logger.warning("No se pudo mover PDF a ruta estable %s", dest, exc_info=True)
+
+
+def _upsert_folder_student_document(
+    db: Session,
+    student_id: int,
+    catalog_document_id: int,
+    period_str: Optional[str],
+    canonical_filename: str,
+) -> FolderModel:
+    """
+    Actualiza la última fila folders del mismo estudiante/documento/período con el nombre canónico,
+    o inserta versión 1 si no existe. Evita acumular ficheros distintos por timestamp.
+    """
+    upload_dir = Path("files/system/students")
+    lv_q = db.query(FolderModel).filter(
+        FolderModel.student_id == student_id,
+        FolderModel.document_id == catalog_document_id,
+    )
+    if period_str is not None:
+        lv_q = lv_q.filter(FolderModel.period_year == period_str)
+    last = lv_q.order_by(FolderModel.version_id.desc()).first()
+    if last:
+        old_fn = (last.file or "").strip()
+        if old_fn and old_fn != canonical_filename:
+            try:
+                op = upload_dir / old_fn
+                if op.is_file():
+                    op.unlink()
+            except OSError:
+                pass
+        last.file = canonical_filename
+        last.updated_date = datetime.now()
+        db.commit()
+        db.refresh(last)
+        return last
+    rec = FolderModel(
+        school_id=None,
+        course_id=None,
+        student_id=student_id,
+        document_id=catalog_document_id,
+        version_id=1,
+        detail_id=None,
+        professional_id=0,
+        file=canonical_filename,
+        period_year=period_str,
+        added_date=datetime.now(),
+        updated_date=datetime.now(),
+        deleted_date=None,
+    )
+    db.add(rec)
+    db.commit()
+    db.refresh(rec)
+    return rec
+
+
 def _catalog_row_is_informe_evaluacion_psicomotriz(document_id: int, db: Session) -> bool:
     """True si `document_id` es la fila del catálogo `documents` para Informe de evaluación psicomotriz."""
     row = (
@@ -152,6 +257,52 @@ def _catalog_row_is_informe_evaluacion_psicomotriz(document_id: int, db: Session
         .first()
     )
     return bool(row and (row.document or "").strip() == "Informe de evaluación psicomotriz")
+
+
+def _psychoped_doc27_cognitive_image_path(db: Session, student_id: int) -> Optional[str]:
+    """
+    Ruta absoluta de la imagen IV (cuantitativa): primero `psychopedagogical_evaluation_info.cognitive_quantitative_image_file`,
+    si no hay o el archivo falta, la última imagen en `folders` para documento 27.
+    """
+    image_exts = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
+    base = Path("files/system/students")
+    info = (
+        db.query(PsychopedagogicalEvaluationInfoModel)
+        .filter(PsychopedagogicalEvaluationInfoModel.student_id == student_id)
+        .order_by(PsychopedagogicalEvaluationInfoModel.id.desc())
+        .first()
+    )
+    if info and getattr(info, "cognitive_quantitative_image_file", None):
+        fn = (info.cognitive_quantitative_image_file or "").strip()
+        if fn and Path(fn).suffix.lower() in image_exts:
+            p = base / fn
+            try:
+                if p.is_file():
+                    return str(p.resolve())
+            except OSError:
+                pass
+    rows = (
+        db.query(FolderModel)
+        .filter(
+            FolderModel.student_id == student_id,
+            FolderModel.document_id == 27,
+            FolderModel.file.isnot(None),
+            FolderModel.deleted_date.is_(None),
+        )
+        .order_by(FolderModel.version_id.desc())
+        .all()
+    )
+    for row in rows:
+        fn = (row.file or "").strip()
+        if not fn or Path(fn).suffix.lower() not in image_exts:
+            continue
+        p = base / fn
+        try:
+            if p.is_file():
+                return str(p.resolve())
+        except OSError:
+            continue
+    return None
 
 
 import uuid
@@ -232,7 +383,7 @@ async def debug_doc19_data(
                 ps_data["student_school"] = school.school_name
         course_id = ps_data.get("student_course_id")
         if course_id:
-            course = db.query(CourseModel).filter(CourseModel.id == course_id).first()
+            course = db.query(CourseModel).filter(CourseModel.deleted_status_id == 0, CourseModel.id == course_id).first()
             ps_data["course_name"] = course.course_name if course and course.course_name else ""
         else:
             ps_data["course_name"] = ""
@@ -415,60 +566,40 @@ async def upload_document(
         
         # Obtener la extensión del archivo original
         file_extension = Path(file.filename).suffix.lower() if file.filename else ''
-        
-        # Generar fecha y hora en formato YYYYMMDDHHMMSS
-        date_hour = datetime.now().strftime("%Y%m%d%H%M%S")
-        
-        # Generar nombre del archivo: {student_id}_{document_id}_{document_type_id}_{date_hour}
-        unique_filename = f"{student_id}_{document_id}_{document_type_id}_{date_hour}{file_extension}"
-        
-        # Crear directorio si no existe
+
+        # Nombre canónico (misma ruta al resubir el mismo documento → sobrescribe en disco)
+        unique_filename = _canonical_student_document_filename(
+            student_id, document_id, document_type_id, file_extension, period_year
+        )
+
         upload_dir = Path("files/system/students")
         upload_dir.mkdir(parents=True, exist_ok=True)
-        
         file_path = upload_dir / unique_filename
-        
-        # Guardar el archivo
+
         content = await file.read()
         with open(file_path, "wb") as f:
             f.write(content)
-        
-        # Guardar directamente en folders con el document_id correcto (no usar store que busca por document_type_id)
-        # Buscar la última versión para este estudiante, documento y período
+
         period_str = str(period_year) if period_year is not None else None
-        lv_q = db.query(FolderModel).filter(
-            FolderModel.student_id == student_id,
-            FolderModel.document_id == document_id,
+        new_folder = _upsert_folder_student_document(
+            db, student_id, document_id, period_str, unique_filename
         )
-        if period_str is not None:
-            lv_q = lv_q.filter(FolderModel.period_year == period_str)
-        last_version = lv_q.order_by(FolderModel.version_id.desc()).first()
-        
-        # Determinar el nuevo version_id
-        if last_version:
-            new_version_id = last_version.version_id + 1
-        else:
-            new_version_id = 1
-        
-        # Crear el nuevo registro en folders
-        new_folder = FolderModel(
-            school_id=None,
-            course_id=None,
-            student_id=student_id,
-            document_id=document_id,
-            version_id=new_version_id,
-            detail_id=None,
-            professional_id=0,
-            file=unique_filename,
-            period_year=period_str,
-            added_date=datetime.now(),
-            updated_date=datetime.now(),
-            deleted_date=None,
-        )
-        
-        db.add(new_folder)
-        db.commit()
-        db.refresh(new_folder)
+        new_version_id = new_folder.version_id
+
+        if document_id == 27 and file_extension in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}:
+            try:
+                eval_row = (
+                    db.query(PsychopedagogicalEvaluationInfoModel)
+                    .filter(PsychopedagogicalEvaluationInfoModel.student_id == student_id)
+                    .order_by(PsychopedagogicalEvaluationInfoModel.id.desc())
+                    .first()
+                )
+                if eval_row:
+                    eval_row.cognitive_quantitative_image_file = unique_filename
+                    eval_row.updated_at = datetime.now()
+                    db.commit()
+            except Exception:
+                db.rollback()
 
         # Marcar asignaciones profesionales como completadas (status 1) si aplica
         try:
@@ -627,7 +758,7 @@ def _generate_anamnesis_docx_internal(student_id: int, db: Session) -> dict:
         if db:
             course_id = academic.get("course_id")
             if course_id:
-                c = db.query(CourseModel).filter(CourseModel.id == course_id).first()
+                c = db.query(CourseModel).filter(CourseModel.deleted_status_id == 0, CourseModel.id == course_id).first()
                 course = str(c.course_name or "").strip() if c else ""
             school_id = student_data.get("school_id")
             if school_id:
@@ -2647,7 +2778,7 @@ def _generate_register_book_impl(course_id: int, db: Session):
             replacements[f"cee_{j}"] = _crit
     out_dir = Path("files/system/students")
     out_dir.mkdir(parents=True, exist_ok=True)
-    course = db.query(CourseModel).filter(CourseModel.id == course_id).first()
+    course = db.query(CourseModel).filter(CourseModel.deleted_status_id == 0, CourseModel.id == course_id).first()
     course_name = (course.course_name or f"curso_{course_id}").replace(" ", "_")
     safe_name = re.sub(r"[^\w\-]", "", course_name)[:50]
     out_file = out_dir / f"libro_registro_{safe_name}_{uuid.uuid4().hex[:8]}.docx"
@@ -2843,7 +2974,22 @@ async def generate_document(
                         "data": None
                     }
                 )
-        
+
+        # `document_type_id` del catálogo para nombre estable de PDFs en disco (sobrescritura al regenerar)
+        _doc_type_id: Optional[int] = None
+        if isinstance(document_result, dict):
+            _doc_type_id = document_result.get("document_type_id")
+        if _doc_type_id is None:
+            _cat_doc = (
+                db.query(DocumentModel)
+                .filter(DocumentModel.id == document_id, DocumentModel.deleted_date.is_(None))
+                .first()
+            )
+            if _cat_doc is not None:
+                _doc_type_id = _cat_doc.document_type_id
+        if _doc_type_id is None:
+            _doc_type_id = document_id
+
         # Si document_id = 3, generar documento de anamnesis (DOCX)
         if document_id == 3:
             result = _generate_anamnesis_docx_internal(student_id, db)
@@ -3483,7 +3629,7 @@ async def generate_document(
                 if sch:
                     school = str(sch.school_name or "").strip()
             if not course and academic.get("course_id") and db:
-                crs = db.query(CourseModel).filter(CourseModel.id == academic["course_id"]).first()
+                crs = db.query(CourseModel).filter(CourseModel.deleted_status_id == 0, CourseModel.id == academic["course_id"]).first()
                 if crs:
                     course = str(crs.course_name or "").strip()
             guardian = None
@@ -3804,6 +3950,8 @@ async def generate_document(
                     }
                 )
 
+            psychoped_iv_image_path = _psychoped_doc27_cognitive_image_path(db, student_id)
+
             student_data = student_result.get("student_data", {}) if isinstance(student_result, dict) else {}
             personal = student_data.get("personal_data") or {}
             academic = student_data.get("academic_info") or {}
@@ -3834,7 +3982,7 @@ async def generate_document(
                     student_school = school.school_name
             student_course = ""
             if academic and academic.get("course_id"):
-                course = db.query(CourseModel).filter(CourseModel.id == academic.get("course_id")).first()
+                course = db.query(CourseModel).filter(CourseModel.deleted_status_id == 0, CourseModel.id == academic.get("course_id")).first()
                 if course and course.course_name:
                     student_course = course.course_name
             evaluation_date = _fmt_date_d27(eval_data.get("evaluation_date"))
@@ -3866,7 +4014,10 @@ async def generate_document(
             cognitive_chart_placeholder_text = ""
             inject_ac_table = False
             parsed_cq = parse_evalua_psychoped_matrices(eval_data)
-            if parsed_cq and parsed_cq.has_table_numbers():
+            if psychoped_iv_image_path:
+                # Imagen subida desde el frontend (IV): sustituye tabla + gráfico generados.
+                pass
+            elif parsed_cq and parsed_cq.has_table_numbers():
                 inject_ac_table = True
                 if parsed_cq.has_chart_numbers():
                     cognitive_chart_placeholder_text = CHART_PLACEHOLDER
@@ -3950,8 +4101,8 @@ async def generate_document(
                 "instruments_applied": instruments_applied,
                 "school_history_background": school_history_background,
                 "cognitive_analysis": cognitive_analysis,
-                "ac": AC_CONTENT_CONTROL_HOLD if inject_ac_table else "",
-                "acg": cognitive_chart_placeholder_text,
+                "ac": AC_CONTENT_CONTROL_HOLD if (inject_ac_table or psychoped_iv_image_path) else "",
+                "acg": "" if psychoped_iv_image_path else cognitive_chart_placeholder_text,
                 "personal_analysis": personal_analysis,
                 "motor_analysis": motor_analysis,
                 "conclusion": conclusion,
@@ -4074,9 +4225,14 @@ async def generate_document(
                     }
                 )
             out_path = result.get("file_path")
-            if out_path and inject_ac_table and parsed_cq:
+            if out_path and psychoped_iv_image_path:
+                inject_image_into_content_control_by_tag(
+                    str(out_path), "ac", psychoped_iv_image_path, width_inches=6.0
+                )
+                strip_chart_placeholder_from_docx(str(out_path))
+            elif out_path and inject_ac_table and parsed_cq:
                 inject_evalua_matrix_word_table(str(out_path), parsed_cq)
-            if cognitive_chart_tmp and out_path:
+            if cognitive_chart_tmp and out_path and not psychoped_iv_image_path:
                 try:
                     if not insert_chart_placeholder_paragraph_image(str(out_path), cognitive_chart_tmp):
                         strip_chart_placeholder_from_docx(str(out_path))
@@ -4085,7 +4241,7 @@ async def generate_document(
                         os.unlink(cognitive_chart_tmp)
                     except OSError:
                         pass
-            elif out_path and CHART_PLACEHOLDER in (replacements.get("acg") or ""):
+            elif out_path and CHART_PLACEHOLDER in (replacements.get("acg") or "") and not psychoped_iv_image_path:
                 strip_chart_placeholder_from_docx(str(out_path))
             return FileResponse(
                 path=result["file_path"],
@@ -4190,7 +4346,7 @@ async def generate_document(
             
             # course_id -> nombre del curso
             if progress_status_data.get("course_id"):
-                course = db.query(CourseModel).filter(CourseModel.id == progress_status_data["course_id"]).first()
+                course = db.query(CourseModel).filter(CourseModel.deleted_status_id == 0, CourseModel.id == progress_status_data["course_id"]).first()
                 progress_status_data["course_name"] = course.course_name if course and course.course_name else ""
                 progress_status_data.pop("course_id", None)
             
@@ -4220,7 +4376,8 @@ async def generate_document(
                 template_path=None,  # Siempre generar desde cero para documento 18
                 output_directory="files/system/students"
             )
-            
+            _coerce_pdf_to_stable_storage(result, student_id, document_id, _doc_type_id)
+
             if result["status"] == "error":
                 return JSONResponse(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -4313,7 +4470,7 @@ async def generate_document(
             # student_course_id -> nombre del curso
             course_id = ps_data.get("student_course_id")
             if course_id:
-                course = db.query(CourseModel).filter(CourseModel.id == course_id).first()
+                course = db.query(CourseModel).filter(CourseModel.deleted_status_id == 0, CourseModel.id == course_id).first()
                 ps_data["course_name"] = course.course_name if course and course.course_name else ""
             else:
                 ps_data["course_name"] = ""
@@ -4380,6 +4537,7 @@ async def generate_document(
                 template_path=None,
                 output_directory="files/system/students",
             )
+            _coerce_pdf_to_stable_storage(result, student_id, document_id, _doc_type_id)
             if result.get("status") == "error":
                 return JSONResponse(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -4430,7 +4588,7 @@ async def generate_document(
                     school_name = (school.school_name or "").strip()
             course_name = cesp_data_raw.get("student_course") or (academic_info.get("course_name") if isinstance(academic_info, dict) else "") or ""
             if not course_name and academic_info and isinstance(academic_info, dict) and academic_info.get("course_id"):
-                course = db.query(CourseModel).filter(CourseModel.id == academic_info["course_id"]).first()
+                course = db.query(CourseModel).filter(CourseModel.deleted_status_id == 0, CourseModel.id == academic_info["course_id"]).first()
                 if course:
                     course_name = (course.course_name or "").strip()
             nee_name = cesp_data_raw.get("student_nee") or ""
@@ -4492,6 +4650,7 @@ async def generate_document(
                 template_path=None,
                 output_directory="files/system/students",
             )
+            _coerce_pdf_to_stable_storage(result, student_id, document_id, _doc_type_id)
             if result.get("status") == "error":
                 return JSONResponse(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -4544,7 +4703,7 @@ async def generate_document(
             
             # student_course_id -> nombre del curso
             if isp_data.get("student_course_id"):
-                course = db.query(CourseModel).filter(CourseModel.id == isp_data["student_course_id"]).first()
+                course = db.query(CourseModel).filter(CourseModel.deleted_status_id == 0, CourseModel.id == isp_data["student_course_id"]).first()
                 if course and course.course_name:
                     isp_data["course_name"] = course.course_name
                 isp_data.pop("student_course_id", None)
@@ -4585,7 +4744,8 @@ async def generate_document(
                 template_path=None,  # Siempre generar desde cero para documento 22
                 output_directory="files/system/students"
             )
-            
+            _coerce_pdf_to_stable_storage(result, student_id, document_id, _doc_type_id)
+
             if result["status"] == "error":
                 return JSONResponse(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -4625,7 +4785,7 @@ async def generate_document(
             
             # course_id -> nombre del curso
             if report_data.get("course_id"):
-                course = db.query(CourseModel).filter(CourseModel.id == report_data["course_id"]).first()
+                course = db.query(CourseModel).filter(CourseModel.deleted_status_id == 0, CourseModel.id == report_data["course_id"]).first()
                 if course and course.course_name:
                     report_data["course_name"] = course.course_name
                 report_data.pop("course_id", None)
@@ -4673,7 +4833,8 @@ async def generate_document(
                 template_path=None,
                 output_directory="files/system/students"
             )
-            
+            _coerce_pdf_to_stable_storage(result, student_id, document_id, _doc_type_id)
+
             if result.get("status") == "error":
                 return JSONResponse(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -4708,7 +4869,7 @@ async def generate_document(
             report_data.pop("added_date", None)
             report_data.pop("updated_date", None)
             if report_data.get("course_id"):
-                course = db.query(CourseModel).filter(CourseModel.id == report_data["course_id"]).first()
+                course = db.query(CourseModel).filter(CourseModel.deleted_status_id == 0, CourseModel.id == report_data["course_id"]).first()
                 if course and course.course_name:
                     report_data["course_name"] = course.course_name
                 report_data.pop("course_id", None)
@@ -4751,6 +4912,7 @@ async def generate_document(
                 template_path=None,
                 output_directory="files/system/students"
             )
+            _coerce_pdf_to_stable_storage(result, student_id, document_id, _doc_type_id)
             if result.get("status") == "error":
                 return JSONResponse(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -4784,7 +4946,7 @@ async def generate_document(
             report_data.pop("added_date", None)
             report_data.pop("updated_date", None)
             if report_data.get("course_id"):
-                course = db.query(CourseModel).filter(CourseModel.id == report_data["course_id"]).first()
+                course = db.query(CourseModel).filter(CourseModel.deleted_status_id == 0, CourseModel.id == report_data["course_id"]).first()
                 if course and course.course_name:
                     report_data["course_name"] = course.course_name
                 report_data.pop("course_id", None)
@@ -4827,6 +4989,7 @@ async def generate_document(
                 template_path=None,
                 output_directory="files/system/students"
             )
+            _coerce_pdf_to_stable_storage(result, student_id, document_id, _doc_type_id)
             if result.get("status") == "error":
                 return JSONResponse(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -4876,7 +5039,7 @@ async def generate_document(
                 cert_data["establishment_name"] = ""
             course_id = academic.get("course_id")
             if course_id:
-                course = db.query(CourseModel).filter(CourseModel.id == course_id).first()
+                course = db.query(CourseModel).filter(CourseModel.deleted_status_id == 0, CourseModel.id == course_id).first()
                 cert_data["course_name"] = course.course_name if course and course.course_name else "Sin curso"
             else:
                 cert_data["course_name"] = "Sin curso"
@@ -4932,6 +5095,7 @@ async def generate_document(
                 template_path=None,
                 output_directory="files/system/students",
             )
+            _coerce_pdf_to_stable_storage(result, student_id, document_id, _doc_type_id)
             if result.get("status") == "error":
                 return JSONResponse(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -4980,7 +5144,7 @@ async def generate_document(
                 cert_data["establishment_name"] = school.school_name if school and school.school_name else ""
             course_id = academic.get("course_id")
             if course_id:
-                course = db.query(CourseModel).filter(CourseModel.id == course_id).first()
+                course = db.query(CourseModel).filter(CourseModel.deleted_status_id == 0, CourseModel.id == course_id).first()
                 cert_data["course_name"] = course.course_name if course and course.course_name else ""
             nee_id = academic.get("special_educational_need_id")
             if nee_id:
@@ -5016,6 +5180,7 @@ async def generate_document(
                 template_path=None,
                 output_directory="files/system/students",
             )
+            _coerce_pdf_to_stable_storage(result, student_id, document_id, _doc_type_id)
             if result.get("status") == "error":
                 return JSONResponse(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -5082,6 +5247,7 @@ async def generate_document(
                 template_path=None,
                 output_directory="files/system/students",
             )
+            _coerce_pdf_to_stable_storage(result, student_id, document_id, _doc_type_id)
             if result.get("status") == "error":
                 return JSONResponse(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -5118,6 +5284,7 @@ async def generate_document(
                 template_path=None,
                 output_directory="files/system/students",
             )
+            _coerce_pdf_to_stable_storage(result, student_id, document_id, _doc_type_id)
             if result.get("status") == "error":
                 return JSONResponse(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -5154,6 +5321,7 @@ async def generate_document(
                 template_path=None,
                 output_directory="files/system/students",
             )
+            _coerce_pdf_to_stable_storage(result, student_id, document_id, _doc_type_id)
             if result.get("status") == "error":
                 return JSONResponse(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -5190,6 +5358,7 @@ async def generate_document(
                 template_path=None,
                 output_directory="files/system/students",
             )
+            _coerce_pdf_to_stable_storage(result, student_id, document_id, _doc_type_id)
             if result.get("status") == "error":
                 return JSONResponse(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -5226,6 +5395,7 @@ async def generate_document(
                 template_path=None,
                 output_directory="files/system/students",
             )
+            _coerce_pdf_to_stable_storage(result, student_id, document_id, _doc_type_id)
             if result.get("status") == "error":
                 return JSONResponse(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -5262,6 +5432,7 @@ async def generate_document(
                 template_path=None,
                 output_directory="files/system/students",
             )
+            _coerce_pdf_to_stable_storage(result, student_id, document_id, _doc_type_id)
             if result.get("status") == "error":
                 return JSONResponse(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -5298,6 +5469,7 @@ async def generate_document(
                 template_path=None,
                 output_directory="files/system/students",
             )
+            _coerce_pdf_to_stable_storage(result, student_id, document_id, _doc_type_id)
             if result.get("status") == "error":
                 return JSONResponse(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -5334,6 +5506,7 @@ async def generate_document(
                 template_path=None,
                 output_directory="files/system/students",
             )
+            _coerce_pdf_to_stable_storage(result, student_id, document_id, _doc_type_id)
             if result.get("status") == "error":
                 return JSONResponse(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -5370,6 +5543,7 @@ async def generate_document(
                 template_path=None,
                 output_directory="files/system/students",
             )
+            _coerce_pdf_to_stable_storage(result, student_id, document_id, _doc_type_id)
             if result.get("status") == "error":
                 return JSONResponse(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -5406,6 +5580,7 @@ async def generate_document(
                 template_path=None,
                 output_directory="files/system/students",
             )
+            _coerce_pdf_to_stable_storage(result, student_id, document_id, _doc_type_id)
             if result.get("status") == "error":
                 return JSONResponse(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -5442,6 +5617,7 @@ async def generate_document(
                 template_path=None,
                 output_directory="files/system/students",
             )
+            _coerce_pdf_to_stable_storage(result, student_id, document_id, _doc_type_id)
             if result.get("status") == "error":
                 return JSONResponse(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -5513,7 +5689,7 @@ async def generate_document(
             
             # Obtener nombre del curso
             if course_id:
-                course = db.query(CourseModel).filter(CourseModel.id == course_id).first()
+                course = db.query(CourseModel).filter(CourseModel.deleted_status_id == 0, CourseModel.id == course_id).first()
                 course_name = course.course_name if course else ""
             
             # Obtener nombre del colegio (school_name desde schools)
@@ -5605,7 +5781,7 @@ async def generate_document(
                 no_marker="",  # En blanco para [N]
                 output_directory="files/system/students"
             )
-            
+
             if result["status"] == "error":
                 return JSONResponse(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -5616,70 +5792,29 @@ async def generate_document(
                     }
                 )
             
-            # Guardar el documento generado en folders con document_id = 2
+            # Mismo PDF canónico por estudiante + documento 2 (sobrescribe al volver a generar)
             try:
                 generated_file = Path(result["file_path"])
-                
-                if generated_file.exists():
-                    # Generar fecha y hora en formato YYYYMMDDHHMMSS
-                    date_hour = datetime.now().strftime("%Y%m%d%H%M%S")
-                    
-                    # Obtener el document_type_id del documento (document_id = 2)
-                    document_data = document_result if isinstance(document_result, dict) else {}
-                    document_type_id = document_data.get("document_type_id")
-                    
-                    # Generar nombre del archivo: {student_id}_{document_id}_{document_type_id}_{date_hour}
-                    file_extension = generated_file.suffix
-                    unique_filename = f"{student_id}_{document_id}_{document_type_id}_{date_hour}{file_extension}"
-                    
-                    # Renombrar el archivo generado al nombre único
+                if generated_file.is_file():
+                    parent_auth_document_id = 2
+                    unique_filename = _canonical_student_document_filename(
+                        student_id,
+                        parent_auth_document_id,
+                        _doc_type_id,
+                        generated_file.suffix,
+                        None,
+                    )
                     system_file_path = Path("files/system/students") / unique_filename
                     system_file_path.parent.mkdir(parents=True, exist_ok=True)
-                    
-                    # Mover/renombrar el archivo
-                    move(generated_file, system_file_path)
-                    
-                    # Actualizar el resultado con la nueva ruta
+                    if system_file_path.exists() and generated_file.resolve() != system_file_path.resolve():
+                        system_file_path.unlink()
+                    move(str(generated_file), str(system_file_path))
                     result["file_path"] = str(system_file_path)
                     result["filename"] = unique_filename
-                    
-                    # Guardar directamente en folders con document_id = 2 (no usar store que busca por document_type_id)
-                    # Asegurarse de usar document_id = 2 explícitamente (no la variable document_id que podría cambiar)
-                    parent_auth_document_id = 2
-                    
-                    # Buscar la última versión para este estudiante y documento (document_id = 2)
-                    last_version = db.query(FolderModel).filter(
-                        FolderModel.student_id == student_id,
-                        FolderModel.document_id == parent_auth_document_id  # Usar document_id = 2 directamente
-                    ).order_by(FolderModel.version_id.desc()).first()
-                    
-                    # Determinar el nuevo version_id
-                    if last_version:
-                        new_version_id = last_version.version_id + 1
-                    else:
-                        new_version_id = 1
-                    
-                    # Crear el nuevo registro en folders con document_id = 2
-                    new_folder = FolderModel(
-                        school_id=None,
-                        course_id=None,
-                        student_id=student_id,
-                        document_id=parent_auth_document_id,  # document_id = 2 para parent_authorization
-                        version_id=new_version_id,
-                        detail_id=None,  # No hay detail_id para parent_authorization
-                        professional_id=0,
-                        file=unique_filename,
-                        period_year=None,
-                        added_date=datetime.now(),
-                        updated_date=datetime.now(),
-                        deleted_date=None,
+                    _upsert_folder_student_document(
+                        db, student_id, parent_auth_document_id, None, unique_filename
                     )
-                    
-                    db.add(new_folder)
-                    db.commit()
-                    db.refresh(new_folder)
-            except Exception as e:
-                # Si falla el guardado en folders, continuar de todos modos
+            except Exception:
                 pass
             
             # Retornar el archivo PDF generado
@@ -5738,7 +5873,8 @@ async def generate_document(
             template_path=str(template_path) if template_path else None,
             output_directory="files/system/students"
         )
-        
+        _coerce_pdf_to_stable_storage(result, student_id, document_id, _doc_type_id)
+
         if result["status"] == "error":
             return JSONResponse(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -5748,7 +5884,7 @@ async def generate_document(
                     "data": None
                 }
             )
-        
+
         # Retornar el archivo PDF generado
         return FileResponse(
             path=result["file_path"],

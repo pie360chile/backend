@@ -1,7 +1,9 @@
 ﻿"""Document 27 – Psychopedagogical Evaluation Information."""
 
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, Query, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from app.backend.db.database import get_db
 from app.backend.auth.auth_user import get_current_active_user
 from app.backend.schemas import (
@@ -45,6 +47,67 @@ def get_by_student_id(
         return JSONResponse(
             status_code=status.HTTP_200_OK,
             content={"status": 200, "message": "OK", "data": result.get("data")},
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"status": 500, "message": str(e), "data": None},
+        )
+
+
+@psychopedagogical_evaluations.get("/by_student/{student_id}/cognitive_quantitative_image")
+def get_cognitive_quantitative_image(
+    student_id: int,
+    session_user: UserLogin = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Descarga la imagen IV cuantitativa guardada para el estudiante (doc 27)."""
+    try:
+        svc = PsychopedagogicalEvaluationClass(db)
+        path = svc.get_cognitive_quantitative_image_path(student_id)
+        if not path:
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"status": 404, "message": "No hay imagen guardada.", "data": None},
+            )
+        suffix = Path(path).suffix.lower()
+        media = {
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".gif": "image/gif",
+            ".webp": "image/webp",
+            ".bmp": "image/bmp",
+        }.get(suffix, "application/octet-stream")
+        return FileResponse(path, media_type=media, filename=Path(path).name)
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"status": 500, "message": str(e), "data": None},
+        )
+
+
+@psychopedagogical_evaluations.delete("/by_student/{student_id}/cognitive_quantitative_image")
+def delete_cognitive_quantitative_image(
+    student_id: int,
+    session_user: UserLogin = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Elimina imagen IV cuantitativa (BD, carpeta folders y archivo en disco)."""
+    try:
+        result = PsychopedagogicalEvaluationClass(db).clear_cognitive_quantitative_image(student_id)
+        if result.get("status") == "error":
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"status": 400, "message": result.get("message", "Error"), "data": None},
+            )
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "status": 200,
+                "message": result.get("message", "OK"),
+                "data": {"cleared": bool(result.get("cleared"))},
+            },
         )
     except Exception as e:
         return JSONResponse(

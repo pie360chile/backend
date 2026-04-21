@@ -182,7 +182,7 @@ def generate_pdf(id: int, session_user: UserLogin = Depends(get_current_active_u
     student_academic = db.query(StudentAcademicInfoModel).filter(StudentAcademicInfoModel.student_id == action_result['student_id']).first()
     school = db.query(SchoolModel).filter(SchoolModel.id == action_result['school_id']).first()
     professional = db.query(ProfessionalModel).filter(ProfessionalModel.id == action_result['professional_id']).first() if action_result.get('professional_id') else None
-    course = db.query(CourseModel).filter(CourseModel.id == student_academic.course_id).first() if student_academic and student_academic.course_id else None
+    course = db.query(CourseModel).filter(CourseModel.deleted_status_id == 0, CourseModel.id == student_academic.course_id).first() if student_academic and student_academic.course_id else None
     nee = db.query(SpecialEducationalNeedModel).filter(SpecialEducationalNeedModel.id == student_academic.special_educational_need_id).first() if student_academic and student_academic.special_educational_need_id else None
     
     # Calcular edad

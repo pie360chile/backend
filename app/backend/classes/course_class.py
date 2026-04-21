@@ -1,6 +1,33 @@
 from datetime import datetime
+from typing import Any, Dict, List, Optional
+
 from sqlalchemy import func, case
+
+from app.backend.classes.teaching_class import _normalize_school_id
 from app.backend.db.models import CourseModel, TeachingModel, ProfessionalTeachingCourseModel, StudentModel, StudentAcademicInfoModel, SpecialEducationalNeedModel
+
+
+def _extract_courses_rows(inspection_body: Dict[str, Any]) -> List[Any]:
+    if not inspection_body.get("ok"):
+        return []
+    data = inspection_body.get("data")
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        for key in ("cursos", "items", "list", "data"):
+            v = data.get(key)
+            if isinstance(v, list):
+                return v
+    return []
+
+
+def _inspection_course_id_from_row(row: Any) -> Optional[int]:
+    if isinstance(row, dict) and row.get("id") is not None:
+        try:
+            return int(row["id"])
+        except (TypeError, ValueError):
+            return None
+    return None
 
 class CourseClass:
     def __init__(self, db):
@@ -32,6 +59,8 @@ class CourseClass:
                 (StudentAcademicInfoModel.special_educational_need_id == SpecialEducationalNeedModel.id)
                 & (SpecialEducationalNeedModel.deleted_status_id == 0),
             )
+
+            query = query.filter(CourseModel.deleted_status_id == 0)
 
             # Filtrar por school_id si se proporciona
             if school_id:
@@ -143,6 +172,8 @@ class CourseClass:
                 TeachingModel, CourseModel.teaching_id == TeachingModel.id
             )
 
+            query = query.filter(CourseModel.deleted_status_id == 0)
+
             # Filtrar por school_id si se proporciona
             if school_id:
                 query = query.filter(CourseModel.school_id == school_id)
@@ -188,7 +219,7 @@ class CourseClass:
                 TeachingModel.teaching_name
             ).join(
                 TeachingModel, CourseModel.teaching_id == TeachingModel.id
-            ).filter(CourseModel.id == id)
+            ).filter(CourseModel.id == id, CourseModel.deleted_status_id == 0)
             if period_year is not None:
                 q = q.filter(CourseModel.period_year == int(period_year))
             data_query = q.first()
@@ -223,14 +254,19 @@ class CourseClass:
                     period_year_val = int(py)
                 except (TypeError, ValueError):
                     period_year_val = None
-            new_course = CourseModel(
-                school_id=course_inputs.get('school_id'),
-                teaching_id=course_inputs['teaching_id'],
-                course_name=course_inputs['course_name'],
-                period_year=period_year_val,
-                added_date=datetime.now(),
-                updated_date=datetime.now()
-            )
+            row_kwargs: Dict[str, Any] = {
+                "school_id": course_inputs.get("school_id"),
+                "teaching_id": course_inputs["teaching_id"],
+                "course_name": course_inputs["course_name"],
+                "period_year": period_year_val,
+                "added_date": datetime.now(),
+                "updated_date": datetime.now(),
+                "deleted_status_id": 0,
+            }
+            if course_inputs.get("id") is not None:
+                row_kwargs["id"] = int(course_inputs["id"])
+
+            new_course = CourseModel(**row_kwargs)
 
             self.db.add(new_course)
             self.db.commit()
@@ -248,7 +284,11 @@ class CourseClass:
     
     def delete(self, id):
         try:
-            data = self.db.query(CourseModel).filter(CourseModel.id == id).first()
+            data = (
+                self.db.query(CourseModel)
+                .filter(CourseModel.id == id, CourseModel.deleted_status_id == 0)
+                .first()
+            )
             if data:
                 # Marcar como eliminado en professionals_teachings_courses
                 self.db.query(ProfessionalTeachingCourseModel).filter(
@@ -257,8 +297,9 @@ class CourseClass:
                     "deleted_status_id": 1,
                     "updated_date": datetime.now()
                 })
-                
-                self.db.delete(data)
+
+                data.deleted_status_id = 1
+                data.updated_date = datetime.now()
                 self.db.commit()
                 return {"status": "success", "message": "Course deleted successfully"}
             else:
@@ -271,7 +312,11 @@ class CourseClass:
 
     def update(self, id, course_inputs):
         try:
-            existing_course = self.db.query(CourseModel).filter(CourseModel.id == id).one_or_none()
+            existing_course = (
+                self.db.query(CourseModel)
+                .filter(CourseModel.id == id, CourseModel.deleted_status_id == 0)
+                .one_or_none()
+            )
 
             if not existing_course:
                 return {"status": "error", "message": "No data found"}
@@ -289,4 +334,138 @@ class CourseClass:
 
         except Exception as e:
             self.db.rollback()
+            return {"status": "error", "message": str(e)}
+
+    def import_from_inspection(
+        self, school_id: int, inspection_body: Dict[str, Any], default_period_year: int
+    ) -> Dict[str, Any]:
+        """
+        Inserta cursos desde Inspection usando el id remoto como PK (`courses.id`).
+        Requiere que exista la enseñanza (`tipo_ensenanza_id` = `teachings.id`) del mismo colegio.
+        """
+        try:
+            rows = _extract_courses_rows(inspection_body)
+            imported = 0
+            skipped = 0
+            errors: List[Dict[str, str]] = []
+
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                ext_id = _inspection_course_id_from_row(row)
+                nombre = str(row.get("nombre") or "").strip()
+                if ext_id is None or not nombre:
+                    continue
+
+                tipo_tid = row.get("tipo_ensenanza_id")
+                if tipo_tid is None:
+                    errors.append({"name": nombre, "message": "Fila sin tipo_ensenanza_id"})
+                    continue
+                try:
+                    teaching_id = int(tipo_tid)
+                except (TypeError, ValueError):
+                    errors.append({"name": nombre, "message": "tipo_ensenanza_id inválido"})
+                    continue
+
+                teaching = (
+                    self.db.query(TeachingModel)
+                    .filter(
+                        TeachingModel.id == teaching_id,
+                        TeachingModel.school_id == school_id,
+                        TeachingModel.deleted_status_id == 0,
+                    )
+                    .first()
+                )
+                if not teaching:
+                    errors.append(
+                        {
+                            "name": nombre,
+                            "message": f"No existe enseñanza id={teaching_id} para este colegio; importe tipos primero",
+                        }
+                    )
+                    continue
+
+                rid_col = row.get("colegio_id")
+                if rid_col is not None:
+                    try:
+                        if int(rid_col) != int(school_id):
+                            errors.append(
+                                {
+                                    "name": nombre,
+                                    "message": f"colegio_id {rid_col} no coincide con el colegio de sesión",
+                                }
+                            )
+                            continue
+                    except (TypeError, ValueError):
+                        pass
+
+                py_raw = row.get("anio")
+                if py_raw is not None and str(py_raw).strip() != "":
+                    try:
+                        period_year = int(py_raw)
+                    except (TypeError, ValueError):
+                        period_year = default_period_year
+                else:
+                    period_year = default_period_year
+
+                name_norm = nombre.lower()
+                existing = self.db.query(CourseModel).filter(CourseModel.id == ext_id).first()
+                if existing:
+                    if int(existing.deleted_status_id or 0) != 0:
+                        existing.school_id = school_id
+                        existing.teaching_id = teaching_id
+                        existing.course_name = nombre
+                        existing.period_year = period_year
+                        existing.deleted_status_id = 0
+                        existing.updated_date = datetime.now()
+                        self.db.commit()
+                        imported += 1
+                        continue
+
+                    same_school = int(existing.school_id or 0) == int(school_id)
+                    same_name = (existing.course_name or "").strip().lower() == name_norm
+                    if same_school and same_name:
+                        skipped += 1
+                        continue
+                    if same_school and not same_name:
+                        errors.append(
+                            {
+                                "name": nombre,
+                                "message": (
+                                    f"Ya existe curso id={ext_id} con otro nombre ({existing.course_name!r})"
+                                ),
+                            }
+                        )
+                        continue
+                    errors.append(
+                        {
+                            "name": nombre,
+                            "message": (
+                                f"El id {ext_id} ya está asignado a otro colegio (school_id={existing.school_id})"
+                            ),
+                        }
+                    )
+                    continue
+
+                res = self.store(
+                    {
+                        "id": ext_id,
+                        "school_id": school_id,
+                        "teaching_id": teaching_id,
+                        "course_name": nombre,
+                        "period_year": period_year,
+                    }
+                )
+                if res.get("status") == "success":
+                    imported += 1
+                else:
+                    errors.append({"name": nombre, "message": str(res.get("message", "Error"))})
+
+            return {
+                "status": "success",
+                "imported": imported,
+                "skipped": skipped,
+                "errors": errors,
+            }
+        except Exception as e:
             return {"status": "error", "message": str(e)}

@@ -7,6 +7,8 @@ from app.backend.schemas import UserLogin, StudentList, StoreStudent, UpdateStud
 from app.backend.classes.student_class import StudentClass
 from app.backend.auth.auth_user import get_current_active_user
 from app.backend.classes.school_class import SchoolClass
+from app.backend.classes.inspection_api_client import InspectionApiClient
+from app.backend.classes.teaching_class import _normalize_school_id
 from app.backend.db.models import ProfessionalModel, ProfessionalTeachingCourseModel, CourseModel, SchoolModel, PlatformStatusModel
 from pathlib import Path
 from datetime import datetime
@@ -259,6 +261,77 @@ def totals(session_user: UserLogin = Depends(get_current_active_user), db: Sessi
         }
     )
 
+
+@students.post("/import_from_inspection")
+def import_from_inspection(
+    period_year: Optional[int] = Query(None, ge=2000, le=2100, description="Año de matrícula (Inspection anio) y period_year local"),
+    session_user: UserLogin = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    customer_id = session_user.customer_id if session_user else None
+    school_id = session_user.school_id if session_user else None
+    if customer_id and not school_id:
+        schools_list = SchoolClass(db).get_all(page=0, customer_id=customer_id)
+        if isinstance(schools_list, list) and len(schools_list) > 0:
+            school_id = schools_list[0].get("id")
+    school_id = _normalize_school_id(school_id)
+    if school_id is None:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "status": 400,
+                "message": "No se pudo determinar el colegio (school_id) de la sesión",
+                "data": None,
+            },
+        )
+
+    client = InspectionApiClient()
+    if not client.is_configured():
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "status": 503,
+                "message": "Inspection API not configured (INSPECTION_API_USERNAME / INSPECTION_API_PASSWORD)",
+                "data": None,
+            },
+        )
+
+    anio = int(period_year) if period_year is not None else datetime.now().year
+    remote = client.fetch_students_list(anio=anio)
+    if not remote.get("ok"):
+        return JSONResponse(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            content={
+                "status": 502,
+                "message": remote.get("message") or "Error al obtener alumnos desde Inspection",
+                "data": remote,
+            },
+        )
+
+    result = StudentClass(db).import_from_inspection(school_id, remote, anio)
+    if isinstance(result, dict) and result.get("status") == "error":
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "status": 500,
+                "message": result.get("message", "Error al importar estudiantes"),
+                "data": None,
+            },
+        )
+
+    imported = result.get("imported", 0)
+    skipped = result.get("skipped", 0)
+    msg = f"Importación de estudiantes finalizada: {imported} nuevos, {skipped} omitidos (duplicados o ya existentes)."
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "status": 200,
+            "message": msg,
+            "data": result,
+        },
+    )
+
+
 @students.post("/store")
 def store(
     student_item: StoreStudent,
@@ -342,7 +415,7 @@ def edit(id: int, session_user: UserLogin = Depends(get_current_active_user), db
     
     # Obtener nombre del curso
     if course_id:
-        course = db.query(CourseModel).filter(CourseModel.id == course_id).first()
+        course = db.query(CourseModel).filter(CourseModel.deleted_status_id == 0, CourseModel.id == course_id).first()
         if course:
             course_name = course.course_name
     

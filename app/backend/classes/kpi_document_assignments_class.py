@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import case, func, literal
+from sqlalchemy import and_, case, func, literal
 from sqlalchemy.orm import Session
 
 from app.backend.db.models import (
@@ -77,7 +77,10 @@ class KpiDocumentAssignmentsClass:
             if school_id_filter is not None:
                 base_q = base_q.join(
                     CourseModel,
-                    CourseModel.id == ProfessionalDocumentAssignmentModel.course_id,
+                    and_(
+                        CourseModel.id == ProfessionalDocumentAssignmentModel.course_id,
+                        CourseModel.deleted_status_id == 0,
+                    ),
                 ).filter(CourseModel.school_id == int(school_id_filter))
 
             q = base_q.group_by(ProfessionalDocumentAssignmentModel.course_id)
@@ -88,7 +91,7 @@ class KpiDocumentAssignmentsClass:
             if course_ids:
                 for c in (
                     self.db.query(CourseModel)
-                    .filter(CourseModel.id.in_(course_ids))
+                    .filter(CourseModel.id.in_(course_ids), CourseModel.deleted_status_id == 0)
                     .all()
                 ):
                     names[int(c.id)] = (c.course_name or "").strip() or f"Curso #{c.id}"
@@ -152,7 +155,13 @@ class KpiDocumentAssignmentsClass:
                     loaded_expr,
                 )
                 .select_from(ProfessionalDocumentAssignmentModel)
-                .join(CourseModel, CourseModel.id == ProfessionalDocumentAssignmentModel.course_id)
+                .join(
+                    CourseModel,
+                    and_(
+                        CourseModel.id == ProfessionalDocumentAssignmentModel.course_id,
+                        CourseModel.deleted_status_id == 0,
+                    ),
+                )
                 .filter(*filters)
                 .group_by(CourseModel.school_id)
             )

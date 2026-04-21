@@ -660,6 +660,51 @@ def inject_evalua_matrix_word_table(docx_path: str, parsed: CognitiveQuantitativ
     return True
 
 
+def inject_image_into_content_control_by_tag(
+    docx_path: str,
+    tag: str,
+    image_path: str,
+    *,
+    width_inches: float = 6.0,
+) -> bool:
+    """
+    Vacía el primer SDT con w:tag @w:val == `tag` e inserta una imagen centrada.
+    Sustituye la tabla EVALÚA generada en el control `ac` del doc 27 cuando el usuario
+    sube una captura en lugar de usar la matriz en el Word.
+    """
+    if not image_path or not os.path.isfile(image_path):
+        return False
+    try:
+        from docx import Document
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        from docx.oxml import OxmlElement
+        from docx.oxml.ns import qn
+        from docx.shared import Inches
+        from docx.text.paragraph import Paragraph
+    except ImportError:
+        return False
+
+    doc = Document(docx_path)
+    sdt = _find_sdt_element_by_tag(doc.element.body, tag)
+    if sdt is None:
+        return False
+    sdt_content = sdt.find(qn("w:sdtContent"))
+    if sdt_content is None:
+        return False
+
+    for child in list(sdt_content):
+        sdt_content.remove(child)
+
+    new_p = OxmlElement("w:p")
+    sdt_content.append(new_p)
+    paragraph = Paragraph(new_p, doc._body)
+    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = paragraph.add_run()
+    run.add_picture(image_path, width=Inches(width_inches))
+    doc.save(docx_path)
+    return True
+
+
 def _diamond(draw: Any, xy: Tuple[float, float], r: float, fill: Tuple[int, int, int]) -> None:
     x, y = xy
     pts = [(x, y - r), (x + r, y), (x, y + r), (x - r, y)]

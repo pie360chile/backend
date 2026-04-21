@@ -104,6 +104,7 @@ class ProfessionalTeachingCourseClass:
                 .filter(
                     ProfessionalTeachingCourseModel.course_id == course_id,
                     CourseModel.school_id == school_id,
+                    CourseModel.deleted_status_id == 0,
                     ProfessionalTeachingCourseModel.career_type_id == career_type_id,
                     ProfessionalTeachingCourseModel.deleted_status_id == 0,
                 )

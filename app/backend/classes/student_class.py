@@ -1,5 +1,17 @@
 from datetime import datetime, date
-from app.backend.db.models import StudentModel, StudentAcademicInfoModel, StudentPersonalInfoModel, SpecialEducationalNeedModel, CourseModel, SchoolModel
+from typing import Any, Dict, List
+
+from app.backend.db.models import (
+    StudentModel,
+    StudentAcademicInfoModel,
+    StudentPersonalInfoModel,
+    SpecialEducationalNeedModel,
+    CourseModel,
+    SchoolModel,
+    CommuneModel,
+    FolderModel,
+)
+from sqlalchemy import and_
 from sqlalchemy.orm import aliased
 
 
@@ -40,12 +52,113 @@ def _period_year_int(v):
         return None
 
 
+def _extract_inspection_students_rows(inspection_body: Dict[str, Any]) -> List[Dict[str, Any]]:
+    raw = inspection_body.get("data")
+    if isinstance(raw, list):
+        return [r for r in raw if isinstance(r, dict)]
+    if isinstance(raw, dict):
+        inner = raw.get("data")
+        if isinstance(inner, list):
+            return [r for r in inner if isinstance(r, dict)]
+    return []
+
+
+def _inspection_int(v):
+    if v is None or (isinstance(v, str) and not str(v).strip()):
+        return None
+    try:
+        return int(str(v).strip())
+    except (TypeError, ValueError):
+        return None
+
+
 class StudentClass:
     def __init__(self, db):
         self.db = db
 
     def _parse_date(self, v):
         return _parse_date(v)
+
+    def _resolve_region_id_from_commune(self, commune_id: Any) -> Any:
+        if commune_id is None:
+            return None
+        try:
+            cid = int(commune_id)
+        except (TypeError, ValueError):
+            return None
+        row = self.db.query(CommuneModel).filter(CommuneModel.id == cid).first()
+        if row is not None and getattr(row, "region_id", None) is not None:
+            return int(row.region_id)
+        return None
+
+    def _provision_inspection_import_extras(
+        self,
+        student_id: int,
+        school_id: int,
+        course_id: int,
+        period_year: int,
+        student_inputs: Dict[str, Any],
+    ) -> None:
+        """
+        After Inspection import: align folders (health doc id=4) with school/course/period,
+        and create a minimal health_evaluations + folders row when missing (same path as HealthEvaluationClass.store).
+        """
+        from app.backend.classes.health_evaluation_class import HealthEvaluationClass
+
+        py_str = str(int(period_year)) if period_year is not None else None
+
+        existing = (
+            self.db.query(FolderModel)
+            .filter(FolderModel.student_id == student_id, FolderModel.document_id == 4)
+            .order_by(FolderModel.id.desc())
+            .first()
+        )
+        if existing:
+            existing.school_id = school_id
+            existing.course_id = course_id
+            if py_str is not None:
+                existing.period_year = py_str
+            existing.updated_date = datetime.now()
+            self.db.commit()
+            return
+
+        full_name = " ".join(
+            p
+            for p in (
+                (student_inputs.get("names") or "").strip(),
+                (student_inputs.get("father_lastname") or "").strip(),
+                (student_inputs.get("mother_lastname") or "").strip(),
+            )
+            if (p or "").strip()
+        ).strip()
+
+        hev = HealthEvaluationClass(self.db)
+        res = hev.store(
+            {
+                "student_id": student_id,
+                "gender_id": student_inputs.get("gender_id"),
+                "nationality_id": student_inputs.get("nationality_id"),
+                "full_name": full_name or None,
+                "identification_number": student_inputs.get("identification_number"),
+                "born_date": student_inputs.get("born_date"),
+            }
+        )
+        if isinstance(res, dict) and res.get("status") == "error":
+            raise RuntimeError(str(res.get("message") or "health evaluation stub failed"))
+
+        fld = (
+            self.db.query(FolderModel)
+            .filter(FolderModel.student_id == student_id, FolderModel.document_id == 4)
+            .order_by(FolderModel.id.desc())
+            .first()
+        )
+        if fld:
+            fld.school_id = school_id
+            fld.course_id = course_id
+            if py_str is not None:
+                fld.period_year = py_str
+            fld.updated_date = datetime.now()
+            self.db.commit()
 
     def get_all(self, page=0, items_per_page=10, school_id=None, rut=None, names=None, identification_number=None, course_id=None, period_year=None):
         try:
@@ -398,7 +511,10 @@ class StudentClass:
                 )
                 .outerjoin(
                     CourseModel,
-                    CourseModel.id == StudentAcademicInfoModel.course_id,
+                    and_(
+                        CourseModel.id == StudentAcademicInfoModel.course_id,
+                        CourseModel.deleted_status_id == 0,
+                    ),
                 )
                 .filter(
                     StudentModel.deleted_status_id == 0,
@@ -496,7 +612,10 @@ class StudentClass:
                 )
                 .outerjoin(
                     CourseModel,
-                    CourseModel.id == StudentAcademicInfoModel.course_id,
+                    and_(
+                        CourseModel.id == StudentAcademicInfoModel.course_id,
+                        CourseModel.deleted_status_id == 0,
+                    ),
                 )
                 .filter(
                     StudentModel.deleted_status_id == 0,
@@ -703,6 +822,14 @@ class StudentClass:
             if not identification_number:
                 return {"status": "error", "message": "El RUT/número de identificación es requerido."}
 
+            forced_id_int = None
+            raw_id = student_inputs.get("id")
+            if raw_id is not None and str(raw_id).strip() != "":
+                try:
+                    forced_id_int = int(raw_id)
+                except (TypeError, ValueError):
+                    return {"status": "error", "message": "Invalid student id"}
+
             # Validar que no exista ya un estudiante con el mismo RUT, curso y periodo en el mismo colegio
             duplicate_query = self.db.query(StudentModel).filter(
                 StudentModel.school_id == school_id,
@@ -722,39 +849,79 @@ class StudentClass:
                 )
             existing = duplicate_query.first()
 
+            dup_msg = "Ya existe un estudiante con ese RUT en el mismo curso y período."
             if existing:
-                return {
-                    "status": "error",
-                    "message": "Ya existe un estudiante con ese RUT en el mismo curso y período.",
-                }
+                if forced_id_int is not None and int(existing.id) != int(forced_id_int):
+                    return {
+                        "status": "error",
+                        "message": (
+                            f"Identification number already enrolled (student id={existing.id}); "
+                            f"Inspection row expects id={forced_id_int}"
+                        ),
+                    }
+                return {"status": "error", "message": dup_msg}
 
-            # Crear el estudiante principal (period_year en BD es string)
+            if forced_id_int is not None:
+                by_id = self.db.query(StudentModel).filter(StudentModel.id == forced_id_int).first()
+                if by_id:
+                    if int(by_id.deleted_status_id or 0) != 0:
+                        return {
+                            "status": "error",
+                            "message": "Student id exists but is deleted; restore manually before import.",
+                        }
+                    if int(by_id.school_id or 0) != int(school_id or 0):
+                        return {
+                            "status": "error",
+                            "message": "Student id already belongs to another school",
+                        }
+                    if (by_id.identification_number or "").strip() != identification_number:
+                        return {
+                            "status": "error",
+                            "message": "Student id already assigned to a different identification number",
+                        }
+                    return {"status": "error", "message": dup_msg}
+
+            # Crear el estudiante principal (period_year en BD es string); id opcional (import Inspection)
             py = student_inputs.get('period_year')
             period_year_db = str(py).strip() if py is not None else None
-            new_student = StudentModel(
+            row_kwargs = dict(
                 deleted_status_id=0,
                 school_id=student_inputs.get('school_id'),
                 identification_number=student_inputs.get('identification_number'),
                 period_year=period_year_db,
                 added_date=datetime.now(),
-                updated_date=datetime.now()
+                updated_date=datetime.now(),
             )
+            if forced_id_int is not None:
+                row_kwargs["id"] = forced_id_int
+            new_student = StudentModel(**row_kwargs)
 
             self.db.add(new_student)
             self.db.commit()
             self.db.refresh(new_student)
 
+            region_id = student_inputs.get("region_id")
+            if region_id is None and student_inputs.get("commune_id") is not None:
+                region_id = self._resolve_region_id_from_commune(student_inputs.get("commune_id"))
+
             # Crear información personal con los campos enviados (email/tel/fecha pueden venir de sync Inspection)
+            now_ts = datetime.now()
             new_personal = StudentPersonalInfoModel(
                 student_id=new_student.id,
+                region_id=region_id,
                 identification_number=student_inputs.get('identification_number'),
                 names=student_inputs.get('names'),
                 father_lastname=student_inputs.get('father_lastname'),
                 mother_lastname=student_inputs.get('mother_lastname'),
                 nationality_id=student_inputs.get('nationality_id'),
+                gender_id=student_inputs.get('gender_id'),
+                commune_id=student_inputs.get('commune_id'),
+                address=student_inputs.get('address'),
                 email=student_inputs.get('email'),
                 phone=student_inputs.get('phone'),
                 born_date=student_inputs.get('born_date'),
+                added_date=now_ts,
+                updated_date=now_ts,
             )
             self.db.add(new_personal)
 
@@ -997,7 +1164,152 @@ class StudentClass:
         except Exception as e:
             self.db.rollback()
             return {"status": "error", "message": str(e)}
-    
+
+    def import_from_inspection(
+        self, school_id: int, inspection_body: Dict[str, Any], default_period_year: int
+    ) -> Dict[str, Any]:
+        """
+        Import students from Inspection list payload (data[]).
+        Each row must include id (stored as students.id), colegio_id (must match session school_id),
+        rut, curso_id, and year fields per Inspection API.
+        """
+        try:
+            rows = _extract_inspection_students_rows(inspection_body)
+            imported = 0
+            skipped = 0
+            errors: List[Dict[str, str]] = []
+
+            for row in rows:
+                rut_raw = (row.get("rut") or row.get("identification_number") or "").strip()
+                if not rut_raw:
+                    errors.append({"name": "(no RUT)", "message": "Row missing RUT"})
+                    continue
+
+                ext_id = _inspection_int(row.get("id"))
+                if ext_id is None:
+                    errors.append({"name": rut_raw, "message": "Row missing Inspection student id"})
+                    continue
+
+                rid_col = row.get("colegio_id")
+                if rid_col is None or str(rid_col).strip() == "":
+                    errors.append({"name": rut_raw, "message": "Row missing colegio_id"})
+                    continue
+                try:
+                    if int(rid_col) != int(school_id):
+                        errors.append(
+                            {
+                                "name": rut_raw,
+                                "message": f"colegio_id {rid_col} does not match session school_id {school_id}",
+                            }
+                        )
+                        continue
+                except (TypeError, ValueError):
+                    errors.append({"name": rut_raw, "message": "Invalid colegio_id"})
+                    continue
+
+                course_remote = _inspection_int(row.get("curso_id"))
+                if course_remote is None:
+                    errors.append({"name": rut_raw, "message": "Row missing curso_id"})
+                    continue
+
+                course_row = (
+                    self.db.query(CourseModel)
+                    .filter(
+                        CourseModel.id == course_remote,
+                        CourseModel.school_id == school_id,
+                        CourseModel.deleted_status_id == 0,
+                    )
+                    .first()
+                )
+                if not course_row:
+                    errors.append(
+                        {
+                            "name": rut_raw,
+                            "message": f"No course id={course_remote} for this school; import courses first",
+                        }
+                    )
+                    continue
+
+                py_raw = row.get("anio")
+                if py_raw is not None and str(py_raw).strip() != "":
+                    period_year = _inspection_int(py_raw)
+                    if period_year is None:
+                        period_year = default_period_year
+                else:
+                    period_year = default_period_year
+
+                nombres = str(row.get("nombres") or "").strip()
+                paterno = str(row.get("paterno") or "").strip()
+                materno = str(row.get("materno") or "").strip()
+                if not nombres and not paterno and not materno:
+                    errors.append({"name": rut_raw, "message": "Row missing name fields"})
+                    continue
+
+                born = row.get("fecha_nacimiento")
+                born_str = str(born).strip()[:10] if born is not None and str(born).strip() else None
+
+                nat = _inspection_int(row.get("nacionalidad_id"))
+                sex = _inspection_int(row.get("sexo"))
+                comuna = _inspection_int(row.get("comuna_id"))
+
+                student_inputs: Dict[str, Any] = {
+                    "id": ext_id,
+                    "school_id": school_id,
+                    "identification_number": rut_raw,
+                    "period_year": period_year,
+                    "course_id": course_remote,
+                    "names": nombres or "—",
+                    "father_lastname": paterno or "",
+                    "mother_lastname": materno or "",
+                    "born_date": born_str,
+                    "email": (str(row.get("email")).strip() if row.get("email") else None) or None,
+                    "phone": (str(row.get("telefono")).strip() if row.get("telefono") else None) or None,
+                    "address": (str(row.get("direccion")).strip() if row.get("direccion") else None) or None,
+                    "nationality_id": nat,
+                    "gender_id": sex,
+                    "commune_id": comuna,
+                }
+
+                result = self.store(student_inputs)
+                if isinstance(result, dict) and result.get("status") == "success":
+                    sid = result.get("student_id")
+                    if sid is not None:
+                        try:
+                            self._provision_inspection_import_extras(
+                                int(sid), int(school_id), int(course_remote), int(period_year), student_inputs
+                            )
+                        except Exception as pe:
+                            errors.append(
+                                {
+                                    "name": rut_raw,
+                                    "message": f"Student saved; post-import provisioning failed: {pe}",
+                                }
+                            )
+                    imported += 1
+                    continue
+
+                msg = (result or {}).get("message") or ""
+                if isinstance(msg, str) and "Ya existe un estudiante" in msg:
+                    skipped += 1
+                    continue
+
+                errors.append(
+                    {
+                        "name": rut_raw,
+                        "message": str(msg) if msg else "Error al guardar",
+                    }
+                )
+
+            return {
+                "status": "success",
+                "imported": imported,
+                "skipped": skipped,
+                "errors": errors,
+            }
+        except Exception as e:
+            self.db.rollback()
+            return {"status": "error", "message": str(e)}
+
     def get_totals(self, customer_id=None, school_id=None, rol_id=None):
         try:
             from app.backend.db.models import SchoolModel

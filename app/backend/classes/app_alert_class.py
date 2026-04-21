@@ -29,7 +29,7 @@ class AppAlertClass:
         """Obtiene school_id desde `courses` si no viene en el request."""
         try:
             cid = int(course_id)
-            row = self.db.query(CourseModel).filter(CourseModel.id == cid).first()
+            row = self.db.query(CourseModel).filter(CourseModel.deleted_status_id == 0, CourseModel.id == cid).first()
             if row is None or row.school_id is None:
                 return None
             return int(row.school_id)
