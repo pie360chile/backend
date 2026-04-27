@@ -321,7 +321,11 @@ def import_from_inspection(
 
     imported = result.get("imported", 0)
     skipped = result.get("skipped", 0)
-    msg = f"Importación de estudiantes finalizada: {imported} nuevos, {skipped} omitidos (duplicados o ya existentes)."
+    excluded = result.get("excluded_other_school", 0)
+    msg = (
+        f"Importación de estudiantes finalizada: {imported} nuevos, {skipped} omitidos "
+        f"(duplicados o ya existentes), {excluded} filas de otros colegios ignoradas."
+    )
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={

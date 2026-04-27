@@ -1,5 +1,5 @@
 from datetime import datetime, date
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from app.backend.db.models import (
     StudentModel,
@@ -70,6 +70,17 @@ def _inspection_int(v):
         return int(str(v).strip())
     except (TypeError, ValueError):
         return None
+
+
+def _row_colegio_id_for_inspection(row: Dict[str, Any]) -> Optional[int]:
+    """Id de establecimiento en fila Inspection (import alumnos)."""
+    for key in ("colegio_id", "colegio", "id_colegio"):
+        if key not in row:
+            continue
+        n = _inspection_int(row.get(key))
+        if n is not None:
+            return n
+    return None
 
 
 class StudentClass:
@@ -1170,11 +1181,22 @@ class StudentClass:
     ) -> Dict[str, Any]:
         """
         Import students from Inspection list payload (data[]).
-        Each row must include id (stored as students.id), colegio_id (must match session school_id),
-        rut, curso_id, and year fields per Inspection API.
+        Solo se procesan filas cuyo colegio_id (Inspection) coincide con school_id de sesión;
+        el resto se descarta sin contar como error.
+        Cada fila elegible debe incluir id (students.id), rut, curso_id, etc.
         """
         try:
-            rows = _extract_inspection_students_rows(inspection_body)
+            raw_rows = _extract_inspection_students_rows(inspection_body)
+            sid = int(school_id)
+            rows: List[Dict[str, Any]] = []
+            excluded_other_school = 0
+            for row in raw_rows:
+                cid = _row_colegio_id_for_inspection(row)
+                if cid is not None and cid != sid:
+                    excluded_other_school += 1
+                    continue
+                rows.append(row)
+
             imported = 0
             skipped = 0
             errors: List[Dict[str, str]] = []
@@ -1190,21 +1212,17 @@ class StudentClass:
                     errors.append({"name": rut_raw, "message": "Row missing Inspection student id"})
                     continue
 
-                rid_col = row.get("colegio_id")
-                if rid_col is None or str(rid_col).strip() == "":
+                rid_col = _row_colegio_id_for_inspection(row)
+                if rid_col is None:
                     errors.append({"name": rut_raw, "message": "Row missing colegio_id"})
                     continue
-                try:
-                    if int(rid_col) != int(school_id):
-                        errors.append(
-                            {
-                                "name": rut_raw,
-                                "message": f"colegio_id {rid_col} does not match session school_id {school_id}",
-                            }
-                        )
-                        continue
-                except (TypeError, ValueError):
-                    errors.append({"name": rut_raw, "message": "Invalid colegio_id"})
+                if int(rid_col) != sid:
+                    errors.append(
+                        {
+                            "name": rut_raw,
+                            "message": f"colegio_id {rid_col} no coincide con school_id de sesión {sid}",
+                        }
+                    )
                     continue
 
                 course_remote = _inspection_int(row.get("curso_id"))
@@ -1304,6 +1322,7 @@ class StudentClass:
                 "status": "success",
                 "imported": imported,
                 "skipped": skipped,
+                "excluded_other_school": excluded_other_school,
                 "errors": errors,
             }
         except Exception as e:

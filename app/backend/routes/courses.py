@@ -230,7 +230,8 @@ def import_from_inspection(
         )
 
     anio = int(period_year) if period_year is not None else datetime.now().year
-    remote = client.fetch_courses_list(colegio_id=school_id, anio=anio)
+    # Inspection exige multipart `colegio` == school_id resuelto desde la sesión.
+    remote = client.fetch_courses_list(colegio=int(school_id), anio=anio)
     if not remote.get("ok"):
         return JSONResponse(
             status_code=status.HTTP_502_BAD_GATEWAY,
