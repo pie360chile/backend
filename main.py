@@ -108,6 +108,8 @@ from app.backend.routes.pedagogical_evaluation_classroom_seventh_grade import pe
 from app.backend.routes.pedagogical_evaluation_classroom_eighth_grade import pedagogical_evaluation_classroom_eighth_grade
 from app.backend.routes.pedagogical_evaluation_classroom_first_grade_secondary import pedagogical_evaluation_classroom_first_grade_secondary
 from app.backend.routes.pedagogical_evaluation_classroom_second_grade_secondary import pedagogical_evaluation_classroom_second_grade_secondary
+from app.backend.routes.informal_test_templates import informal_test_templates
+from app.backend.routes.document_evalua_result_reports import document_evalua_result_reports
 
 # OpenAPI (Swagger): FastAPI genera automáticamente el esquema desde rutas y modelos Pydantic.
 # Documentación interactiva:
@@ -202,6 +204,8 @@ app.include_router(communes)
 app.include_router(regions)
 app.include_router(native_language_proficiencies)
 app.include_router(documents)
+# Misma ruta bajo /api: el front usa VITE_API_URL p. ej. http://127.0.0.1:8005/api → POST /api/documents/upload/...
+app.include_router(documents, prefix="/api")
 app.include_router(family_members)
 app.include_router(news)
 app.include_router(external_api)
@@ -288,6 +292,11 @@ app.include_router(pedagogical_evaluation_classroom_seventh_grade)
 app.include_router(pedagogical_evaluation_classroom_eighth_grade)
 app.include_router(pedagogical_evaluation_classroom_first_grade_secondary)
 app.include_router(pedagogical_evaluation_classroom_second_grade_secondary)
+app.include_router(informal_test_templates)
+# Sin prefijo /api: http://host:port/document_evalua_result_reports/...
+# Con prefijo /api: coinciden con VITE_API_URL que suele ser http://host:port/api
+app.include_router(document_evalua_result_reports)
+app.include_router(document_evalua_result_reports, prefix="/api")
 
 if __name__ == "__main__":
     # Para aumentar el límite de tamaño de archivo, configurar en el servidor

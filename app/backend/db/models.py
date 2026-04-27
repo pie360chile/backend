@@ -1229,6 +1229,52 @@ class DynamicFormSubmissionModel(Base):
     updated_date = Column(DateTime, nullable=True)
 
 
+class InformalTestTemplateModel(Base):
+    """Plantillas de pruebas informales por colegio (catálogo reutilizable entre estudiantes)."""
+
+    __tablename__ = 'informal_test_templates'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    school_id = Column(Integer, nullable=False)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+
+class InformalTestTemplateQuestionModel(Base):
+    """Preguntas de una plantilla de prueba informal."""
+
+    __tablename__ = 'informal_test_template_questions'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    template_id = Column(Integer, ForeignKey('informal_test_templates.id', ondelete='CASCADE'), nullable=False)
+    question_order = Column(Integer, nullable=False)
+    question_text = Column(Text, nullable=False)
+    question_type = Column(String(50), nullable=False)  # short_text|long_text|single_choice|multiple_choice|number|date
+    options_json = Column(Text, nullable=True)
+    required = Column(Boolean, nullable=False, default=False)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+
+
+class InformalTestSubmissionModel(Base):
+    """Respuestas enviadas para una plantilla de prueba informal por estudiante."""
+
+    __tablename__ = 'informal_test_submissions'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    informal_test_template_id = Column(Integer, ForeignKey('informal_test_templates.id', ondelete='CASCADE'), nullable=False)
+    school_id = Column(Integer, nullable=False)
+    student_id = Column(Integer, nullable=False)
+    professional_id = Column(Integer, nullable=True)
+    answers_json = Column(Text, nullable=False)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+
 class DifferentiatedStrategiesImplementationModel(Base):
     __tablename__ = 'differentiated_strategies_implementations'
 
@@ -1993,6 +2039,17 @@ class PsychomotorEvaluationReportModel(Base):
     student_id = Column(Integer, nullable=False)
     document_type_id = Column(Integer, nullable=True)
     form_data = Column(Text, nullable=True)  # JSON con todos los campos del formulario
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+
+
+class EvaluaResultReportModel(Base):
+    """Informes Resultado Prueba Evalua (título; folders.detail_id → id). Tabla evalua_result_report."""
+    __tablename__ = 'evalua_result_report'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    student_id = Column(Integer, nullable=False)
+    document_catalog_id = Column(Integer, nullable=True)
+    title = Column(String(500), nullable=True)
     added_date = Column(DateTime, nullable=True)
     updated_date = Column(DateTime, nullable=True)
 

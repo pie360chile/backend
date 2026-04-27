@@ -1,7 +1,13 @@
 from typing import Optional, Any, List, Dict, Union
 from sqlalchemy.orm import Session
 from datetime import datetime
-from app.backend.db.models import FolderModel, DocumentModel, BirthCertificateDocumentModel, HealthEvaluationModel
+from app.backend.db.models import (
+    FolderModel,
+    DocumentModel,
+    BirthCertificateDocumentModel,
+    HealthEvaluationModel,
+    EvaluaResultReportModel,
+)
 
 
 def _folder_period_str(period_year: Optional[Union[int, str]]) -> Optional[str]:
@@ -375,7 +381,8 @@ class FolderClass:
                     birth_cert = self.db.query(BirthCertificateDocumentModel).filter(
                         BirthCertificateDocumentModel.student_id == student_id
                     ).order_by(BirthCertificateDocumentModel.id.desc()).first()
-                    
+
+                    folder_record = None
                     if birth_cert:
                         # Buscar el registro correspondiente en folders para obtener file y version_id
                         fq = self.db.query(FolderModel).filter(
@@ -386,26 +393,58 @@ class FolderClass:
                         if py is not None:
                             fq = fq.filter(FolderModel.period_year == py)
                         folder_record = fq.order_by(FolderModel.version_id.desc()).first()
-                        
-                        # Obtener el document_name desde la tabla documents (solo no eliminados)
-                        doc_info = self.db.query(DocumentModel).filter(
-                            DocumentModel.id == document_id,
-                            DocumentModel.deleted_date.is_(None)
-                        ).first()
-                        document_name = doc_info.document if doc_info else "Certificado de Nacimiento"
-                        
+                        if not folder_record:
+                            # Fallback: hay cargas antiguas sin detail_id
+                            fq_fallback = self.db.query(FolderModel).filter(
+                                FolderModel.student_id == student_id,
+                                FolderModel.document_id == document_id,
+                                FolderModel.file.isnot(None),
+                                FolderModel.deleted_date.is_(None),
+                            )
+                            if py is not None:
+                                fq_fallback = fq_fallback.filter(FolderModel.period_year == py)
+                            folder_record = fq_fallback.order_by(FolderModel.version_id.desc()).first()
+                    else:
+                        # Fallback: cargas directas a folders sin fila en birth_certificate_documents
+                        fq_fallback = self.db.query(FolderModel).filter(
+                            FolderModel.student_id == student_id,
+                            FolderModel.document_id == document_id,
+                            FolderModel.file.isnot(None),
+                            FolderModel.deleted_date.is_(None),
+                        )
+                        if py is not None:
+                            fq_fallback = fq_fallback.filter(FolderModel.period_year == py)
+                        folder_record = fq_fallback.order_by(FolderModel.version_id.desc()).first()
+
+                    # Obtener el document_name desde la tabla documents (solo no eliminados)
+                    doc_info = self.db.query(DocumentModel).filter(
+                        DocumentModel.id == document_id,
+                        DocumentModel.deleted_date.is_(None)
+                    ).first()
+                    document_name = doc_info.document if doc_info else "Certificado de Nacimiento"
+
+                    # Solo contar como existente si existe respaldo en folders con archivo.
+                    if folder_record:
                         all_documents.append({
-                            "id": birth_cert.id,
-                            "student_id": birth_cert.student_id,
+                            "id": birth_cert.id if birth_cert else folder_record.id,
+                            "student_id": student_id,
                             "document_id": document_id,
                             "document_type_id": document_type_id,
-                            "detail_id": birth_cert.id,
-                            "file": birth_cert.birth_certificate if birth_cert.birth_certificate else (folder_record.file if folder_record else None),
-                            "version_id": folder_record.version_id if folder_record else None,
+                            "detail_id": birth_cert.id if birth_cert else folder_record.detail_id,
+                            "file": folder_record.file,
+                            "version_id": folder_record.version_id,
                             "document_name": document_name,
-                            "birth_certificate": birth_cert.birth_certificate,
-                            "added_date": birth_cert.added_date.strftime("%Y-%m-%d %H:%M:%S") if birth_cert.added_date else None,
-                            "updated_date": birth_cert.updated_date.strftime("%Y-%m-%d %H:%M:%S") if birth_cert.updated_date else None
+                            "birth_certificate": birth_cert.birth_certificate if birth_cert else None,
+                            "added_date": (
+                                birth_cert.added_date.strftime("%Y-%m-%d %H:%M:%S")
+                                if birth_cert and birth_cert.added_date else
+                                (folder_record.added_date.strftime("%Y-%m-%d %H:%M:%S") if folder_record.added_date else None)
+                            ),
+                            "updated_date": (
+                                birth_cert.updated_date.strftime("%Y-%m-%d %H:%M:%S")
+                                if birth_cert and birth_cert.updated_date else
+                                (folder_record.updated_date.strftime("%Y-%m-%d %H:%M:%S") if folder_record.updated_date else None)
+                            )
                         })
                         found = True
                 
@@ -425,6 +464,17 @@ class FolderClass:
                         if py is not None:
                             hq = hq.filter(FolderModel.period_year == py)
                         folder_record = hq.order_by(FolderModel.version_id.desc()).first()
+                        if not folder_record:
+                            # Fallback: hay cargas en folders sin detail_id asociado
+                            hq_fallback = self.db.query(FolderModel).filter(
+                                FolderModel.student_id == student_id,
+                                FolderModel.document_id == document_id,
+                                FolderModel.file.isnot(None),
+                                FolderModel.deleted_date.is_(None),
+                            )
+                            if py is not None:
+                                hq_fallback = hq_fallback.filter(FolderModel.period_year == py)
+                            folder_record = hq_fallback.order_by(FolderModel.version_id.desc()).first()
                         
                         # Obtener el document_name desde la tabla documents (solo no eliminados)
                         doc_info = self.db.query(DocumentModel).filter(
@@ -433,25 +483,93 @@ class FolderClass:
                         ).first()
                         document_name = doc_info.document if doc_info else "Evaluación de Salud"
                         
-                        all_documents.append({
-                            "id": health_eval.id,
-                            "student_id": health_eval.student_id,
-                            "document_id": document_id,
-                            "document_type_id": document_type_id,
-                            "detail_id": health_eval.id,
-                            "file": folder_record.file if folder_record else None,
-                            "version_id": folder_record.version_id if folder_record else None,
-                            "document_name": document_name,
-                            "full_name": health_eval.full_name,
-                            "identification_number": health_eval.identification_number,
-                            "born_date": health_eval.born_date.strftime("%Y-%m-%d") if health_eval.born_date else None,
-                            "age": health_eval.age,
-                            "evaluation_date": health_eval.evaluation_date.strftime("%Y-%m-%d") if health_eval.evaluation_date else None,
-                            "reevaluation_date": health_eval.reevaluation_date.strftime("%Y-%m-%d") if health_eval.reevaluation_date else None,
-                            "diagnosis": health_eval.diagnosis,
-                            "added_date": health_eval.added_date.strftime("%Y-%m-%d %H:%M:%S") if health_eval.added_date else None,
+                        # Solo contar como existente si existe respaldo en folders con archivo.
+                        if folder_record:
+                            all_documents.append({
+                                "id": health_eval.id,
+                                "student_id": health_eval.student_id,
+                                "document_id": document_id,
+                                "document_type_id": document_type_id,
+                                "detail_id": health_eval.id,
+                                "file": folder_record.file,
+                                "version_id": folder_record.version_id,
+                                "document_name": document_name,
+                                "full_name": health_eval.full_name,
+                                "identification_number": health_eval.identification_number,
+                                "born_date": health_eval.born_date.strftime("%Y-%m-%d") if health_eval.born_date else None,
+                                "age": health_eval.age,
+                                "evaluation_date": health_eval.evaluation_date.strftime("%Y-%m-%d") if health_eval.evaluation_date else None,
+                                "reevaluation_date": health_eval.reevaluation_date.strftime("%Y-%m-%d") if health_eval.reevaluation_date else None,
+                                "diagnosis": health_eval.diagnosis,
+                                "added_date": health_eval.added_date.strftime("%Y-%m-%d %H:%M:%S") if health_eval.added_date else None,
                             "updated_date": health_eval.updated_date.strftime("%Y-%m-%d %H:%M:%S") if health_eval.updated_date else None
-                        })
+                            })
+                        found = True
+
+                # Informes Resultado Prueba Evalua (detail_id → evalua_result_report)
+                elif document_id == 42:
+                    d42 = (
+                        self.db.query(EvaluaResultReportModel)
+                        .filter(EvaluaResultReportModel.student_id == student_id)
+                        .order_by(EvaluaResultReportModel.id.desc())
+                        .first()
+                    )
+                    folder_record = None
+                    if d42:
+                        hq = self.db.query(FolderModel).filter(
+                            FolderModel.student_id == student_id,
+                            FolderModel.detail_id == d42.id,
+                            FolderModel.file.isnot(None),
+                        )
+                        if py is not None:
+                            hq = hq.filter(FolderModel.period_year == py)
+                        folder_record = hq.order_by(FolderModel.version_id.desc()).first()
+                    if not folder_record and d42:
+                        hq_fb = self.db.query(FolderModel).filter(
+                            FolderModel.student_id == student_id,
+                            FolderModel.document_id == document_id,
+                            FolderModel.file.isnot(None),
+                            FolderModel.deleted_date.is_(None),
+                        )
+                        if py is not None:
+                            hq_fb = hq_fb.filter(FolderModel.period_year == py)
+                        folder_record = hq_fb.order_by(FolderModel.version_id.desc()).first()
+                    if not d42:
+                        fb = self.db.query(FolderModel).filter(
+                            FolderModel.student_id == student_id,
+                            FolderModel.document_id == document_id,
+                            FolderModel.file.isnot(None),
+                            FolderModel.deleted_date.is_(None),
+                        )
+                        if py is not None:
+                            fb = fb.filter(FolderModel.period_year == py)
+                        folder_record = fb.order_by(FolderModel.version_id.desc()).first()
+
+                    doc_info = self.db.query(DocumentModel).filter(
+                        DocumentModel.id == document_id,
+                        DocumentModel.deleted_date.is_(None),
+                    ).first()
+                    document_name = doc_info.document if doc_info else "Informes Resultado Prueba Evalua"
+                    if folder_record:
+                        all_documents.append(
+                            {
+                                "id": d42.id if d42 else folder_record.id,
+                                "student_id": student_id,
+                                "document_id": document_id,
+                                "document_type_id": document_type_id,
+                                "detail_id": d42.id if d42 else folder_record.detail_id,
+                                "title": (d42.title or "").strip() if d42 else None,
+                                "file": folder_record.file,
+                                "version_id": folder_record.version_id,
+                                "document_name": document_name,
+                                "added_date": folder_record.added_date.strftime("%Y-%m-%d %H:%M:%S")
+                                if folder_record.added_date
+                                else None,
+                                "updated_date": folder_record.updated_date.strftime("%Y-%m-%d %H:%M:%S")
+                                if folder_record.updated_date
+                                else None,
+                            }
+                        )
                         found = True
                 
                 # Para document_id 7 y otros: existencia = está en folders; si no está, va a missing

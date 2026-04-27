@@ -83,6 +83,12 @@ def _row_colegio_id_for_inspection(row: Dict[str, Any]) -> Optional[int]:
     return None
 
 
+def _identification_key_for_dedupe(raw: str) -> str:
+    """Clave estable para detectar el mismo RUT repetido en el JSON (puntos/guiones/espacios)."""
+    s = (raw or "").strip().upper().replace(".", "").replace("-", "").replace(" ", "")
+    return s
+
+
 class StudentClass:
     def __init__(self, db):
         self.db = db
@@ -1181,18 +1187,20 @@ class StudentClass:
     ) -> Dict[str, Any]:
         """
         Import students from Inspection list payload (data[]).
-        Solo se procesan filas cuyo colegio_id (Inspection) coincide con school_id de sesión;
-        el resto se descarta sin contar como error.
-        Cada fila elegible debe incluir id (students.id), rut, curso_id, etc.
+        1) Se filtra el JSON: solo filas con colegio_id == school_id de sesión.
+        2) Por fila: no repetir RUT en el mismo lote; no insertar si ya existe identification_number
+           activo en ese colegio.
+        Cada fila elegible debe incluir rut, curso_id, etc. No se persiste el id remoto de Inspection en students.id
+        (PK local por autoincrement).
         """
         try:
             raw_rows = _extract_inspection_students_rows(inspection_body)
-            sid = int(school_id)
+            session_school_id = int(school_id)
             rows: List[Dict[str, Any]] = []
             excluded_other_school = 0
             for row in raw_rows:
                 cid = _row_colegio_id_for_inspection(row)
-                if cid is not None and cid != sid:
+                if cid is not None and cid != session_school_id:
                     excluded_other_school += 1
                     continue
                 rows.append(row)
@@ -1200,6 +1208,7 @@ class StudentClass:
             imported = 0
             skipped = 0
             errors: List[Dict[str, str]] = []
+            seen_identification_keys: set = set()
 
             for row in rows:
                 rut_raw = (row.get("rut") or row.get("identification_number") or "").strip()
@@ -1207,20 +1216,17 @@ class StudentClass:
                     errors.append({"name": "(no RUT)", "message": "Row missing RUT"})
                     continue
 
-                ext_id = _inspection_int(row.get("id"))
-                if ext_id is None:
-                    errors.append({"name": rut_raw, "message": "Row missing Inspection student id"})
-                    continue
-
                 rid_col = _row_colegio_id_for_inspection(row)
                 if rid_col is None:
                     errors.append({"name": rut_raw, "message": "Row missing colegio_id"})
                     continue
-                if int(rid_col) != sid:
+                if int(rid_col) != session_school_id:
                     errors.append(
                         {
                             "name": rut_raw,
-                            "message": f"colegio_id {rid_col} no coincide con school_id de sesión {sid}",
+                            "message": (
+                                f"colegio_id {rid_col} no coincide con school_id de sesión {session_school_id}"
+                            ),
                         }
                     )
                     continue
@@ -1263,6 +1269,25 @@ class StudentClass:
                     errors.append({"name": rut_raw, "message": "Row missing name fields"})
                     continue
 
+                id_key = _identification_key_for_dedupe(rut_raw)
+                if id_key in seen_identification_keys:
+                    skipped += 1
+                    continue
+                seen_identification_keys.add(id_key)
+
+                already = (
+                    self.db.query(StudentModel.id)
+                    .filter(
+                        StudentModel.school_id == session_school_id,
+                        StudentModel.identification_number == rut_raw,
+                        StudentModel.deleted_status_id == 0,
+                    )
+                    .first()
+                )
+                if already is not None:
+                    skipped += 1
+                    continue
+
                 born = row.get("fecha_nacimiento")
                 born_str = str(born).strip()[:10] if born is not None and str(born).strip() else None
 
@@ -1271,7 +1296,6 @@ class StudentClass:
                 comuna = _inspection_int(row.get("comuna_id"))
 
                 student_inputs: Dict[str, Any] = {
-                    "id": ext_id,
                     "school_id": school_id,
                     "identification_number": rut_raw,
                     "period_year": period_year,
@@ -1290,11 +1314,15 @@ class StudentClass:
 
                 result = self.store(student_inputs)
                 if isinstance(result, dict) and result.get("status") == "success":
-                    sid = result.get("student_id")
-                    if sid is not None:
+                    new_student_id = result.get("student_id")
+                    if new_student_id is not None:
                         try:
                             self._provision_inspection_import_extras(
-                                int(sid), int(school_id), int(course_remote), int(period_year), student_inputs
+                                int(new_student_id),
+                                int(school_id),
+                                int(course_remote),
+                                int(period_year),
+                                student_inputs,
                             )
                         except Exception as pe:
                             errors.append(

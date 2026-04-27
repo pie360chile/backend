@@ -1,7 +1,7 @@
 from typing import Optional, Any
 import unicodedata
 from fastapi import APIRouter, status, UploadFile, File, Form, Depends, Body, Query
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, Response
 from app.backend.classes.documents_class import DocumentsClass
 from app.backend.classes.docx_register_book_layout import (
     clone_register_book_section_b_blocks,
@@ -53,6 +53,7 @@ from app.backend.classes.cesp_class import CespClass
 from app.backend.classes.action_incident_class import ActionIncidentClass
 from app.backend.classes.idtel_report_class import IdtelReportClass
 from app.backend.classes.psychomotor_evaluation_report_class import PsychomotorEvaluationReportClass
+from app.backend.classes.informal_test_template_class import InformalTestTemplateClass
 from app.backend.classes.pedagogical_evaluation_classroom_first_grade_class import PedagogicalEvaluationClassroomFirstGradeClass
 from app.backend.classes.pedagogical_evaluation_classroom_second_grade_class import PedagogicalEvaluationClassroomSecondGradeClass
 from app.backend.classes.pedagogical_evaluation_classroom_third_grade_class import PedagogicalEvaluationClassroomThirdGradeClass
@@ -66,6 +67,7 @@ from app.backend.classes.pedagogical_evaluation_classroom_second_grade_secondary
 from app.backend.classes.professional_document_assignment_class import ProfessionalDocumentAssignmentClass
 from app.backend.db.database import get_db
 from app.backend.db.models import (
+    BirthCertificateDocumentModel,
     FolderModel,
     DocumentModel,
     GenderModel,
@@ -202,10 +204,18 @@ def _upsert_folder_student_document(
     catalog_document_id: int,
     period_str: Optional[str],
     canonical_filename: str,
+    school_id: Optional[int],
+    course_id: Optional[int],
+    professional_id: Optional[int],
+    detail_id: Optional[int] = None,
+    always_new_version: bool = False,
 ) -> FolderModel:
     """
-    Actualiza la última fila folders del mismo estudiante/documento/período con el nombre canónico,
-    o inserta versión 1 si no existe. Evita acumular ficheros distintos por timestamp.
+    Por defecto: actualiza la última fila folders del mismo estudiante/documento/período
+    con el nombre canónico, o inserta versión 1 si no existe.
+
+    Si always_new_version=True (p. ej. catálogo 42 Evalua): siempre INSERT con version_id
+    incrementado; no sobrescribe la última versión ni borra el fichero anterior.
     """
     upload_dir = Path("files/system/students")
     lv_q = db.query(FolderModel).filter(
@@ -215,6 +225,35 @@ def _upsert_folder_student_document(
     if period_str is not None:
         lv_q = lv_q.filter(FolderModel.period_year == period_str)
     last = lv_q.order_by(FolderModel.version_id.desc()).first()
+
+    if always_new_version:
+        max_ver_q = db.query(func.coalesce(func.max(FolderModel.version_id), 0)).filter(
+            FolderModel.student_id == student_id,
+            FolderModel.document_id == catalog_document_id,
+        )
+        if period_str is not None:
+            max_ver_q = max_ver_q.filter(FolderModel.period_year == period_str)
+        max_ver = int(max_ver_q.scalar() or 0)
+        next_ver = max_ver + 1
+        rec = FolderModel(
+            school_id=school_id,
+            course_id=course_id,
+            student_id=student_id,
+            document_id=catalog_document_id,
+            version_id=next_ver,
+            detail_id=detail_id,
+            professional_id=professional_id or 0,
+            file=canonical_filename,
+            period_year=period_str,
+            added_date=datetime.now(),
+            updated_date=datetime.now(),
+            deleted_date=None,
+        )
+        db.add(rec)
+        db.commit()
+        db.refresh(rec)
+        return rec
+
     if last:
         old_fn = (last.file or "").strip()
         if old_fn and old_fn != canonical_filename:
@@ -225,18 +264,24 @@ def _upsert_folder_student_document(
             except OSError:
                 pass
         last.file = canonical_filename
+        last.school_id = school_id
+        last.course_id = course_id
+        last.professional_id = professional_id or 0
+        if detail_id is not None:
+            last.detail_id = detail_id
+        last.period_year = period_str
         last.updated_date = datetime.now()
         db.commit()
         db.refresh(last)
         return last
     rec = FolderModel(
-        school_id=None,
-        course_id=None,
+        school_id=school_id,
+        course_id=course_id,
         student_id=student_id,
         document_id=catalog_document_id,
         version_id=1,
-        detail_id=None,
-        professional_id=0,
+        detail_id=detail_id,
+        professional_id=professional_id or 0,
         file=canonical_filename,
         period_year=period_str,
         added_date=datetime.now(),
@@ -506,6 +551,10 @@ async def upload_document(
     student_id: int,
     document_id: int,
     file: UploadFile = File(...),
+    title: Optional[str] = Form(
+        None,
+        description="Título del informe (obligatorio para documento catálogo 42 – Evalua).",
+    ),
     period_year: Optional[int] = Query(
         None,
         ge=2000,
@@ -522,6 +571,7 @@ async def upload_document(
         ge=0,
         description="Curso del estudiante; si no viene, se usa academic_info del estudiante",
     ),
+    session_user: UserLogin = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -563,6 +613,18 @@ async def upload_document(
         
         # Obtener document_type_id del documento
         document_type_id = document.document_type_id
+
+        if int(document_id) == 42:
+            t0 = (title or "").strip()
+            if not t0:
+                return JSONResponse(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    content={
+                        "status": 400,
+                        "message": "Debe enviar el título del informe (campo title).",
+                        "data": None,
+                    },
+                )
         
         # Obtener la extensión del archivo original
         file_extension = Path(file.filename).suffix.lower() if file.filename else ''
@@ -580,9 +642,75 @@ async def upload_document(
         with open(file_path, "wb") as f:
             f.write(content)
 
-        period_str = str(period_year) if period_year is not None else None
+        student_school_id = int(student_data.get("school_id") or 0) if isinstance(student_data, dict) else 0
+        academic_info = (student_data.get("academic_info") or {}) if isinstance(student_data, dict) else {}
+        student_course_id = int(academic_info.get("course_id") or 0) if isinstance(academic_info, dict) else 0
+
+        resolved_school_id = int(student_school_id or 0) or int(getattr(session_user, "school_id", 0) or 0) or None
+        resolved_course_id = int(course_id or 0) or int(student_course_id or 0) or int(getattr(session_user, "course_id", 0) or 0) or None
+        resolved_professional_id = (
+            int(professional_id or 0)
+            or int(getattr(session_user, "id", 0) or 0)
+            or int(getattr(session_user, "customer_id", 0) or 0)
+            or 0
+        )
+        resolved_period_year = (
+            str(period_year)
+            if period_year is not None
+            else str(getattr(session_user, "period_year", "") or "").strip() or str(datetime.now().year)
+        )
+
+        detail_id_value: Optional[int] = None
+        if document_id == 1:
+            birth_row = (
+                db.query(BirthCertificateDocumentModel)
+                .filter(BirthCertificateDocumentModel.student_id == student_id)
+                .order_by(BirthCertificateDocumentModel.id.desc())
+                .first()
+            )
+            if birth_row:
+                birth_row.birth_certificate = unique_filename
+                birth_row.updated_date = datetime.now()
+                detail_id_value = int(birth_row.id)
+            else:
+                birth_row = BirthCertificateDocumentModel(
+                    student_id=student_id,
+                    birth_certificate=unique_filename,
+                    added_date=datetime.now(),
+                    updated_date=datetime.now(),
+                )
+                db.add(birth_row)
+                db.flush()
+                detail_id_value = int(birth_row.id)
+
+        if int(document_id) == 42:
+            from app.backend.classes.evalua_result_class import EvaluaResultClass
+
+            svc = EvaluaResultClass(db)
+            res_42 = svc.upsert_title(student_id, int(document_id), (title or "").strip())
+            if isinstance(res_42, dict) and res_42.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    content={
+                        "status": 500,
+                        "message": res_42.get("message", "Error al guardar el título del informe"),
+                        "data": None,
+                    },
+                )
+            detail_id_value = int(res_42.get("id") or 0) or None
+
+        period_str = resolved_period_year
         new_folder = _upsert_folder_student_document(
-            db, student_id, document_id, period_str, unique_filename
+            db,
+            student_id,
+            document_id,
+            period_str,
+            unique_filename,
+            school_id=resolved_school_id,
+            course_id=resolved_course_id,
+            professional_id=resolved_professional_id,
+            detail_id=detail_id_value,
+            always_new_version=(int(document_id) == 42),
         )
         new_version_id = new_folder.version_id
 
@@ -2932,13 +3060,21 @@ async def register_book_car_preview(
 async def generate_document(
     student_id: int,
     document_id: int,
-    db: Session = Depends(get_db)
+    informal_test_template_id: Optional[int] = Query(
+        None,
+        description="ID de plantilla de prueba informal (obligatorio cuando document_id=43).",
+    ),
+    db: Session = Depends(get_db),
 ):
     """
     Genera un documento para un estudiante específico.
     Cuando document_id = 4, genera el documento de evaluación de salud desde health_evaluations.
     """
     try:
+        # Definir primero: si falla algo antes (p. ej. get estudiante), el except no debe usar variables no definidas
+        MSG_NO_DOC = "No se encontró documento para este estudiante."
+        MSG_ERROR_GEN = "Error generando documento."
+
         # Obtener el estudiante usando la clase
         student_service = StudentClass(db)
         student_result = student_service.get(student_id)
@@ -2952,16 +3088,92 @@ async def generate_document(
                     "data": None
                 }
             )
-        
-        # Mensajes unificados para generación de documentos
-        MSG_NO_DOC = "No se encontró documento para este estudiante."
-        MSG_ERROR_GEN = "Error generando documento."
-        
+
+        # Prueba informal (document_id 43): mismo endpoint; antes del catálogo documents
+        if document_id == 43:
+            if informal_test_template_id is None or int(informal_test_template_id or 0) <= 0:
+                return JSONResponse(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    content={
+                        "status": 400,
+                        "message": "Se requiere informal_test_template_id para generar este documento.",
+                        "data": None,
+                    },
+                )
+            stu_row = (
+                db.query(StudentModel)
+                .filter(StudentModel.id == student_id)
+                .first()
+            )
+            if not stu_row:
+                return JSONResponse(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    content={"status": 404, "message": MSG_NO_DOC, "data": None},
+                )
+            gen = InformalTestTemplateClass(db).generate_submission_pdf(
+                int(stu_row.school_id or 0),
+                int(informal_test_template_id),
+                student_id,
+            )
+            if gen.get("status") == "error":
+                err_http = int(gen.get("http_status") or 404)
+                if err_http not in (400, 404, 422, 500):
+                    err_http = 404
+                return JSONResponse(
+                    status_code=err_http,
+                    content={
+                        "status": err_http,
+                        "message": gen.get("message") or MSG_NO_DOC,
+                        "data": None,
+                    },
+                )
+            data = gen.get("data") or {}
+            fp = data.get("file_path")
+            if not fp:
+                return JSONResponse(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    content={
+                        "status": 500,
+                        "message": "No se obtuvo ruta del PDF generado.",
+                        "data": None,
+                    },
+                )
+            pdf_path = Path(str(fp))
+            if not pdf_path.is_file():
+                return JSONResponse(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    content={
+                        "status": 500,
+                        "message": f"El archivo PDF no existe en disco: {fp}",
+                        "data": None,
+                    },
+                )
+            try:
+                pdf_bytes = pdf_path.read_bytes()
+            except OSError as read_err:
+                return JSONResponse(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    content={
+                        "status": 500,
+                        "message": f"No se pudo leer el PDF generado: {read_err}",
+                        "data": None,
+                    },
+                )
+            fn = data.get("filename") or "informal_test.pdf"
+            return Response(
+                content=pdf_bytes,
+                media_type="application/pdf",
+                headers={
+                    "Content-Disposition": f'attachment; filename="{fn}"',
+                    "Content-Length": str(len(pdf_bytes)),
+                },
+            )
+
         # Obtener el documento usando la clase
         document = DocumentsClass(db)
         document_result = document.get(document_id)
         # Documentos 3,4,7,8,18,19,22,23,24,25,27 se pueden generar aunque no existan en la tabla documents
-        known_generable = (3, 4, 7, 8, 9, 18, 19, 20, 22, 23, 24, 25, 27, 29, 31)
+        known_generable = (3, 4, 7, 8, 9, 18, 19, 20, 22, 23, 24, 25, 27, 29, 31, 43)
         if isinstance(document_result, dict) and document_result.get("status") == "error":
             if document_id in known_generable or _catalog_row_is_informe_evaluacion_psicomotriz(document_id, db):
                 document_result = {"document_type_id": document_id}
@@ -5897,7 +6109,7 @@ async def generate_document(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
                 "status": 500,
-                "message": MSG_ERROR_GEN,
+                "message": f"{MSG_ERROR_GEN} ({type(e).__name__}: {str(e)[:400]})",
                 "data": None
             }
         )

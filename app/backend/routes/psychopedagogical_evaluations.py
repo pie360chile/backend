@@ -1,4 +1,4 @@
-﻿"""Document 27 – Psychopedagogical Evaluation Information."""
+"""Document 27 – Psychopedagogical Evaluation Information."""
 
 from pathlib import Path
 

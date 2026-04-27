@@ -1599,6 +1599,43 @@ class ResendFormWhatsApp(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# informal_tests (plantillas de pruebas informales por colegio)
+# ---------------------------------------------------------------------------
+
+class InformalTestQuestionOptionSchema(BaseModel):
+    label: str
+    value: str
+
+
+class InformalTestQuestionSchema(BaseModel):
+    id: Optional[int] = None
+    question_text: str
+    question_type: str  # short_text|long_text|single_choice|multiple_choice|number|date
+    required: bool = False
+    options: List[InformalTestQuestionOptionSchema] = Field(default_factory=list)
+
+
+class StoreInformalTestTemplate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    questions: List[InformalTestQuestionSchema] = Field(default_factory=list)
+    student_id: Optional[int] = None
+
+
+class UpdateInformalTestTemplate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    questions: Optional[List[InformalTestQuestionSchema]] = None
+
+
+class SubmitInformalTestTemplateAnswers(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    student_id: int = Field(..., ge=1, validation_alias=AliasChoices("student_id", "studentId"))
+    answers: Dict[str, Any] = Field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
 # differentiated_strategies_implementations
 # ---------------------------------------------------------------------------
 

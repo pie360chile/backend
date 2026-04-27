@@ -9,7 +9,7 @@ Env:
   INSPECTION_API_PASSWORD
   INSPECTION_API_TIMEOUT   (seconds, default 30)
   INSPECTION_API_TEACHINGS_PATH  (default: listado/tipos-ensenanzas) — GET tipos de enseñanza (doc. Inspection)
-  INSPECTION_API_COURSES_PATH   (default: listado/cursos) — POST multipart `colegio` (school_id sesión) + anio
+  INSPECTION_API_COURSES_PATH   (default: listado/cursos) — POST multipart colegio + anio
   INSPECTION_API_STUDENTS_PATH  (default: listado/alumnos) — POST multipart anio
   INSPECTION_API_SCHOOLS_PATH  (default: listado/colegios) — GET listado de colegios
 """
@@ -288,13 +288,10 @@ class InspectionApiClient:
         path = (_env("INSPECTION_API_TEACHINGS_PATH") or "listado/tipos-ensenanzas").lstrip("/")
         return self._get_with_bearer(path)
 
-    def fetch_courses_list(self, *, colegio: int, anio: int) -> Dict[str, Any]:
-        """
-        POST listado/cursos — multipart Inspection: campo **colegio** (int, id establecimiento remoto)
-        igual al **school_id** de la sesión PIE360, más **anio**.
-        """
+    def fetch_courses_list(self, colegio_id: int, anio: int) -> Dict[str, Any]:
+        """POST listado de cursos (Inspection: multipart colegio, anio)."""
         path = (_env("INSPECTION_API_COURSES_PATH") or "listado/cursos").lstrip("/")
-        return self._post_multipart_form(path, {"colegio": int(colegio), "anio": int(anio)})
+        return self._post_multipart_form(path, {"colegio": int(colegio_id), "anio": int(anio)})
 
     def fetch_students_list(self, anio: int) -> Dict[str, Any]:
         """POST listado de alumnos (Inspection: multipart anio)."""
