@@ -5,6 +5,14 @@ from decimal import Decimal
 from fastapi import Form
 import json
 
+
+def _empty_str_to_none(v: Any) -> Any:
+    """Convierte cadena vacía a None para campos opcionales."""
+    if v == "" or (isinstance(v, str) and not v.strip()):
+        return None
+    return v
+
+
 # Authentication schemas
 class UserLogin(BaseModel):
     rol_id: Union[int, None]
@@ -449,6 +457,12 @@ class StoreCustomer(BaseModel):
     rol_id: Optional[int] = None
     schools: Optional[List[str]] = None
 
+    @field_validator("license_time", mode="before")
+    @classmethod
+    def _license_time_empty_to_none_store(cls, v: Any) -> Any:
+        return _empty_str_to_none(v)
+
+
 class UpdateCustomer(BaseModel):
     country_id: Optional[int] = None
     region_id: Optional[int] = None
@@ -464,6 +478,12 @@ class UpdateCustomer(BaseModel):
     email: Optional[str] = None
     license_time: Optional[date] = None
     schools: Optional[List[str]] = None
+
+    @field_validator("license_time", mode="before")
+    @classmethod
+    def _license_time_empty_to_none_update(cls, v: Any) -> Any:
+        return _empty_str_to_none(v)
+
 
 # Professional schemas
 class ProfessionalList(BaseModel):
@@ -2448,13 +2468,6 @@ class SchoolIntegrationProgramExitCertificateList(BaseModel):
 
 
 # Anamnesis (documento tipo 3)
-def _empty_str_to_none(v):
-    """Convierte cadena vacía a None para campos opcionales."""
-    if v == "" or (isinstance(v, str) and not v.strip()):
-        return None
-    return v
-
-
 class AnamnesisInformantSchema(BaseModel):
     id: Optional[int] = None
     sort_order: Optional[int] = 0

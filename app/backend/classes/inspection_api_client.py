@@ -11,6 +11,7 @@ Env:
   INSPECTION_API_TEACHINGS_PATH  (default: listado/tipos-ensenanzas) — GET tipos de enseñanza (doc. Inspection)
   INSPECTION_API_COURSES_PATH   (default: listado/cursos) — POST multipart colegio + anio
   INSPECTION_API_STUDENTS_PATH  (default: listado/alumnos) — POST multipart anio
+  INSPECTION_API_SCHOOLS_PATH  (default: listado/colegios) — GET listado de colegios
 """
 
 from __future__ import annotations
@@ -296,6 +297,11 @@ class InspectionApiClient:
         """POST listado de alumnos (Inspection: multipart anio)."""
         path = (_env("INSPECTION_API_STUDENTS_PATH") or "listado/alumnos").lstrip("/")
         return self._post_multipart_form(path, {"anio": int(anio)})
+
+    def fetch_schools_list(self) -> Dict[str, Any]:
+        """GET listado de colegios (Inspection: /api/listado/colegios)."""
+        path = (_env("INSPECTION_API_SCHOOLS_PATH") or "listado/colegios").lstrip("/")
+        return self._get_with_bearer(path)
 
 
 def _first_value(data: Dict[str, Any], keys: tuple) -> Optional[str]:

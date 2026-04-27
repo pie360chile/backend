@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, status
 from fastapi.responses import JSONResponse
+from app.backend.classes.inspection_api_client import InspectionApiClient
 from app.backend.db.database import get_db
 from sqlalchemy.orm import Session
 from app.backend.schemas import UserLogin, SchoolList, StoreSchool, UpdateSchool
-from app.backend.classes.school_class import SchoolClass
+from app.backend.classes.school_class import SchoolClass, _extract_schools_rows
 from app.backend.auth.auth_user import get_current_active_user
 
 schools = APIRouter(
@@ -276,4 +277,72 @@ def delete(id: int, session_user: UserLogin = Depends(get_current_active_user), 
             "message": "School deleted successfully",
             "data": result
         }
+    )
+
+
+@schools.post("/import_from_inspection")
+def import_from_inspection(
+    session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)
+):
+    customer_id = session_user.customer_id if session_user else None
+    if not customer_id:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "status": 400,
+                "message": "Customer ID not found in session",
+                "data": None,
+            },
+        )
+
+    client = InspectionApiClient()
+    if not client.is_configured():
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "status": 503,
+                "message": "Inspection API not configured (INSPECTION_API_USERNAME / INSPECTION_API_PASSWORD)",
+                "data": None,
+            },
+        )
+
+    remote = client.fetch_schools_list()
+    if not remote.get("ok"):
+        return JSONResponse(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            content={
+                "status": 502,
+                "message": remote.get("message") or "Error al obtener colegios desde Inspection",
+                "data": remote,
+            },
+        )
+
+    result = SchoolClass(db).import_from_inspection(int(customer_id), remote)
+    if isinstance(result, dict) and result.get("status") == "error":
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "status": 500,
+                "message": result.get("message", "Error al importar colegios"),
+                "data": None,
+            },
+        )
+
+    imported = result.get("imported", 0)
+    skipped = result.get("skipped", 0)
+    msg = f"Importación de colegios finalizada: {imported} nuevos o actualizados, {skipped} omitidos (sin cambios)."
+    _rows = _extract_schools_rows(remote) if isinstance(remote, dict) else []
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "status": 200,
+            "message": msg,
+            "data": {
+                "imported": imported,
+                "skipped": skipped,
+                "errors": result.get("errors", []),
+                "remote_row_count": len(_rows),
+                "remote_preview": _rows[:5],
+            },
+        },
     )
