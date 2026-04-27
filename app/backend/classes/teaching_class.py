@@ -246,6 +246,9 @@ class TeachingClass:
             }
             if teaching_inputs.get("id") is not None:
                 row_kwargs["id"] = int(teaching_inputs["id"])
+            else:
+                max_id = self.db.query(func.max(TeachingModel.id)).scalar()
+                row_kwargs["id"] = (int(max_id) if max_id is not None else 0) + 1
 
             new_teaching = TeachingModel(**row_kwargs)
 
