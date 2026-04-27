@@ -311,10 +311,11 @@ class TeachingClass:
     def import_from_inspection(self, school_id: int, inspection_body: Dict[str, Any]) -> Dict[str, Any]:
         """
         Inserta enseñanzas desde Inspection usando el **id remoto** como PK local (`teachings.id`).
+        La validación de duplicados es **por colegio** (`school_id` + `id` de Inspection).
+
         - Si ya existe el mismo id activo, mismo colegio y mismo nombre (sin distinguir mayúsculas): omite.
         - Si ya existe el mismo id activo, mismo colegio y distinto nombre: error en listado.
-        - Si el id está en otro colegio: no inserta (error).
-        - Si existe el mismo id pero eliminado (soft): reactiva y actualiza datos.
+        - Si existe el mismo id pero eliminado (soft) en este colegio: reactiva y actualiza datos.
         """
         try:
             rows = _extract_teachings_rows(inspection_body)
@@ -336,13 +337,15 @@ class TeachingClass:
 
                 existing = (
                     self.db.query(TeachingModel)
-                    .filter(TeachingModel.id == inspection_id)
+                    .filter(
+                        TeachingModel.id == inspection_id,
+                        TeachingModel.school_id == school_id,
+                    )
                     .first()
                 )
 
                 if existing:
                     if existing.deleted_status_id != 0:
-                        existing.school_id = school_id
                         existing.teaching_name = name
                         existing.teaching_type_id = type_id
                         existing.deleted_status_id = 0
@@ -351,29 +354,17 @@ class TeachingClass:
                         imported += 1
                         continue
 
-                    same_school = existing.school_id == school_id
                     same_name = (existing.teaching_name or "").strip().lower() == name_norm
-                    if same_school and same_name:
+                    if same_name:
                         skipped += 1
-                        continue
-                    if same_school and not same_name:
-                        errors.append(
-                            {
-                                "name": name,
-                                "message": (
-                                    f"Ya existe enseñanza id={inspection_id} con otro nombre "
-                                    f"({existing.teaching_name!r})"
-                                ),
-                            }
-                        )
                         continue
 
                     errors.append(
                         {
                             "name": name,
                             "message": (
-                                f"El id {inspection_id} de Inspection ya está asignado a otro colegio "
-                                f"(school_id={existing.school_id})"
+                                f"Ya existe enseñanza id={inspection_id} con otro nombre "
+                                f"({existing.teaching_name!r})"
                             ),
                         }
                     )
