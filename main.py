@@ -20,6 +20,7 @@ from app.backend.routes.teachings import teachings
 from app.backend.routes.courses import courses
 from app.backend.routes.communes import communes
 from app.backend.routes.regions import regions
+from app.backend.routes.provinces import provinces
 from app.backend.routes.native_language_proficiencies import native_language_proficiencies
 from app.backend.routes.documents import documents
 from app.backend.routes.family_members import family_members
@@ -202,6 +203,7 @@ app.include_router(teachings)
 app.include_router(courses)
 app.include_router(communes)
 app.include_router(regions)
+app.include_router(provinces)
 app.include_router(native_language_proficiencies)
 app.include_router(documents)
 # Misma ruta bajo /api: el front usa VITE_API_URL p. ej. http://127.0.0.1:8005/api → POST /api/documents/upload/...

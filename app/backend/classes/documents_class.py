@@ -4827,8 +4827,16 @@ class DocumentsClass:
                 id_data.append([Paragraph(DocumentsClass._escape_html_for_paragraph(val or "—"), normal_style), ""])
                 id_spans.append(('SPAN', (0, r + 1), (1, r + 1)))
 
-            age_range = report_data.get("idtel_age_range") or "6_7"
-            age_range_label = "8 a 9 años 11 meses" if age_range == "8_9" else "6 a 7 años 11 meses"
+            age_range = report_data.get("idtel_age_range") or "8"
+            ar = str(age_range).strip()
+            if ar == "8_9":
+                age_range_label = "8 a 9 años 11 meses"
+            elif ar == "6_7":
+                age_range_label = "6 a 7 años 11 meses"
+            elif ar.isdigit() and 5 <= int(ar) <= 10:
+                age_range_label = f"{int(ar)} años (baremo microdominios)"
+            else:
+                age_range_label = ar or "—"
             _add_row("Nombre", get_value("student_full_name"))
             _add_row("RUT", get_value("student_identification_number"))
             _add_row("Fecha de nacimiento", format_date(get_value("student_born_date")))

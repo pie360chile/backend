@@ -268,10 +268,21 @@ class RegionModel(Base):
     __tablename__ = 'regions'
 
     id = Column(Integer, primary_key=True)
-    region = Column(String(255))    
-    region_remuneration_code = Column(Integer) 
+    region = Column(String(255))
     added_date = Column(DateTime())
     updated_date = Column(DateTime())
+
+
+class ProvinceModel(Base):
+    """Provincias (Inspection listado/provincias): id remoto, nombre, región padre."""
+    __tablename__ = 'provinces'
+
+    id = Column(Integer, primary_key=True)
+    province = Column(String(255))
+    region_id = Column(Integer)
+    added_date = Column(DateTime())
+    updated_date = Column(DateTime())
+
 
 class ProductModel(Base):
     __tablename__ = 'products'

@@ -2,6 +2,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from passlib.context import CryptContext
 from fastapi import HTTPException, Depends
 from app.backend.db.models import UserModel
+from typing import Union
 import os
 from jose import jwt, JWTError
 from app.backend.db.database import get_db
@@ -82,6 +83,17 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
     return user
     
 def get_current_active_user(current_user: UserModel = Depends(get_current_user)):
+    return current_user
+
+
+def get_current_superadmin_user(current_user: UserModel = Depends(get_current_active_user)) -> UserModel:
+    """Solo `rol_id == 1` (superadministrador), alineado con el front (`isKpiSuperadmin`)."""
+    rid: Union[int, None] = getattr(current_user, "rol_id", None)
+    if rid is None or int(rid) != 1:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo el superadministrador puede realizar esta acción.",
+        )
     return current_user
 
 def get_user(sub: str):

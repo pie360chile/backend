@@ -8,10 +8,14 @@ Env:
   INSPECTION_API_USERNAME
   INSPECTION_API_PASSWORD
   INSPECTION_API_TIMEOUT   (seconds, default 30)
-  INSPECTION_API_TEACHINGS_PATH  (default: listado/tipos-ensenanzas) — GET tipos de enseñanza (doc. Inspection)
+  INSPECTION_API_TEACHINGS_PATH  (default: listado/tipos-ensenanzas) — GET tipos global (legacy)
   INSPECTION_API_COURSES_PATH   (default: listado/cursos) — POST multipart colegio + anio
-  INSPECTION_API_STUDENTS_PATH  (default: listado/alumnos) — POST multipart anio
-  INSPECTION_API_SCHOOLS_PATH  (default: listado/colegios) — GET listado de colegios
+  INSPECTION_API_STUDENTS_PATH  (default: listado/alumnos) — POST multipart colegio + anio
+  INSPECTION_API_SCHOOLS_PATH  (default: listado/colegios) — GET colegios con tiposEnsenanzas (import enseñanzas por colegio activo)
+  INSPECTION_API_NATIONALITIES_PATH (default: listado/nacionalidades) — GET catálogo nacionalidades (import)
+  INSPECTION_API_REGIONS_PATH (default: listado/regiones) — GET catálogo regiones (import)
+  INSPECTION_API_PROVINCES_PATH (default: listado/provincias) — GET catálogo provincias (import)
+  INSPECTION_API_COMMUNES_PATH (default: listado/comunas) — GET catálogo comunas (import)
 """
 
 from __future__ import annotations
@@ -276,12 +280,28 @@ class InspectionApiClient:
         return self._post_multipart_rut("getDatosFuncionario", rut)
 
     def fetch_communes_list(self) -> Dict[str, Any]:
-        """GET /listado/comunas — catálogo remoto de comunas."""
-        return self._get_with_bearer("listado/comunas")
+        """GET listado/comunas — catálogo remoto de comunas (`id`, `nombre`, `provincia_id` → resolver región vía `provinces`)."""
+        path = (_env("INSPECTION_API_COMMUNES_PATH") or "listado/comunas").lstrip("/")
+        return self._get_with_bearer(path)
 
     def fetch_regions_list(self) -> Dict[str, Any]:
-        """GET /listado/provincias — catálogo remoto (provincias/regiones según API Inspection)."""
-        return self._get_with_bearer("listado/provincias")
+        """Alias: mismo catálogo que provincias (compatibilidad con rutas `/regions/endpoint/list`)."""
+        return self.fetch_provinces_list()
+
+    def fetch_provinces_list(self) -> Dict[str, Any]:
+        """GET listado/provincias — catálogo remoto de provincias."""
+        path = (_env("INSPECTION_API_PROVINCES_PATH") or "listado/provincias").lstrip("/")
+        return self._get_with_bearer(path)
+
+    def fetch_regiones_list(self) -> Dict[str, Any]:
+        """GET listado/regiones — catálogo remoto de regiones (configurable por env)."""
+        path = (_env("INSPECTION_API_REGIONS_PATH") or "listado/regiones").lstrip("/")
+        return self._get_with_bearer(path)
+
+    def fetch_nationalities_list(self) -> Dict[str, Any]:
+        """GET listado/nacionalidades — `{ ok, data: [{ id, gentilicio, pais, iso }, ...] }`."""
+        path = (_env("INSPECTION_API_NATIONALITIES_PATH") or "listado/nacionalidades").lstrip("/")
+        return self._get_with_bearer(path)
 
     def fetch_teachings_list(self) -> Dict[str, Any]:
         """GET listado de tipos de enseñanzas (Inspection: /api/listado/tipos-ensenanzas)."""
@@ -289,19 +309,92 @@ class InspectionApiClient:
         return self._get_with_bearer(path)
 
     def fetch_courses_list(self, colegio_id: int, anio: int) -> Dict[str, Any]:
-        """POST listado de cursos (Inspection: multipart colegio, anio)."""
+        """
+        POST `{base}/listado/cursos` — multipart/form-data, Bearer.
+        Campos: `colegio` (id establecimiento), `anio` (año matrícula).
+        Respuesta típica: `{ ok, message, data: [{ id, nombre, nivel, letra, tipo_ensenanza_id, colegio_id, anio, ... }] }`.
+        """
         path = (_env("INSPECTION_API_COURSES_PATH") or "listado/cursos").lstrip("/")
         return self._post_multipart_form(path, {"colegio": int(colegio_id), "anio": int(anio)})
 
-    def fetch_students_list(self, anio: int) -> Dict[str, Any]:
-        """POST listado de alumnos (Inspection: multipart anio)."""
+    def fetch_students_list(self, colegio_id: int, anio: int) -> Dict[str, Any]:
+        """
+        POST `{base}/listado/alumnos` — multipart/form-data, Bearer.
+        Campos: `colegio` (id establecimiento), `anio` (año matrícula).
+        """
         path = (_env("INSPECTION_API_STUDENTS_PATH") or "listado/alumnos").lstrip("/")
-        return self._post_multipart_form(path, {"anio": int(anio)})
+        return self._post_multipart_form(path, {"colegio": int(colegio_id), "anio": int(anio)})
 
     def fetch_schools_list(self) -> Dict[str, Any]:
         """GET listado de colegios (Inspection: /api/listado/colegios)."""
         path = (_env("INSPECTION_API_SCHOOLS_PATH") or "listado/colegios").lstrip("/")
         return self._get_with_bearer(path)
+
+    def fetch_teachings_for_active_school(self, school_id: int) -> Dict[str, Any]:
+        """
+        GET listado/colegios y devuelve solo los tipos de enseñanza del colegio cuyo id remoto
+        coincide con school_id (mismo id que en BD / sesión).
+
+        Formato esperado por colegio: tiposEnsenanzas | tipos_ensenanzas → [{ id, codigo, nombre }, ...]
+        """
+        try:
+            sid = int(school_id)
+        except (TypeError, ValueError):
+            return {"ok": False, "message": "school_id inválido", "data": None}
+
+        remote = self.fetch_schools_list()
+        if not remote.get("ok"):
+            return remote
+
+        schools = remote.get("data")
+        if not isinstance(schools, list):
+            return {
+                "ok": False,
+                "message": "Respuesta de Inspection: data no es una lista de colegios",
+                "data": None,
+            }
+
+        match: Optional[Dict[str, Any]] = None
+        for s in schools:
+            if not isinstance(s, dict):
+                continue
+            try:
+                if int(s.get("id")) == sid:
+                    match = s
+                    break
+            except (TypeError, ValueError):
+                continue
+
+        if match is None:
+            return {
+                "ok": False,
+                "message": (
+                    f"No se encontró el colegio con id={sid} en el listado de Inspection "
+                    "(el id del colegio en BD debe coincidir con el id remoto)."
+                ),
+                "data": None,
+            }
+
+        tipos = (
+            match.get("tiposEnsenanzas")
+            or match.get("tipos_ensenanzas")
+            or match.get("tiposEnsenanza")
+            or match.get("tipos_ensenanza")
+        )
+        if tipos is None:
+            tipos = []
+        if not isinstance(tipos, list):
+            return {
+                "ok": False,
+                "message": "tiposEnsenanzas no es una lista en el colegio encontrado",
+                "data": None,
+            }
+
+        return {
+            "ok": True,
+            "message": remote.get("message") or "OK",
+            "data": tipos,
+        }
 
 
 def _first_value(data: Dict[str, Any], keys: tuple) -> Optional[str]:

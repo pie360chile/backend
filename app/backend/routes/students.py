@@ -297,7 +297,7 @@ def import_from_inspection(
         )
 
     anio = int(period_year) if period_year is not None else datetime.now().year
-    remote = client.fetch_students_list(anio=anio)
+    remote = client.fetch_students_list(colegio_id=school_id, anio=anio)
     if not remote.get("ok"):
         return JSONResponse(
             status_code=status.HTTP_502_BAD_GATEWAY,

@@ -15,7 +15,7 @@ document_evalua_result_reports = APIRouter(
 @document_evalua_result_reports.get("/student/{student_id}")
 async def get_document_evalua_by_student(
     student_id: int,
-    document_catalog_id: int = Query(42, description="Id de fila en catálogo `documents` para este informe."),
+    document_catalog_id: int = Query(42, description="Id de fila en catálogo `documents` (típico: 42)."),
     session_user: UserLogin = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):

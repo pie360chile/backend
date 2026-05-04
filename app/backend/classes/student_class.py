@@ -74,7 +74,7 @@ def _inspection_int(v):
 
 def _row_colegio_id_for_inspection(row: Dict[str, Any]) -> Optional[int]:
     """Id de establecimiento en fila Inspection (import alumnos)."""
-    for key in ("colegio_id", "colegio", "id_colegio"):
+    for key in ("colegio_id", "colegioId", "colegio", "id_colegio"):
         if key not in row:
             continue
         n = _inspection_int(row.get(key))
@@ -740,6 +740,7 @@ class StudentClass:
                 StudentAcademicInfoModel.diagnostic_date,
                 StudentAcademicInfoModel.psychopedagogical_evaluation_status,
                 StudentAcademicInfoModel.psychopedagogical_evaluation_year,
+                CourseModel.teaching_id.label('academic_course_teaching_id'),
                 SpecialEducationalNeedModel.special_educational_needs.label('special_educational_need_name'),
                 StudentPersonalInfoModel.id.label('personal_id'),
                 StudentPersonalInfoModel.region_id,
@@ -762,6 +763,12 @@ class StudentClass:
             ).outerjoin(
                 StudentAcademicInfoModel,
                 StudentModel.id == StudentAcademicInfoModel.student_id
+            ).outerjoin(
+                CourseModel,
+                and_(
+                    StudentAcademicInfoModel.course_id == CourseModel.id,
+                    CourseModel.deleted_status_id == 0,
+                ),
             ).outerjoin(
                 SpecialEducationalNeedModel,
                 StudentAcademicInfoModel.special_educational_need_id == SpecialEducationalNeedModel.id
@@ -787,6 +794,7 @@ class StudentClass:
                         "special_educational_need_id": data_query.special_educational_need_id,
                         "special_educational_need_name": (getattr(data_query, "special_educational_need_name", None) or "").strip() or None,
                         "course_id": data_query.course_id,
+                        "teaching_id": getattr(data_query, "academic_course_teaching_id", None),
                         "platform_status_id": getattr(data_query, "platform_status_id", None),
                         "resolution_number": getattr(data_query, "resolution_number", None),
                         "sip_admission_year": data_query.sip_admission_year,
@@ -1186,12 +1194,11 @@ class StudentClass:
         self, school_id: int, inspection_body: Dict[str, Any], default_period_year: int
     ) -> Dict[str, Any]:
         """
-        Import students from Inspection list payload (data[]).
-        1) Se filtra el JSON: solo filas con colegio_id == school_id de sesión.
-        2) Por fila: no repetir RUT en el mismo lote; no insertar si ya existe identification_number
-           activo en ese colegio.
-        Cada fila elegible debe incluir rut, curso_id, etc. No se persiste el id remoto de Inspection en students.id
-        (PK local por autoincrement).
+        Import desde Inspection (POST listado/alumnos con colegio + anio en remoto; payload data[]).
+        1) Se excluyen filas con colegio_id distinto al school_id de sesión (si viene en JSON).
+        2) Si la fila no trae colegio_id, se asume el colegio de sesión.
+        3) Por fila: sin RUT duplicado en el lote; sin insertar si ya existe identification_number activo en el colegio.
+        No se persiste el id remoto del alumno en students.id (PK autoincrement local).
         """
         try:
             raw_rows = _extract_inspection_students_rows(inspection_body)
@@ -1218,20 +1225,14 @@ class StudentClass:
 
                 rid_col = _row_colegio_id_for_inspection(row)
                 if rid_col is None:
-                    errors.append({"name": rut_raw, "message": "Row missing colegio_id"})
-                    continue
-                if int(rid_col) != session_school_id:
-                    errors.append(
-                        {
-                            "name": rut_raw,
-                            "message": (
-                                f"colegio_id {rid_col} no coincide con school_id de sesión {session_school_id}"
-                            ),
-                        }
-                    )
+                    rid_col = session_school_id
+                elif int(rid_col) != session_school_id:
+                    skipped += 1
                     continue
 
-                course_remote = _inspection_int(row.get("curso_id"))
+                course_remote = _inspection_int(
+                    row.get("curso_id") if row.get("curso_id") is not None else row.get("cursoId")
+                )
                 if course_remote is None:
                     errors.append({"name": rut_raw, "message": "Row missing curso_id"})
                     continue

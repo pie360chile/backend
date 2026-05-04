@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, status
 from fastapi.responses import JSONResponse
 from app.backend.db.database import get_db
@@ -6,16 +8,32 @@ from app.backend.schemas import UserLogin, TeachingList, StoreTeaching, UpdateTe
 from app.backend.classes.teaching_class import TeachingClass, _normalize_school_id
 from app.backend.auth.auth_user import get_current_active_user
 from app.backend.classes.inspection_api_client import InspectionApiClient
+from app.backend.classes.school_class import SchoolClass
 
 teachings = APIRouter(
     prefix="/teachings",
     tags=["Teachings"]
 )
 
+
+def _resolve_session_school_id(session_user, db: Session) -> Optional[int]:
+    """
+    Colegio efectivo de la sesión: school_id del usuario/JWT, o si hay customer_id
+    y no hay school_id, el primer colegio activo de ese cliente (mismo criterio que /courses).
+    """
+    customer_id = session_user.customer_id if session_user else None
+    school_id = session_user.school_id if session_user else None
+    if customer_id and not school_id:
+        schools_list = SchoolClass(db).get_all(page=0, customer_id=customer_id)
+        if isinstance(schools_list, list) and len(schools_list) > 0:
+            school_id = schools_list[0].get("id")
+    return _normalize_school_id(school_id)
+
+
 @teachings.post("/")
 def index(teaching: TeachingList, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    # Listado siempre acotado al colegio de la sesión (JWT / usuario).
-    school_id = _normalize_school_id(session_user.school_id if session_user else None)
+    # Listado acotado al colegio de la sesión (JWT + resolución por customer_id si aplica).
+    school_id = _resolve_session_school_id(session_user, db)
 
     # Si no hay school_id, devolver array vacío
     if school_id is None:
@@ -61,8 +79,8 @@ def index(teaching: TeachingList, session_user: UserLogin = Depends(get_current_
 
 @teachings.get("/list")
 def get_all_list(school_id: int = None, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    # Listado siempre del colegio de la sesión (normalizado). Query ?school_id solo si coincide (compat. frontend).
-    session_sid = _normalize_school_id(session_user.school_id if session_user else None)
+    # Listado del colegio de la sesión (normalizado). Query ?school_id solo si coincide (compat. frontend).
+    session_sid = _resolve_session_school_id(session_user, db)
     requested = _normalize_school_id(school_id)
     if requested is not None and session_sid is not None and requested != session_sid:
         return JSONResponse(
@@ -110,13 +128,17 @@ def get_all_list(school_id: int = None, session_user: UserLogin = Depends(get_cu
 
 @teachings.post("/import_from_inspection")
 def import_from_inspection(session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    school_id = session_user.school_id if session_user else None
+    school_id = _resolve_session_school_id(session_user, db)
     if school_id is None:
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
             content={
                 "status": 400,
-                "message": "El usuario no tiene colegio asociado (school_id)",
+                "message": (
+                    "No se pudo determinar el colegio (school_id). "
+                    "Asocia un colegio al usuario, inicia sesión con un token que incluya school_id, "
+                    "o asegúrate de tener al menos un colegio activo para tu cliente (customer_id)."
+                ),
                 "data": None,
             },
         )
@@ -132,12 +154,18 @@ def import_from_inspection(session_user: UserLogin = Depends(get_current_active_
             },
         )
 
-    remote = client.fetch_teachings_list()
+    # GET https://…/api/listado/colegios → filtrar por id == school_id → tiposEnsenanzas
+    remote = client.fetch_teachings_for_active_school(school_id)
     if not remote.get("ok"):
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if "No se encontró el colegio" in (remote.get("message") or "")
+            else status.HTTP_502_BAD_GATEWAY
+        )
         return JSONResponse(
-            status_code=status.HTTP_502_BAD_GATEWAY,
+            status_code=status_code,
             content={
-                "status": 502,
+                "status": int(status_code),
                 "message": remote.get("message") or "Error al obtener enseñanzas desde Inspection",
                 "data": remote,
             },
@@ -170,11 +198,7 @@ def import_from_inspection(session_user: UserLogin = Depends(get_current_active_
 @teachings.post("/store")
 def store(teaching: StoreTeaching, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
     teaching_inputs = teaching.dict()
-    
-    # Obtener school_id de la sesión del usuario
-    school_id = session_user.school_id if session_user else None
-    
-    # Agregar school_id a teaching_inputs
+    school_id = _resolve_session_school_id(session_user, db)
     teaching_inputs['school_id'] = school_id
     
     result = TeachingClass(db).store(teaching_inputs)
@@ -224,11 +248,7 @@ def edit(id: int, session_user: UserLogin = Depends(get_current_active_user), db
 @teachings.put("/update/{id}")
 def update(id: int, teaching: UpdateTeaching, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
     teaching_inputs = teaching.dict(exclude_unset=True)
-    
-    # Obtener school_id de la sesión del usuario
-    school_id = session_user.school_id if session_user else None
-    
-    # Agregar school_id a teaching_inputs
+    school_id = _resolve_session_school_id(session_user, db)
     teaching_inputs['school_id'] = school_id
     
     result = TeachingClass(db).update(id, teaching_inputs)

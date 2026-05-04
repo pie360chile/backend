@@ -506,25 +506,25 @@ class FolderClass:
                             })
                         found = True
 
-                # Informes Resultado Prueba Evalua (detail_id → evalua_result_report)
+                # Informes Resultado Prueba Evalua (catálogo documents; detail_id → evalua_result_report)
                 elif document_id == 42:
-                    d42 = (
+                    evalua_report = (
                         self.db.query(EvaluaResultReportModel)
                         .filter(EvaluaResultReportModel.student_id == student_id)
                         .order_by(EvaluaResultReportModel.id.desc())
                         .first()
                     )
                     folder_record = None
-                    if d42:
+                    if evalua_report:
                         hq = self.db.query(FolderModel).filter(
                             FolderModel.student_id == student_id,
-                            FolderModel.detail_id == d42.id,
+                            FolderModel.detail_id == evalua_report.id,
                             FolderModel.file.isnot(None),
                         )
                         if py is not None:
                             hq = hq.filter(FolderModel.period_year == py)
                         folder_record = hq.order_by(FolderModel.version_id.desc()).first()
-                    if not folder_record and d42:
+                    if not folder_record and evalua_report:
                         hq_fb = self.db.query(FolderModel).filter(
                             FolderModel.student_id == student_id,
                             FolderModel.document_id == document_id,
@@ -534,7 +534,7 @@ class FolderClass:
                         if py is not None:
                             hq_fb = hq_fb.filter(FolderModel.period_year == py)
                         folder_record = hq_fb.order_by(FolderModel.version_id.desc()).first()
-                    if not d42:
+                    if not evalua_report:
                         fb = self.db.query(FolderModel).filter(
                             FolderModel.student_id == student_id,
                             FolderModel.document_id == document_id,
@@ -553,12 +553,12 @@ class FolderClass:
                     if folder_record:
                         all_documents.append(
                             {
-                                "id": d42.id if d42 else folder_record.id,
+                                "id": evalua_report.id if evalua_report else folder_record.id,
                                 "student_id": student_id,
                                 "document_id": document_id,
                                 "document_type_id": document_type_id,
-                                "detail_id": d42.id if d42 else folder_record.detail_id,
-                                "title": (d42.title or "").strip() if d42 else None,
+                                "detail_id": evalua_report.id if evalua_report else folder_record.detail_id,
+                                "title": (evalua_report.title or "").strip() if evalua_report else None,
                                 "file": folder_record.file,
                                 "version_id": folder_record.version_id,
                                 "document_name": document_name,

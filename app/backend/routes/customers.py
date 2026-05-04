@@ -120,36 +120,10 @@ def store(customer: StoreCustomer, session_user: UserLogin = Depends(get_current
                     }
                     school_result = school_class.store(school_inputs)
                     
-                    # Si el school se creó exitosamente, crear los roles y enseñanzas automáticos
+                    # Si el school se creó exitosamente, crear roles (Administrador, Evaluador, Coordinador, Profesional) y enseñanzas
                     if isinstance(school_result, dict) and school_result.get("status") == "success":
                         school_id = school_result.get("school_id")
-                        
-                        # Crear rol "Profesional" con permisos: 40 (Ver cursos), 41 (Filtrar cursos)
-                        rol_profesional_inputs = {
-                            "customer_id": customer_id,
-                            "school_id": school_id,
-                            "rol": "Profesional",
-                            "permissions": [40, 41]
-                        }
-                        rol_class.store(rol_profesional_inputs)
-                        
-                        # Crear rol "Coordinador" con permisos múltiples incluyendo 40 (Ver cursos) y 41 (Filtrar cursos)
-                        rol_coordinador_inputs = {
-                            "customer_id": customer_id,
-                            "school_id": school_id,
-                            "rol": "Coordinador",
-                            "permissions": [1, 2, 3, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 40, 41]
-                        }
-                        rol_class.store(rol_coordinador_inputs)
-
-                        # Crear rol "Evaluador" con los mismos permisos que Coordinador
-                        rol_evaluador_inputs = {
-                            "customer_id": customer_id,
-                            "school_id": school_id,
-                            "rol": "Evaluador",
-                            "permissions": [1, 2, 3, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 40, 41]
-                        }
-                        rol_class.store(rol_evaluador_inputs)
+                        rol_class.ensure_institution_roles_for_school(customer_id, school_id)
                         
                         # Crear enseñanzas automáticas: Pre Básica, Básica y Media
                         teachings_to_create = [
@@ -170,7 +144,7 @@ def store(customer: StoreCustomer, session_user: UserLogin = Depends(get_current
         status_code=status.HTTP_201_CREATED,
         content={
             "status": 201,
-            "message": "Customer, user, schools and roles (Profesional, Coordinador, Evaluador) created successfully",
+            "message": "Customer, user, schools and institution roles (Administrador, Evaluador, Coordinador, Profesional) created successfully",
             "data": result
         }
     )
@@ -252,32 +226,56 @@ def update(id: int, customer: UpdateCustomer, session_user: UserLogin = Depends(
             }
         )
     
-    # Actualizar schools si vienen en el request
-    if schools is not None:
+    # Colegios: no recrear filas en `schools` si ya existen (mismo nombre); solo asegurar roles/permisos.
+    rol_class = RolClass(db)
+    if schools is not None and isinstance(schools, list):
         school_class = SchoolClass(db)
-        
-        # Marcar todos los schools existentes como eliminados (deleted_status_id = 1)
-        existing_schools = db.query(SchoolModel).filter(
-            SchoolModel.customer_id == id,
-            SchoolModel.deleted_status_id == 0
-        ).all()
-        for school in existing_schools:
-            school.deleted_status_id = 1
-            school.updated_date = dt.now()
+        names_clean = [str(s).strip() for s in schools if s is not None and str(s).strip()]
+        requested_lower = {(n or "").strip().lower() for n in names_clean}
+
+        existing_active = (
+            db.query(SchoolModel)
+            .filter(SchoolModel.customer_id == id, SchoolModel.deleted_status_id == 0)
+            .all()
+        )
+        for school in existing_active:
+            key = (school.school_name or "").strip().lower()
+            if key not in requested_lower:
+                school.deleted_status_id = 1
+                school.updated_date = dt.now()
         db.commit()
-        
-        # Crear los nuevos schools
-        if isinstance(schools, list):
-            for school_name in schools:
-                if school_name and school_name.strip():
-                    school_inputs = {
-                        "customer_id": id,
-                        "school_name": school_name.strip(),
-                        "school_address": None,
-                        "director_name": None,
-                        "community_school_password": None
-                    }
-                    school_class.store(school_inputs)
+
+        active_after = (
+            db.query(SchoolModel)
+            .filter(SchoolModel.customer_id == id, SchoolModel.deleted_status_id == 0)
+            .all()
+        )
+        by_lower = {(s.school_name or "").strip().lower(): s for s in active_after}
+        seen_lower = set()
+        for school_name in names_clean:
+            nk = school_name.lower()
+            if nk in seen_lower:
+                continue
+            seen_lower.add(nk)
+            existing_row = by_lower.get(nk)
+            if existing_row is not None:
+                rol_class.ensure_institution_roles_for_school(id, int(existing_row.id))
+                continue
+            school_inputs = {
+                "customer_id": id,
+                "school_name": school_name,
+                "school_address": None,
+                "director_name": None,
+                "community_school_password": None,
+            }
+            school_result = school_class.store(school_inputs)
+            if isinstance(school_result, dict) and school_result.get("status") == "success":
+                sid = school_result.get("school_id")
+                if sid is not None:
+                    rol_class.ensure_institution_roles_for_school(id, int(sid))
+                    by_lower[nk] = db.query(SchoolModel).filter(SchoolModel.id == sid).first()
+    else:
+        rol_class.ensure_institution_roles_for_all_customer_schools(id)
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,

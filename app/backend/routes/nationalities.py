@@ -4,6 +4,7 @@ from app.backend.db.database import get_db
 from sqlalchemy.orm import Session
 from app.backend.schemas import UserLogin, NationalityList, StoreNationality, UpdateNationality
 from app.backend.classes.nationalities_class import NationalitiesClass
+from app.backend.classes.inspection_api_client import InspectionApiClient
 from app.backend.auth.auth_user import get_current_active_user
 
 nationalities = APIRouter(
@@ -143,6 +144,58 @@ def delete(id: int, session_user: UserLogin = Depends(get_current_active_user), 
             "data": result
         }
     )
+
+@nationalities.post("/import_from_inspection")
+def import_from_inspection(
+    session_user: UserLogin = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Importa catálogo desde Inspection GET listado/nacionalidades (Bearer). Catálogo global, sin colegio."""
+    client = InspectionApiClient()
+    if not client.is_configured():
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "status": 503,
+                "message": "Inspection API not configured (INSPECTION_API_USERNAME / INSPECTION_API_PASSWORD)",
+                "data": None,
+            },
+        )
+
+    remote = client.fetch_nationalities_list()
+    if not remote.get("ok"):
+        return JSONResponse(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            content={
+                "status": 502,
+                "message": remote.get("message") or "Error al obtener nacionalidades desde Inspection",
+                "data": remote,
+            },
+        )
+
+    result = NationalitiesClass(db).import_from_inspection(remote)
+    if isinstance(result, dict) and result.get("status") == "error":
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "status": 500,
+                "message": result.get("message", "Error al importar nacionalidades"),
+                "data": None,
+            },
+        )
+
+    imported = result.get("imported", 0)
+    skipped = result.get("skipped", 0)
+    msg = f"Importación de nacionalidades finalizada: {imported} nuevas, {skipped} omitidas (duplicadas o sin datos)."
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "status": 200,
+            "message": msg,
+            "data": result,
+        },
+    )
+
 
 @nationalities.get("/list")
 def list_all(session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):

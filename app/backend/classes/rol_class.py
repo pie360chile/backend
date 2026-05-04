@@ -1,10 +1,151 @@
 from datetime import datetime
+
+from sqlalchemy import func
+
 from app.backend.db.models import RolModel, RolPermissionModel, PermissionModel, SchoolModel
 from app.backend.classes.school_class import SchoolClass
+
+# Roles por establecimiento (cliente): se crean por cada `school_id` con permisos en `rols_permissions`.
+INSTITUTION_ROLE_NAMES = ("Administrador", "Evaluador", "Coordinador", "Profesional")
+
 
 class RolClass:
     def __init__(self, db):
         self.db = db
+
+    @staticmethod
+    def default_permission_ids_for_institution_role(rol_display_name: str) -> list:
+        """Permisos por defecto si el cliente aún no tiene otro rol del mismo nombre para copiar."""
+        name = (rol_display_name or "").strip()
+        mapping = {
+            "Profesional": [40, 41],
+            "Coordinador": [1, 2, 3, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 40, 41],
+            "Evaluador": [1, 2, 3, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 40, 41],
+            # Alineado con scripts/seed_liceo_mixto_san_felipe_users.py (rol Administrador institución)
+            "Administrador": [1, 2, 3, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 40, 41, 43, 44, 56],
+        }
+        return list(mapping.get(name, []))
+
+    def _permission_ids_for_rol(self, rol_id: int) -> list:
+        rows = (
+            self.db.query(RolPermissionModel.permission_id)
+            .filter(RolPermissionModel.rol_id == rol_id)
+            .all()
+        )
+        return [r[0] for r in rows]
+
+    def _template_rol_id_same_name(self, customer_id: int, target_school_id: int, rol_name: str):
+        """
+        Busca otro rol del mismo cliente con el mismo nombre (insensible a mayúsculas)
+        para reutilizar los mismos permission_id en rols_permissions.
+        Prioriza otra escuela activa; luego cualquier otra escuela; luego la misma escuela si aplica.
+        """
+        key = (rol_name or "").strip().lower()
+        if not key:
+            return None
+
+        q1 = (
+            self.db.query(RolModel.id)
+            .join(SchoolModel, SchoolModel.id == RolModel.school_id)
+            .filter(
+                RolModel.customer_id == customer_id,
+                RolModel.deleted_status_id == 0,
+                SchoolModel.deleted_status_id == 0,
+                func.lower(func.trim(RolModel.rol)) == key,
+                RolModel.school_id != target_school_id,
+            )
+            .order_by(RolModel.id)
+            .first()
+        )
+        if q1:
+            return q1[0]
+
+        q2 = (
+            self.db.query(RolModel.id)
+            .filter(
+                RolModel.customer_id == customer_id,
+                RolModel.deleted_status_id == 0,
+                func.lower(func.trim(RolModel.rol)) == key,
+                RolModel.school_id != target_school_id,
+            )
+            .order_by(RolModel.id)
+            .first()
+        )
+        if q2:
+            return q2[0]
+
+        q3 = (
+            self.db.query(RolModel.id)
+            .filter(
+                RolModel.customer_id == customer_id,
+                RolModel.deleted_status_id == 0,
+                func.lower(func.trim(RolModel.rol)) == key,
+            )
+            .order_by(RolModel.id)
+            .first()
+        )
+        return q3[0] if q3 else None
+
+    def _resolve_permissions_for_new_institution_role(
+        self, customer_id: int, target_school_id: int, rol_name: str
+    ) -> list:
+        template_rol_id = self._template_rol_id_same_name(customer_id, target_school_id, rol_name)
+        if template_rol_id:
+            ids = self._permission_ids_for_rol(template_rol_id)
+            if ids:
+                return ids
+        return self.default_permission_ids_for_institution_role(rol_name)
+
+    def institution_role_exists_at_school(self, customer_id: int, school_id: int, rol_name: str) -> bool:
+        key = (rol_name or "").strip().lower()
+        row = (
+            self.db.query(RolModel.id)
+            .filter(
+                RolModel.customer_id == customer_id,
+                RolModel.school_id == school_id,
+                RolModel.deleted_status_id == 0,
+                func.lower(func.trim(RolModel.rol)) == key,
+            )
+            .first()
+        )
+        return row is not None
+
+    def ensure_institution_roles_for_school(self, customer_id: int, school_id: int) -> dict:
+        """
+        Crea en `rols` (con `school_id` y `customer_id`) los cuatro roles de institución si faltan,
+        y rellena `rols_permissions` copiando los permisos de un rol homónimo del mismo cliente
+        cuando exista; si no, usa permisos por defecto.
+        """
+        details = []
+        for rol_name in INSTITUTION_ROLE_NAMES:
+            if self.institution_role_exists_at_school(customer_id, school_id, rol_name):
+                details.append({"rol": rol_name, "action": "skipped", "reason": "already_exists"})
+                continue
+            perms = self._resolve_permissions_for_new_institution_role(customer_id, school_id, rol_name)
+            res = self.store(
+                {
+                    "customer_id": customer_id,
+                    "school_id": school_id,
+                    "rol": rol_name,
+                    "permissions": perms,
+                }
+            )
+            details.append({"rol": rol_name, "result": res})
+        return {"status": "success", "school_id": school_id, "details": details}
+
+    def ensure_institution_roles_for_all_customer_schools(self, customer_id: int) -> dict:
+        """Asegura los cuatro roles en cada escuela activa del cliente."""
+        school_ids = [
+            r[0]
+            for r in self.db.query(SchoolModel.id)
+            .filter(SchoolModel.customer_id == customer_id, SchoolModel.deleted_status_id == 0)
+            .order_by(SchoolModel.id)
+            .all()
+        ]
+        out = []
+        for sid in school_ids:
+            out.append(self.ensure_institution_roles_for_school(customer_id, sid))
+        return {"status": "success", "customer_id": customer_id, "schools": out}
 
     def get_all(self, page=0, items_per_page=10, customer_id=None, school_id=None, rol=None):
         try:

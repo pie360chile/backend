@@ -154,10 +154,13 @@ class UpdateCourse(BaseModel):
 class CommuneList(BaseModel):
     commune_name: Optional[str] = None
     region_id: Optional[int] = None
+    page: Optional[int] = None
+    per_page: int = 10
 
 class StoreCommune(BaseModel):
     region_id: int
     commune: str
+    id: Optional[int] = None
 
 class UpdateCommune(BaseModel):
     region_id: int = None
@@ -166,14 +169,34 @@ class UpdateCommune(BaseModel):
 # Region schemas
 class RegionList(BaseModel):
     region_name: Optional[str] = None
+    page: Optional[int] = None
+    per_page: int = 10
 
 class StoreRegion(BaseModel):
     region: str
-    region_remuneration_code: str
+    id: Optional[int] = None
 
 class UpdateRegion(BaseModel):
     region: str = None
-    region_remuneration_code: str = None
+
+
+# Province schemas (catálogo Inspection listado/provincias en BD local `provinces`)
+class ProvinceList(BaseModel):
+    province_name: Optional[str] = None
+    region_id: Optional[int] = None
+    page: Optional[int] = None
+    per_page: int = 10
+
+
+class StoreProvince(BaseModel):
+    province: str
+    region_id: int
+    id: Optional[int] = None
+
+
+class UpdateProvince(BaseModel):
+    province: str = None
+    region_id: int = None
 
 # Native Language Proficiency schemas
 class NativeLanguageProficiencyList(BaseModel):

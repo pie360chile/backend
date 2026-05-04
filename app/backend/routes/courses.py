@@ -10,7 +10,7 @@ from app.backend.classes.course_class import CourseClass
 from app.backend.classes.inspection_api_client import InspectionApiClient
 from app.backend.classes.school_class import SchoolClass
 from app.backend.classes.teaching_class import _normalize_school_id
-from app.backend.db.models import CourseModel, ProfessionalModel, ProfessionalTeachingCourseModel
+from app.backend.db.models import CourseModel, ProfessionalModel, ProfessionalTeachingCourseModel, SchoolModel
 from app.backend.auth.auth_user import get_current_active_user
 
 courses = APIRouter(
@@ -152,24 +152,46 @@ def index(
 def get_all_list(
     teaching_id: int = None,
     period_year: Optional[int] = Query(None, ge=2000, le=2100, description="Año período escolar"),
+    school_id: Optional[int] = Query(
+        None,
+        description="Colegio explícito (p. ej. estudiante). Debe pertenecer al customer de la sesión, o sesión sin customer (admin).",
+    ),
     session_user: UserLogin = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
-    # Obtener school_id del usuario en sesión
-    school_id = session_user.school_id if session_user else None
-    
-    # Si no hay school_id, devolver array vacío
-    if school_id is None:
+    customer_id = session_user.customer_id if session_user else None
+    effective_school_id = session_user.school_id if session_user else None
+
+    # Override / fijar colegio cuando la sesión no trae school_id (p. ej. administrador editando estudiante)
+    if school_id is not None:
+        sch = (
+            db.query(SchoolModel)
+            .filter(SchoolModel.id == int(school_id), SchoolModel.deleted_status_id == 0)
+            .first()
+        )
+        if sch:
+            cust = getattr(sch, "customer_id", None)
+            if customer_id is None or (cust is not None and int(cust) == int(customer_id)):
+                effective_school_id = sch.id
+
+    if effective_school_id is None and customer_id:
+        schools_list = SchoolClass(db).get_all(page=0, customer_id=customer_id)
+        if isinstance(schools_list, list) and len(schools_list) > 0:
+            effective_school_id = schools_list[0].get("id")
+
+    if effective_school_id is None:
         return JSONResponse(
             status_code=status.HTTP_200_OK,
             content={
                 "status": 200,
                 "message": "Courses list retrieved successfully",
-                "data": []
-            }
+                "data": [],
+            },
         )
-    
-    result = CourseClass(db).get_all_list(school_id=school_id, teaching_id=teaching_id, period_year=period_year)
+
+    result = CourseClass(db).get_all_list(
+        school_id=effective_school_id, teaching_id=teaching_id, period_year=period_year
+    )
 
     if isinstance(result, dict) and result.get("status") == "error":
         return JSONResponse(
@@ -230,8 +252,7 @@ def import_from_inspection(
         )
 
     anio = int(period_year) if period_year is not None else datetime.now().year
-    # Inspection exige multipart `colegio` == school_id resuelto desde la sesión.
-    remote = client.fetch_courses_list(colegio=int(school_id), anio=anio)
+    remote = client.fetch_courses_list(colegio_id=school_id, anio=anio)
     if not remote.get("ok"):
         return JSONResponse(
             status_code=status.HTTP_502_BAD_GATEWAY,

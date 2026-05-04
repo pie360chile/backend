@@ -79,8 +79,8 @@ def _teaching_type_id_from_row(row: Any) -> int:
                         return n
                 except (TypeError, ValueError):
                     pass
-        nivel = str(row.get("nivel") or row.get("tipo") or "").lower()
-        if "pre" in nivel:
+        nivel = str(row.get("nivel") or row.get("tipo") or row.get("nombre") or "").lower()
+        if "parvular" in nivel or "pre" in nivel or "inicial" in nivel or "preescolar" in nivel:
             return 1
         if "media" in nivel:
             return 3
@@ -313,7 +313,10 @@ class TeachingClass:
 
     def import_from_inspection(self, school_id: int, inspection_body: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Inserta enseñanzas desde Inspection usando el **id remoto** como PK local (`teachings.id`).
+        Inserta enseñanzas desde Inspection usando el **id remoto del tipo** como PK local (`teachings.id`).
+        `inspection_body` suele ser `{ ok, data: [ { id, nombre, ... }, ... ] }` (p. ej. tiposEnsenanzas
+        del colegio activo tras GET listado/colegios).
+
         La validación de duplicados es **por colegio** (`school_id` + `id` de Inspection).
 
         - Si ya existe el mismo id activo, mismo colegio y mismo nombre (sin distinguir mayúsculas): omite.

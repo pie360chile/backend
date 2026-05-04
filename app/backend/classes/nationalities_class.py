@@ -1,5 +1,41 @@
 from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+from sqlalchemy import func
+
 from app.backend.db.models import NationalityModel
+
+
+def _extract_inspection_nationality_rows(inspection_body: Dict[str, Any]) -> List[Dict[str, Any]]:
+    if not inspection_body.get("ok"):
+        return []
+    raw = inspection_body.get("data")
+    if isinstance(raw, list):
+        return [r for r in raw if isinstance(r, dict)]
+    return []
+
+
+def _inspection_int(v: Any) -> Optional[int]:
+    if v is None or (isinstance(v, str) and not str(v).strip()):
+        return None
+    try:
+        return int(str(v).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _nationality_label_from_inspection_row(row: Dict[str, Any]) -> Optional[str]:
+    """Prioriza país legible; si no, gentilicio; si no, ISO."""
+    pais = str(row.get("pais") or "").strip()
+    if pais:
+        return pais[:255]
+    gent = str(row.get("gentilicio") or "").strip()
+    if gent:
+        return gent[:255]
+    iso = str(row.get("iso") or "").strip()
+    if iso:
+        return iso[:255]
+    return None
 
 class NationalitiesClass:
     def __init__(self, db):
@@ -117,12 +153,19 @@ class NationalitiesClass:
         
     def store(self, nationality_inputs):
         try:
-            new_nationality = NationalityModel(
-                nationality=nationality_inputs['nationality'],
-                deleted_status_id=0,
-                added_date=datetime.now(),
-                updated_date=datetime.now()
-            )
+            row_kwargs: Dict[str, Any] = {
+                "nationality": nationality_inputs["nationality"],
+                "deleted_status_id": int(nationality_inputs.get("deleted_status_id", 0)),
+                "added_date": datetime.now(),
+                "updated_date": datetime.now(),
+            }
+            if nationality_inputs.get("id") is not None:
+                row_kwargs["id"] = int(nationality_inputs["id"])
+            else:
+                max_id = self.db.query(func.max(NationalityModel.id)).scalar()
+                row_kwargs["id"] = (int(max_id) if max_id is not None else 0) + 1
+
+            new_nationality = NationalityModel(**row_kwargs)
 
             self.db.add(new_nationality)
             self.db.commit()
@@ -136,6 +179,70 @@ class NationalitiesClass:
 
         except Exception as e:
             self.db.rollback()
+            return {"status": "error", "message": str(e)}
+
+    def import_from_inspection(self, inspection_body: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Inserta nacionalidades desde Inspection (`GET listado/nacionalidades`) usando el **id remoto**
+        como PK local (`nationalities.id`). Campo `nationality`: preferente `pais`, luego `gentilicio` / `iso`.
+        """
+        try:
+            rows = _extract_inspection_nationality_rows(inspection_body)
+            imported = 0
+            skipped = 0
+            errors: List[Dict[str, str]] = []
+
+            for row in rows:
+                name = _nationality_label_from_inspection_row(row)
+                if not name:
+                    continue
+                inspection_id = _inspection_int(row.get("id"))
+                if inspection_id is None:
+                    errors.append({"name": name, "message": "Fila sin id de Inspection"})
+                    continue
+
+                name_norm = name.strip().lower()
+
+                existing = self.db.query(NationalityModel).filter(NationalityModel.id == inspection_id).first()
+
+                if existing:
+                    if int(existing.deleted_status_id or 0) != 0:
+                        existing.nationality = name
+                        existing.deleted_status_id = 0
+                        existing.updated_date = datetime.now()
+                        self.db.commit()
+                        imported += 1
+                        continue
+
+                    same_name = (existing.nationality or "").strip().lower() == name_norm
+                    if same_name:
+                        skipped += 1
+                        continue
+
+                    errors.append(
+                        {
+                            "name": name,
+                            "message": (
+                                f"Ya existe nacionalidad id={inspection_id} con otro nombre "
+                                f"({existing.nationality!r})"
+                            ),
+                        }
+                    )
+                    continue
+
+                res = self.store({"id": inspection_id, "nationality": name, "deleted_status_id": 0})
+                if res.get("status") == "success":
+                    imported += 1
+                else:
+                    errors.append({"name": name, "message": str(res.get("message", "Error"))})
+
+            return {
+                "status": "success",
+                "imported": imported,
+                "skipped": skipped,
+                "errors": errors,
+            }
+        except Exception as e:
             return {"status": "error", "message": str(e)}
     
     def delete(self, id):

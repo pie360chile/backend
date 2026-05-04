@@ -21,6 +21,23 @@ def _extract_courses_rows(inspection_body: Dict[str, Any]) -> List[Any]:
     return []
 
 
+def _unique_courses_by_id(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Un curso por `id` (orden de llegada), por si algún join o capa superior duplicara filas."""
+    seen = set()
+    out: List[Dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        rid = row.get("id")
+        if rid is None:
+            continue
+        if rid in seen:
+            continue
+        seen.add(rid)
+        out.append(row)
+    return out
+
+
 def _inspection_course_id_from_row(row: Any) -> Optional[int]:
     if isinstance(row, dict) and row.get("id") is not None:
         try:
@@ -28,6 +45,33 @@ def _inspection_course_id_from_row(row: Any) -> Optional[int]:
         except (TypeError, ValueError):
             return None
     return None
+
+
+def _row_int_optional(row: Dict[str, Any], keys: tuple) -> Optional[int]:
+    for k in keys:
+        v = row.get(k)
+        if v is None or v == "":
+            continue
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _course_name_from_row(row: Dict[str, Any]) -> str:
+    """Inspection listado/cursos: `nombre`; alternativas y fallback nivel + letra."""
+    for key in ("nombre", "name", "curso", "course_name"):
+        v = row.get(key)
+        if v is not None:
+            s = str(v).strip()
+            if s:
+                return s
+    nivel = str(row.get("nivel") or "").strip()
+    letra = str(row.get("letra") or "").strip()
+    if nivel or letra:
+        return f"{nivel} {letra}".strip()
+    return ""
 
 class CourseClass:
     def __init__(self, db):
@@ -86,7 +130,7 @@ class CourseClass:
                 CourseModel.added_date,
                 CourseModel.updated_date,
                 TeachingModel.teaching_name
-            ).order_by(CourseModel.id)
+            ).order_by(CourseModel.id.asc())
 
             if page > 0:
                 total_items = query.count()
@@ -185,8 +229,8 @@ class CourseClass:
             if period_year is not None:
                 query = query.filter(CourseModel.period_year == int(period_year))
 
-            query = query.order_by(CourseModel.id)
-            
+            query = query.order_by(CourseModel.id.asc())
+
             data = query.all()
 
             serialized_data = [{
@@ -200,7 +244,7 @@ class CourseClass:
                 "updated_date": course.updated_date.strftime("%Y-%m-%d %H:%M:%S") if course.updated_date else None
             } for course in data]
 
-            return serialized_data
+            return _unique_courses_by_id(serialized_data)
 
         except Exception as e:
             error_message = str(e)
@@ -340,8 +384,11 @@ class CourseClass:
         self, school_id: int, inspection_body: Dict[str, Any], default_period_year: int
     ) -> Dict[str, Any]:
         """
-        Inserta cursos desde Inspection usando el id remoto como PK (`courses.id`).
-        Requiere que exista la enseñanza (`tipo_ensenanza_id` = `teachings.id`) del mismo colegio.
+        Inserta cursos desde Inspection (POST listado/cursos → JSON tipo
+        `{ ok, data: [{ id, nombre, tipo_ensenanza_id, colegio_id, anio, ... }] }`).
+        Usa el id remoto del curso como PK (`courses.id`).
+        Requiere enseñanza existente: `tipo_ensenanza_id` debe coincidir con `teachings.id` del colegio.
+        Filas con `colegio_id` distinto al colegio de sesión se omiten (no error).
         """
         try:
             rows = _extract_courses_rows(inspection_body)
@@ -353,19 +400,32 @@ class CourseClass:
                 if not isinstance(row, dict):
                     continue
                 ext_id = _inspection_course_id_from_row(row)
-                nombre = str(row.get("nombre") or "").strip()
+                nombre = _course_name_from_row(row)
                 if ext_id is None or not nombre:
                     continue
 
-                tipo_tid = row.get("tipo_ensenanza_id")
+                remote_school = _row_int_optional(
+                    row,
+                    ("colegio_id", "colegioId", "colegio", "school_id", "schoolId"),
+                )
+                if remote_school is not None and int(remote_school) != int(school_id):
+                    skipped += 1
+                    continue
+
+                tipo_tid = _row_int_optional(
+                    row,
+                    (
+                        "tipo_ensenanza_id",
+                        "tipoEnsenanzaId",
+                        "tipo_ensenanza",
+                        "teaching_id",
+                        "teachingId",
+                    ),
+                )
                 if tipo_tid is None:
-                    errors.append({"name": nombre, "message": "Fila sin tipo_ensenanza_id"})
+                    errors.append({"name": nombre, "message": "Fila sin tipo_ensenanza_id (tipo de enseñanza)"})
                     continue
-                try:
-                    teaching_id = int(tipo_tid)
-                except (TypeError, ValueError):
-                    errors.append({"name": nombre, "message": "tipo_ensenanza_id inválido"})
-                    continue
+                teaching_id = tipo_tid
 
                 teaching = (
                     self.db.query(TeachingModel)
@@ -385,21 +445,7 @@ class CourseClass:
                     )
                     continue
 
-                rid_col = row.get("colegio_id")
-                if rid_col is not None:
-                    try:
-                        if int(rid_col) != int(school_id):
-                            errors.append(
-                                {
-                                    "name": nombre,
-                                    "message": f"colegio_id {rid_col} no coincide con el colegio de sesión",
-                                }
-                            )
-                            continue
-                    except (TypeError, ValueError):
-                        pass
-
-                py_raw = row.get("anio")
+                py_raw = row.get("anio") or row.get("anio_matricula") or row.get("year")
                 if py_raw is not None and str(py_raw).strip() != "":
                     try:
                         period_year = int(py_raw)
