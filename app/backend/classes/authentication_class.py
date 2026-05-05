@@ -1,14 +1,13 @@
-from app.backend.db.models import UserModel, CustomerModel
+from app.backend.db.models import UserModel, CustomerModel, UsersRolModel
 from fastapi import HTTPException
 from app.backend.auth.auth_user import pwd_context
-from app.backend.classes.user_class import UserClass
 from datetime import datetime, timedelta, date
 from typing import Union
 import os
 from jose import jwt, JWTError
-import json
 import bcrypt
 from argon2 import PasswordHasher
+from sqlalchemy import func, or_
 
 argon2_hasher = PasswordHasher()
 
@@ -16,26 +15,62 @@ class AuthenticationClass:
     def __init__(self, db):
         self.db = db
     
-    def authenticate_user(self, email, password):
-        user = UserClass(self.db).get('email', email)
+    def _normalize_rut(self, raw: str) -> str:
+        return (raw or "").replace(".", "").replace("-", "").strip().upper()
 
-        if not user or user == "No se encontraron datos para el campo especificado." or user.startswith("Error:"):
+    def authenticate_user(self, username_or_rut, password):
+        username = (username_or_rut or "").strip()
+        rut_norm = self._normalize_rut(username)
+        user = (
+            self.db.query(UserModel)
+            .filter(
+                or_(
+                    func.lower(UserModel.email) == username.lower(),
+                    func.upper(
+                        func.replace(func.replace(UserModel.rut, ".", ""), "-", "")
+                    )
+                    == rut_norm,
+                ),
+                or_(UserModel.deleted_status_id == 0, UserModel.deleted_status_id.is_(None)),
+            )
+            .first()
+        )
+
+        if not user:
             raise HTTPException(status_code=401, detail="Could not validate credentials", headers={"WWW-Authenticate": "Bearer"})
 
-        response_data = json.loads(user)
-
-        if not self.verify_password(password, response_data["user_data"]["hashed_password"]):
+        if not self.verify_password(password, user.hashed_password):
             raise HTTPException(status_code=401, detail="Could not validate credentials", headers={"WWW-Authenticate": "Bearer"})
-        
-        # Verificar licencia del customer si el usuario tiene customer_id (excepto rol_id 1)
-        rol_id = response_data["user_data"].get("rol_id")
-        customer_id = response_data["user_data"].get("customer_id")
-        if customer_id and rol_id != 1:
+
+        # Verificar licencia del customer, excepto si el usuario tiene rol superadmin (1) entre sus roles activos.
+        customer_id = user.customer_id
+        has_superadmin_role = (
+            self.db.query(UsersRolModel.id)
+            .filter(
+                UsersRolModel.user_id == user.id,
+                UsersRolModel.rol_id == 1,
+                or_(UsersRolModel.deleted_status_id == 0, UsersRolModel.deleted_status_id.is_(None)),
+            )
+            .first()
+            is not None
+        )
+        if customer_id and not has_superadmin_role:
             customer = self.db.query(CustomerModel).filter(CustomerModel.id == customer_id).first()
             if customer and customer.license_time:
                 if customer.license_time < date.today():
                     raise HTTPException(status_code=403, detail="La licencia ha expirado. Debe renovarla")
-        
+
+        response_data = {
+            "user_data": {
+                "id": user.id,
+                "rut": user.rut,
+                "full_name": user.full_name,
+                "customer_id": user.customer_id,
+                "email": user.email,
+                "phone": user.phone,
+                "hashed_password": user.hashed_password,
+            }
+        }
         return response_data
         
     def verify_password(self, plain_password, hashed_password):

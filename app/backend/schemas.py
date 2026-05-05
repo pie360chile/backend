@@ -82,6 +82,17 @@ class UpdateRol(BaseModel):
     rol: str = None
     permissions: Optional[List[int]] = None
 
+
+class StoreCustomerSchoolRole(BaseModel):
+    """Alta de rol vinculado a un colegio del cliente (superadmin / gestión usuarios)."""
+    rol: str
+    permissions: Optional[List[int]] = None
+
+
+class AddRolToSchoolFromExisting(BaseModel):
+    """Clonar un rol del cliente a un colegio (nueva fila en `rols`)."""
+    rol_id: int
+
 # Permission schemas
 class PermissionList(BaseModel):
     page: Optional[int] = None

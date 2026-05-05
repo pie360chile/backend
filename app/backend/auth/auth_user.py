@@ -5,7 +5,7 @@ from app.backend.db.models import UserModel
 from typing import Union
 import os
 from jose import jwt, JWTError
-from app.backend.db.database import get_db
+from app.backend.db.database import SessionLocal
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 import bcrypt
@@ -101,45 +101,54 @@ def get_user(sub: str):
     Resuelve el usuario del JWT `sub`.
     - Tokens nuevos: `sub` es el correo (`users.email`); varias cuentas pueden compartir RUT.
     - Compatibilidad: `sub` numérico = id de usuario; `sub` sin @ = RUT (tokens antiguos).
+
+    Importante: no usar `next(get_db())` aquí — el generador nunca llega al `finally` y las sesiones
+    no se cierran, agotando el pool de MySQL y bloqueando todos los endpoints.
     """
-    db: Session = next(get_db())
     if sub is None or str(sub).strip() == "":
         return ""
 
-    s = str(sub).strip()
-    if "@" in s:
-        user = (
-            db.query(UserModel)
-            .filter(func.lower(UserModel.email) == s.lower())
-            .filter(UserModel.deleted_status_id == 0)
-            .first()
-        )
-        if user:
-            return user
-        return ""
-
+    db: Session = SessionLocal()
     try:
-        uid = int(s)
+        s = str(sub).strip()
+        if "@" in s:
+            user = (
+                db.query(UserModel)
+                .filter(func.lower(UserModel.email) == s.lower())
+                .filter(UserModel.deleted_status_id == 0)
+                .first()
+            )
+            if user:
+                db.expunge(user)
+                return user
+            return ""
+
+        try:
+            uid = int(s)
+            user = (
+                db.query(UserModel)
+                .filter(UserModel.id == uid)
+                .filter(UserModel.deleted_status_id == 0)
+                .first()
+            )
+            if user:
+                db.expunge(user)
+                return user
+        except ValueError:
+            pass
+
         user = (
             db.query(UserModel)
-            .filter(UserModel.id == uid)
+            .filter(UserModel.rut == s)
             .filter(UserModel.deleted_status_id == 0)
             .first()
         )
-        if user:
-            return user
-    except ValueError:
-        pass
-
-    user = (
-        db.query(UserModel)
-        .filter(UserModel.rut == s)
-        .filter(UserModel.deleted_status_id == 0)
-        .first()
-    )
-    if not user:
-        return ""
-    return user
+        if not user:
+            return ""
+        db.expunge(user)
+        return user
+    finally:
+        db.close()
 
 def generate_bcrypt_hash(input_string):
     """

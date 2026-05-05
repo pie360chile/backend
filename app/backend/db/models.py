@@ -310,14 +310,22 @@ class UserModel(Base):
 
     id = Column(Integer, primary_key=True)
     customer_id = Column(Integer)
-    school_id = Column(Integer)
-    rol_id = Column(Integer, ForeignKey('rols.id'))
     deleted_status_id = Column(Integer)
     rut = Column(String(255))
     full_name = Column(String(255))
     email = Column(String(255))
     phone = Column(String(255))
     hashed_password = Column(Text)
+    added_date = Column(DateTime())
+    updated_date = Column(DateTime())
+
+class UsersRolModel(Base):
+    __tablename__ = 'users_rols'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'))
+    rol_id = Column(Integer, ForeignKey('rols.id'))
+    deleted_status_id = Column(Integer)
     added_date = Column(DateTime())
     updated_date = Column(DateTime())
 
@@ -350,6 +358,7 @@ class RolPermissionModel(Base):
     permission_id = Column(Integer, ForeignKey('permissions.id'))
     added_date = Column(DateTime())
     updated_date = Column(DateTime())
+
 
 class TeachingModel(Base):
     __tablename__ = 'teachings'

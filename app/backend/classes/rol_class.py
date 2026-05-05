@@ -3,6 +3,9 @@ from datetime import datetime
 from sqlalchemy import func
 
 from app.backend.db.models import RolModel, RolPermissionModel, PermissionModel, SchoolModel
+
+# Rol «Administrador» compartido por todos los clientes (sin customer_id / school_id en BD).
+GLOBAL_ADMIN_ROL_ID = 2
 from app.backend.classes.school_class import SchoolClass
 
 # Roles por establecimiento (cliente): se crean por cada `school_id` con permisos en `rols_permissions`.
@@ -147,6 +150,56 @@ class RolClass:
             out.append(self.ensure_institution_roles_for_school(customer_id, sid))
         return {"status": "success", "customer_id": customer_id, "schools": out}
 
+    def list_by_customer_id(self, customer_id: int):
+        """Roles del cliente más el Administrador global compartido (id=2), si existe y está activo."""
+        try:
+            proj = (
+                RolModel.id,
+                RolModel.customer_id,
+                RolModel.school_id,
+                RolModel.rol,
+                RolModel.added_date,
+                RolModel.updated_date,
+            )
+            rows = (
+                self.db.query(*proj)
+                .filter(
+                    RolModel.customer_id == customer_id,
+                    RolModel.deleted_status_id == 0,
+                )
+                .order_by(RolModel.id)
+                .all()
+            )
+            seen = {r.id for r in rows}
+            merged = list(rows)
+
+            global_admin = (
+                self.db.query(*proj)
+                .filter(
+                    RolModel.id == GLOBAL_ADMIN_ROL_ID,
+                    RolModel.deleted_status_id == 0,
+                )
+                .first()
+            )
+            if global_admin and global_admin.id not in seen:
+                merged.append(global_admin)
+
+            merged.sort(key=lambda x: x.id)
+
+            return [
+                {
+                    "id": r.id,
+                    "customer_id": r.customer_id,
+                    "school_id": r.school_id,
+                    "rol": r.rol,
+                    "added_date": r.added_date.strftime("%Y-%m-%d %H:%M:%S") if r.added_date else None,
+                    "updated_date": r.updated_date.strftime("%Y-%m-%d %H:%M:%S") if r.updated_date else None,
+                }
+                for r in merged
+            ]
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
     def get_all(self, page=0, items_per_page=10, customer_id=None, school_id=None, rol=None):
         try:
             # Si viene customer_id, obtener el school específico para validar la relación
@@ -176,7 +229,10 @@ class RolClass:
                 RolModel.added_date,
                 RolModel.updated_date
             ).filter(RolModel.deleted_status_id == 0)
-            
+
+            if customer_id:
+                query = query.filter(RolModel.customer_id == customer_id)
+
             if school_id:
                 query = query.filter(RolModel.school_id == school_id)
             
@@ -277,6 +333,39 @@ class RolClass:
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
+    def clone_rol_to_school(self, customer_id: int, school_id: int, source_rol_id: int):
+        """Nueva fila en `rols` para el colegio, copiando nombre y permisos del rol origen del cliente."""
+        if source_rol_id == GLOBAL_ADMIN_ROL_ID:
+            return {"status": "error", "message": "No se duplica el Administrador global"}
+        try:
+            src = (
+                self.db.query(RolModel)
+                .filter(
+                    RolModel.id == source_rol_id,
+                    RolModel.customer_id == customer_id,
+                    RolModel.deleted_status_id == 0,
+                )
+                .first()
+            )
+            if not src:
+                return {"status": "error", "message": "Rol origen no encontrado para este cliente"}
+            if self.institution_role_exists_at_school(customer_id, school_id, src.rol or ""):
+                return {
+                    "status": "error",
+                    "message": "Esta escuela ya tiene un rol con ese nombre",
+                }
+            perms = self._permission_ids_for_rol(source_rol_id)
+            return self.store(
+                {
+                    "customer_id": customer_id,
+                    "school_id": school_id,
+                    "rol": (src.rol or "").strip(),
+                    "permissions": perms,
+                }
+            )
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
     def store(self, rol_inputs):
         try:
             new_rol = RolModel(
@@ -305,7 +394,7 @@ class RolClass:
                             updated_date=datetime.now()
                         )
                         self.db.add(rol_permission)
-            
+
             self.db.commit()
             self.db.refresh(new_rol)
 
@@ -321,6 +410,11 @@ class RolClass:
     
     def delete(self, id):
         try:
+            if id == GLOBAL_ADMIN_ROL_ID:
+                return {
+                    "status": "error",
+                    "message": "El rol Administrador global no puede eliminarse",
+                }
             data = self.db.query(RolModel).filter(RolModel.id == id).first()
             if data and data.deleted_status_id == 0:
                 data.deleted_status_id = 1
