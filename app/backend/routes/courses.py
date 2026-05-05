@@ -10,7 +10,14 @@ from app.backend.classes.course_class import CourseClass
 from app.backend.classes.inspection_api_client import InspectionApiClient
 from app.backend.classes.school_class import SchoolClass
 from app.backend.classes.teaching_class import _normalize_school_id
-from app.backend.db.models import CourseModel, ProfessionalModel, ProfessionalTeachingCourseModel, SchoolModel
+from sqlalchemy import or_
+from app.backend.db.models import (
+    CourseModel,
+    ProfessionalModel,
+    ProfessionalTeachingCourseModel,
+    SchoolModel,
+    UserModel,
+)
 from app.backend.auth.auth_user import get_current_active_user
 
 courses = APIRouter(
@@ -43,19 +50,30 @@ def index(
     
     # Si el usuario es profesional, buscar sus cursos en professionals_teachings_courses
     professional_course_ids = []
-    if session_user.rut:
-        # Buscar el profesional por rut
-        professional = db.query(ProfessionalModel).filter(
-            ProfessionalModel.identification_number == session_user.rut
-        ).first()
-        
-        if professional:
-            # Buscar los cursos asignados al profesional
-            ptc_records = db.query(ProfessionalTeachingCourseModel).filter(
-                ProfessionalTeachingCourseModel.professional_id == professional.id,
-                ProfessionalTeachingCourseModel.deleted_status_id == 0
-            ).all()
-            professional_course_ids = [ptc.course_id for ptc in ptc_records]
+    if session_user.rut and school_id:
+        user_row = (
+            db.query(UserModel)
+            .filter(
+                UserModel.rut == session_user.rut,
+                or_(UserModel.deleted_status_id == 0, UserModel.deleted_status_id.is_(None)),
+            )
+            .first()
+        )
+        if user_row:
+            prof_pk = (
+                db.query(ProfessionalModel.id)
+                .filter(ProfessionalModel.user_id == user_row.id)
+                .order_by(ProfessionalModel.id.desc())
+                .first()
+            )
+            pid = int(prof_pk[0]) if prof_pk else None
+
+            if pid is not None:
+                ptc_records = db.query(ProfessionalTeachingCourseModel).filter(
+                    ProfessionalTeachingCourseModel.professional_id == pid,
+                    ProfessionalTeachingCourseModel.deleted_status_id == 0
+                ).all()
+                professional_course_ids = [ptc.course_id for ptc in ptc_records]
 
     py = _course_period_year(course, period_year)
 

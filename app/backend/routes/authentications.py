@@ -9,6 +9,7 @@ from app.backend.classes.rol_class import RolClass
 from app.backend.classes.audit_class import AuditClass
 from app.backend.classes.email_class import EmailServiceClass
 from app.backend.auth.auth_user import get_current_active_user
+from app.backend.utils.users_rol_period import users_rol_period_clause
 from app.backend.db.models import (
     RolModel,
     ProfessionalModel,
@@ -28,7 +29,7 @@ from pydantic import BaseModel, Field
 logger = logging.getLogger(__name__)
 
 
-def _active_user_roles(db: Session, user_id: int):
+def _active_user_roles(db: Session, user_id: int, period_year=None):
     rows = (
         db.query(
             RolModel.id,
@@ -49,10 +50,37 @@ def _active_user_roles(db: Session, user_id: int):
                 RolModel.deleted_status_id.is_(None),
                 RolModel.id == 1,  # rol global super admin
             ),
+            users_rol_period_clause(period_year, bypass_global_rol_ids=(1,)),
         )
         .order_by(RolModel.id.asc())
         .all()
     )
+    return _dedupe_roles_for_login_selection(rows)
+
+
+def _normalize_rol_display_key(rol_text) -> str:
+    return str(rol_text or "").strip().lower()
+
+
+def _dedupe_roles_for_login_selection(role_rows: list) -> list[dict]:
+    """
+    Asignaciones en users_rols pueden apuntar a varios registros en rols con el mismo nombre
+    (clones por colegio). Para /select-role debe haber una sola opción por rol lógico.
+    Representante estable: menor RolModel.id entre los que el usuario tiene activos en users_rols.
+    La lista siguiente de colegios ya filtra por RolModel.rol coincidente.
+    """
+    by_rol_table_id = {}
+    for r in role_rows:
+        rid = int(r.id)
+        if rid not in by_rol_table_id:
+            by_rol_table_id[rid] = r
+    unique_rows = sorted(by_rol_table_id.values(), key=lambda x: int(x.id))
+    by_name = {}
+    for r in unique_rows:
+        key = _normalize_rol_display_key(r.rol)
+        if key not in by_name:
+            by_name[key] = r
+    ordered = sorted(by_name.values(), key=lambda x: int(x.id))
     return [
         {
             "rol_id": r.id,
@@ -60,7 +88,7 @@ def _active_user_roles(db: Session, user_id: int):
             "customer_id": r.customer_id,
             "school_id": r.school_id,
         }
-        for r in rows
+        for r in ordered
     ]
 
 
@@ -88,7 +116,9 @@ def _ensure_superadmin_if_admin_equivalent(db: Session, roles: list[dict]):
     return roles
 
 
-def _available_schools_for_current_role(db: Session, customer_id: int, rol_id: int, user_id: int):
+def _available_schools_for_current_role(
+    db: Session, customer_id: int, rol_id: int, user_id: int, period_year=None
+):
     base_query = db.query(SchoolModel).filter(
         SchoolModel.customer_id == customer_id,
         SchoolModel.deleted_status_id == 0,
@@ -123,6 +153,7 @@ def _available_schools_for_current_role(db: Session, customer_id: int, rol_id: i
                 RolModel.rol == rol_row.rol,
                 or_(RolModel.deleted_status_id == 0, RolModel.deleted_status_id.is_(None)),
                 RolModel.school_id.isnot(None),
+                users_rol_period_clause(period_year, bypass_global_rol_ids=(1,)),
             )
             .distinct()
             .all()
@@ -282,6 +313,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
                     "rol_id": 0,
                     "customer_id": user_data.get("customer_id"),
                     "school_id": None,
+                    "period_year": datetime.now().year,
                 },
                 token_expires,
             )
@@ -323,7 +355,8 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
                 'customer_id': customer_id,
                 'school_id': school_id,
                 'teaching_id': None,
-                'course_id': None
+                'course_id': None,
+                'period_year': datetime.now().year,
             }
             token = AuthenticationClass(db).create_token(token_data, token_expires)
             data = {
@@ -402,6 +435,9 @@ def select_role(rol_id: int, session_user: UserLogin = Depends(get_current_activ
                     UsersRolModel.deleted_status_id.is_(None),
                     UsersRolModel.rol_id == 1,  # permitir super admin global
                 ),
+                users_rol_period_clause(
+                    getattr(session_user, "period_year", None), bypass_global_rol_ids=(1,)
+                ),
             )
             .first()
         )
@@ -414,6 +450,9 @@ def select_role(rol_id: int, session_user: UserLogin = Depends(get_current_activ
                         UsersRolModel.user_id == user_row.id,
                         UsersRolModel.rol_id == 2,
                         or_(UsersRolModel.deleted_status_id == 0, UsersRolModel.deleted_status_id.is_(None)),
+                        users_rol_period_clause(
+                            getattr(session_user, "period_year", None), bypass_global_rol_ids=(1,)
+                        ),
                     )
                     .first()
                 )
@@ -434,6 +473,9 @@ def select_role(rol_id: int, session_user: UserLogin = Depends(get_current_activ
         school_data = None
 
         token_expires = timedelta(minutes=9999999)
+        py_tok = getattr(session_user, "period_year", None)
+        if py_tok is None:
+            py_tok = datetime.now().year
         token = AuthenticationClass(db).create_token(
             {
                 "sub": str(user_row.email),
@@ -442,6 +484,7 @@ def select_role(rol_id: int, session_user: UserLogin = Depends(get_current_activ
                 "school_id": school_id,
                 "teaching_id": None,
                 "course_id": None,
+                "period_year": py_tok,
             },
             token_expires,
         )
@@ -502,7 +545,9 @@ def select_school(school_id: int, session_user: UserLogin = Depends(get_current_
             rol_name = rol_result["rol_data"].get("rol", "")
             permissions = rol_result["rol_data"].get("permissions", [])
         
-        allowed_schools = _available_schools_for_current_role(db, customer_id, user_rol_id, int(user_row.id))
+        allowed_schools = _available_schools_for_current_role(
+            db, customer_id, user_rol_id, int(user_row.id), getattr(session_user, "period_year", None)
+        )
         school_data = next((s for s in allowed_schools if int(s["id"]) == int(school_id)), None)
         
         if not school_data:
@@ -521,17 +566,22 @@ def select_school(school_id: int, session_user: UserLogin = Depends(get_current_
         professional_teaching_course = None
         ptc_teaching_id = None
         ptc_course_id = None
-        
+        professional_id_val = None
+
         if user_rol_id not in [1, 2] and rol_name.lower() != "coordinador":
-            # Buscar el profesional por identification_number
-            professional = db.query(ProfessionalModel).filter(
-                ProfessionalModel.identification_number == user_row.rut
-            ).first()
-            
-            if professional:
+            # Solo id de `professionals` (RUT vive en `users`); evita hidratar filas con mapas viejos.
+            prof_pk = (
+                db.query(ProfessionalModel.id)
+                .filter(ProfessionalModel.user_id == user_row.id)
+                .order_by(ProfessionalModel.id.desc())
+                .first()
+            )
+            professional_id_val = int(prof_pk[0]) if prof_pk else None
+
+            if professional_id_val is not None:
                 # Buscar en professionals_teachings_courses
                 ptc = db.query(ProfessionalTeachingCourseModel).filter(
-                    ProfessionalTeachingCourseModel.professional_id == professional.id,
+                    ProfessionalTeachingCourseModel.professional_id == professional_id_val,
                     ProfessionalTeachingCourseModel.deleted_status_id == 0
                 ).first()
                 
@@ -549,13 +599,17 @@ def select_school(school_id: int, session_user: UserLogin = Depends(get_current_
 
         # Generar nuevo token con el mismo tiempo de expiración e incluir school_id
         token_expires = timedelta(minutes=9999999)
+        py_tok = getattr(session_user, "period_year", None)
+        if py_tok is None:
+            py_tok = datetime.now().year
         token_data = {
             'sub': str(user_row.email),
             'rol_id': user_rol_id,
             'customer_id': customer_id,
             'school_id': school_id,
             'teaching_id': ptc_teaching_id,
-            'course_id': ptc_course_id
+            'course_id': ptc_course_id,
+            'period_year': py_tok,
         }
         token = AuthenticationClass(db).create_token(token_data, token_expires)
         expires_in_seconds = token_expires.total_seconds()
@@ -570,6 +624,7 @@ def select_school(school_id: int, session_user: UserLogin = Depends(get_current_
             "school": school_dict,
             "rol": rol_name,
             "permissions": permissions,
+            "professional_id": professional_id_val,
             "professional_teaching_course": professional_teaching_course,
             "full_name": user_row.full_name,
             "email": user_row.email,
@@ -616,7 +671,9 @@ def available_schools(session_user: UserLogin = Depends(get_current_active_user)
                 content={"status": 400, "message": "Rol o cliente inválido para seleccionar colegio", "data": []},
             )
 
-        data = _available_schools_for_current_role(db, customer_id, user_rol_id, int(session_user.id))
+        data = _available_schools_for_current_role(
+            db, customer_id, user_rol_id, int(session_user.id), getattr(session_user, "period_year", None)
+        )
         return JSONResponse(
             status_code=status.HTTP_200_OK,
             content={"status": 200, "message": "OK", "data": data},

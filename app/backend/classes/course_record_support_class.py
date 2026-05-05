@@ -8,8 +8,8 @@ from app.backend.db.models import (
     CourseRecordSupportStudentModel,
     CourseRecordSupportInterventionModel,
     SupportAreaModel,
-    ProfessionalModel,
 )
+from app.backend.utils.professional_display import map_professional_id_to_display_name, professional_display_name
 
 
 def _serialize_date(v):
@@ -84,14 +84,7 @@ class CourseRecordSupportClass:
                     .all()
                 )
                 professional_ids = [r.professional_id for r in interventions_rows if r.professional_id is not None]
-                prof_names = {}
-                if professional_ids:
-                    for p in self.db.query(ProfessionalModel).filter(ProfessionalModel.id.in_(professional_ids)).all():
-                        name = getattr(p, "names", None) and getattr(p, "lastnames", None)
-                        if name:
-                            prof_names[p.id] = f"{p.names} {p.lastnames}".strip()
-                        else:
-                            prof_names[p.id] = getattr(p, "name", None) or str(p.id)
+                prof_names = map_professional_id_to_display_name(self.db, professional_ids) if professional_ids else {}
                 interventions = [
                     _intervention_to_dict(r, professional_name=prof_names.get(r.professional_id))
                     for r in interventions_rows
@@ -170,14 +163,7 @@ class CourseRecordSupportClass:
                 .all()
             )
             professional_ids = [r.professional_id for r in rows if r.professional_id is not None]
-            prof_names = {}
-            if professional_ids:
-                for p in self.db.query(ProfessionalModel).filter(ProfessionalModel.id.in_(professional_ids)).all():
-                    name = getattr(p, "names", None) and getattr(p, "lastnames", None)
-                    if name:
-                        prof_names[p.id] = f"{p.names} {p.lastnames}".strip()
-                    else:
-                        prof_names[p.id] = getattr(p, "name", None) or str(p.id)
+            prof_names = map_professional_id_to_display_name(self.db, professional_ids) if professional_ids else {}
             data = [_intervention_to_dict(r, professional_name=prof_names.get(r.professional_id)) for r in rows]
             return {"status": "success", "data": data}
         except Exception as e:
@@ -191,10 +177,7 @@ class CourseRecordSupportClass:
                 return {"status": "error", "message": "Intervención no encontrada.", "data": None}
             prof_name = None
             if row.professional_id:
-                p = self.db.query(ProfessionalModel).filter(ProfessionalModel.id == row.professional_id).first()
-                if p:
-                    prof_name = (getattr(p, "names", "") or "") + " " + (getattr(p, "lastnames", "") or "")
-                    prof_name = prof_name.strip() or getattr(p, "name", None)
+                prof_name = professional_display_name(self.db, int(row.professional_id))
             data = _intervention_to_dict(row, professional_name=prof_name)
             return {"status": "success", "data": data}
         except Exception as e:
@@ -232,10 +215,7 @@ class CourseRecordSupportClass:
             self.db.refresh(row)
             prof_name = None
             if row.professional_id:
-                p = self.db.query(ProfessionalModel).filter(ProfessionalModel.id == row.professional_id).first()
-                if p:
-                    prof_name = (getattr(p, "names", "") or "") + " " + (getattr(p, "lastnames", "") or "")
-                    prof_name = prof_name.strip()
+                prof_name = professional_display_name(self.db, int(row.professional_id))
             out = _intervention_to_dict(row, professional_name=prof_name)
             return {"status": "success", "message": "Apoyo registrado.", "id": row.id, "data": out}
         except Exception as e:
@@ -265,10 +245,7 @@ class CourseRecordSupportClass:
             self.db.refresh(row)
             prof_name = None
             if row.professional_id:
-                p = self.db.query(ProfessionalModel).filter(ProfessionalModel.id == row.professional_id).first()
-                if p:
-                    prof_name = (getattr(p, "names", "") or "") + " " + (getattr(p, "lastnames", "") or "")
-                    prof_name = prof_name.strip()
+                prof_name = professional_display_name(self.db, int(row.professional_id))
             out = _intervention_to_dict(row, professional_name=prof_name)
             return {"status": "success", "message": "Intervención actualizada.", "id": id, "data": out}
         except Exception as e:

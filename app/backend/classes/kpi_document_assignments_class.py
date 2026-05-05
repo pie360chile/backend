@@ -17,9 +17,9 @@ from app.backend.db.models import (
     DocumentModel,
     DocumentTypeModel,
     ProfessionalDocumentAssignmentModel,
-    ProfessionalModel,
     SchoolModel,
 )
+from app.backend.utils.professional_display import map_professional_id_to_display_name
 
 
 def _month_bounds(year: int, month: int) -> Tuple[datetime, datetime]:
@@ -245,14 +245,7 @@ class KpiDocumentAssignmentsClass:
 
             rows = q.all()
             pids = [int(r.professional_id) for r in rows if r.professional_id is not None]
-            prof_names: Dict[int, str] = {}
-            if pids:
-                for p in (
-                    self.db.query(ProfessionalModel).filter(ProfessionalModel.id.in_(pids)).all()
-                ):
-                    fn = (p.names or "").strip()
-                    ln = (p.lastnames or "").strip()
-                    prof_names[int(p.id)] = (f"{fn} {ln}").strip() or f"Profesional #{p.id}"
+            prof_names: Dict[int, str] = map_professional_id_to_display_name(self.db, pids) if pids else {}
 
             out: List[Dict[str, Any]] = []
             for r in rows:

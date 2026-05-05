@@ -3,6 +3,7 @@ from passlib.context import CryptContext
 from fastapi import HTTPException, Depends
 from app.backend.db.models import UserModel
 from typing import Union
+from datetime import datetime
 import os
 from jose import jwt, JWTError
 from app.backend.db.database import SessionLocal
@@ -79,6 +80,14 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
         user.course_id = decoded_token['course_id']
     if 'career_type_id' in decoded_token:
         user.career_type_id = decoded_token['career_type_id']
+    py = decoded_token.get("period_year")
+    if py is not None:
+        try:
+            user.period_year = int(py)
+        except (TypeError, ValueError):
+            user.period_year = datetime.now().year
+    else:
+        user.period_year = datetime.now().year
 
     return user
     

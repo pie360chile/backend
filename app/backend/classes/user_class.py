@@ -1,4 +1,5 @@
 import json
+from sqlalchemy import or_
 from app.backend.db.models import UserModel, ProfessionalModel
 from app.backend.auth.auth_user import generate_bcrypt_hash, pwd_context
 from datetime import datetime
@@ -93,10 +94,12 @@ class UserClass:
                     "hashed_password": data_query.hashed_password
                 }
 
-                # Buscar si el usuario es un profesional para obtener career_type_id
-                professional = self.db.query(ProfessionalModel).filter(
-                    ProfessionalModel.identification_number == data_query.rut
-                ).first()
+                # Perfil académico (tabla professionals) por user_id
+                professional = (
+                    self.db.query(ProfessionalModel)
+                    .filter(ProfessionalModel.user_id == data_query.id)
+                    .first()
+                )
                 
                 if professional and professional.career_type_id:
                     user_data["career_type_id"] = professional.career_type_id

@@ -5,7 +5,9 @@ from app.backend.db.models import (
     ProfessionalModel,
     CareerTypeModel,
     CourseModel,
+    UserModel,
 )
+from app.backend.utils.name_split import split_full_name
 
 
 class ProfessionalTeachingCourseClass:
@@ -62,7 +64,7 @@ class ProfessionalTeachingCourseClass:
         if not professional_id:
             return None
         prof = self.db.query(ProfessionalModel).filter(ProfessionalModel.id == professional_id).first()
-        if not prof or not prof.career_type_id:
+        if not prof or not getattr(prof, "career_type_id", None):
             return None
         ct = self.db.query(CareerTypeModel).filter(CareerTypeModel.id == prof.career_type_id).first()
         return (ct.career_type or "").strip() if ct and ct.career_type else None
@@ -88,11 +90,11 @@ class ProfessionalTeachingCourseClass:
             q = (
                 self.db.query(
                     ProfessionalModel.id.label("professional_id"),
-                    ProfessionalModel.names,
-                    ProfessionalModel.lastnames,
-                    ProfessionalModel.identification_number,
+                    UserModel.full_name,
+                    UserModel.rut,
                     ProfessionalTeachingCourseModel.teacher_type_id,
                 )
+                .outerjoin(UserModel, ProfessionalModel.user_id == UserModel.id)
                 .join(
                     ProfessionalTeachingCourseModel,
                     ProfessionalTeachingCourseModel.professional_id == ProfessionalModel.id,
@@ -113,16 +115,19 @@ class ProfessionalTeachingCourseClass:
                 q = q.filter(ProfessionalTeachingCourseModel.teacher_type_id == teacher_type_id)
             q = q.distinct()
             rows = q.all()
-            data = [
-                {
-                    "professional_id": r.professional_id,
-                    "names": (r.names or "").strip() or None,
-                    "lastnames": (r.lastnames or "").strip() or None,
-                    "rut": (r.identification_number or "").strip() or None,
-                    "teacher_type_id": r.teacher_type_id,
-                }
-                for r in rows
-            ]
+            data = []
+            for r in rows:
+                fn = (r.full_name or "").strip() if r.full_name is not None else ""
+                n, ln = split_full_name(fn) if fn else ("", "")
+                data.append(
+                    {
+                        "professional_id": r.professional_id,
+                        "names": n or None,
+                        "lastnames": ln or None,
+                        "rut": (r.rut or "").strip() if r.rut is not None else None,
+                        "teacher_type_id": r.teacher_type_id,
+                    }
+                )
             return {"status": "success", "data": data}
         except Exception as e:
             return {"status": "error", "message": str(e), "data": []}

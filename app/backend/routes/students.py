@@ -9,7 +9,7 @@ from app.backend.auth.auth_user import get_current_active_user
 from app.backend.classes.school_class import SchoolClass
 from app.backend.classes.inspection_api_client import InspectionApiClient
 from app.backend.classes.teaching_class import _normalize_school_id
-from app.backend.db.models import ProfessionalModel, ProfessionalTeachingCourseModel, CourseModel, SchoolModel, PlatformStatusModel
+from app.backend.db.models import CourseModel, SchoolModel, PlatformStatusModel
 from pathlib import Path
 from datetime import datetime
 

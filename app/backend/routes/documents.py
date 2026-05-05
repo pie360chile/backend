@@ -144,6 +144,7 @@ import json
 import logging
 from datetime import datetime, date
 from collections import defaultdict
+from app.backend.utils.professional_display import professional_display_fields, map_professional_id_to_display_name
 
 logger = logging.getLogger(__name__)
 
@@ -959,7 +960,7 @@ def _generate_anamnesis_docx_internal(student_id: int, db: Session) -> dict:
                 if pid and db:
                     prof = db.query(ProfessionalModel).filter(ProfessionalModel.id == pid).first()
                     if prof:
-                        interviewer_data["name"][i] = f"{prof.names or ''} {prof.lastnames or ''}".strip()
+                        interviewer_data["name"][i] = (professional_display_fields(db, prof).full_name or "").strip()
             hm_list = anamnesis_result.get("household_members") or []
             for i in range(min(8, len(hm_list))):
                 hm = hm_list[i]
@@ -1876,11 +1877,12 @@ def _generate_register_book_impl(course_id: int, db: Session):
         if idx >= 4:
             break
         i = idx + 1
-        full_name = f"{prof.names or ''} {prof.lastnames or ''}".strip()
+        _disp = professional_display_fields(db, prof)
+        full_name = (_disp.full_name or "").strip()
         replacements[f"regular_professional_full_name_{i}"] = full_name
         replacements[f"regular_professional_subject_{i}"] = (ptc.subject or "").strip()
-        replacements[f"regular_professional_phone_{i}"] = (prof.phone or "").strip()
-        replacements[f"regular_professional_email_{i}"] = (prof.email or "").strip()
+        replacements[f"regular_professional_phone_{i}"] = (_disp.phone or "").strip()
+        replacements[f"regular_professional_email_{i}"] = (_disp.email or "").strip()
     # Profesionales especialistas (teacher_type_id=2)
     ptc_specialist = (
         db.query(ProfessionalTeachingCourseModel, ProfessionalModel)
@@ -1898,11 +1900,12 @@ def _generate_register_book_impl(course_id: int, db: Session):
         if idx >= 4:
             break
         i = idx + 1
-        full_name = f"{prof.names or ''} {prof.lastnames or ''}".strip()
+        _disp = professional_display_fields(db, prof)
+        full_name = (_disp.full_name or "").strip()
         replacements[f"specialist_professional_full_name_{i}"] = full_name
         replacements[f"specialist_professional_subject_{i}"] = (ptc.subject or "").strip()
-        replacements[f"specialist_professional_phone_{i}"] = (prof.phone or "").strip()
-        replacements[f"specialist_professional_email_{i}"] = (prof.email or "").strip()
+        replacements[f"specialist_professional_phone_{i}"] = (_disp.phone or "").strip()
+        replacements[f"specialist_professional_email_{i}"] = (_disp.email or "").strip()
     # Asistentes especializados (teacher_type_id=3), del 1 al 3
     ptc_assistant = (
         db.query(ProfessionalTeachingCourseModel, ProfessionalModel)
@@ -1920,11 +1923,12 @@ def _generate_register_book_impl(course_id: int, db: Session):
         if idx >= 3:
             break
         i = idx + 1
-        full_name = f"{prof.names or ''} {prof.lastnames or ''}".strip()
+        _disp = professional_display_fields(db, prof)
+        full_name = (_disp.full_name or "").strip()
         replacements[f"specialized_assistant_professional_full_name_{i}"] = full_name
         replacements[f"specialized_assistant_professional_subject_{i}"] = (ptc.subject or "").strip()
-        replacements[f"specialized_assistant_professional_phone_{i}"] = (prof.phone or "").strip()
-        replacements[f"specialized_assistant_professional_email_{i}"] = (prof.email or "").strip()
+        replacements[f"specialized_assistant_professional_phone_{i}"] = (_disp.phone or "").strip()
+        replacements[f"specialized_assistant_professional_email_{i}"] = (_disp.email or "").strip()
     # Coordinadores: school (coordinator_type_id=1), daem (2), support_networks (3)
     for coordinator_type_id, prefix in [(1, "school"), (2, "daem"), (3, "support_networks")]:
         coord = (
@@ -1940,10 +1944,11 @@ def _generate_register_book_impl(course_id: int, db: Session):
         )
         if coord:
             cc, prof = coord
-            full_name = f"{prof.names or ''} {prof.lastnames or ''}".strip()
+            _disp = professional_display_fields(db, prof)
+            full_name = (_disp.full_name or "").strip()
             replacements[f"{prefix}_coordinator_full_name"] = full_name
-            replacements[f"{prefix}_coordinator_email"] = (cc.email or prof.email or "").strip()
-            replacements[f"{prefix}_coordinator_phone"] = (cc.phone or prof.phone or "").strip()
+            replacements[f"{prefix}_coordinator_email"] = (cc.email or _disp.email or "").strip()
+            replacements[f"{prefix}_coordinator_phone"] = (cc.phone or _disp.phone or "").strip()
     # Reuniones 1 a 10:
     # - 1..5  => periodo 1
     # - 6..10 => periodo 2
@@ -1994,7 +1999,7 @@ def _generate_register_book_impl(course_id: int, db: Session):
             fn = ""
             prof = db.query(ProfessionalModel).filter(ProfessionalModel.id == rp.professional_id).first()
             if prof:
-                fn = f"{prof.names or ''} {prof.lastnames or ''}".strip()
+                fn = (professional_display_fields(db, prof).full_name or "").strip()
             else:
                 usr = db.query(UserModel).filter(UserModel.id == rp.professional_id).first()
                 if usr:
@@ -2338,11 +2343,9 @@ def _generate_register_book_impl(course_id: int, db: Session):
         for _iv in _blk["interventions"]:
             if getattr(_iv, "professional_id", None):
                 _raeg_pid.add(_iv.professional_id)
-    _raeg_prof_names: dict = {}
-    if _raeg_pid:
-        for _p in db.query(ProfessionalModel).filter(ProfessionalModel.id.in_(_raeg_pid)).all():
-            _nm = f"{getattr(_p, 'names', '') or ''} {getattr(_p, 'lastnames', '') or ''}".strip()
-            _raeg_prof_names[_p.id] = _nm or getattr(_p, "name", None) or str(_p.id)
+    _raeg_prof_names: dict = (
+        map_professional_id_to_display_name(db, list(_raeg_pid)) if _raeg_pid else {}
+    )
 
     for _bi, _blk in enumerate(_raeg_blocks, start=1):
         replacements[f"raegee_{_bi}"] = _qse_student_names_line(_blk["student_ids"])
@@ -3298,7 +3301,7 @@ async def generate_document(
             if evaluation_data.get("profesional_id"):
                 professional = db.query(ProfessionalModel).filter(ProfessionalModel.id == evaluation_data.get("profesional_id")).first()
                 if professional:
-                    professional_fullname = f"{professional.names or ''} {professional.lastnames or ''}".strip()
+                    professional_fullname = (professional_display_fields(db, professional).full_name or "").strip()
                     # Obtener el nombre de la especialidad desde career_type_id
                     if professional.career_type_id:
                         from app.backend.db.models import CareerTypeModel
@@ -3788,7 +3791,7 @@ async def generate_document(
                 if _pid:
                     _prof = db.query(ProfessionalModel).filter(ProfessionalModel.id == _pid).first()
                     if _prof:
-                        professional_full_name = f"{_prof.names or ''} {_prof.lastnames or ''}".strip()
+                        professional_full_name = (professional_display_fields(db, _prof).full_name or "").strip()
                         # Especialidad desde career_type_id del profesional si no viene en ic_data
                         if not professional_specialty and getattr(_prof, "career_type_id", None):
                             from app.backend.db.models import CareerTypeModel
@@ -4262,8 +4265,9 @@ async def generate_document(
             if eval_data.get("professional_id"):
                 prof = db.query(ProfessionalModel).filter(ProfessionalModel.id == eval_data.get("professional_id")).first()
                 if prof:
-                    professional_full_name = f"{prof.names or ''} {prof.lastnames or ''}".strip()
-                    professional_identification_number = str(prof.identification_number or "").strip()
+                    _pd = professional_display_fields(db, prof)
+                    professional_full_name = (_pd.full_name or "").strip()
+                    professional_identification_number = str(_pd.rut or "").strip()
 
             # Escalas: scale_{fila}_{columna} fila 1..10, columna 1..4 (1=valor "1", 2="2", 3="3", 4="N/O")
             scales_list = eval_data.get("scales") or []
@@ -4568,13 +4572,8 @@ async def generate_document(
                 if professional_ids_str:
                     try:
                         professional_ids = [int(id.strip()) for id in professional_ids_str.split(",") if id.strip().isdigit()]
-                        professional_names = []
-                        for prof_id in professional_ids:
-                            professional = db.query(ProfessionalModel).filter(ProfessionalModel.id == prof_id).first()
-                            if professional:
-                                fullname = f"{professional.names or ''} {professional.lastnames or ''}".strip()
-                                if fullname:
-                                    professional_names.append(fullname)
+                        _pn = map_professional_id_to_display_name(db, professional_ids)
+                        professional_names = [_pn[i] for i in professional_ids if _pn.get(i)]
                         progress_status_data["responsible_professionals_names"] = ", ".join(professional_names) if professional_names else ""
                     except Exception as e:
                         progress_status_data["responsible_professionals_names"] = ""
@@ -4725,13 +4724,8 @@ async def generate_document(
             if rp:
                 ids_str = str(rp).strip()
                 ids = [int(x.strip()) for x in ids_str.split(",") if x.strip().isdigit()]
-                names = []
-                for pid in ids:
-                    prof = db.query(ProfessionalModel).filter(ProfessionalModel.id == pid).first()
-                    if prof:
-                        fn = f"{prof.names or ''} {prof.lastnames or ''}".strip()
-                        if fn:
-                            names.append(fn)
+                _pn = map_professional_id_to_display_name(db, ids)
+                names = [_pn[i] for i in ids if _pn.get(i)]
                 ps_data["responsible_professionals_names"] = ", ".join(names) if names else ""
             else:
                 ps_data["responsible_professionals_names"] = ""
@@ -4841,12 +4835,12 @@ async def generate_document(
             participant = cesp_data.get("participant_professional")
             if participant and isinstance(participant, dict) and participant.get("professional_id"):
                 prof = db.query(ProfessionalModel).filter(ProfessionalModel.id == participant["professional_id"]).first()
-                cesp_data["participant_professional_name"] = f"{prof.names or ''} {prof.lastnames or ''}".strip() if prof else ""
+                cesp_data["participant_professional_name"] = (professional_display_fields(db, prof).full_name or "").strip() if prof else ""
             support_list = cesp_data.get("support_team_members") or []
             for s in support_list:
                 if isinstance(s, dict) and s.get("professional_id"):
                     prof = db.query(ProfessionalModel).filter(ProfessionalModel.id == s["professional_id"]).first()
-                    s["professional_name"] = f"{prof.names or ''} {prof.lastnames or ''}".strip() if prof else ""
+                    s["professional_name"] = (professional_display_fields(db, prof).full_name or "").strip() if prof else ""
             # Registros DEC (incidentes de acción) del estudiante para sección VII
             incidents_result = ActionIncidentClass(db).get_all(student_id=student_id)
             dec_records = []
@@ -4932,7 +4926,7 @@ async def generate_document(
                     if professional_id:
                         professional = db.query(ProfessionalModel).filter(ProfessionalModel.id == professional_id).first()
                         if professional:
-                            professional_name = f"{professional.names or ''} {professional.lastnames or ''}".strip()
+                            professional_name = (professional_display_fields(db, professional).full_name or "").strip()
                     
                     career_type_name = ""
                     if career_type_id:
@@ -5024,17 +5018,14 @@ async def generate_document(
                         ids = json.loads(rp)
                     except Exception:
                         ids = []
-                names = []
+                int_ids = []
                 for pid in ids:
                     try:
-                        prof_id = int(pid)
-                        professional = db.query(ProfessionalModel).filter(ProfessionalModel.id == prof_id).first()
-                        if professional:
-                            fn = f"{professional.names or ''} {professional.lastnames or ''}".strip()
-                            if fn:
-                                names.append(fn)
+                        int_ids.append(int(pid))
                     except (ValueError, TypeError):
                         pass
+                _pn = map_professional_id_to_display_name(db, int_ids)
+                names = [_pn[i] for i in int_ids if _pn.get(i)]
                 report_data["responsible_professionals_names"] = ", ".join(names) if names else ""
             report_data.pop("responsible_professionals", None)
             
@@ -5104,17 +5095,14 @@ async def generate_document(
                         ids = json.loads(rp)
                     except Exception:
                         ids = []
-                names = []
+                int_ids = []
                 for pid in ids:
                     try:
-                        prof_id = int(pid)
-                        professional = db.query(ProfessionalModel).filter(ProfessionalModel.id == prof_id).first()
-                        if professional:
-                            fn = f"{professional.names or ''} {professional.lastnames or ''}".strip()
-                            if fn:
-                                names.append(fn)
+                        int_ids.append(int(pid))
                     except (ValueError, TypeError):
                         pass
+                _pn = map_professional_id_to_display_name(db, int_ids)
+                names = [_pn[i] for i in int_ids if _pn.get(i)]
                 report_data["responsible_professionals_names"] = ", ".join(names) if names else ""
             report_data.pop("responsible_professionals", None)
             result = DocumentsClass.generate_document_pdf(
@@ -5181,17 +5169,14 @@ async def generate_document(
                         ids = json.loads(rp)
                     except Exception:
                         ids = []
-                names = []
+                int_ids = []
                 for pid in ids:
                     try:
-                        prof_id = int(pid)
-                        professional = db.query(ProfessionalModel).filter(ProfessionalModel.id == prof_id).first()
-                        if professional:
-                            fn = f"{professional.names or ''} {professional.lastnames or ''}".strip()
-                            if fn:
-                                names.append(fn)
+                        int_ids.append(int(pid))
                     except (ValueError, TypeError):
                         pass
+                _pn = map_professional_id_to_display_name(db, int_ids)
+                names = [_pn[i] for i in int_ids if _pn.get(i)]
                 report_data["responsible_professionals_names"] = ", ".join(names) if names else ""
             report_data.pop("responsible_professionals", None)
             result = DocumentsClass.generate_document_pdf(
@@ -5266,8 +5251,9 @@ async def generate_document(
             if prof_id:
                 prof = db.query(ProfessionalModel).filter(ProfessionalModel.id == prof_id).first()
                 if prof:
-                    cert_data["professional_fullname"] = f"{prof.names or ''} {prof.lastnames or ''}".strip()
-                    cert_data["professional_rut"] = prof.identification_number or ""
+                    _pd = professional_display_fields(db, prof)
+                    cert_data["professional_fullname"] = (_pd.full_name or "").strip()
+                    cert_data["professional_rut"] = _pd.rut or ""
                     _career = (cert_data.get("professional_career") or "").strip()
                     if _career:
                         cert_data["professional_role"] = _career

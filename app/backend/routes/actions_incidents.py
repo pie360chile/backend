@@ -7,6 +7,7 @@ from app.backend.classes.action_incident_class import ActionIncidentClass
 from app.backend.classes.action_incident_pdf_class import ActionIncidentPDFClass
 from app.backend.auth.auth_user import get_current_active_user
 from app.backend.db.models import StudentModel, StudentPersonalInfoModel, StudentAcademicInfoModel, SchoolModel, ProfessionalModel, CourseModel, SpecialEducationalNeedModel
+from app.backend.utils.professional_display import professional_display_fields
 from datetime import datetime, date
 
 # Catálogos en duro
@@ -196,8 +197,9 @@ def generate_pdf(id: int, session_user: UserLogin = Depends(get_current_active_u
     # RUT del estudiante (ya viene formateado de la BD)
     student_rut = student_personal.identification_number if student_personal and student_personal.identification_number else ""
     
-    # RUT del profesional (ya viene formateado de la BD)
-    professional_rut = professional.identification_number if professional and professional.identification_number else ""
+    professional_disp = professional_display_fields(db, professional) if professional else None
+    professional_rut = (professional_disp.rut or "") if professional_disp else ""
+    professional_full_name = (professional_disp.full_name or "").strip() if professional_disp else ""
     
     # Formatear fecha
     formatted_date = ""
@@ -225,10 +227,10 @@ def generate_pdf(id: int, session_user: UserLogin = Depends(get_current_active_u
         'conduct': action_result.get('conduct', ''),
         'consequences': action_result.get('consequences', ''),
         'recommendations': action_result.get('recommendations', ''),
-        'professional_name': f"{professional.names} {professional.lastnames}" if professional else '',
+        'professional_name': professional_full_name,
         'professional_position': 'Asistente Técnico Diferencial',
         'professional_rut': professional_rut,
-        'professional_secreduc': professional.identification_number if professional else '',
+        'professional_secreduc': professional_rut,
     }
     
     # Generar PDF

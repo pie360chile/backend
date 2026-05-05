@@ -20,6 +20,7 @@ class UserLogin(BaseModel):
     branch_office_id: Union[int, None]
     customer_id: Union[int, None]
     school_id: Union[int, None]
+    period_year: Union[int, None] = None  # users_rols / JWT
     full_name: Union[str, None]
     email: Union[str, None]
     phone: Union[str, None]

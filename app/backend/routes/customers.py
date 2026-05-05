@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, status
+from typing import Optional
+
+from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import JSONResponse
 from app.backend.db.database import get_db
 from sqlalchemy import or_
@@ -17,6 +19,7 @@ from app.backend.classes.rol_class import RolClass
 from app.backend.classes.teaching_class import TeachingClass
 from app.backend.db.models import RolModel, SchoolModel, UserModel, UsersRolModel
 from app.backend.auth.auth_user import get_current_active_user
+from app.backend.utils.users_rol_period import resolve_period_year_for_session, users_rol_period_clause
 from datetime import datetime as dt
 
 customers = APIRouter(
@@ -289,6 +292,7 @@ def list_users_for_customer_rol(
     customer_id: int,
     rol_id: int,
     school_id: int,
+    period_year: Optional[int] = Query(None, description="Año período escolar"),
     session_user: UserLogin = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
@@ -325,6 +329,8 @@ def list_users_for_customer_rol(
                 },
             )
 
+    py = resolve_period_year_for_session(session_user, period_year)
+
     rows = (
         db.query(UserModel.id, UserModel.rut, UserModel.full_name)
         .join(
@@ -337,6 +343,7 @@ def list_users_for_customer_rol(
                 UsersRolModel.deleted_status_id == 0,
                 UsersRolModel.deleted_status_id.is_(None),
             ),
+            users_rol_period_clause(py, bypass_global_rol_ids=(1,)),
             UserModel.customer_id == customer_id,
             or_(
                 UserModel.deleted_status_id == 0,
@@ -359,6 +366,7 @@ def list_available_users_for_customer_rol(
     customer_id: int,
     rol_id: int,
     school_id: int,
+    period_year: Optional[int] = Query(None, description="Año período escolar"),
     session_user: UserLogin = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
@@ -386,11 +394,14 @@ def list_available_users_for_customer_rol(
                 content={"status": 404, "message": "Rol no encontrado para este cliente y escuela", "data": None},
             )
 
+    py = resolve_period_year_for_session(session_user, period_year)
+
     assigned_user_rows = (
         db.query(UsersRolModel.user_id)
         .filter(
             UsersRolModel.rol_id == rol_id,
             or_(UsersRolModel.deleted_status_id == 0, UsersRolModel.deleted_status_id.is_(None)),
+            users_rol_period_clause(py, bypass_global_rol_ids=(1,)),
         )
         .all()
     )
@@ -431,6 +442,8 @@ def add_user_to_customer_rol(
             content={"status": 400, "message": "user_id es requerido", "data": None},
         )
 
+    py = resolve_period_year_for_session(session_user, body.get("period_year"))
+
     if rol_id != 2:
         rol_exists = (
             db.query(RolModel.id)
@@ -469,6 +482,7 @@ def add_user_to_customer_rol(
             UsersRolModel.user_id == int(user_id),
             UsersRolModel.rol_id == rol_id,
             or_(UsersRolModel.deleted_status_id == 0, UsersRolModel.deleted_status_id.is_(None)),
+            users_rol_period_clause(py, bypass_global_rol_ids=(1,)),
         )
         .first()
     )
@@ -484,6 +498,7 @@ def add_user_to_customer_rol(
             UsersRolModel.user_id == int(user_id),
             UsersRolModel.rol_id == rol_id,
             UsersRolModel.deleted_status_id == 1,
+            users_rol_period_clause(py, bypass_global_rol_ids=(1,)),
         )
         .order_by(UsersRolModel.id.desc())
         .first()
@@ -492,11 +507,13 @@ def add_user_to_customer_rol(
     if soft_deleted_rel:
         soft_deleted_rel.deleted_status_id = 0
         soft_deleted_rel.updated_date = now
+        soft_deleted_rel.period_year = py
     else:
         rel = UsersRolModel(
             user_id=int(user_id),
             rol_id=rol_id,
             deleted_status_id=0,
+            period_year=py,
             added_date=now,
             updated_date=now,
         )
@@ -512,6 +529,7 @@ def remove_user_from_customer_rol(
     rol_id: int,
     user_id: int,
     school_id: int,
+    period_year: Optional[int] = Query(None, description="Año período escolar"),
     session_user: UserLogin = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
@@ -564,8 +582,10 @@ def remove_user_from_customer_rol(
                 "status": 404,
                 "message": "Usuario no encontrado para este cliente",
                 "data": None,
-            },
-        )
+                },
+            )
+
+    py = resolve_period_year_for_session(session_user, period_year)
 
     rel_rows = (
         db.query(UsersRolModel)
@@ -573,6 +593,7 @@ def remove_user_from_customer_rol(
             UsersRolModel.user_id == user_id,
             UsersRolModel.rol_id == rol_id,
             or_(UsersRolModel.deleted_status_id == 0, UsersRolModel.deleted_status_id.is_(None)),
+            users_rol_period_clause(py, bypass_global_rol_ids=(1,)),
         )
         .all()
     )

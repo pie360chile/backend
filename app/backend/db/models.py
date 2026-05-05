@@ -1,5 +1,6 @@
 from app.backend.db.database import Base
-from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Date, Time, ForeignKey, Float, Boolean, Text, Numeric, Enum, UniqueConstraint
+from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Date, Time, ForeignKey, Float, Boolean, Text, Numeric, Enum, UniqueConstraint, select
+from sqlalchemy.orm import column_property
 from datetime import datetime
 
 class AIConversationModel(Base):
@@ -326,6 +327,7 @@ class UsersRolModel(Base):
     user_id = Column(Integer, ForeignKey('users.id'))
     rol_id = Column(Integer, ForeignKey('rols.id'))
     deleted_status_id = Column(Integer)
+    period_year = Column(Integer, nullable=True)
     added_date = Column(DateTime())
     updated_date = Column(DateTime())
 
@@ -641,22 +643,22 @@ class StudentGuardianModel(Base):
     updated_date = Column(DateTime)
 
 class ProfessionalModel(Base):
+    """
+    Perfil académico del usuario (carrera): una fila típica por user_id.
+    Colegio / año escolar live en users_rols + rols; teaching/course en professionals_teachings_courses.
+    """
+
     __tablename__ = 'professionals'
 
     id = Column(Integer, primary_key=True)
-    school_id = Column(Integer)
-    rol_id = Column(Integer)
-    career_type_id = Column(Integer)
-    identification_number = Column(String(255))
-    names = Column(String(255))
-    lastnames = Column(String(255))
-    email = Column(String(255))
-    birth_date = Column(Date)
-    address = Column(String(255))
-    phone = Column(String(255))
-    period_year = Column(String(10), nullable=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=True)
+    career_type_id = Column(Integer, nullable=True)
     added_date = Column(DateTime)
     updated_date = Column(DateTime)
+    # RUT/documento vive en `users`; expone el mismo dato para código legado que filtraba por professionals.identification_number
+    identification_number = column_property(
+        select(UserModel.rut).where(UserModel.id == user_id).correlate_except(UserModel).scalar_subquery()
+    )
 
 
 class ProfessionalTeachingCourseModel(Base):
