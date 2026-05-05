@@ -1,6 +1,6 @@
 from datetime import datetime
-from sqlalchemy import String, func
-from app.backend.db.models import ProfessionalModel, UserModel, SchoolModel, ProfessionalTeachingCourseModel, RolModel
+from sqlalchemy import String, func, or_
+from app.backend.db.models import ProfessionalModel, UserModel, SchoolModel, ProfessionalTeachingCourseModel, RolModel, UsersRolModel
 from app.backend.auth.auth_user import generate_bcrypt_hash
 import json
 
@@ -62,8 +62,9 @@ def session_professional_scope_id(db, session_user):
 
     # Rol y RUT desde BD: el JWT a veces no trae rol_id o lo anula; sin rol_id el código antes devolvía
     # None y se listaban todos los profesionales.
-    db_user = None
     uid = getattr(session_user, "id", None)
+
+    db_user = None
     if uid:
         db_user = db.query(UserModel).filter(UserModel.id == uid).first()
     if not db_user:
@@ -71,15 +72,23 @@ def session_professional_scope_id(db, session_user):
         if r_fallback:
             db_user = db.query(UserModel).filter(UserModel.rut == r_fallback).first()
 
-    rol_id = None
-    if db_user is not None and db_user.rol_id is not None:
-        rol_id = db_user.rol_id
-    else:
-        rol_id = getattr(session_user, "rol_id", None)
+    # rol_id desde JWT/selección de rol (no existe en tabla users tras users_rols).
+    rol_id = getattr(session_user, "rol_id", None)
+    if rol_id is None and uid:
+        ur = (
+            db.query(UsersRolModel.rol_id)
+            .filter(
+                UsersRolModel.user_id == uid,
+                or_(UsersRolModel.deleted_status_id == 0, UsersRolModel.deleted_status_id.is_(None)),
+            )
+            .order_by(UsersRolModel.id.asc())
+            .first()
+        )
+        if ur:
+            rol_id = ur[0]
 
+    # Colegio activo viene del token tras select-school (no usar users.*).
     school_id = getattr(session_user, "school_id", None)
-    if school_id is None and db_user is not None:
-        school_id = db_user.school_id
 
     rut_raw = None
     if db_user is not None and db_user.rut:
@@ -385,8 +394,6 @@ class ProfessionalClass:
             full_name = f"{professional_inputs.get('names')} {professional_inputs.get('lastnames')}"
             new_user = UserModel(
                 customer_id=customer_id,
-                school_id=school_id,
-                rol_id=professional_inputs.get('rol_id'),
                 deleted_status_id=0,
                 rut=professional_inputs.get('identification_number'),
                 full_name=full_name,
@@ -399,6 +406,17 @@ class ProfessionalClass:
 
             self.db.add(new_user)
             self.db.flush()
+
+            rid_new = professional_inputs.get('rol_id')
+            if rid_new is not None and new_user.id:
+                new_ur = UsersRolModel(
+                    user_id=new_user.id,
+                    rol_id=rid_new,
+                    deleted_status_id=0,
+                    added_date=datetime.now(),
+                    updated_date=datetime.now(),
+                )
+                self.db.add(new_ur)
 
             # Crear registros en professionals_teachings_courses para cada combinación
             if teaching_ids and course_ids:
@@ -485,8 +503,6 @@ class ProfessionalClass:
                 existing_user.full_name = f"{names} {lastnames}"
                 existing_user.email = email
                 existing_user.phone = phone
-                existing_user.rol_id = rol_id
-                existing_user.school_id = professional_inputs.get('school_id', existing_user.school_id)
                 existing_user.updated_date = datetime.now()
 
             # Actualizar professionals_teachings_courses
