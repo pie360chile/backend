@@ -75,7 +75,11 @@ def _rol_sees_all_professionals_list(rol, rol_id) -> bool:
         return True
     if rol and rol.rol:
         rn = str(rol.rol).strip().lower()
-        if rn == "coordinador" or rn.startswith("coordinador"):
+        if rn.startswith("coordinador"):
+            return True
+        if rn.startswith("evaluador"):
+            return True
+        if "administrador" in rn and "super" not in rn:
             return True
     return False
 
@@ -314,10 +318,10 @@ class ProfessionalClass:
                 query = query.filter(UserModel.full_name.like(f"%{names.strip()}%"))
 
             rut_sort = _rut_body_numeric_sort_sql(UserModel.rut)
-            query = query.order_by(rut_sort.asc().nulls_last(), UserModel.id.asc())
+            query = query.order_by((rut_sort.is_(None)).asc(), rut_sort.asc(), UserModel.id.asc())
 
             if page > 0:
-                total_items = query.count()
+                total_items = query.order_by(None).count()
                 total_pages = (total_items + items_per_page - 1) // items_per_page
 
                 if total_items == 0 or (page < 1 or page > total_pages):
@@ -440,7 +444,7 @@ class ProfessionalClass:
                 )
             )
             rut_sort_coord = _rut_body_numeric_sort_sql(UserModel.rut)
-            data = q.order_by(rut_sort_coord.asc().nulls_last(), UserModel.id.asc()).all()
+            data = q.order_by((rut_sort_coord.is_(None)).asc(), rut_sort_coord.asc(), UserModel.id.asc()).all()
             out = []
             for p in data:
                 names_p, last_p = _split_full_name(p.full_name or "")

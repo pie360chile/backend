@@ -25,8 +25,19 @@ def _session_school_id_with_fallback(db: Session, session_user) -> Optional[int]
     return school_id
 
 
+def _school_id_from_request_or_session(db: Session, session_user, requested_school_id: Optional[int] = None) -> Optional[int]:
+    if requested_school_id is not None:
+        try:
+            sid = int(requested_school_id)
+            if sid > 0:
+                return sid
+        except (TypeError, ValueError):
+            pass
+    return _session_school_id_with_fallback(db, session_user)
+
+
 def _ensure_professional_self_only(db, session_user, target_user_id: int, explicit_period_year=None):
-    """Si no es coordinador/admin (rol 1/2), solo puede acceder a su propio ``users.id``."""
+    """Si no es rol institucional permitido, solo puede acceder a su propio ``users.id``."""
     scope = session_restricted_user_id(db, session_user, explicit_period_year)
     if scope is None:
         return
@@ -51,7 +62,7 @@ def index(professional_list: ProfessionalList, session_user: UserLogin = Depends
     page_value = 0 if professional_list.page is None else professional_list.page
     only_uid = session_restricted_user_id(db, session_user, professional_list.period_year)
 
-    school_id = _session_school_id_with_fallback(db, session_user)
+    school_id = _school_id_from_request_or_session(db, session_user, professional_list.school_id)
 
     result = ProfessionalClass(db).get_all(
         page=page_value,
@@ -81,8 +92,9 @@ def list_professionals(
     db: Session = Depends(get_db),
     body: Optional[dict] = Body(default=None),
 ):
-    school_id = _session_school_id_with_fallback(db, session_user)
     body = body or {}
+    requested_school_id = body.get("school_id")
+    school_id = _school_id_from_request_or_session(db, session_user, requested_school_id)
     py = resolve_period_year_for_session(session_user, body.get("period_year"))
     only_uid = session_restricted_user_id(db, session_user, py)
     result = ProfessionalClass(db).get_all(
@@ -105,10 +117,11 @@ def list_professionals(
 @professionals.get("/list")
 def get_all_list(
     period_year: Optional[int] = Query(None, description="Filtrar por año (ej. 2026)"),
+    school_id: Optional[int] = Query(None, description="Filtrar por colegio"),
     session_user: UserLogin = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
-    school_id = _session_school_id_with_fallback(db, session_user)
+    school_id = _school_id_from_request_or_session(db, session_user, school_id)
 
     if school_id is None:
         return JSONResponse(
@@ -157,7 +170,7 @@ def totals(
 ):
     body = body or {}
     customer_id = session_user.customer_id if session_user else None
-    school_id = _session_school_id_with_fallback(db, session_user)
+    school_id = _school_id_from_request_or_session(db, session_user, body.get("school_id"))
     rol_id = session_user.rol_id if session_user else None
     py = resolve_period_year_for_session(session_user, body.get("period_year"))
     only_uid = session_restricted_user_id(db, session_user, py)
@@ -197,8 +210,7 @@ def store(professional: StoreProfessional, session_user: UserLogin = Depends(get
         )
     professional_inputs = professional.dict()
 
-    # Obtener school_id de la sesión del usuario
-    school_id = session_user.school_id if session_user else None
+    school_id = _school_id_from_request_or_session(db, session_user, professional.school_id)
 
     result = ProfessionalClass(db).store(professional_inputs, school_id=school_id)
 
@@ -259,7 +271,7 @@ def edit(
 ):
     py = resolve_period_year_for_session(session_user, period_year)
     _ensure_professional_self_only(db, session_user, id, py)
-    sid = session_user.school_id if session_user else None
+    sid = _school_id_from_request_or_session(db, session_user, None)
     result = ProfessionalClass(db).get(id, school_id=sid, period_year=py)
 
     if isinstance(result, dict) and (result.get("error") or result.get("status") == "error"):
@@ -290,7 +302,7 @@ def delete(
 ):
     py = resolve_period_year_for_session(session_user, period_year)
     _ensure_professional_self_only(db, session_user, id, py)
-    sid = session_user.school_id if session_user else None
+    sid = _school_id_from_request_or_session(db, session_user, None)
     result = ProfessionalClass(db).delete(id, school_id=sid, period_year=py)
 
     if isinstance(result, dict) and result.get("status") == "error":
@@ -329,9 +341,9 @@ def update(
 
     # Agregar school_id de la sesión si no viene en el input
     if 'school_id' not in professional_inputs:
-        professional_inputs['school_id'] = session_user.school_id if session_user else None
+        professional_inputs['school_id'] = _school_id_from_request_or_session(db, session_user, None)
 
-    sid = session_user.school_id if session_user else None
+    sid = _school_id_from_request_or_session(db, session_user, professional_inputs.get("school_id"))
     result = ProfessionalClass(db).update(id, professional_inputs, school_id=sid, period_year=py)
 
     if isinstance(result, dict) and result.get("status") == "error":

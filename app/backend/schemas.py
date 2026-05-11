@@ -526,6 +526,7 @@ class ProfessionalList(BaseModel):
     per_page: int = 10
     identification_number: Optional[str] = None
     names: Optional[str] = None
+    school_id: Optional[int] = None
     period_year: Optional[int] = None
 
 class StoreProfessional(BaseModel):
@@ -538,6 +539,7 @@ class StoreProfessional(BaseModel):
     phone: str
     rol_id: int
     password: str
+    school_id: Optional[int] = None
     period_year: Optional[int] = None
     course_id: Optional[List[int]] = None
     teaching_id: Optional[List[int]] = None
@@ -552,6 +554,7 @@ class UpdateProfessional(BaseModel):
     birth_date: Optional[str] = None
     address: Optional[str] = None
     phone: Optional[str] = None
+    school_id: Optional[int] = None
     period_year: Optional[int] = None
     course_id: Optional[List[int]] = None
     teaching_id: Optional[List[int]] = None
