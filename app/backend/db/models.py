@@ -3054,3 +3054,29 @@ class AlertModel(Base):
     extra = Column(Text, nullable=True)
     added_date = Column(DateTime, nullable=True)
     updated_date = Column(DateTime, nullable=True)
+
+
+class ChatModel(Base):
+    """Conversación del Agente Pie (cabecera: cómo empezó la conversación)."""
+
+    __tablename__ = 'chats'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=False)
+    customer_id = Column(Integer, nullable=True)
+    session_id = Column(String(64), nullable=True)
+    title = Column(String(512), nullable=False)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+
+
+class ChatDetailModel(Base):
+    """Cada pregunta (chat_type_id=1) o respuesta del agente (chat_type_id=2)."""
+
+    __tablename__ = 'chat_details'
+
+    id = Column(Integer, primary_key=True)
+    chat_id = Column(Integer, ForeignKey('chats.id', ondelete='CASCADE'), nullable=False)
+    chat_type_id = Column(Integer, nullable=False)
+    message = Column(Text, nullable=False)
+    added_date = Column(DateTime, nullable=True)

@@ -1,0 +1,167 @@
+from dataclasses import dataclass
+from typing import Optional
+
+from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi.responses import JSONResponse
+from sqlalchemy.orm import Session
+
+from app.backend.auth.auth_user import get_optional_current_user
+from app.backend.classes.agents_class import AgentsClass
+from app.backend.db.database import get_db
+from app.backend.db.models import UserModel
+from app.backend.schemas import AgentsChatList, AgentsSaveChat, AgentsSendMessage
+
+
+agents = APIRouter(prefix='/agents', tags=['Agents'])
+
+
+@dataclass
+class AgentActor:
+    user_id: int
+    customer_id: Optional[int]
+    session_id: Optional[str]
+
+
+def _resolve_session_id(header_value: Optional[str], body_value: Optional[str]) -> Optional[str]:
+    for raw in (header_value, body_value):
+        s = (raw or '').strip()
+        if s:
+            return s
+    return None
+
+
+def get_agent_actor(
+    session_user: Optional[UserModel] = Depends(get_optional_current_user),
+    x_agent_session: Optional[str] = Header(None, alias='X-Agent-Session'),
+) -> AgentActor:
+    if session_user and getattr(session_user, 'id', None):
+        return AgentActor(
+            user_id=int(session_user.id),
+            customer_id=getattr(session_user, 'customer_id', None),
+            session_id=None,
+        )
+    sid = (x_agent_session or '').strip()
+    if not sid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='X-Agent-Session header or session_id is required when not logged in',
+        )
+    return AgentActor(user_id=0, customer_id=None, session_id=sid)
+
+
+def _error_response(result: dict, default_status: int = status.HTTP_400_BAD_REQUEST):
+    return JSONResponse(
+        status_code=default_status,
+        content={
+            'status': default_status,
+            'message': result.get('message', 'Error'),
+            'data': None,
+        },
+    )
+
+
+@agents.post('/')
+def index(
+    body: AgentsChatList,
+    actor: AgentActor = Depends(get_agent_actor),
+    db: Session = Depends(get_db),
+):
+    session_id = _resolve_session_id(None, body.session_id) or actor.session_id
+    page_value = 0 if body.page is None else body.page
+    result = AgentsClass(db).get_all(
+        user_id=actor.user_id,
+        page=page_value,
+        items_per_page=body.per_page,
+        session_id=session_id,
+    )
+
+    if isinstance(result, dict) and result.get('status') == 'error':
+        return _error_response(result, status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            'status': 200,
+            'message': 'Chats retrieved successfully',
+            'data': result,
+        },
+    )
+
+
+@agents.get('/edit/{id}')
+def edit(
+    id: int,
+    session_id: Optional[str] = None,
+    actor: AgentActor = Depends(get_agent_actor),
+    db: Session = Depends(get_db),
+):
+    sid = _resolve_session_id(None, session_id) or actor.session_id
+    result = AgentsClass(db).get(chat_id=id, user_id=actor.user_id, session_id=sid)
+
+    if isinstance(result, dict) and result.get('status') == 'error':
+        return _error_response(result, status.HTTP_404_NOT_FOUND)
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            'status': 200,
+            'message': 'Chat retrieved successfully',
+            'data': result,
+        },
+    )
+
+
+@agents.post('/save')
+def save(
+    body: AgentsSaveChat,
+    actor: AgentActor = Depends(get_agent_actor),
+    db: Session = Depends(get_db),
+):
+    session_id = _resolve_session_id(None, body.session_id) or actor.session_id
+    result = AgentsClass(db).save_chat(
+        user_id=actor.user_id,
+        customer_id=actor.customer_id,
+        title=body.title,
+        chat_id=body.chat_id,
+        session_id=session_id,
+    )
+
+    if isinstance(result, dict) and result.get('status') == 'error':
+        return _error_response(result, status.HTTP_400_BAD_REQUEST)
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            'status': 200,
+            'message': 'Chat saved successfully',
+            'data': result,
+        },
+    )
+
+
+@agents.post('/send')
+def send(
+    body: AgentsSendMessage,
+    actor: AgentActor = Depends(get_agent_actor),
+    db: Session = Depends(get_db),
+):
+    session_id = _resolve_session_id(None, body.session_id) or actor.session_id
+    result = AgentsClass(db).send_message(
+        user_id=actor.user_id,
+        customer_id=actor.customer_id,
+        message=body.message,
+        chat_id=body.chat_id,
+        session_id=session_id,
+    )
+
+    if isinstance(result, dict) and result.get('status') == 'error':
+        return _error_response(result, status.HTTP_400_BAD_REQUEST)
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            'status': 200,
+            'message': 'Message sent successfully',
+            'data': result,
+        },
+    )

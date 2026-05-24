@@ -48,6 +48,7 @@ from app.backend.routes.contacts import contacts
 from app.backend.routes.student_document_files import student_document_files
 from app.backend.routes.folders import folders
 from app.backend.routes.health_evaluations import health_evaluations
+from app.backend.routes.agents import agents
 from app.backend.routes.artificial_intelligence import artificial_intelligence
 from app.backend.routes.evaluator_chat import evaluator_chat
 from app.backend.routes.events import events
@@ -233,6 +234,8 @@ app.include_router(contacts)
 app.include_router(student_document_files)
 app.include_router(folders)
 app.include_router(health_evaluations)
+app.include_router(agents)
+app.include_router(agents, prefix='/api')
 app.include_router(artificial_intelligence)
 app.include_router(evaluator_chat)
 app.include_router(events)

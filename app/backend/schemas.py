@@ -2936,3 +2936,22 @@ class AnamnesisList(BaseModel):
     page: Optional[int] = None
     per_page: int = 10
     student_id: Optional[int] = None
+
+
+# Agente Pie — chats / chat_details
+class AgentsChatList(BaseModel):
+    page: Optional[int] = None
+    per_page: int = 50
+    session_id: Optional[str] = None
+
+
+class AgentsSendMessage(BaseModel):
+    chat_id: Optional[int] = None
+    message: str
+    session_id: Optional[str] = None
+
+
+class AgentsSaveChat(BaseModel):
+    chat_id: Optional[int] = None
+    title: str
+    session_id: Optional[str] = None

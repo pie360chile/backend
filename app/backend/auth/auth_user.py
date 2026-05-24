@@ -95,6 +95,49 @@ def get_current_active_user(current_user: UserModel = Depends(get_current_user))
     return current_user
 
 
+oauth2_scheme_optional = OAuth2PasswordBearer("/login_users/token", auto_error=False)
+
+
+def get_optional_current_user(token: Union[str, None] = Depends(oauth2_scheme_optional)):
+    """Usuario autenticado o None si no hay token / token inválido."""
+    if not token:
+        return None
+    try:
+        decoded_token = jwt.decode(token, os.environ['SECRET_KEY'], algorithms=[os.environ['ALGORITHM']])
+        username = decoded_token.get("sub")
+        if username is None:
+            return None
+    except JWTError:
+        return None
+
+    user = get_user(username)
+    if not user:
+        return None
+
+    if 'rol_id' in decoded_token and decoded_token['rol_id'] is not None:
+        user.rol_id = decoded_token['rol_id']
+    if 'customer_id' in decoded_token:
+        user.customer_id = decoded_token['customer_id']
+    if 'school_id' in decoded_token:
+        user.school_id = decoded_token['school_id']
+    if 'teaching_id' in decoded_token:
+        user.teaching_id = decoded_token['teaching_id']
+    if 'course_id' in decoded_token:
+        user.course_id = decoded_token['course_id']
+    if 'career_type_id' in decoded_token:
+        user.career_type_id = decoded_token['career_type_id']
+    py = decoded_token.get("period_year")
+    if py is not None:
+        try:
+            user.period_year = int(py)
+        except (TypeError, ValueError):
+            user.period_year = datetime.now().year
+    else:
+        user.period_year = datetime.now().year
+
+    return user
+
+
 def get_current_superadmin_user(current_user: UserModel = Depends(get_current_active_user)) -> UserModel:
     """Solo `rol_id == 1` (superadministrador), alineado con el front (`isKpiSuperadmin`)."""
     rid: Union[int, None] = getattr(current_user, "rol_id", None)
