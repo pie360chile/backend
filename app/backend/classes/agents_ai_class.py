@@ -20,6 +20,7 @@ priorízalo. Si no tienes certeza o falta información del colegio, indícalo ex
 No inventes datos de estudiantes ni normativa."""
 
 DEFAULT_MODEL = os.getenv('AGENTS_CHAT_MODEL', 'gpt-4o-mini')
+DEFAULT_TEMPERATURE = 0.3
 RAG_N_RESULTS = int(os.getenv('AGENTS_RAG_N_RESULTS', '3') or '3')
 HISTORY_CONTEXT_LIMIT = int(os.getenv('AGENTS_HISTORY_LIMIT', '20') or '20')
 
@@ -112,6 +113,7 @@ class AgentsAiClass:
                 model=DEFAULT_MODEL,
                 input=text,
                 instructions=instructions,
+                temperature=DEFAULT_TEMPERATURE,
             )
             reply = (getattr(response, 'output_text', None) or '').strip()
             if not reply:
