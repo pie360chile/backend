@@ -205,7 +205,12 @@ async def send(
             return _error_response({'status': 'error', 'message': extract_error})
 
     text = (message or '').strip()
-    if not text and (attachment_names or image_attachments):
+    if not text and image_attachments:
+        text = (
+            'Describe y analiza detalladamente la imagen adjunta. '
+            'Si contiene texto, formularios o documentos escolares, extráelos.'
+        )
+    elif not text and attachment_names:
         text = 'Analiza los archivos adjuntos en el contexto del PIE chileno.'
 
     result = AgentsClass(db).send_message(

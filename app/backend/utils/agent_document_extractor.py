@@ -6,8 +6,8 @@ from typing import Dict, List, Optional, Tuple
 
 MAX_FILES = int(os.getenv('AGENTS_MAX_FILES', '5') or '5')
 MAX_FILE_BYTES = int(os.getenv('AGENTS_MAX_FILE_MB', '10') or '10') * 1024 * 1024
-MAX_CHARS_PER_FILE = int(os.getenv('AGENTS_MAX_CHARS_PER_FILE', '12000') or '12000')
-MAX_TOTAL_CHARS = int(os.getenv('AGENTS_MAX_ATTACHMENT_CHARS', '40000') or '40000')
+MAX_CHARS_PER_FILE = int(os.getenv('AGENTS_MAX_CHARS_PER_FILE', '25000') or '25000')
+MAX_TOTAL_CHARS = int(os.getenv('AGENTS_MAX_ATTACHMENT_CHARS', '50000') or '50000')
 MAX_IMAGE_BYTES = int(os.getenv('AGENTS_MAX_IMAGE_MB', '5') or '5') * 1024 * 1024
 
 DOCUMENT_EXTENSIONS = {'.pdf', '.docx', '.txt', '.md'}
@@ -66,9 +66,43 @@ def _extract_pdf(content: bytes) -> str:
 def _extract_docx(content: bytes) -> str:
     try:
         from docx import Document
+        from docx.table import Table
+        from docx.text.paragraph import Paragraph
 
         doc = Document(io.BytesIO(content))
-        return '\n'.join(p.text for p in doc.paragraphs if p.text.strip())
+        parts: List[str] = []
+
+        def paragraph_text(p: Paragraph) -> str:
+            return (p.text or '').strip()
+
+        def table_text(table: Table) -> str:
+            rows = []
+            for row in table.rows:
+                cells = [((cell.text or '').strip().replace('\n', ' ')) for cell in row.cells]
+                cells = [c for c in cells if c]
+                if cells:
+                    rows.append(' | '.join(cells))
+            return '\n'.join(rows)
+
+        for child in doc.element.body:
+            tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
+            if tag == 'p':
+                from docx.text.paragraph import Paragraph as P
+
+                text = paragraph_text(P(child, doc))
+                if text:
+                    parts.append(text)
+            elif tag == 'tbl':
+                from docx.table import Table as T
+
+                ttext = table_text(T(child, doc))
+                if ttext:
+                    parts.append(ttext)
+
+        if not parts:
+            parts = [paragraph_text(p) for p in doc.paragraphs if paragraph_text(p)]
+
+        return '\n'.join(parts)
     except Exception as e:
         raise ValueError(f'No se pudo leer el DOCX: {e}') from e
 
@@ -145,9 +179,9 @@ def _build_documents_context(doc_files: List[Tuple[str, bytes]]) -> Tuple[str, L
         total += len(block)
 
     context = (
-        'DOCUMENTOS ADJUNTOS POR EL USUARIO (analízalos para responder; '
-        'prioriza su contenido si la pregunta lo requiere):\n\n'
+        '=== DOCUMENTOS ADJUNTOS (CONTENIDO REAL EXTRAÍDO — DEBES USAR ESTOS DATOS) ===\n\n'
         + '\n\n---\n\n'.join(blocks)
+        + '\n\n=== FIN DOCUMENTOS ADJUNTOS ==='
     )
     return context, names, None
 
@@ -213,3 +247,23 @@ def format_user_message_with_attachments(message: str, filenames: List[str]) -> 
     if text:
         return f'{text}\n\n📎 Archivos adjuntos: {files_line}'
     return f'📎 Archivos adjuntos: {files_line}\n(El usuario envió archivos para analizar)'
+
+
+DOC_CONTEXT_START = '<<<PIE360_DOC>>>'
+DOC_CONTEXT_END = '<<<END_PIE360_DOC>>>'
+
+
+def append_document_context_for_history(stored_message: str, attachments_context: Optional[str]) -> str:
+    """Guarda extracto del documento en el mensaje para follow-ups (oculto en UI)."""
+    block = (attachments_context or '').strip()
+    if not block:
+        return stored_message
+    excerpt = block[:15000]
+    return f'{stored_message}\n\n{DOC_CONTEXT_START}\n{excerpt}\n{DOC_CONTEXT_END}'
+
+
+def strip_document_context_from_display(message: str) -> str:
+    if DOC_CONTEXT_START not in message:
+        return message
+    before = message.split(DOC_CONTEXT_START, 1)[0]
+    return before.rstrip()

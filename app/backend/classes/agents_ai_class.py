@@ -44,7 +44,31 @@ Responde siempre en español, con claridad y tono profesional. Si usas contexto 
 Si no tienes certeza o falta información del colegio, indícalo explícitamente. No inventes datos de
 estudiantes ni normativa."""
 
+DOCUMENT_ANALYSIS_RULES = """
+REGLAS PARA DOCUMENTOS ADJUNTOS (OBLIGATORIO):
+- El usuario adjuntó documento(s) con contenido real incluido en este mensaje o en el historial.
+- Responde ÚNICAMENTE con información que aparezca en esos documentos: nombres, fechas, diagnósticos,
+  observaciones, resultados, recomendaciones, antecedentes, etc.
+- PROHIBIDO responder con plantillas genéricas del tipo "1. Identificación 2. Motivo de consulta..."
+  si no extraes datos concretos del texto del documento.
+- Si el documento trae datos del estudiante, cítalos. Si pide resumen, resume hechos concretos del texto.
+- Si el contenido del documento no está disponible o está vacío, dilo explícitamente y pide re-adjuntar el archivo.
+- No inventes datos que no estén en el documento."""
+
+IMAGE_ANALYSIS_RULES = """
+REGLAS PARA IMÁGENES ADJUNTAS (OBLIGATORIO — PRIORIDAD SOBRE OTRAS REGLAS):
+- El usuario adjuntó imagen(es) en ESTE mensaje. DEBES mirarlas y analizarlas. Tienes capacidad de visión.
+- PROHIBIDO responder "no puedo ayudarte con esa imagen", "no puedo ver imágenes" o rechazar sin describir lo que ves.
+- Si pregunta "qué es esto", "qué dice", "resume" u similar: describe la imagen con detalle (texto visible,
+  tipo de documento, formularios, tablas, logos, personas si aplica, contexto escolar, etc.).
+- Asume que puede ser un informe escaneado, formulario PIE, anamnesis, captura de pantalla o material escolar.
+- Si contiene texto legible, transcríbelo o resume su contenido concreto.
+- Si la imagen NO está relacionada con PIE/escuela, dilo después de describirla (ej. "La imagen muestra X;
+  no parece un documento PIE"), pero NUNCA rechaces sin analizarla primero.
+- El nombre del archivo (ej. "ChatGPT Image...") no indica el contenido: mira la imagen real."""
+
 DEFAULT_MODEL = os.getenv('AGENTS_CHAT_MODEL', 'gpt-4o-mini')
+VISION_MODEL = os.getenv('AGENTS_VISION_MODEL', DEFAULT_MODEL)
 RAG_N_RESULTS = int(os.getenv('AGENTS_RAG_N_RESULTS', '3') or '3')
 HISTORY_CONTEXT_LIMIT = int(os.getenv('AGENTS_HISTORY_LIMIT', '20') or '20')
 
@@ -128,8 +152,14 @@ class AgentsAiClass:
             client = openai.OpenAI(api_key=api_key)
 
             instructions = AGENT_PIE_INSTRUCTIONS
+            if has_images:
+                instructions = (
+                    f'{instructions}\n\n{IMAGE_ANALYSIS_RULES}\n\n'
+                    'NOTA: Analizar imágenes adjuntadas por el equipo PIE SÍ está dentro de tu alcance.'
+                )
+
             rag_block = _rag_context(text or 'documento o imagen PIE adjunto')
-            if rag_block:
+            if rag_block and not has_images:
                 instructions = (
                     f'{instructions}\n\nUsa como referencia principal la base de conocimiento '
                     f'cuando el contexto responda o enriquezca la pregunta:\n\n{rag_block}'
@@ -137,31 +167,44 @@ class AgentsAiClass:
 
             attach_block = (attachments_context or '').strip()
             if attach_block:
-                instructions = (
-                    f'{instructions}\n\n{attach_block}\n\n'
-                    'Instrucción: El usuario adjuntó documento(s) de texto. Léelos y úsalos para '
-                    'analizar, resumir, redactar informes PIE o responder según su mensaje.'
-                )
+                instructions = f'{instructions}\n\n{DOCUMENT_ANALYSIS_RULES}'
 
-            if has_images:
+            if has_images and not attach_block:
+                pass  # reglas de imagen ya añadidas arriba
+
+            asks_about_past_image = (
+                not has_images
+                and ('📎' in text or 'archivos adjuntos' in text.lower() or 'imagen adjunta' in text.lower())
+            )
+            if asks_about_past_image:
                 instructions = (
                     f'{instructions}\n\n'
-                    'El usuario adjuntó imagen(es). Obsérvalas con atención: pueden ser informes '
-                    'escaneados, formularios, capturas o material del establecimiento. Extrae el texto '
-                    'visible y responde en el marco del PIE chileno. Si la imagen no es legible, '
-                    'indícalo y pide una mejor foto o un PDF/DOCX.'
+                    'El usuario pregunta por una imagen mencionada en el chat pero NO adjuntó imagen '
+                    'en este mensaje. Indícale amablemente que vuelva a adjuntar la imagen para poder '
+                    'analizarla. No rechaces con un mensaje genérico de fuera de alcance.'
                 )
 
             history_block = _format_history(history or [])
             if history_block:
                 instructions = f'{instructions}\n\n{history_block}'
 
+            user_input = text or 'Analiza los documentos adjuntos y responde según el contexto PIE chileno.'
+            if attach_block:
+                user_input = (
+                    f'{user_input}\n\n'
+                    f'--- CONTENIDO DE LOS DOCUMENTOS ADJUNTOS (úsalo como fuente principal) ---\n'
+                    f'{attach_block}'
+                )
+
             if has_images:
-                user_input = text or 'Analiza las imágenes adjuntas y responde según el contexto PIE chileno.'
-                if has_docs:
-                    user_input += ' También considera los documentos de texto adjuntos en las instrucciones.'
+                user_input = text or (
+                    'Describe y analiza detalladamente la imagen adjunta. '
+                    'Si hay texto visible, transcríbelo o resume su contenido.'
+                )
+                if has_docs and attach_block not in user_input:
+                    user_input += f'\n\n{attach_block}'
                 image_names = ', '.join(img.get('filename', 'imagen') for img in images)
-                user_input += f'\n\nImágenes adjuntas: {image_names}.'
+                user_input += f'\n\n[Imagen(es) adjunta(s) en este mensaje: {image_names}]'
 
                 content_parts: List[Dict[str, Any]] = [
                     {'type': 'input_text', 'text': user_input},
@@ -174,12 +217,13 @@ class AgentsAiClass:
                         }
                     )
                 api_input: Any = [{'role': 'user', 'content': content_parts}]
+                model = VISION_MODEL
             else:
-                user_input = text or 'Analiza los documentos adjuntos y responde según el contexto PIE chileno.'
                 api_input = user_input
+                model = DEFAULT_MODEL
 
             response = client.responses.create(
-                model=DEFAULT_MODEL,
+                model=model,
                 input=api_input,
                 instructions=instructions,
             )

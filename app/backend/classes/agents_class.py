@@ -275,9 +275,15 @@ class AgentsClass:
         if not text and not attach_names and not has_images:
             return {'status': 'error', 'message': 'Message or files are required'}
 
-        from app.backend.utils.agent_document_extractor import format_user_message_with_attachments
+        from app.backend.utils.agent_document_extractor import (
+            append_document_context_for_history,
+            format_user_message_with_attachments,
+        )
 
         stored_user_message = format_user_message_with_attachments(text, attach_names)
+        stored_user_message = append_document_context_for_history(
+            stored_user_message, attachments_context
+        )
 
         sid = _normalize_session_id(session_id)
         uid = int(user_id) if user_id and int(user_id) > 0 else 0
