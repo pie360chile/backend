@@ -269,11 +269,11 @@ class AgentsClass:
         attachment_names: Optional[List[str]] = None,
         image_attachments: Optional[List[Dict[str, str]]] = None,
     ):
-    text = (message or '').strip()
-    attach_names = attachment_names or []
-    has_images = bool(image_attachments and len(image_attachments) > 0)
-    if not text and not attach_names and not has_images:
-        return {'status': 'error', 'message': 'Message or files are required'}
+        text = (message or '').strip()
+        attach_names = attachment_names or []
+        has_images = bool(image_attachments and len(image_attachments) > 0)
+        if not text and not attach_names and not has_images:
+            return {'status': 'error', 'message': 'Message or files are required'}
 
         from app.backend.utils.agent_document_extractor import format_user_message_with_attachments
 
