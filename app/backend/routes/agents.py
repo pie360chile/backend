@@ -1,7 +1,7 @@
 from dataclasses import dataclass
-from typing import Annotated, Dict, List, Optional
+from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
@@ -139,29 +139,61 @@ def save(
     )
 
 
-@agents.post('/send')
-async def send(
-    actor: AgentActor = Depends(get_agent_actor),
-    db: Session = Depends(get_db),
-    message: Annotated[str, Form()] = '',
-    chat_id: Annotated[Optional[int], Form()] = None,
-    session_id: Annotated[Optional[str], Form()] = None,
-    files: Annotated[List[UploadFile], File()] = [],
-):
-    session_id = _resolve_session_id(None, session_id) or actor.session_id
+def _parse_form_int(value: Optional[str]) -> Optional[int]:
+    if value is None:
+        return None
+    s = str(value).strip()
+    if not s:
+        return None
+    try:
+        return int(s)
+    except ValueError:
+        return None
 
-    attachments_context = None
-    attachment_names: List[str] = []
-    image_attachments: List[Dict[str, str]] = []
+
+async def _read_uploaded_files(form) -> List[tuple]:
+    """Lee archivos del multipart de forma compatible con proxy/apache."""
     file_payload: List[tuple] = []
+    candidates = []
 
-    for upload in files:
-        filename = (upload.filename or '').strip()
-        if not filename:
+    for key, value in form.multi_items():
+        if key in ('files', 'file', 'files[]') and hasattr(value, 'read'):
+            candidates.append(value)
+
+    if not candidates:
+        for key in ('files', 'file', 'files[]'):
+            candidates.extend(form.getlist(key))
+
+    seen = set()
+    for upload in candidates:
+        if not hasattr(upload, 'read'):
+            continue
+        filename = (getattr(upload, 'filename', None) or '').strip()
+        if not filename or filename in seen:
             continue
         content = await upload.read()
         if content:
             file_payload.append((filename, content))
+            seen.add(filename)
+
+    return file_payload
+
+
+@agents.post('/send')
+async def send(
+    request: Request,
+    actor: AgentActor = Depends(get_agent_actor),
+    db: Session = Depends(get_db),
+):
+    form = await request.form()
+    message = str(form.get('message') or '')
+    chat_id = _parse_form_int(form.get('chat_id'))
+    session_id = _resolve_session_id(None, str(form.get('session_id') or '') or None) or actor.session_id
+
+    attachments_context = None
+    attachment_names: List[str] = []
+    image_attachments: List[Dict[str, str]] = []
+    file_payload = await _read_uploaded_files(form)
 
     if file_payload:
         from app.backend.utils.agent_document_extractor import process_uploaded_files
