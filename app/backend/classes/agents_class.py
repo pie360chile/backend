@@ -79,14 +79,18 @@ class AgentsClass:
         message: str,
         chat_id: Optional[int] = None,
         session_id: Optional[str] = None,
+        attachments_context: Optional[str] = None,
+        image_attachments: Optional[List[Dict[str, str]]] = None,
     ) -> Union[Dict[str, Any], Dict[str, str]]:
         """
         Lee el historial guardado en BD (hasta 20 mensajes: usuario + agente)
         y genera la respuesta de la IA usando ese contexto.
         """
         text = (message or '').strip()
-        if not text:
-            return {'status': 'error', 'message': 'Message is required'}
+        has_docs = bool((attachments_context or '').strip())
+        has_images = bool(image_attachments and len(image_attachments) > 0)
+        if not text and not has_docs and not has_images:
+            return {'status': 'error', 'message': 'Message or files are required'}
 
         history: List[Dict[str, str]] = []
         if chat_id:
@@ -95,7 +99,12 @@ class AgentsClass:
                 return {'status': 'error', 'message': 'Chat not found'}
             history = self._get_recent_history(chat_id, HISTORY_CONTEXT_LIMIT)
 
-        ai_reply, ai_error = AgentsAiClass().generate_reply(text, history)
+        ai_reply, ai_error = AgentsAiClass().generate_reply(
+            text,
+            history,
+            attachments_context=attachments_context,
+            image_attachments=image_attachments,
+        )
         if ai_error or not ai_reply:
             return {
                 'status': 'error',
@@ -256,10 +265,19 @@ class AgentsClass:
         chat_id: Optional[int] = None,
         assistant_reply: Optional[str] = None,
         session_id: Optional[str] = None,
+        attachments_context: Optional[str] = None,
+        attachment_names: Optional[List[str]] = None,
+        image_attachments: Optional[List[Dict[str, str]]] = None,
     ):
-        text = (message or '').strip()
-        if not text:
-            return {'status': 'error', 'message': 'Message is required'}
+    text = (message or '').strip()
+    attach_names = attachment_names or []
+    has_images = bool(image_attachments and len(image_attachments) > 0)
+    if not text and not attach_names and not has_images:
+        return {'status': 'error', 'message': 'Message or files are required'}
+
+        from app.backend.utils.agent_document_extractor import format_user_message_with_attachments
+
+        stored_user_message = format_user_message_with_attachments(text, attach_names)
 
         sid = _normalize_session_id(session_id)
         uid = int(user_id) if user_id and int(user_id) > 0 else 0
@@ -278,7 +296,7 @@ class AgentsClass:
                     user_id=uid,
                     customer_id=customer_id,
                     session_id=sid if uid == 0 else None,
-                    title=_title_from_text(text),
+                    title=_title_from_text(text or stored_user_message),
                     added_date=now,
                     updated_date=now,
                 )
@@ -289,7 +307,12 @@ class AgentsClass:
                 reply = assistant_reply.strip()
             else:
                 answer_result = self.answers(
-                    user_id, text, chat_id=chat.id, session_id=session_id
+                    user_id,
+                    text,
+                    chat_id=chat.id,
+                    session_id=session_id,
+                    attachments_context=attachments_context,
+                    image_attachments=image_attachments,
                 )
                 if answer_result.get('status') == 'error':
                     reply = (
@@ -306,12 +329,12 @@ class AgentsClass:
                 .first()
             )
             if not has_details:
-                chat.title = _title_from_text(text)
+                chat.title = _title_from_text(text or stored_user_message)
 
             user_detail = ChatDetailModel(
                 chat_id=chat.id,
                 chat_type_id=CHAT_TYPE_USER,
-                message=text,
+                message=stored_user_message,
                 added_date=now,
             )
             assistant_detail = ChatDetailModel(

@@ -8,6 +8,7 @@ try:
 except ImportError:
     OPENAI_AVAILABLE = False
 
+
 AGENT_PIE_INSTRUCTIONS = """Eres Agente Pie, asistente para equipos del Programa de Integración Escolar (PIE) en Chile.
 
 ÁMBITO DE TRABAJO — Todo lo relacionado con el PIE chileno está dentro de tu alcance. Eres un apoyo
@@ -105,10 +106,16 @@ class AgentsAiClass:
         self,
         user_message: str,
         history: Optional[List[Dict[str, str]]] = None,
+        attachments_context: Optional[str] = None,
+        image_attachments: Optional[List[Dict[str, str]]] = None,
     ) -> Tuple[Optional[str], Optional[str]]:
         text = (user_message or '').strip()
-        if not text:
-            return None, 'Message is required'
+        images = image_attachments or []
+        has_docs = bool((attachments_context or '').strip())
+        has_images = len(images) > 0
+
+        if not text and not has_docs and not has_images:
+            return None, 'Message or files are required'
 
         if not OPENAI_AVAILABLE:
             return None, 'La librería openai no está instalada en el backend.'
@@ -121,20 +128,59 @@ class AgentsAiClass:
             client = openai.OpenAI(api_key=api_key)
 
             instructions = AGENT_PIE_INSTRUCTIONS
-            rag_block = _rag_context(text)
+            rag_block = _rag_context(text or 'documento o imagen PIE adjunto')
             if rag_block:
                 instructions = (
                     f'{instructions}\n\nUsa como referencia principal la base de conocimiento '
                     f'cuando el contexto responda o enriquezca la pregunta:\n\n{rag_block}'
                 )
 
+            attach_block = (attachments_context or '').strip()
+            if attach_block:
+                instructions = (
+                    f'{instructions}\n\n{attach_block}\n\n'
+                    'Instrucción: El usuario adjuntó documento(s) de texto. Léelos y úsalos para '
+                    'analizar, resumir, redactar informes PIE o responder según su mensaje.'
+                )
+
+            if has_images:
+                instructions = (
+                    f'{instructions}\n\n'
+                    'El usuario adjuntó imagen(es). Obsérvalas con atención: pueden ser informes '
+                    'escaneados, formularios, capturas o material del establecimiento. Extrae el texto '
+                    'visible y responde en el marco del PIE chileno. Si la imagen no es legible, '
+                    'indícalo y pide una mejor foto o un PDF/DOCX.'
+                )
+
             history_block = _format_history(history or [])
             if history_block:
                 instructions = f'{instructions}\n\n{history_block}'
 
+            if has_images:
+                user_input = text or 'Analiza las imágenes adjuntas y responde según el contexto PIE chileno.'
+                if has_docs:
+                    user_input += ' También considera los documentos de texto adjuntos en las instrucciones.'
+                image_names = ', '.join(img.get('filename', 'imagen') for img in images)
+                user_input += f'\n\nImágenes adjuntas: {image_names}.'
+
+                content_parts: List[Dict[str, Any]] = [
+                    {'type': 'input_text', 'text': user_input},
+                ]
+                for img in images:
+                    content_parts.append(
+                        {
+                            'type': 'input_image',
+                            'image_url': img['image_url'],
+                        }
+                    )
+                api_input: Any = [{'role': 'user', 'content': content_parts}]
+            else:
+                user_input = text or 'Analiza los documentos adjuntos y responde según el contexto PIE chileno.'
+                api_input = user_input
+
             response = client.responses.create(
                 model=DEFAULT_MODEL,
-                input=text,
+                input=api_input,
                 instructions=instructions,
             )
             reply = (getattr(response, 'output_text', None) or '').strip()

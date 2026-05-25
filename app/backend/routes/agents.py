@@ -1,7 +1,7 @@
 from dataclasses import dataclass
-from typing import Optional
+from typing import Annotated, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
@@ -140,11 +140,73 @@ def save(
 
 
 @agents.post('/send')
-def send(
+async def send(
+    actor: AgentActor = Depends(get_agent_actor),
+    db: Session = Depends(get_db),
+    message: Annotated[str, Form()] = '',
+    chat_id: Annotated[Optional[int], Form()] = None,
+    session_id: Annotated[Optional[str], Form()] = None,
+    files: Annotated[List[UploadFile], File()] = [],
+):
+    session_id = _resolve_session_id(None, session_id) or actor.session_id
+
+    attachments_context = None
+    attachment_names: List[str] = []
+    image_attachments: List[Dict[str, str]] = []
+    file_payload: List[tuple] = []
+
+    for upload in files:
+        filename = (upload.filename or '').strip()
+        if not filename:
+            continue
+        content = await upload.read()
+        if content:
+            file_payload.append((filename, content))
+
+    if file_payload:
+        from app.backend.utils.agent_document_extractor import process_uploaded_files
+
+        attachments_context, image_attachments, attachment_names, extract_error = (
+            process_uploaded_files(file_payload)
+        )
+        if extract_error:
+            return _error_response({'status': 'error', 'message': extract_error})
+
+    text = (message or '').strip()
+    if not text and (attachment_names or image_attachments):
+        text = 'Analiza los archivos adjuntos en el contexto del PIE chileno.'
+
+    result = AgentsClass(db).send_message(
+        user_id=actor.user_id,
+        customer_id=actor.customer_id,
+        message=text,
+        chat_id=chat_id,
+        session_id=session_id,
+        attachments_context=attachments_context,
+        attachment_names=attachment_names,
+        image_attachments=image_attachments,
+    )
+
+    if isinstance(result, dict) and result.get('status') == 'error':
+        return _error_response(result, status.HTTP_400_BAD_REQUEST)
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            'status': 200,
+            'message': 'Message sent successfully',
+            'data': result,
+        },
+    )
+
+
+@agents.post('/send/json')
+def send_json(
     body: AgentsSendMessage,
     actor: AgentActor = Depends(get_agent_actor),
     db: Session = Depends(get_db),
 ):
+    """Compatibilidad: envío solo texto sin archivos."""
     session_id = _resolve_session_id(None, body.session_id) or actor.session_id
     result = AgentsClass(db).send_message(
         user_id=actor.user_id,
