@@ -132,7 +132,8 @@ from app.backend.schemas import (
     UserLogin,
     CreateDocumentRequest,
     DocumentListRequest,
-    UploadDocumentRequest
+    UploadDocumentRequest,
+    PaciProgressStatePdfRequest,
 )
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -3057,6 +3058,144 @@ async def register_book_car_preview(
             "debug_file_after_generate": "files/system/students/register_book_car_debug.txt",
         },
     )
+
+
+def _student_age_label(born_date_str: str, reference_date: Optional[date] = None) -> str:
+    if not born_date_str:
+        return ""
+    try:
+        born_date = None
+        for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d", "%d-%m-%Y"):
+            try:
+                born_date = datetime.strptime(str(born_date_str).strip()[:10], fmt).date()
+                break
+            except Exception:
+                continue
+        if not born_date:
+            return ""
+        ref = reference_date or datetime.now().date()
+        years = ref.year - born_date.year
+        months = ref.month - born_date.month
+        if months < 0:
+            years -= 1
+            months += 12
+        elif months == 0 and ref.day < born_date.day:
+            years -= 1
+            months = 11
+        if years > 0:
+            if months > 0:
+                return f"{years} año{'s' if years != 1 else ''} y {months} mes{'es' if months != 1 else ''}"
+            return f"{years} año{'s' if years != 1 else ''}"
+        if months > 0:
+            return f"{months} mes{'es' if months != 1 else ''}"
+    except Exception:
+        pass
+    return ""
+
+
+@documents.post("/generate/{student_id}/21/progress-state")
+async def generate_paci_progress_state_pdf(
+    student_id: int,
+    body: PaciProgressStatePdfRequest,
+    session_user: UserLogin = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Genera PDF de estado de avance PACI para una asignatura y período (EA)."""
+    MSG_ERROR_GEN = "Error generando documento."
+    try:
+        student_service = StudentClass(db)
+        student_result = student_service.get(student_id)
+        if isinstance(student_result, dict) and (
+            student_result.get("error") or student_result.get("status") == "error"
+        ):
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"status": 404, "message": "Estudiante no encontrado", "data": None},
+            )
+
+        student_data = student_result.get("student_data", {}) if isinstance(student_result, dict) else {}
+        personal = student_data.get("personal_data") or {}
+        academic = student_data.get("academic_info") or {}
+
+        student_name = (personal.get("names") or "").strip()
+        student_lastname = f"{personal.get('father_lastname', '')} {personal.get('mother_lastname', '')}".strip()
+        student_fullname = f"{student_name} {student_lastname}".strip()
+
+        ref_date = datetime.now().date()
+        if body.date_to:
+            try:
+                ref_date = datetime.strptime(str(body.date_to)[:10], "%Y-%m-%d").date()
+            except Exception:
+                pass
+
+        born_date = personal.get("born_date") or ""
+        school_name = ""
+        if student_data.get("school_id"):
+            school = db.query(SchoolModel).filter(SchoolModel.id == student_data["school_id"]).first()
+            if school and school.school_name:
+                school_name = school.school_name
+        course_name = ""
+        if academic.get("course_id"):
+            course = (
+                db.query(CourseModel)
+                .filter(CourseModel.deleted_status_id == 0, CourseModel.id == academic["course_id"])
+                .first()
+            )
+            if course and course.course_name:
+                course_name = course.course_name
+
+        nee_name = ""
+        nee_id = academic.get("special_educational_need_id")
+        if nee_id:
+            nee = db.query(SpecialEducationalNeedModel).filter(SpecialEducationalNeedModel.id == nee_id).first()
+            if nee and nee.special_educational_needs:
+                nee_name = nee.special_educational_needs
+
+        paci_data = {
+            "subject_id": body.subject_id,
+            "subject_name": body.subject_name or "",
+            "entry_code": body.entry_code or "",
+            "progress_entry_id": body.progress_entry_id or "",
+            "date_from": body.date_from or "",
+            "date_to": body.date_to or "",
+            "observations": body.observations or "",
+            "responsible_professionals": body.responsible_professionals or "",
+            "signature_name": body.signature_name or "",
+            "signature_role": body.signature_role or "",
+            "signature_rut": body.signature_rut or "",
+            "signature_secreduc": body.signature_secreduc or "",
+            "student_full_name": body.student_full_name or student_fullname,
+            "student_rut": body.student_rut or personal.get("identification_number") or "",
+            "student_born_date": body.student_born_date or born_date or "",
+            "student_age": body.student_age or _student_age_label(str(born_date), ref_date),
+            "student_nee": body.student_nee or nee_name or "",
+            "student_school": body.student_school or school_name or "",
+            "student_course": body.student_course or course_name or "",
+        }
+
+        result = DocumentsClass.generate_document_pdf(
+            document_id=21,
+            document_data=paci_data,
+            db=db,
+            template_path=None,
+            output_directory="files/system/students",
+        )
+        if result.get("status") == "error":
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={"status": 500, "message": result.get("message", MSG_ERROR_GEN), "data": None},
+            )
+        return FileResponse(
+            path=result["file_path"],
+            filename=result["filename"],
+            media_type="application/pdf",
+        )
+    except Exception as e:
+        logger.exception("generate_paci_progress_state_pdf")
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"status": 500, "message": str(e), "data": None},
+        )
 
 
 @documents.get("/generate/{student_id}/{document_id}")

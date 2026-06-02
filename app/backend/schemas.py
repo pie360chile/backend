@@ -2120,6 +2120,29 @@ class AuditList(BaseModel):
     per_page: int = 10
     user_id: Optional[int] = None
 
+# PACI / ICAP – PDF estado de avance por asignatura (documento 21)
+class PaciProgressStatePdfRequest(BaseModel):
+    subject_id: int
+    subject_name: Optional[str] = None
+    progress_entry_id: Optional[str] = None
+    entry_code: Optional[str] = None
+    date_from: Optional[str] = None
+    date_to: Optional[str] = None
+    observations: Optional[str] = None
+    responsible_professionals: Optional[str] = None
+    signature_name: Optional[str] = None
+    signature_role: Optional[str] = None
+    signature_rut: Optional[str] = None
+    signature_secreduc: Optional[str] = None
+    student_full_name: Optional[str] = None
+    student_rut: Optional[str] = None
+    student_born_date: Optional[str] = None
+    student_age: Optional[str] = None
+    student_nee: Optional[str] = None
+    student_school: Optional[str] = None
+    student_course: Optional[str] = None
+
+
 # Progress Status Individual Support schemas (Estado de avance PAI - Documento 19)
 class PaiObjectiveSchema(BaseModel):
     id: Optional[int] = None
