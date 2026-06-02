@@ -110,8 +110,15 @@ class DocumentsClass:
                     output_directory=output_directory
                 )
             
-            # Si es documento 21 (Estado de avance PACI por asignatura), usar función específica
+            # Si es documento 21 (PACI completo o estado de avance)
             if document_id == 21:
+                if document_data.get("paci_full"):
+                    return DocumentsClass._generate_paci_full_from_scratch(
+                        document_id=document_id,
+                        paci_data=document_data,
+                        db=db,
+                        output_directory=output_directory,
+                    )
                 if document_data.get("integral_sections"):
                     return DocumentsClass._generate_paci_integral_progress_state_from_scratch(
                         document_id=document_id,
@@ -119,12 +126,19 @@ class DocumentsClass:
                         db=db,
                         output_directory=output_directory,
                     )
-                return DocumentsClass._generate_paci_progress_state_from_scratch(
-                    document_id=document_id,
-                    paci_data=document_data,
-                    db=db,
-                    output_directory=output_directory
-                )
+                if document_data.get("entry_code") or document_data.get("progress_entry_id"):
+                    return DocumentsClass._generate_paci_progress_state_from_scratch(
+                        document_id=document_id,
+                        paci_data=document_data,
+                        db=db,
+                        output_directory=output_directory
+                    )
+                return {
+                    "status": "error",
+                    "message": "Datos insuficientes para generar el documento PACI (use paci_full o estado de avance).",
+                    "filename": None,
+                    "file_path": None,
+                }
 
             # Si es documento 22 (Plan de Apoyo Individual), usar función específica
             if document_id == 22:
@@ -3684,6 +3698,356 @@ class DocumentsClass:
                 "message": f"Error generando PDF Estado de Avance PAI: {str(e)}",
                 "filename": None,
                 "file_path": None
+            }
+
+    @staticmethod
+    def _generate_paci_full_from_scratch(
+        document_id: int,
+        paci_data: Dict[str, Any],
+        db: Optional[Session] = None,
+        output_directory: str = "files/system/students",
+    ) -> Dict[str, Any]:
+        """Genera PDF completo «Plan de Adecuación Curricular Individual - PACI» (documento 21)."""
+        try:
+            if not REPORTLAB_AVAILABLE:
+                return {
+                    "status": "error",
+                    "message": "ReportLab no está instalado. Instala con: pip install reportlab",
+                    "filename": None,
+                    "file_path": None,
+                }
+
+            student_name_safe = (paci_data.get("student_full_name") or "estudiante").replace(" ", "_")[:40]
+            unique_filename = f"paci_{student_name_safe}_{uuid.uuid4().hex[:8]}.pdf"
+            output_file = Path(output_directory) / unique_filename
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+
+            doc = SimpleDocTemplate(
+                str(output_file),
+                pagesize=A4,
+                rightMargin=2 * cm,
+                leftMargin=2 * cm,
+                topMargin=2.2 * cm,
+                bottomMargin=2 * cm,
+            )
+            elements = []
+            styles = getSampleStyleSheet()
+            header_bg = colors.HexColor("#6B7280")
+            header_text = colors.white
+
+            title_style = ParagraphStyle(
+                "PaciFullTitle",
+                parent=styles["Heading1"],
+                fontSize=14,
+                alignment=TA_CENTER,
+                fontName="Helvetica-Bold",
+                spaceAfter=16,
+            )
+            section_style = ParagraphStyle(
+                "PaciFullSection",
+                parent=styles["Normal"],
+                fontSize=11,
+                fontName="Helvetica-Bold",
+                spaceBefore=12,
+                spaceAfter=8,
+            )
+            subtitle_style = ParagraphStyle(
+                "PaciFullSubtitle",
+                parent=styles["Normal"],
+                fontSize=10,
+                fontName="Helvetica-Bold",
+                spaceBefore=8,
+                spaceAfter=4,
+            )
+            normal_style = ParagraphStyle(
+                "PaciFullNormal",
+                parent=styles["Normal"],
+                fontSize=9,
+                leading=11,
+                spaceAfter=3,
+            )
+            label_style = ParagraphStyle(
+                "PaciFullLabel",
+                parent=styles["Normal"],
+                fontSize=9,
+                fontName="Helvetica-Bold",
+                backColor=colors.HexColor("#F5F5F5"),
+                borderPadding=3,
+            )
+            small_style = ParagraphStyle(
+                "PaciFullSmall",
+                parent=normal_style,
+                fontSize=8,
+                leading=10,
+            )
+
+            def esc(text: str) -> str:
+                return (text or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+            def get_value(key: str, default: str = "") -> str:
+                value = paci_data.get(key)
+                if value is None:
+                    return default
+                return str(value).strip() if value else default
+
+            def format_date(date_str: Optional[str]) -> str:
+                if not date_str:
+                    return ""
+                s = str(date_str).strip()[:10]
+                if not s:
+                    return ""
+                for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%Y/%m/%d"):
+                    try:
+                        return datetime.strptime(s, fmt).date().strftime("%d/%m/%Y")
+                    except Exception:
+                        continue
+                return s
+
+            def cell_label(text: str) -> Paragraph:
+                return Paragraph(f"<b>{esc(text)}</b>", label_style)
+
+            def cell_value(text: str, style: Optional[ParagraphStyle] = None) -> Paragraph:
+                return Paragraph(esc(text) or "—", style or normal_style)
+
+            def table_style_base(extra: Optional[List] = None) -> TableStyle:
+                rules = [
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                    ("TOPPADDING", (0, 0), (-1, -1), 5),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CCCCCC")),
+                ]
+                if extra:
+                    rules.extend(extra)
+                return TableStyle(rules)
+
+            def header_table_row(labels: List[str]) -> List[Paragraph]:
+                return [
+                    Paragraph(f"<b><font color='white'>{esc(lbl)}</font></b>", normal_style)
+                    for lbl in labels
+                ]
+
+            def add_section_title(text: str) -> None:
+                elements.append(Paragraph(esc(text), section_style))
+
+            def add_text_block(label: str, value: str) -> None:
+                if not label and not value:
+                    return
+                elements.append(Paragraph(f"<b>{esc(label)}</b>", subtitle_style))
+                elements.append(cell_value(value))
+                elements.append(Spacer(1, 0.08 * inch))
+
+            def nl_to_br(text: str) -> str:
+                return esc(text).replace("\n", "<br/>")
+
+            elements.append(
+                Paragraph("Plan de Adecuación Curricular Individual - PACI", title_style)
+            )
+
+            add_section_title("I. Identificación del/la estudiante")
+            id_rows = [
+                [cell_label("Nombre"), cell_label("RUT")],
+                [cell_value(get_value("student_full_name")), cell_value(get_value("student_rut"))],
+                [cell_label("Fecha Nacimiento"), cell_label("Edad")],
+                [
+                    cell_value(format_date(get_value("student_born_date"))),
+                    cell_value(get_value("student_age")),
+                ],
+                [cell_label("NEE"), cell_label("Fecha de informe")],
+                [
+                    cell_value(get_value("student_nee")),
+                    cell_value(format_date(get_value("report_date"))),
+                ],
+                [cell_label("Establecimiento"), cell_label("Curso")],
+                [
+                    cell_value(get_value("student_school")),
+                    cell_value(get_value("student_course")),
+                ],
+            ]
+            id_table = Table(id_rows, colWidths=[8.5 * cm, 8.5 * cm])
+            id_table.setStyle(table_style_base())
+            elements.append(id_table)
+            elements.append(Spacer(1, 0.15 * inch))
+
+            add_section_title("II. Responsables de la elaboración y aplicación del PACI")
+            profs = paci_data.get("professionals") or []
+            if profs:
+                prof_rows = [
+                    header_table_row(["Nombre", "Profesión/cargo", "Roles y funciones"]),
+                ]
+                for p in profs:
+                    prof_rows.append(
+                        [
+                            cell_value(p.get("name") or ""),
+                            cell_value(p.get("professional_role") or ""),
+                            cell_value(p.get("support_roles") or ""),
+                        ]
+                    )
+                prof_table = Table(prof_rows, colWidths=[5.5 * cm, 5.5 * cm, 6 * cm])
+                prof_style = table_style_base(
+                    [
+                        ("BACKGROUND", (0, 0), (-1, 0), header_bg),
+                        ("TEXTCOLOR", (0, 0), (-1, 0), header_text),
+                    ]
+                )
+                prof_table.setStyle(prof_style)
+                elements.append(prof_table)
+            else:
+                elements.append(cell_value("—"))
+            elements.append(Spacer(1, 0.15 * inch))
+
+            add_section_title("III. Responsabilidades y compromisos de la familia")
+            family = paci_data.get("family_members") or []
+            if family:
+                fam_rows = [
+                    header_table_row(
+                        ["Nombre", "Relación con el/la estudiante", "Responsabilidades y compromisos"]
+                    ),
+                ]
+                for f in family:
+                    fam_rows.append(
+                        [
+                            cell_value(f.get("name") or ""),
+                            cell_value(f.get("relationship") or ""),
+                            cell_value(f.get("responsibilities") or ""),
+                        ]
+                    )
+                fam_table = Table(fam_rows, colWidths=[5.5 * cm, 5 * cm, 6.5 * cm])
+                fam_table.setStyle(
+                    table_style_base(
+                        [
+                            ("BACKGROUND", (0, 0), (-1, 0), header_bg),
+                            ("TEXTCOLOR", (0, 0), (-1, 0), header_text),
+                        ]
+                    )
+                )
+                elements.append(fam_table)
+            else:
+                elements.append(cell_value("—"))
+            elements.append(Spacer(1, 0.15 * inch))
+
+            add_section_title("IV. Antecedentes")
+            add_text_block(
+                "Fortalezas y aprendizajes curriculares logrados",
+                get_value("school_background"),
+            )
+            add_text_block(
+                "Necesidades de apoyo y áreas en que se requieren medidas especializadas",
+                get_value("evaluation_background"),
+            )
+
+            add_section_title("V. Adecuaciones curriculares")
+            subjects = paci_data.get("curricular_subjects") or []
+            if not subjects:
+                elements.append(cell_value("—"))
+            for subj in subjects:
+                subj_name = subj.get("subject_name") or "Asignatura"
+                elements.append(Paragraph(f"<b>{esc(subj_name)}</b>", subtitle_style))
+                add_text_block(
+                    "Tipo de adecuación en los objetivos de aprendizaje",
+                    subj.get("adaptation_type") or "",
+                )
+                los = subj.get("learning_objectives") or []
+                if los:
+                    oa_rows = [
+                        header_table_row(
+                            ["Objetivos de aprendizaje del nivel", "Objetivos y adecuaciones"]
+                        ),
+                    ]
+                    for lo in los:
+                        code = lo.get("level_code") or ""
+                        desc = lo.get("level_description") or ""
+                        if lo.get("is_not_adapted"):
+                            left = f"{code}: (OA sin adecuación) {desc}".strip(": ").strip()
+                        else:
+                            left = f"{code}: {desc}".strip(": ").strip() if code else desc
+                        right_lines = []
+                        if lo.get("oa_not_worked"):
+                            right_lines.append("Este OA no se trabajará")
+                        adapted = lo.get("adapted_description") or ""
+                        if adapted:
+                            right_lines.append(adapted)
+                        indicators = lo.get("achievement_indicators") or []
+                        if lo.get("achievement_indicators_enabled") and indicators:
+                            right_lines.append("Indicadores de logro:")
+                            for ind in indicators:
+                                t = (ind.get("text") or "").strip()
+                                if t:
+                                    right_lines.append(f"• {t}")
+                        right_text = "\n".join(right_lines)
+                        oa_rows.append(
+                            [
+                                Paragraph(esc(left), small_style),
+                                Paragraph(nl_to_br(right_text) or "—", small_style),
+                            ]
+                        )
+                    oa_table = Table(oa_rows, colWidths=[8.5 * cm, 8.5 * cm])
+                    oa_table.setStyle(
+                        table_style_base(
+                            [
+                                ("BACKGROUND", (0, 0), (-1, 0), header_bg),
+                                ("TEXTCOLOR", (0, 0), (-1, 0), header_text),
+                            ]
+                        )
+                    )
+                    elements.append(oa_table)
+                    elements.append(Spacer(1, 0.1 * inch))
+                add_text_block(
+                    "Estrategia(s) que se usará(n) para lograr los objetivos propuestos",
+                    subj.get("strategies") or "",
+                )
+
+            add_section_title("VI. Recursos humanos y materiales necesarios")
+            res_rows = [
+                [
+                    Paragraph("<b>Recursos humanos</b>", subtitle_style),
+                    Paragraph("<b>Recursos materiales</b>", subtitle_style),
+                ],
+                [
+                    Paragraph(nl_to_br(get_value("human_resources")) or "—", small_style),
+                    Paragraph(nl_to_br(get_value("material_resources")) or "—", small_style),
+                ],
+            ]
+            res_table = Table(res_rows, colWidths=[8.5 * cm, 8.5 * cm])
+            res_table.setStyle(table_style_base())
+            elements.append(res_table)
+            elements.append(Spacer(1, 0.15 * inch))
+
+            add_section_title("VIII. Criterio de evaluación y promoción")
+            add_text_block(
+                "Criterios de adaptación durante las evaluaciones",
+                get_value("evaluation_adaptation_criteria"),
+            )
+            add_text_block(
+                "Evaluación de los resultados de aprendizajes",
+                get_value("learning_results_evaluation"),
+            )
+            promo = get_value("evaluation_promotion_criteria")
+            if promo:
+                add_text_block("Criterios de promoción", promo)
+
+            doc.build(elements)
+            return {
+                "status": "success",
+                "message": "PDF generado exitosamente",
+                "filename": unique_filename,
+                "file_path": str(output_file),
+            }
+        except ImportError:
+            return {
+                "status": "error",
+                "message": "ReportLab no está instalado.",
+                "filename": None,
+                "file_path": None,
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Error generando PDF PACI completo: {str(e)}",
+                "filename": None,
+                "file_path": None,
             }
 
     @staticmethod

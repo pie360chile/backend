@@ -2178,6 +2178,63 @@ class PaciIntegralProgressStatePdfRequest(BaseModel):
     sections: List[PaciProgressStateSectionPdf]
 
 
+class PaciFullPdfProfessional(BaseModel):
+    name: Optional[str] = None
+    professional_role: Optional[str] = None
+    support_roles: Optional[str] = None
+
+
+class PaciFullPdfFamilyMember(BaseModel):
+    name: Optional[str] = None
+    relationship: Optional[str] = None
+    responsibilities: Optional[str] = None
+
+
+class PaciFullPdfAchievementIndicator(BaseModel):
+    text: Optional[str] = None
+
+
+class PaciFullPdfLearningObjective(BaseModel):
+    level_code: Optional[str] = None
+    level_description: Optional[str] = None
+    is_priority: Optional[bool] = False
+    adapted_description: Optional[str] = None
+    adapted_level_code: Optional[str] = None
+    is_not_adapted: Optional[bool] = False
+    oa_not_worked: Optional[bool] = False
+    achievement_indicators_enabled: Optional[bool] = False
+    achievement_indicators: Optional[List[PaciFullPdfAchievementIndicator]] = None
+
+
+class PaciFullPdfCurricularSubject(BaseModel):
+    subject_name: Optional[str] = None
+    adaptation_type: Optional[str] = None
+    strategies: Optional[str] = None
+    learning_objectives: Optional[List[PaciFullPdfLearningObjective]] = None
+
+
+class PaciFullPdfRequest(BaseModel):
+    paci_full: bool = True
+    student_full_name: Optional[str] = None
+    student_rut: Optional[str] = None
+    student_born_date: Optional[str] = None
+    student_age: Optional[str] = None
+    student_nee: Optional[str] = None
+    student_school: Optional[str] = None
+    student_course: Optional[str] = None
+    report_date: Optional[str] = None
+    school_background: Optional[str] = None
+    evaluation_background: Optional[str] = None
+    human_resources: Optional[str] = None
+    material_resources: Optional[str] = None
+    evaluation_adaptation_criteria: Optional[str] = None
+    learning_results_evaluation: Optional[str] = None
+    evaluation_promotion_criteria: Optional[str] = None
+    professionals: Optional[List[PaciFullPdfProfessional]] = None
+    family_members: Optional[List[PaciFullPdfFamilyMember]] = None
+    curricular_subjects: Optional[List[PaciFullPdfCurricularSubject]] = None
+
+
 # Progress Status Individual Support schemas (Estado de avance PAI - Documento 19)
 class PaiObjectiveSchema(BaseModel):
     id: Optional[int] = None

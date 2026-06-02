@@ -135,6 +135,7 @@ from app.backend.schemas import (
     UploadDocumentRequest,
     PaciProgressStatePdfRequest,
     PaciIntegralProgressStatePdfRequest,
+    PaciFullPdfRequest,
 )
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -3111,6 +3112,142 @@ def _resolve_paci_signature_rut(
     return (professional_display_fields(db, prof).rut or "").strip()
 
 
+@documents.post("/generate/{student_id}/21/full")
+async def generate_paci_full_pdf(
+    student_id: int,
+    body: PaciFullPdfRequest,
+    session_user: UserLogin = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Genera PDF completo del Plan de Adecuación Curricular Individual (PACI)."""
+    MSG_ERROR_GEN = "Error generando documento."
+    try:
+        student_service = StudentClass(db)
+        student_result = student_service.get(student_id)
+        if isinstance(student_result, dict) and (
+            student_result.get("error") or student_result.get("status") == "error"
+        ):
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"status": 404, "message": "Estudiante no encontrado", "data": None},
+            )
+
+        student_data = student_result.get("student_data", {}) if isinstance(student_result, dict) else {}
+        personal = student_data.get("personal_data") or {}
+        academic = student_data.get("academic_info") or {}
+
+        student_name = (personal.get("names") or "").strip()
+        student_lastname = f"{personal.get('father_lastname', '')} {personal.get('mother_lastname', '')}".strip()
+        student_fullname = f"{student_name} {student_lastname}".strip()
+
+        school_name = ""
+        if student_data.get("school_id"):
+            school = db.query(SchoolModel).filter(SchoolModel.id == student_data["school_id"]).first()
+            if school and school.school_name:
+                school_name = school.school_name
+        course_name = ""
+        if academic.get("course_id"):
+            course = (
+                db.query(CourseModel)
+                .filter(CourseModel.deleted_status_id == 0, CourseModel.id == academic["course_id"])
+                .first()
+            )
+            if course and course.course_name:
+                course_name = course.course_name
+
+        nee_name = ""
+        nee_id = academic.get("special_educational_need_id")
+        if nee_id:
+            nee = db.query(SpecialEducationalNeedModel).filter(SpecialEducationalNeedModel.id == nee_id).first()
+            if nee and nee.special_educational_needs:
+                nee_name = nee.special_educational_needs
+
+        born_date = personal.get("born_date") or ""
+        paci_data = {
+            "paci_full": True,
+            "student_full_name": body.student_full_name or student_fullname,
+            "student_rut": body.student_rut or personal.get("identification_number") or "",
+            "student_born_date": body.student_born_date or born_date or "",
+            "student_age": body.student_age or _student_age_label(str(born_date), date.today()),
+            "student_nee": body.student_nee or nee_name or "",
+            "student_school": body.student_school or school_name or "",
+            "student_course": body.student_course or course_name or "",
+            "report_date": body.report_date or "",
+            "school_background": body.school_background or "",
+            "evaluation_background": body.evaluation_background or "",
+            "human_resources": body.human_resources or "",
+            "material_resources": body.material_resources or "",
+            "evaluation_adaptation_criteria": body.evaluation_adaptation_criteria or "",
+            "learning_results_evaluation": body.learning_results_evaluation or "",
+            "evaluation_promotion_criteria": body.evaluation_promotion_criteria or "",
+            "professionals": [
+                {
+                    "name": p.name or "",
+                    "professional_role": p.professional_role or "",
+                    "support_roles": p.support_roles or "",
+                }
+                for p in (body.professionals or [])
+            ],
+            "family_members": [
+                {
+                    "name": f.name or "",
+                    "relationship": f.relationship or "",
+                    "responsibilities": f.responsibilities or "",
+                }
+                for f in (body.family_members or [])
+            ],
+            "curricular_subjects": [
+                {
+                    "subject_name": s.subject_name or "",
+                    "adaptation_type": s.adaptation_type or "",
+                    "strategies": s.strategies or "",
+                    "learning_objectives": [
+                        {
+                            "level_code": lo.level_code or "",
+                            "level_description": lo.level_description or "",
+                            "is_priority": bool(lo.is_priority),
+                            "adapted_description": lo.adapted_description or "",
+                            "adapted_level_code": lo.adapted_level_code,
+                            "is_not_adapted": bool(lo.is_not_adapted),
+                            "oa_not_worked": bool(lo.oa_not_worked),
+                            "achievement_indicators_enabled": bool(lo.achievement_indicators_enabled),
+                            "achievement_indicators": [
+                                {"text": ind.text or ""}
+                                for ind in (lo.achievement_indicators or [])
+                            ],
+                        }
+                        for lo in (s.learning_objectives or [])
+                    ],
+                }
+                for s in (body.curricular_subjects or [])
+            ],
+        }
+
+        result = DocumentsClass.generate_document_pdf(
+            document_id=21,
+            document_data=paci_data,
+            db=db,
+            template_path=None,
+            output_directory="files/system/students",
+        )
+        if result.get("status") == "error":
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={"status": 500, "message": result.get("message", MSG_ERROR_GEN), "data": None},
+            )
+        return FileResponse(
+            path=result["file_path"],
+            filename=result["filename"],
+            media_type="application/pdf",
+        )
+    except Exception as e:
+        logger.exception("generate_paci_full_pdf")
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"status": 500, "message": str(e), "data": None},
+        )
+
+
 @documents.post("/generate/{student_id}/21/progress-state")
 async def generate_paci_progress_state_pdf(
     student_id: int,
@@ -3474,7 +3611,7 @@ async def generate_document(
         document = DocumentsClass(db)
         document_result = document.get(document_id)
         # Documentos 3,4,7,8,18,19,22,23,24,25,27 se pueden generar aunque no existan en la tabla documents
-        known_generable = (3, 4, 7, 8, 9, 18, 19, 20, 22, 23, 24, 25, 27, 29, 31, 43)
+        known_generable = (3, 4, 7, 8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 27, 29, 31, 43)
         if isinstance(document_result, dict) and document_result.get("status") == "error":
             if document_id in known_generable or _catalog_row_is_informe_evaluacion_psicomotriz(document_id, db):
                 document_result = {"document_type_id": document_id}
