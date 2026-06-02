@@ -3701,6 +3701,142 @@ class DocumentsClass:
             }
 
     @staticmethod
+    def _append_paci_progress_objectives_block(
+        elements: List[Any],
+        progress_rows: List[Dict[str, Any]],
+        *,
+        section_style: Any,
+        subtitle_style: Any,
+        normal_style: Any,
+        label_style: Any,
+        small_style: Any,
+        header_bg: Any,
+        header_text: Any,
+        observations: str = "",
+    ) -> None:
+        """Tabla «Objetivos de aprendizaje | Estado» con filas de indicadores (como diversi.cl)."""
+        if not progress_rows:
+            return
+
+        def esc(text: str) -> str:
+            return (text or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+        def cell_label(text: str) -> Paragraph:
+            return Paragraph(f"<b>{esc(text)}</b>", label_style)
+
+        def cell_value(text: str, style: Any = None) -> Paragraph:
+            return Paragraph(esc(text) or "—", style or small_style)
+
+        elements.append(Paragraph("II. Progreso en los objetivos de aprendizaje", section_style))
+        elements.append(Spacer(1, 0.1 * inch))
+
+        table_rows: List[List[Any]] = [
+            [
+                "",
+                Paragraph(
+                    "<b><font color='white'>Objetivos de aprendizaje</font></b>",
+                    small_style,
+                ),
+                Paragraph(
+                    "<b><font color='white'>Estado</font></b>",
+                    small_style,
+                ),
+            ]
+        ]
+        span_rules: List[Any] = []
+        row_idx = 1
+        i = 0
+        while i < len(progress_rows):
+            row = progress_rows[i] if isinstance(progress_rows[i], dict) else {}
+            kind = str(row.get("kind") or "oa")
+            if kind == "indicator" and row.get("show_indicators_label"):
+                j = i
+                while j < len(progress_rows):
+                    rj = progress_rows[j] if isinstance(progress_rows[j], dict) else {}
+                    if str(rj.get("kind") or "") != "indicator":
+                        break
+                    j += 1
+                group_len = j - i
+                for k in range(i, j):
+                    rk = progress_rows[k] if isinstance(progress_rows[k], dict) else {}
+                    status = rk.get("status") or rk.get("rating") or ""
+                    if k == i:
+                        table_rows.append(
+                            [
+                                cell_label("Indicadores"),
+                                cell_value(rk.get("description") or ""),
+                                cell_value(status),
+                            ]
+                        )
+                    else:
+                        table_rows.append(
+                            [
+                                "",
+                                cell_value(rk.get("description") or ""),
+                                cell_value(status),
+                            ]
+                        )
+                if group_len > 1:
+                    span_rules.append(("SPAN", (0, row_idx), (0, row_idx + group_len - 1)))
+                    span_rules.append(
+                        ("VALIGN", (0, row_idx), (0, row_idx + group_len - 1), "MIDDLE")
+                    )
+                row_idx += group_len
+                i = j
+            else:
+                status = row.get("status") or row.get("rating") or ""
+                table_rows.append(
+                    [
+                        "",
+                        cell_value(row.get("description") or ""),
+                        cell_value(status),
+                    ]
+                )
+                row_idx += 1
+                i += 1
+
+        col_widths = [1.4 * cm, 12.2 * cm, 4.4 * cm]
+        table = Table(table_rows, colWidths=col_widths)
+        style_rules = [
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+            ("ALIGN", (2, 1), (2, -1), "CENTER"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CCCCCC")),
+            ("BACKGROUND", (0, 0), (-1, 0), header_bg),
+            ("TEXTCOLOR", (0, 0), (-1, 0), header_text),
+        ]
+        style_rules.extend(span_rules)
+        table.setStyle(TableStyle(style_rules))
+        elements.append(table)
+        elements.append(Spacer(1, 0.12 * inch))
+
+        obs_rows = [
+            [cell_label("Observaciones")],
+            [cell_value(observations, normal_style)],
+        ]
+        obs_table = Table(obs_rows, colWidths=[17 * cm])
+        obs_table.setStyle(
+            TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                    ("TOPPADDING", (0, 0), (-1, -1), 8),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CCCCCC")),
+                    ("MINROWHEIGHT", (0, 1), (0, 1), 2.5 * cm),
+                ]
+            )
+        )
+        elements.append(obs_table)
+        elements.append(Spacer(1, 0.2 * inch))
+
+    @staticmethod
     def _generate_paci_full_from_scratch(
         document_id: int,
         paci_data: Dict[str, Any],
@@ -4015,6 +4151,46 @@ class DocumentsClass:
             elements.append(res_table)
             elements.append(Spacer(1, 0.15 * inch))
 
+            progress_entries = paci_data.get("progress_entries") or []
+            if progress_entries:
+                add_section_title("VII. Estado de avance")
+                for entry in progress_entries:
+                    entry_code = entry.get("entry_code") or ""
+                    subject_name = entry.get("subject_name") or ""
+                    if subject_name or entry_code:
+                        title_parts = [p for p in [subject_name, entry_code] if p]
+                        elements.append(
+                            Paragraph(
+                                f"<b>{esc(' — '.join(title_parts))}</b>",
+                                subtitle_style,
+                            )
+                        )
+                    meta_parts = []
+                    if entry.get("date_from") or entry.get("date_to"):
+                        meta_parts.append(
+                            f"Período: {format_date(entry.get('date_from'))} — {format_date(entry.get('date_to'))}"
+                        )
+                    if entry.get("responsible_professionals"):
+                        meta_parts.append(
+                            f"Profesional/es: {esc(entry.get('responsible_professionals'))}"
+                        )
+                    for line in meta_parts:
+                        elements.append(Paragraph(line, normal_style))
+                    if meta_parts:
+                        elements.append(Spacer(1, 0.06 * inch))
+                    DocumentsClass._append_paci_progress_objectives_block(
+                        elements,
+                        entry.get("progress_rows") or [],
+                        section_style=section_style,
+                        subtitle_style=subtitle_style,
+                        normal_style=normal_style,
+                        label_style=label_style,
+                        small_style=small_style,
+                        header_bg=header_bg,
+                        header_text=header_text,
+                        observations=entry.get("observations") or "",
+                    )
+
             add_section_title("VIII. Criterio de evaluación y promoción")
             add_text_block(
                 "Criterios de adaptación durante las evaluaciones",
@@ -4209,30 +4385,44 @@ class DocumentsClass:
                 elements.append(Paragraph(f"Asignatura: {esc(subject_name)}", normal_style))
                 elements.append(Spacer(1, 0.1 * inch))
 
-            elements.append(Paragraph("II. Progreso en los objetivos de aprendizaje", section_style))
-            elements.append(Spacer(1, 0.12 * inch))
-
-            obs_rows = [
-                [cell_label("Observaciones")],
-                [cell_value(get_value("observations"))],
-            ]
-            obs_table = Table(obs_rows, colWidths=[16.8 * cm])
-            obs_table.setStyle(
-                TableStyle(
-                    [
-                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-                        ("LEFTPADDING", (0, 0), (-1, -1), 8),
-                        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-                        ("TOPPADDING", (0, 0), (-1, -1), 8),
-                        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-                        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CCCCCC")),
-                        ("MINROWHEIGHT", (0, 1), (0, 1), 2.5 * cm),
-                    ]
-                )
+            progress_rows = paci_data.get("progress_rows") or []
+            if not progress_rows:
+                oa_rows_legacy = paci_data.get("oa_rows") or []
+                progress_rows = [
+                    {
+                        "kind": "oa",
+                        "description": r.get("description") or "",
+                        "status": r.get("rating") or "",
+                    }
+                    for r in oa_rows_legacy
+                    if isinstance(r, dict)
+                ]
+            header_bg_prog = colors.HexColor("#6B7280")
+            DocumentsClass._append_paci_progress_objectives_block(
+                elements,
+                progress_rows,
+                section_style=section_style,
+                subtitle_style=ParagraphStyle(
+                    "PaciProgressSubtitle",
+                    parent=normal_style,
+                    fontSize=10,
+                    fontName="Helvetica-Bold",
+                    spaceBefore=8,
+                    spaceAfter=4,
+                ),
+                normal_style=normal_style,
+                label_style=label_style,
+                small_style=ParagraphStyle(
+                    "PaciProgressSmall",
+                    parent=normal_style,
+                    fontSize=9,
+                    leading=11,
+                ),
+                header_bg=header_bg_prog,
+                header_text=colors.white,
+                observations=get_value("observations"),
             )
-            elements.append(obs_table)
-            elements.append(Spacer(1, 0.5 * inch))
+            elements.append(Spacer(1, 0.3 * inch))
 
             sig_name = get_value("signature_name")
             sig_role = get_value("signature_role")

@@ -2135,6 +2135,7 @@ class PaciProgressStatePdfRequest(BaseModel):
     signature_rut: Optional[str] = None
     signature_professional_id: Optional[int] = None
     signature_secreduc: Optional[str] = None
+    progress_rows: Optional[List[PaciProgressRowPdf]] = None
     student_full_name: Optional[str] = None
     student_rut: Optional[str] = None
     student_born_date: Optional[str] = None
@@ -2148,6 +2149,13 @@ class PaciProgressOaRowPdf(BaseModel):
     description: Optional[str] = None
     rating: Optional[str] = None
     rating_short: Optional[str] = None
+
+
+class PaciProgressRowPdf(BaseModel):
+    kind: Optional[str] = "oa"
+    description: Optional[str] = None
+    status: Optional[str] = None
+    show_indicators_label: Optional[bool] = False
 
 
 class PaciProgressStateSectionPdf(BaseModel):
@@ -2213,6 +2221,16 @@ class PaciFullPdfCurricularSubject(BaseModel):
     learning_objectives: Optional[List[PaciFullPdfLearningObjective]] = None
 
 
+class PaciFullPdfProgressEntry(BaseModel):
+    subject_name: Optional[str] = None
+    entry_code: Optional[str] = None
+    date_from: Optional[str] = None
+    date_to: Optional[str] = None
+    responsible_professionals: Optional[str] = None
+    observations: Optional[str] = None
+    progress_rows: Optional[List[PaciProgressRowPdf]] = None
+
+
 class PaciFullPdfRequest(BaseModel):
     paci_full: bool = True
     student_full_name: Optional[str] = None
@@ -2233,6 +2251,7 @@ class PaciFullPdfRequest(BaseModel):
     professionals: Optional[List[PaciFullPdfProfessional]] = None
     family_members: Optional[List[PaciFullPdfFamilyMember]] = None
     curricular_subjects: Optional[List[PaciFullPdfCurricularSubject]] = None
+    progress_entries: Optional[List[PaciFullPdfProgressEntry]] = None
 
 
 # Progress Status Individual Support schemas (Estado de avance PAI - Documento 19)

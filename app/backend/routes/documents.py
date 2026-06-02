@@ -3221,6 +3221,26 @@ async def generate_paci_full_pdf(
                 }
                 for s in (body.curricular_subjects or [])
             ],
+            "progress_entries": [
+                {
+                    "subject_name": e.subject_name or "",
+                    "entry_code": e.entry_code or "",
+                    "date_from": e.date_from or "",
+                    "date_to": e.date_to or "",
+                    "responsible_professionals": e.responsible_professionals or "",
+                    "observations": e.observations or "",
+                    "progress_rows": [
+                        {
+                            "kind": r.kind or "oa",
+                            "description": r.description or "",
+                            "status": r.status or "",
+                            "show_indicators_label": bool(r.show_indicators_label),
+                        }
+                        for r in (e.progress_rows or [])
+                    ],
+                }
+                for e in (body.progress_entries or [])
+            ],
         }
 
         result = DocumentsClass.generate_document_pdf(
@@ -3323,6 +3343,15 @@ async def generate_paci_progress_state_pdf(
             "signature_role": body.signature_role or "",
             "signature_rut": signature_rut,
             "signature_secreduc": body.signature_secreduc or "",
+            "progress_rows": [
+                {
+                    "kind": r.kind or "oa",
+                    "description": r.description or "",
+                    "status": r.status or "",
+                    "show_indicators_label": bool(r.show_indicators_label),
+                }
+                for r in (body.progress_rows or [])
+            ],
             "student_full_name": body.student_full_name or student_fullname,
             "student_rut": body.student_rut or personal.get("identification_number") or "",
             "student_born_date": body.student_born_date or born_date or "",
