@@ -3094,6 +3094,23 @@ def _student_age_label(born_date_str: str, reference_date: Optional[date] = None
     return ""
 
 
+def _resolve_paci_signature_rut(
+    db: Session,
+    signature_rut: Optional[str],
+    sig_prof_id: Optional[int],
+) -> str:
+    rut = (signature_rut or "").strip()
+    if rut or not sig_prof_id:
+        return rut
+    prof = db.query(ProfessionalModel).filter(ProfessionalModel.id == sig_prof_id).first()
+    if not prof:
+        return rut
+    rut = (getattr(prof, "identification_number", None) or "").strip()
+    if rut:
+        return rut
+    return (professional_display_fields(db, prof).rut or "").strip()
+
+
 @documents.post("/generate/{student_id}/21/progress-state")
 async def generate_paci_progress_state_pdf(
     student_id: int,
@@ -3152,12 +3169,9 @@ async def generate_paci_progress_state_pdf(
             if nee and nee.special_educational_needs:
                 nee_name = nee.special_educational_needs
 
-        signature_rut = (body.signature_rut or "").strip()
-        sig_prof_id = body.signature_professional_id
-        if not signature_rut and sig_prof_id:
-            prof = db.query(ProfessionalModel).filter(ProfessionalModel.id == sig_prof_id).first()
-            if prof:
-                signature_rut = (prof.identification_number or "").strip()
+        signature_rut = _resolve_paci_signature_rut(
+            db, body.signature_rut, body.signature_professional_id
+        )
 
         paci_data = {
             "subject_id": body.subject_id,
@@ -3274,12 +3288,9 @@ async def generate_paci_integral_progress_state_pdf(
 
         integral_sections = []
         for section in body.sections:
-            signature_rut = (section.signature_rut or "").strip()
-            sig_prof_id = section.signature_professional_id
-            if not signature_rut and sig_prof_id:
-                prof = db.query(ProfessionalModel).filter(ProfessionalModel.id == sig_prof_id).first()
-                if prof:
-                    signature_rut = (prof.identification_number or "").strip()
+            signature_rut = _resolve_paci_signature_rut(
+                db, section.signature_rut, section.signature_professional_id
+            )
 
             oa_rows = []
             if section.oa_rows:
