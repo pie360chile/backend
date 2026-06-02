@@ -112,6 +112,13 @@ class DocumentsClass:
             
             # Si es documento 21 (Estado de avance PACI por asignatura), usar función específica
             if document_id == 21:
+                if document_data.get("integral_sections"):
+                    return DocumentsClass._generate_paci_integral_progress_state_from_scratch(
+                        document_id=document_id,
+                        paci_data=document_data,
+                        db=db,
+                        output_directory=output_directory,
+                    )
                 return DocumentsClass._generate_paci_progress_state_from_scratch(
                     document_id=document_id,
                     paci_data=document_data,
@@ -3790,56 +3797,32 @@ class DocumentsClass:
             elements.append(Spacer(1, 0.12 * inch))
 
             id_rows = [
-                [
-                    cell_label("Nombre"),
-                    cell_label("RUT"),
-                    cell_label("Fecha Nacimiento"),
-                    cell_label("Edad"),
-                ],
+                [cell_label("Nombre"), cell_label("RUT")],
                 [
                     cell_value(get_value("student_full_name")),
                     cell_value(get_value("student_rut")),
+                ],
+                [cell_label("Fecha Nacimiento"), cell_label("Edad")],
+                [
                     cell_value(format_date(get_value("student_born_date"))),
                     cell_value(get_value("student_age")),
                 ],
-                [
-                    cell_label("NEE"),
-                    "",
-                    "",
-                    "",
-                ],
-                [
-                    cell_value(get_value("student_nee")),
-                    "",
-                    "",
-                    "",
-                ],
-                [
-                    cell_label("Establecimiento"),
-                    cell_label("Curso"),
-                    "",
-                    "",
-                ],
+                [cell_label("NEE"), ""],
+                [cell_value(get_value("student_nee")), ""],
+                [cell_label("Establecimiento"), cell_label("Curso")],
                 [
                     cell_value(get_value("student_school")),
                     cell_value(get_value("student_course")),
-                    "",
-                    "",
                 ],
+                [cell_label("Profesional/es responsable/s"), ""],
+                [cell_value(get_value("responsible_professionals")), ""],
+                [cell_label("Desde"), cell_label("Hasta")],
                 [
-                    cell_label("Profesional/es responsable/s"),
-                    cell_label("Desde"),
-                    cell_label("Hasta"),
-                    "",
-                ],
-                [
-                    cell_value(get_value("responsible_professionals")),
                     cell_value(format_date(get_value("date_from"))),
                     cell_value(format_date(get_value("date_to"))),
-                    "",
                 ],
             ]
-            id_table = Table(id_rows, colWidths=[4.2 * cm, 4.2 * cm, 4.2 * cm, 4.2 * cm])
+            id_table = Table(id_rows, colWidths=[8.4 * cm, 8.4 * cm])
             id_style = [
                 ("VALIGN", (0, 0), (-1, -1), "TOP"),
                 ("ALIGN", (0, 0), (-1, -1), "LEFT"),
@@ -3848,12 +3831,10 @@ class DocumentsClass:
                 ("TOPPADDING", (0, 0), (-1, -1), 6),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
                 ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CCCCCC")),
-                ("SPAN", (0, 2), (3, 2)),
-                ("SPAN", (0, 3), (3, 3)),
-                ("SPAN", (1, 4), (3, 4)),
-                ("SPAN", (1, 5), (3, 5)),
-                ("SPAN", (3, 6), (3, 6)),
-                ("SPAN", (3, 7), (3, 7)),
+                ("SPAN", (0, 4), (1, 4)),
+                ("SPAN", (0, 5), (1, 5)),
+                ("SPAN", (0, 8), (1, 8)),
+                ("SPAN", (0, 9), (1, 9)),
             ]
             id_table.setStyle(TableStyle(id_style))
             elements.append(id_table)
@@ -3909,10 +3890,10 @@ class DocumentsClass:
                 elements.append(Paragraph("_" * 42, line_style))
                 if sig_name:
                     elements.append(Paragraph(esc(sig_name), sig_style))
-                if sig_role:
-                    elements.append(Paragraph(esc(sig_role), sig_style))
                 if sig_rut:
                     elements.append(Paragraph(f"RUT: {esc(sig_rut)}", sig_style))
+                if sig_role:
+                    elements.append(Paragraph(esc(sig_role), sig_style))
                 if sig_secreduc:
                     elements.append(Paragraph(f"Nº Secreduc: {esc(sig_secreduc)}", sig_style))
 
@@ -3934,6 +3915,261 @@ class DocumentsClass:
             return {
                 "status": "error",
                 "message": f"Error generando PDF Estado de avance PACI: {str(e)}",
+                "filename": None,
+                "file_path": None,
+            }
+
+    @staticmethod
+    def _generate_paci_integral_progress_state_from_scratch(
+        document_id: int,
+        paci_data: Dict[str, Any],
+        db: Optional[Session] = None,
+        output_directory: str = "files/system/students",
+    ) -> Dict[str, Any]:
+        """Genera PDF «Estado de avance integral PACI» con varias asignaturas / períodos EA."""
+        try:
+            if not REPORTLAB_AVAILABLE:
+                return {
+                    "status": "error",
+                    "message": "ReportLab no está instalado. Instala con: pip install reportlab",
+                    "filename": None,
+                    "file_path": None,
+                }
+
+            sections = paci_data.get("integral_sections") or []
+            if not sections:
+                return {
+                    "status": "error",
+                    "message": "No hay estados de avance seleccionados.",
+                    "filename": None,
+                    "file_path": None,
+                }
+
+            student_name_safe = (paci_data.get("student_full_name") or "estudiante").replace(" ", "_")[:40]
+            unique_filename = f"estado_avance_integral_paci_{student_name_safe}_{uuid.uuid4().hex[:8]}.pdf"
+            output_file = Path(output_directory) / unique_filename
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+
+            doc = SimpleDocTemplate(
+                str(output_file),
+                pagesize=A4,
+                rightMargin=2.5 * cm,
+                leftMargin=2.5 * cm,
+                topMargin=2.5 * cm,
+                bottomMargin=2.5 * cm,
+            )
+            elements = []
+            styles = getSampleStyleSheet()
+
+            title_style = ParagraphStyle(
+                "PaciIntegralTitle",
+                parent=styles["Heading1"],
+                fontSize=16,
+                textColor=colors.HexColor("#000000"),
+                spaceAfter=22,
+                spaceBefore=10,
+                alignment=TA_CENTER,
+                fontName="Helvetica-Bold",
+            )
+            section_style = ParagraphStyle(
+                "PaciIntegralSection",
+                parent=styles["Normal"],
+                fontSize=12,
+                textColor=colors.HexColor("#000000"),
+                spaceAfter=10,
+                spaceBefore=14,
+                fontName="Helvetica-Bold",
+                alignment=TA_LEFT,
+                backColor=colors.HexColor("#E8E8E8"),
+                borderPadding=6,
+            )
+            normal_style = ParagraphStyle(
+                "PaciIntegralNormal",
+                parent=styles["Normal"],
+                fontSize=10,
+                textColor=colors.HexColor("#000000"),
+                alignment=TA_LEFT,
+                leading=12,
+                spaceAfter=4,
+            )
+            label_style = ParagraphStyle(
+                "PaciIntegralLabel",
+                parent=styles["Normal"],
+                fontSize=10,
+                textColor=colors.HexColor("#000000"),
+                alignment=TA_LEFT,
+                fontName="Helvetica-Bold",
+                backColor=colors.HexColor("#F5F5F5"),
+                borderPadding=4,
+            )
+
+            def get_base(key: str, default: str = "") -> str:
+                value = paci_data.get(key)
+                if value is None:
+                    return default
+                return str(value).strip() if value else default
+
+            def get_section(section: Dict[str, Any], key: str, default: str = "") -> str:
+                value = section.get(key)
+                if value is None:
+                    return default
+                return str(value).strip() if value else default
+
+            def format_date(date_str: Optional[str]) -> str:
+                if not date_str:
+                    return ""
+                s = str(date_str).strip()[:10]
+                if not s:
+                    return ""
+                for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%Y/%m/%d"):
+                    try:
+                        return datetime.strptime(s, fmt).date().strftime("%d/%m/%Y")
+                    except Exception:
+                        continue
+                return s
+
+            def esc(text: str) -> str:
+                return (text or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+            def cell_label(text: str) -> Paragraph:
+                return Paragraph(f"<b>{esc(text)}</b>", label_style)
+
+            def cell_value(text: str) -> Paragraph:
+                return Paragraph(esc(text) or "—", normal_style)
+
+            def append_signature_block(section: Dict[str, Any]) -> None:
+                sig_name = get_section(section, "signature_name")
+                sig_role = get_section(section, "signature_role")
+                sig_rut = get_section(section, "signature_rut")
+                sig_secreduc = get_section(section, "signature_secreduc")
+                if not (sig_name or sig_role or sig_rut):
+                    return
+                sig_style = ParagraphStyle(
+                    "PaciIntegralSig",
+                    parent=normal_style,
+                    alignment=TA_CENTER,
+                    fontSize=10,
+                    leading=14,
+                )
+                line_style = ParagraphStyle(
+                    "PaciIntegralSigLine",
+                    parent=sig_style,
+                    spaceAfter=8,
+                )
+                elements.append(Spacer(1, 0.35 * inch))
+                elements.append(Paragraph("_" * 42, line_style))
+                if sig_name:
+                    elements.append(Paragraph(esc(sig_name), sig_style))
+                if sig_rut:
+                    elements.append(Paragraph(f"RUT: {esc(sig_rut)}", sig_style))
+                if sig_role:
+                    elements.append(Paragraph(esc(sig_role), sig_style))
+                if sig_secreduc:
+                    elements.append(Paragraph(f"Nº Secreduc: {esc(sig_secreduc)}", sig_style))
+
+            elements.append(Paragraph("Estado de avance PACI", title_style))
+            elements.append(Spacer(1, 0.15 * inch))
+            elements.append(Paragraph("I. Identificación del/la estudiante", section_style))
+            elements.append(Spacer(1, 0.12 * inch))
+
+            first_section = sections[0]
+            single_section = len(sections) == 1
+            id_rows = [
+                [cell_label("Nombre"), cell_label("RUT")],
+                [cell_value(get_base("student_full_name")), cell_value(get_base("student_rut"))],
+                [cell_label("Fecha Nacimiento"), cell_label("Edad")],
+                [
+                    cell_value(format_date(get_base("student_born_date"))),
+                    cell_value(get_base("student_age")),
+                ],
+                [cell_label("NEE"), ""],
+                [cell_value(get_base("student_nee")), ""],
+                [cell_label("Establecimiento"), cell_label("Curso")],
+                [cell_value(get_base("student_school")), cell_value(get_base("student_course"))],
+            ]
+            if single_section:
+                id_rows.extend(
+                    [
+                        [cell_label("Profesional/es responsable/s"), ""],
+                        [cell_value(get_section(first_section, "responsible_professionals")), ""],
+                        [cell_label("Desde"), cell_label("Hasta")],
+                        [
+                            cell_value(format_date(get_section(first_section, "date_from"))),
+                            cell_value(format_date(get_section(first_section, "date_to"))),
+                        ],
+                    ]
+                )
+            id_style_rules = [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CCCCCC")),
+                ("SPAN", (0, 4), (1, 4)),
+                ("SPAN", (0, 5), (1, 5)),
+            ]
+            if single_section:
+                id_style_rules.extend([("SPAN", (0, 8), (1, 8)), ("SPAN", (0, 9), (1, 9))])
+            id_table = Table(id_rows, colWidths=[8.4 * cm, 8.4 * cm])
+            id_table.setStyle(TableStyle(id_style_rules))
+            elements.append(id_table)
+            elements.append(Spacer(1, 0.25 * inch))
+
+            if single_section:
+                subject_name = get_section(first_section, "subject_name")
+                if subject_name:
+                    elements.append(Paragraph(f"Asignatura: {esc(subject_name)}", normal_style))
+                    elements.append(Spacer(1, 0.1 * inch))
+
+            elements.append(Paragraph("II. Progreso en los objetivos de aprendizaje", section_style))
+            elements.append(Spacer(1, 0.12 * inch))
+
+            obs_table_style = TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                    ("TOPPADDING", (0, 0), (-1, -1), 8),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CCCCCC")),
+                    ("MINROWHEIGHT", (0, 1), (0, 1), 2.5 * cm),
+                ]
+            )
+
+            for section in sections:
+                obs_rows = [
+                    [cell_label("Observaciones")],
+                    [cell_value(get_section(section, "observations"))],
+                ]
+                obs_table = Table(obs_rows, colWidths=[16.8 * cm])
+                obs_table.setStyle(obs_table_style)
+                elements.append(obs_table)
+                elements.append(Spacer(1, 0.15 * inch))
+
+            elements.append(Spacer(1, 0.35 * inch))
+            append_signature_block(first_section)
+
+            doc.build(elements)
+            return {
+                "status": "success",
+                "message": "PDF generado exitosamente",
+                "filename": unique_filename,
+                "file_path": str(output_file),
+            }
+        except ImportError:
+            return {
+                "status": "error",
+                "message": "ReportLab no está instalado.",
+                "filename": None,
+                "file_path": None,
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Error generando PDF Estado de avance integral PACI: {str(e)}",
                 "filename": None,
                 "file_path": None,
             }

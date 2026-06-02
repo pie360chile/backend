@@ -134,6 +134,7 @@ from app.backend.schemas import (
     DocumentListRequest,
     UploadDocumentRequest,
     PaciProgressStatePdfRequest,
+    PaciIntegralProgressStatePdfRequest,
 )
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -3151,6 +3152,13 @@ async def generate_paci_progress_state_pdf(
             if nee and nee.special_educational_needs:
                 nee_name = nee.special_educational_needs
 
+        signature_rut = (body.signature_rut or "").strip()
+        sig_prof_id = body.signature_professional_id
+        if not signature_rut and sig_prof_id:
+            prof = db.query(ProfessionalModel).filter(ProfessionalModel.id == sig_prof_id).first()
+            if prof:
+                signature_rut = (prof.identification_number or "").strip()
+
         paci_data = {
             "subject_id": body.subject_id,
             "subject_name": body.subject_name or "",
@@ -3162,7 +3170,7 @@ async def generate_paci_progress_state_pdf(
             "responsible_professionals": body.responsible_professionals or "",
             "signature_name": body.signature_name or "",
             "signature_role": body.signature_role or "",
-            "signature_rut": body.signature_rut or "",
+            "signature_rut": signature_rut,
             "signature_secreduc": body.signature_secreduc or "",
             "student_full_name": body.student_full_name or student_fullname,
             "student_rut": body.student_rut or personal.get("identification_number") or "",
@@ -3192,6 +3200,146 @@ async def generate_paci_progress_state_pdf(
         )
     except Exception as e:
         logger.exception("generate_paci_progress_state_pdf")
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"status": 500, "message": str(e), "data": None},
+        )
+
+
+@documents.post("/generate/{student_id}/21/progress-state/integral")
+async def generate_paci_integral_progress_state_pdf(
+    student_id: int,
+    body: PaciIntegralProgressStatePdfRequest,
+    session_user: UserLogin = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Genera PDF integral de estados de avance PACI (varias asignaturas / EA)."""
+    MSG_ERROR_GEN = "Error generando documento."
+    try:
+        if not body.sections:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"status": 400, "message": "Seleccione al menos un estado de avance.", "data": None},
+            )
+
+        student_service = StudentClass(db)
+        student_result = student_service.get(student_id)
+        if isinstance(student_result, dict) and (
+            student_result.get("error") or student_result.get("status") == "error"
+        ):
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"status": 404, "message": "Estudiante no encontrado", "data": None},
+            )
+
+        student_data = student_result.get("student_data", {}) if isinstance(student_result, dict) else {}
+        personal = student_data.get("personal_data") or {}
+        academic = student_data.get("academic_info") or {}
+
+        student_name = (personal.get("names") or "").strip()
+        student_lastname = f"{personal.get('father_lastname', '')} {personal.get('mother_lastname', '')}".strip()
+        student_fullname = f"{student_name} {student_lastname}".strip()
+
+        ref_date = datetime.now().date()
+        for section in body.sections:
+            if section.date_to:
+                try:
+                    ref_date = datetime.strptime(str(section.date_to)[:10], "%Y-%m-%d").date()
+                    break
+                except Exception:
+                    pass
+
+        born_date = personal.get("born_date") or ""
+        school_name = ""
+        if student_data.get("school_id"):
+            school = db.query(SchoolModel).filter(SchoolModel.id == student_data["school_id"]).first()
+            if school and school.school_name:
+                school_name = school.school_name
+        course_name = ""
+        if academic.get("course_id"):
+            course = (
+                db.query(CourseModel)
+                .filter(CourseModel.deleted_status_id == 0, CourseModel.id == academic["course_id"])
+                .first()
+            )
+            if course and course.course_name:
+                course_name = course.course_name
+
+        nee_name = ""
+        nee_id = academic.get("special_educational_need_id")
+        if nee_id:
+            nee = db.query(SpecialEducationalNeedModel).filter(SpecialEducationalNeedModel.id == nee_id).first()
+            if nee and nee.special_educational_needs:
+                nee_name = nee.special_educational_needs
+
+        integral_sections = []
+        for section in body.sections:
+            signature_rut = (section.signature_rut or "").strip()
+            sig_prof_id = section.signature_professional_id
+            if not signature_rut and sig_prof_id:
+                prof = db.query(ProfessionalModel).filter(ProfessionalModel.id == sig_prof_id).first()
+                if prof:
+                    signature_rut = (prof.identification_number or "").strip()
+
+            oa_rows = []
+            if section.oa_rows:
+                for oa in section.oa_rows:
+                    oa_rows.append(
+                        {
+                            "description": oa.description or "",
+                            "rating": oa.rating or "",
+                            "rating_short": oa.rating_short or "",
+                        }
+                    )
+
+            integral_sections.append(
+                {
+                    "subject_id": section.subject_id,
+                    "subject_name": section.subject_name or "",
+                    "entry_code": section.entry_code or "",
+                    "progress_entry_id": section.progress_entry_id or "",
+                    "date_from": section.date_from or "",
+                    "date_to": section.date_to or "",
+                    "observations": section.observations or "",
+                    "responsible_professionals": section.responsible_professionals or "",
+                    "signature_name": section.signature_name or "",
+                    "signature_role": section.signature_role or "",
+                    "signature_rut": signature_rut,
+                    "signature_secreduc": section.signature_secreduc or "",
+                    "oa_rows": oa_rows,
+                }
+            )
+
+        paci_data = {
+            "integral_sections": integral_sections,
+            "student_full_name": body.student_full_name or student_fullname,
+            "student_rut": body.student_rut or personal.get("identification_number") or "",
+            "student_born_date": body.student_born_date or born_date or "",
+            "student_age": body.student_age or _student_age_label(str(born_date), ref_date),
+            "student_nee": body.student_nee or nee_name or "",
+            "student_school": body.student_school or school_name or "",
+            "student_course": body.student_course or course_name or "",
+        }
+
+        result = DocumentsClass.generate_document_pdf(
+            document_id=21,
+            document_data=paci_data,
+            db=db,
+            template_path=None,
+            output_directory="files/system/students",
+        )
+        if result.get("status") == "error":
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={"status": 500, "message": result.get("message", MSG_ERROR_GEN), "data": None},
+            )
+        return FileResponse(
+            path=result["file_path"],
+            filename=result["filename"],
+            media_type="application/pdf",
+        )
+    except Exception as e:
+        logger.exception("generate_paci_integral_progress_state_pdf")
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"status": 500, "message": str(e), "data": None},
