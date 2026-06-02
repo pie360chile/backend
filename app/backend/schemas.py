@@ -2121,6 +2121,19 @@ class AuditList(BaseModel):
     user_id: Optional[int] = None
 
 # PACI / ICAP – PDF estado de avance por asignatura (documento 21)
+class PaciProgressOaRowPdf(BaseModel):
+    description: Optional[str] = None
+    rating: Optional[str] = None
+    rating_short: Optional[str] = None
+
+
+class PaciProgressRowPdf(BaseModel):
+    kind: Optional[str] = "oa"
+    description: Optional[str] = None
+    status: Optional[str] = None
+    show_indicators_label: Optional[bool] = False
+
+
 class PaciProgressStatePdfRequest(BaseModel):
     subject_id: int
     subject_name: Optional[str] = None
@@ -2145,19 +2158,6 @@ class PaciProgressStatePdfRequest(BaseModel):
     student_course: Optional[str] = None
 
 
-class PaciProgressOaRowPdf(BaseModel):
-    description: Optional[str] = None
-    rating: Optional[str] = None
-    rating_short: Optional[str] = None
-
-
-class PaciProgressRowPdf(BaseModel):
-    kind: Optional[str] = "oa"
-    description: Optional[str] = None
-    status: Optional[str] = None
-    show_indicators_label: Optional[bool] = False
-
-
 class PaciProgressStateSectionPdf(BaseModel):
     subject_id: int
     subject_name: Optional[str] = None
@@ -2172,6 +2172,7 @@ class PaciProgressStateSectionPdf(BaseModel):
     signature_rut: Optional[str] = None
     signature_professional_id: Optional[int] = None
     signature_secreduc: Optional[str] = None
+    progress_rows: Optional[List[PaciProgressRowPdf]] = None
     oa_rows: Optional[List[PaciProgressOaRowPdf]] = None
 
 

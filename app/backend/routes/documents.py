@@ -3458,6 +3458,15 @@ async def generate_paci_integral_progress_state_pdf(
                 db, section.signature_rut, section.signature_professional_id
             )
 
+            progress_rows = [
+                {
+                    "kind": r.kind or "oa",
+                    "description": r.description or "",
+                    "status": r.status or "",
+                    "show_indicators_label": bool(r.show_indicators_label),
+                }
+                for r in (section.progress_rows or [])
+            ]
             oa_rows = []
             if section.oa_rows:
                 for oa in section.oa_rows:
@@ -3483,6 +3492,7 @@ async def generate_paci_integral_progress_state_pdf(
                     "signature_role": section.signature_role or "",
                     "signature_rut": signature_rut,
                     "signature_secreduc": section.signature_secreduc or "",
+                    "progress_rows": progress_rows,
                     "oa_rows": oa_rows,
                 }
             )
