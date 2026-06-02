@@ -777,6 +777,77 @@ class SubjectModel(Base):
     deleted_date = Column(DateTime, nullable=True)
 
 
+class CurriculumSubjectModel(Base):
+    """
+    Catálogo nacional de asignaturas (curriculum subjects).
+    Distinto de `subjects`, que son asignaturas por colegio (school_id).
+  """
+
+    __tablename__ = 'curriculum_subjects'
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(255), nullable=False)
+    name_es = Column(String(255), nullable=False)
+    category = Column(String(64), nullable=True)
+    sort_order = Column(Integer, nullable=False, default=0)
+    is_active = Column(Integer, nullable=False, default=1)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+
+class EducationLevelModel(Base):
+    """Niveles educativos (1° básico, 2° medio, etc.)."""
+
+    __tablename__ = 'education_levels'
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(128), nullable=False)
+    name_es = Column(String(128), nullable=False)
+    education_stage = Column(String(32), nullable=False)
+    grade_number = Column(Integer, nullable=True)
+    oa_level_code = Column(String(8), nullable=True)
+    sort_order = Column(Integer, nullable=False, default=0)
+    is_active = Column(Integer, nullable=False, default=1)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+
+class CurriculumSubjectLevelModel(Base):
+    """Vincula una asignatura del catálogo con un nivel (cada par puede tener OA)."""
+
+    __tablename__ = 'curriculum_subject_levels'
+
+    id = Column(Integer, primary_key=True)
+    curriculum_subject_id = Column(Integer, ForeignKey('curriculum_subjects.id', ondelete='CASCADE'), nullable=False)
+    education_level_id = Column(Integer, ForeignKey('education_levels.id', ondelete='CASCADE'), nullable=False)
+    ministry_subject_code = Column(String(16), nullable=False)
+    is_active = Column(Integer, nullable=False, default=1)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+
+class LearningObjectiveModel(Base):
+    """Objetivo de aprendizaje (OA) Mineduc por asignatura + nivel."""
+
+    __tablename__ = 'learning_objectives'
+
+    id = Column(Integer, primary_key=True)
+    curriculum_subject_level_id = Column(
+        Integer, ForeignKey('curriculum_subject_levels.id', ondelete='CASCADE'), nullable=False
+    )
+    code = Column(String(32), nullable=False)
+    description = Column(Text, nullable=False)
+    is_priority = Column(Integer, nullable=False, default=0)
+    sort_order = Column(Integer, nullable=False, default=0)
+    is_active = Column(Integer, nullable=False, default=1)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+
 class CollaborativeWorkModel(Base):
     __tablename__ = 'collaborative_works'
 

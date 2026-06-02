@@ -75,6 +75,8 @@ from app.backend.routes.meeting_schedualing_register_professionals import meetin
 from app.backend.routes.diversified_strategies import diversified_strategies
 from app.backend.routes.regular_teacher_diversified_strategies import regular_teacher_diversified_strategies
 from app.backend.routes.subjects import subjects
+from app.backend.routes.learning_objectives import learning_objectives
+from app.backend.routes.curriculum_subjects import curriculum_subjects
 from app.backend.routes.collaborative_works import collaborative_works
 from app.backend.routes.support_organizations import support_organizations
 from app.backend.routes.diversity_criteria import diversity_criteria
@@ -262,6 +264,8 @@ app.include_router(meeting_schedualing_register_professionals)
 app.include_router(diversified_strategies)
 app.include_router(regular_teacher_diversified_strategies)
 app.include_router(subjects)
+app.include_router(learning_objectives)
+app.include_router(curriculum_subjects)
 app.include_router(collaborative_works)
 app.include_router(support_organizations)
 app.include_router(diversity_criteria)
