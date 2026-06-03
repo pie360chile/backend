@@ -3714,9 +3714,13 @@ class DocumentsClass:
         header_text: Any,
         observations: str = "",
     ) -> None:
-        """Tabla «Objetivos de aprendizaje | Estado» con filas de indicadores (como diversi.cl)."""
+        """Tabla «Objetivos de aprendizaje | Estado»; indicadores en columna lateral si existen."""
         if not progress_rows:
             return
+
+        table_width = 17.6 * cm
+        status_col_w = 4.2 * cm
+        indicators_label_w = 2.0 * cm
 
         def esc(text: str) -> str:
             return (text or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
@@ -3727,29 +3731,69 @@ class DocumentsClass:
         def cell_value(text: str, style: Any = None) -> Paragraph:
             return Paragraph(esc(text) or "—", style or small_style)
 
-        elements.append(Paragraph("II. Progreso en los objetivos de aprendizaje", section_style))
-        elements.append(Spacer(1, 0.1 * inch))
+        header_white = ParagraphStyle(
+            "PaciProgressHeaderWhite",
+            parent=small_style,
+            fontSize=10,
+            fontName="Helvetica-Bold",
+            textColor=header_text,
+            alignment=TA_CENTER,
+        )
 
-        table_rows: List[List[Any]] = [
-            [
-                "",
-                Paragraph(
-                    "<b><font color='white'>Objetivos de aprendizaje</font></b>",
-                    small_style,
-                ),
-                Paragraph(
-                    "<b><font color='white'>Estado</font></b>",
-                    small_style,
-                ),
+        indicators_side_style = ParagraphStyle(
+            "PaciProgressIndicatorsSide",
+            parent=small_style,
+            fontSize=7,
+            fontName="Helvetica-Bold",
+            alignment=TA_CENTER,
+            leading=8,
+        )
+
+        def cell_indicators_vertical_label() -> Paragraph:
+            stacked = "<br/>".join(list("Indicadores"))
+            return Paragraph(f"<b>{stacked}</b>", indicators_side_style)
+
+        has_indicator_rows = any(
+            isinstance(r, dict) and str(r.get("kind") or "") == "indicator" for r in progress_rows
+        )
+
+        if has_indicator_rows:
+            content_col_w = table_width - status_col_w - indicators_label_w
+            col_widths = [indicators_label_w, content_col_w, status_col_w]
+            table_rows: List[List[Any]] = [
+                [
+                    "",
+                    Paragraph(
+                        "<b><font color='white'>Objetivos de aprendizaje</font></b>",
+                        header_white,
+                    ),
+                    Paragraph("<b><font color='white'>Estado</font></b>", header_white),
+                ]
             ]
-        ]
+            status_col_idx = 2
+        else:
+            content_col_w = table_width - status_col_w
+            col_widths = [content_col_w, status_col_w]
+            table_rows = [
+                [
+                    Paragraph(
+                        "<b><font color='white'>Objetivos de aprendizaje</font></b>",
+                        header_white,
+                    ),
+                    Paragraph("<b><font color='white'>Estado</font></b>", header_white),
+                ]
+            ]
+            status_col_idx = 1
+
         span_rules: List[Any] = []
         row_idx = 1
         i = 0
         while i < len(progress_rows):
             row = progress_rows[i] if isinstance(progress_rows[i], dict) else {}
             kind = str(row.get("kind") or "oa")
-            if kind == "indicator" and row.get("show_indicators_label"):
+            status = row.get("status") or row.get("rating") or ""
+
+            if kind == "indicator" and has_indicator_rows:
                 j = i
                 while j < len(progress_rows):
                     rj = progress_rows[j] if isinstance(progress_rows[j], dict) else {}
@@ -3759,13 +3803,13 @@ class DocumentsClass:
                 group_len = j - i
                 for k in range(i, j):
                     rk = progress_rows[k] if isinstance(progress_rows[k], dict) else {}
-                    status = rk.get("status") or rk.get("rating") or ""
+                    ind_status = rk.get("status") or rk.get("rating") or ""
                     if k == i:
                         table_rows.append(
                             [
-                                cell_label("Indicadores"),
+                                cell_indicators_vertical_label(),
                                 cell_value(rk.get("description") or ""),
-                                cell_value(status),
+                                cell_value(ind_status),
                             ]
                         )
                     else:
@@ -3773,7 +3817,7 @@ class DocumentsClass:
                             [
                                 "",
                                 cell_value(rk.get("description") or ""),
-                                cell_value(status),
+                                cell_value(ind_status),
                             ]
                         )
                 if group_len > 1:
@@ -3781,26 +3825,39 @@ class DocumentsClass:
                     span_rules.append(
                         ("VALIGN", (0, row_idx), (0, row_idx + group_len - 1), "MIDDLE")
                     )
+                    span_rules.append(
+                        ("ALIGN", (0, row_idx), (0, row_idx + group_len - 1), "CENTER")
+                    )
                 row_idx += group_len
                 i = j
             else:
-                status = row.get("status") or row.get("rating") or ""
-                table_rows.append(
-                    [
-                        "",
-                        cell_value(row.get("description") or ""),
-                        cell_value(status),
-                    ]
-                )
+                if has_indicator_rows:
+                    table_rows.append(
+                        [
+                            "",
+                            cell_value(row.get("description") or ""),
+                            cell_value(status),
+                        ]
+                    )
+                else:
+                    table_rows.append(
+                        [
+                            cell_value(row.get("description") or ""),
+                            cell_value(status),
+                        ]
+                    )
                 row_idx += 1
                 i += 1
 
-        col_widths = [1.4 * cm, 12.2 * cm, 4.4 * cm]
+        elements.append(Paragraph("II. Progreso en los objetivos de aprendizaje", section_style))
+        elements.append(Spacer(1, 0.1 * inch))
+
         table = Table(table_rows, colWidths=col_widths)
         style_rules = [
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-            ("ALIGN", (2, 1), (2, -1), "CENTER"),
+            ("ALIGN", (status_col_idx, 1), (status_col_idx, -1), "CENTER"),
+            ("VALIGN", (status_col_idx, 1), (status_col_idx, -1), "MIDDLE"),
             ("LEFTPADDING", (0, 0), (-1, -1), 6),
             ("RIGHTPADDING", (0, 0), (-1, -1), 6),
             ("TOPPADDING", (0, 0), (-1, -1), 5),
@@ -3809,6 +3866,8 @@ class DocumentsClass:
             ("BACKGROUND", (0, 0), (-1, 0), header_bg),
             ("TEXTCOLOR", (0, 0), (-1, 0), header_text),
         ]
+        if has_indicator_rows:
+            style_rules.append(("BACKGROUND", (0, 0), (0, 0), header_bg))
         style_rules.extend(span_rules)
         table.setStyle(TableStyle(style_rules))
         elements.append(table)
@@ -3818,7 +3877,7 @@ class DocumentsClass:
             [cell_label("Observaciones")],
             [cell_value(observations, normal_style)],
         ]
-        obs_table = Table(obs_rows, colWidths=[17 * cm])
+        obs_table = Table(obs_rows, colWidths=[table_width])
         obs_table.setStyle(
             TableStyle(
                 [
