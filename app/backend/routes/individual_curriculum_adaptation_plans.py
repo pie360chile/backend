@@ -1,5 +1,7 @@
 """Document 21 – Individual Curriculum Adaptation Plan (ICAP / PACI)."""
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
@@ -21,8 +23,10 @@ individual_curriculum_adaptation_plans = APIRouter(
 )
 
 
-def _body_to_dict(body) -> dict:
-    return body.model_dump(exclude_unset=False) if hasattr(body, "model_dump") else body.dict()
+def _body_to_dict(body, *, exclude_unset: bool = False) -> dict:
+    if hasattr(body, "model_dump"):
+        return body.model_dump(exclude_unset=exclude_unset)
+    return body.dict(exclude_unset=exclude_unset)
 
 
 @individual_curriculum_adaptation_plans.get("/semesters")
@@ -47,12 +51,19 @@ async def list_icap_semesters(
 async def get_icap_by_student(
     student_id: int,
     latest_only: bool = Query(True),
+    school_id: Optional[int] = Query(None),
+    semester_id: Optional[int] = Query(None),
+    document_type_id: int = Query(21),
     session_user: UserLogin = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
     try:
         result = IndividualCurriculumAdaptationPlanClass(db).get_by_student_id(
-            student_id, latest_only=latest_only
+            student_id,
+            latest_only=latest_only,
+            school_id=school_id,
+            semester_id=semester_id,
+            document_type_id=document_type_id,
         )
         if isinstance(result, dict) and result.get("status") == "error":
             return JSONResponse(
@@ -137,7 +148,7 @@ async def update_icap(
     db: Session = Depends(get_db),
 ):
     try:
-        data = _body_to_dict(body)
+        data = _body_to_dict(body, exclude_unset=True)
         if data.get("school_id") is None and getattr(session_user, "school_id", None):
             data["school_id"] = session_user.school_id
         result = IndividualCurriculumAdaptationPlanClass(db).update(plan_id, data)

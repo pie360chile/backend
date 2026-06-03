@@ -166,15 +166,38 @@ class IndividualCurriculumAdaptationPlanClass:
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
-    def get_by_student_id(self, student_id: int, latest_only: bool = True) -> Any:
+    def _icap_lookup_query(
+        self,
+        student_id: int,
+        document_type_id: int = 21,
+        school_id: Optional[int] = None,
+        semester_id: Optional[int] = None,
+    ):
+        q = self.db.query(IndividualCurriculumAdaptationPlanModel).filter(
+            IndividualCurriculumAdaptationPlanModel.student_id == student_id,
+            IndividualCurriculumAdaptationPlanModel.document_type_id == document_type_id,
+            IndividualCurriculumAdaptationPlanModel.deleted_date.is_(None),
+        )
+        if school_id is not None:
+            q = q.filter(IndividualCurriculumAdaptationPlanModel.school_id == school_id)
+        if semester_id is not None:
+            q = q.filter(IndividualCurriculumAdaptationPlanModel.semester_id == semester_id)
+        return q.order_by(IndividualCurriculumAdaptationPlanModel.id.desc())
+
+    def get_by_student_id(
+        self,
+        student_id: int,
+        latest_only: bool = True,
+        school_id: Optional[int] = None,
+        semester_id: Optional[int] = None,
+        document_type_id: int = 21,
+    ) -> Any:
         try:
-            q = (
-                self.db.query(IndividualCurriculumAdaptationPlanModel)
-                .filter(
-                    IndividualCurriculumAdaptationPlanModel.student_id == student_id,
-                    IndividualCurriculumAdaptationPlanModel.deleted_date.is_(None),
-                )
-                .order_by(IndividualCurriculumAdaptationPlanModel.id.desc())
+            q = self._icap_lookup_query(
+                student_id,
+                document_type_id=document_type_id,
+                school_id=school_id,
+                semester_id=semester_id,
             )
             if latest_only:
                 plan = q.first()
@@ -187,21 +210,14 @@ class IndividualCurriculumAdaptationPlanClass:
 
     def _find_existing(self, data: dict) -> Optional[IndividualCurriculumAdaptationPlanModel]:
         student_id = data.get("student_id")
-        school_id = data.get("school_id")
-        document_type_id = data.get("document_type_id") or 21
-        semester_id = data.get("semester_id")
         if student_id is None:
             return None
-        q = self.db.query(IndividualCurriculumAdaptationPlanModel).filter(
-            IndividualCurriculumAdaptationPlanModel.student_id == student_id,
-            IndividualCurriculumAdaptationPlanModel.document_type_id == document_type_id,
-            IndividualCurriculumAdaptationPlanModel.deleted_date.is_(None),
-        )
-        if school_id is not None:
-            q = q.filter(IndividualCurriculumAdaptationPlanModel.school_id == school_id)
-        if semester_id is not None:
-            q = q.filter(IndividualCurriculumAdaptationPlanModel.semester_id == semester_id)
-        return q.order_by(IndividualCurriculumAdaptationPlanModel.id.desc()).first()
+        return self._icap_lookup_query(
+            int(student_id),
+            document_type_id=int(data.get("document_type_id") or 21),
+            school_id=data.get("school_id"),
+            semester_id=data.get("semester_id"),
+        ).first()
 
     def _apply_plan_fields(self, plan: IndividualCurriculumAdaptationPlanModel, data: dict) -> None:
         if "student_id" in data and data["student_id"] is not None:
