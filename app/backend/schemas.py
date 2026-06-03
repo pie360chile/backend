@@ -2111,6 +2111,24 @@ class IndividualSupportPlanList(BaseModel):
     school_id: Optional[int] = None
 
 
+# Learning objectives catalog (OA Mineduc)
+class StoreLearningObjectiveAdmin(BaseModel):
+    curriculum_subject_id: int
+    education_level_id: int
+    code: str
+    description: str
+    is_priority: bool = False
+    sort_order: Optional[int] = None
+
+
+class UpdateLearningObjectiveAdmin(BaseModel):
+    code: Optional[str] = None
+    description: Optional[str] = None
+    is_priority: Optional[bool] = None
+    sort_order: Optional[int] = None
+    is_active: Optional[bool] = None
+
+
 # Document 21 – Individual Curriculum Adaptation Plan (ICAP / PACI)
 class IcapAchievementIndicatorSchema(BaseModel):
     id: Optional[str] = None
