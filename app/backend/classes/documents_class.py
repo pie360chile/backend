@@ -3700,6 +3700,9 @@ class DocumentsClass:
                 "file_path": None
             }
 
+    # Ancho único tablas PDF estado de avance PACI (2 × 8.4 cm = tabla identificación)
+    PACI_PROGRESS_TABLE_WIDTH = 16.8 * cm
+
     @staticmethod
     def _append_paci_progress_objectives_block(
         elements: List[Any],
@@ -3713,14 +3716,19 @@ class DocumentsClass:
         header_bg: Any,
         header_text: Any,
         observations: str = "",
+        include_section_title: bool = True,
+        table_width: Optional[float] = None,
     ) -> None:
-        """Tabla «Objetivos de aprendizaje | Estado»; indicadores en columna lateral si existen."""
-        if not progress_rows:
+        """Tabla 2 columnas «Objetivos de aprendizaje | Estado» (+ filas de indicadores)."""
+        obs_text = (observations or "").strip()
+        if not progress_rows and not obs_text:
             return
 
-        table_width = 17.6 * cm
+        table_width = table_width if table_width is not None else DocumentsClass.PACI_PROGRESS_TABLE_WIDTH
         status_col_w = 4.2 * cm
-        indicators_label_w = 2.0 * cm
+        content_col_w = table_width - status_col_w
+        col_widths = [content_col_w, status_col_w]
+        cell_padding = 8
 
         def esc(text: str) -> str:
             return (text or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
@@ -3740,142 +3748,86 @@ class DocumentsClass:
             alignment=TA_CENTER,
         )
 
-        indicators_side_style = ParagraphStyle(
-            "PaciProgressIndicatorsSide",
+        indicator_row_style = ParagraphStyle(
+            "PaciProgressIndicatorRow",
             parent=small_style,
-            fontSize=7,
-            fontName="Helvetica-Bold",
-            alignment=TA_CENTER,
-            leading=8,
+            fontSize=9,
+            leading=11,
+            leftIndent=12,
         )
 
-        def cell_indicators_vertical_label() -> Paragraph:
-            stacked = "<br/>".join(list("Indicadores"))
-            return Paragraph(f"<b>{stacked}</b>", indicators_side_style)
+        def cell_indicator_description(text: str, show_label: bool) -> Paragraph:
+            body = esc(text) or "—"
+            if show_label:
+                return Paragraph(f"<b>Indicadores</b><br/>{body}", indicator_row_style)
+            return Paragraph(f"• {body}", indicator_row_style)
 
-        has_indicator_rows = any(
-            isinstance(r, dict) and str(r.get("kind") or "") == "indicator" for r in progress_rows
-        )
-
-        if has_indicator_rows:
-            content_col_w = table_width - status_col_w - indicators_label_w
-            col_widths = [indicators_label_w, content_col_w, status_col_w]
-            table_rows: List[List[Any]] = [
-                [
-                    "",
-                    Paragraph(
-                        "<b><font color='white'>Objetivos de aprendizaje</font></b>",
-                        header_white,
-                    ),
-                    Paragraph("<b><font color='white'>Estado</font></b>", header_white),
-                ]
+        table_rows: List[List[Any]] = [
+            [
+                Paragraph(
+                    "<b><font color='white'>Objetivos de aprendizaje</font></b>",
+                    header_white,
+                ),
+                Paragraph("<b><font color='white'>Estado</font></b>", header_white),
             ]
-            status_col_idx = 2
-        else:
-            content_col_w = table_width - status_col_w
-            col_widths = [content_col_w, status_col_w]
-            table_rows = [
-                [
-                    Paragraph(
-                        "<b><font color='white'>Objetivos de aprendizaje</font></b>",
-                        header_white,
-                    ),
-                    Paragraph("<b><font color='white'>Estado</font></b>", header_white),
-                ]
-            ]
-            status_col_idx = 1
+        ]
 
-        span_rules: List[Any] = []
-        row_idx = 1
-        i = 0
-        while i < len(progress_rows):
-            row = progress_rows[i] if isinstance(progress_rows[i], dict) else {}
+        indicator_bg = colors.HexColor("#FAFBFC")
+        indicator_row_indices: List[int] = []
+
+        for row in progress_rows:
+            if not isinstance(row, dict):
+                continue
             kind = str(row.get("kind") or "oa")
             status = row.get("status") or row.get("rating") or ""
-
-            if kind == "indicator" and has_indicator_rows:
-                j = i
-                while j < len(progress_rows):
-                    rj = progress_rows[j] if isinstance(progress_rows[j], dict) else {}
-                    if str(rj.get("kind") or "") != "indicator":
-                        break
-                    j += 1
-                group_len = j - i
-                for k in range(i, j):
-                    rk = progress_rows[k] if isinstance(progress_rows[k], dict) else {}
-                    ind_status = rk.get("status") or rk.get("rating") or ""
-                    if k == i:
-                        table_rows.append(
-                            [
-                                cell_indicators_vertical_label(),
-                                cell_value(rk.get("description") or ""),
-                                cell_value(ind_status),
-                            ]
-                        )
-                    else:
-                        table_rows.append(
-                            [
-                                "",
-                                cell_value(rk.get("description") or ""),
-                                cell_value(ind_status),
-                            ]
-                        )
-                if group_len > 1:
-                    span_rules.append(("SPAN", (0, row_idx), (0, row_idx + group_len - 1)))
-                    span_rules.append(
-                        ("VALIGN", (0, row_idx), (0, row_idx + group_len - 1), "MIDDLE")
-                    )
-                    span_rules.append(
-                        ("ALIGN", (0, row_idx), (0, row_idx + group_len - 1), "CENTER")
-                    )
-                row_idx += group_len
-                i = j
+            if kind == "indicator":
+                row_idx = len(table_rows)
+                indicator_row_indices.append(row_idx)
+                table_rows.append(
+                    [
+                        cell_indicator_description(
+                            row.get("description") or "",
+                            bool(row.get("show_indicators_label")),
+                        ),
+                        cell_value(status),
+                    ]
+                )
             else:
-                if has_indicator_rows:
-                    table_rows.append(
-                        [
-                            "",
-                            cell_value(row.get("description") or ""),
-                            cell_value(status),
-                        ]
-                    )
-                else:
-                    table_rows.append(
-                        [
-                            cell_value(row.get("description") or ""),
-                            cell_value(status),
-                        ]
-                    )
-                row_idx += 1
-                i += 1
+                table_rows.append(
+                    [
+                        cell_value(row.get("description") or ""),
+                        cell_value(status),
+                    ]
+                )
 
-        elements.append(Paragraph("II. Progreso en los objetivos de aprendizaje", section_style))
-        elements.append(Spacer(1, 0.1 * inch))
+        if include_section_title:
+            elements.append(Paragraph("II. Progreso en los objetivos de aprendizaje", section_style))
+            elements.append(Spacer(1, 0.1 * inch))
 
-        table = Table(table_rows, colWidths=col_widths)
-        style_rules = [
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-            ("ALIGN", (status_col_idx, 1), (status_col_idx, -1), "CENTER"),
-            ("VALIGN", (status_col_idx, 1), (status_col_idx, -1), "MIDDLE"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 6),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-            ("TOPPADDING", (0, 0), (-1, -1), 5),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CCCCCC")),
-            ("BACKGROUND", (0, 0), (-1, 0), header_bg),
-            ("TEXTCOLOR", (0, 0), (-1, 0), header_text),
-        ]
-        if has_indicator_rows:
-            style_rules.append(("BACKGROUND", (0, 0), (0, 0), header_bg))
-        style_rules.extend(span_rules)
-        table.setStyle(TableStyle(style_rules))
-        elements.append(table)
-        elements.append(Spacer(1, 0.12 * inch))
+        if len(table_rows) > 1:
+            table = Table(table_rows, colWidths=col_widths)
+            style_rules = [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                ("ALIGN", (1, 1), (1, -1), "CENTER"),
+                ("VALIGN", (1, 1), (1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), cell_padding),
+                ("RIGHTPADDING", (0, 0), (-1, -1), cell_padding),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CCCCCC")),
+                ("BACKGROUND", (0, 0), (-1, 0), header_bg),
+                ("TEXTCOLOR", (0, 0), (-1, 0), header_text),
+            ]
+            for idx in indicator_row_indices:
+                style_rules.append(("BACKGROUND", (0, idx), (-1, idx), indicator_bg))
+            table.setStyle(TableStyle(style_rules))
+            elements.append(table)
+            elements.append(Spacer(1, 0.12 * inch))
 
         obs_rows = [
             [cell_label("Observaciones")],
-            [cell_value(observations, normal_style)],
+            [cell_value(obs_text, normal_style)],
         ]
         obs_table = Table(obs_rows, colWidths=[table_width])
         obs_table.setStyle(
@@ -4739,28 +4691,77 @@ class DocumentsClass:
             elements.append(Paragraph("II. Progreso en los objetivos de aprendizaje", section_style))
             elements.append(Spacer(1, 0.12 * inch))
 
-            obs_table_style = TableStyle(
-                [
-                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-                    ("LEFTPADDING", (0, 0), (-1, -1), 8),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-                    ("TOPPADDING", (0, 0), (-1, -1), 8),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-                    ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CCCCCC")),
-                    ("MINROWHEIGHT", (0, 1), (0, 1), 2.5 * cm),
-                ]
+            small_style = ParagraphStyle(
+                "PaciIntegralSmall",
+                parent=normal_style,
+                fontSize=9,
+                leading=11,
             )
+            header_bg = colors.HexColor("#6B7280")
+            header_text = colors.white
 
-            for section in sections:
-                obs_rows = [
-                    [cell_label("Observaciones")],
-                    [cell_value(get_section(section, "observations"))],
-                ]
-                obs_table = Table(obs_rows, colWidths=[16.8 * cm])
-                obs_table.setStyle(obs_table_style)
-                elements.append(obs_table)
-                elements.append(Spacer(1, 0.15 * inch))
+            for sec_idx, section in enumerate(sections):
+                if len(sections) > 1:
+                    subject_name = get_section(section, "subject_name")
+                    if subject_name:
+                        elements.append(Paragraph(f"<b>Asignatura: {esc(subject_name)}</b>", normal_style))
+                        elements.append(Spacer(1, 0.08 * inch))
+
+                progress_rows = section.get("progress_rows") or []
+                if not progress_rows:
+                    oa_rows_legacy = section.get("oa_rows") or []
+                    progress_rows = [
+                        {
+                            "kind": "oa",
+                            "description": r.get("description") or "",
+                            "status": r.get("rating") or "",
+                        }
+                        for r in oa_rows_legacy
+                        if isinstance(r, dict)
+                    ]
+
+                if progress_rows:
+                    DocumentsClass._append_paci_progress_objectives_block(
+                        elements,
+                        progress_rows,
+                        section_style=section_style,
+                        subtitle_style=small_style,
+                        normal_style=normal_style,
+                        label_style=label_style,
+                        small_style=small_style,
+                        header_bg=header_bg,
+                        header_text=header_text,
+                        observations=get_section(section, "observations"),
+                        include_section_title=False,
+                        table_width=DocumentsClass.PACI_PROGRESS_TABLE_WIDTH,
+                    )
+                else:
+                    obs_rows = [
+                        [cell_label("Observaciones")],
+                        [cell_value(get_section(section, "observations"))],
+                    ]
+                    obs_table = Table(
+                        obs_rows, colWidths=[DocumentsClass.PACI_PROGRESS_TABLE_WIDTH]
+                    )
+                    obs_table.setStyle(
+                        TableStyle(
+                            [
+                                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                                ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                                ("TOPPADDING", (0, 0), (-1, -1), 8),
+                                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CCCCCC")),
+                                ("MINROWHEIGHT", (0, 1), (0, 1), 2.5 * cm),
+                            ]
+                        )
+                    )
+                    elements.append(obs_table)
+                    elements.append(Spacer(1, 0.15 * inch))
+
+                if sec_idx < len(sections) - 1:
+                    elements.append(Spacer(1, 0.2 * inch))
 
             elements.append(Spacer(1, 0.35 * inch))
             append_signature_block(first_section)
