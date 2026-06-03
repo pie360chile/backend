@@ -2045,7 +2045,7 @@ class IndividualCurriculumAdaptationPlanModel(Base):
     student_full_name = Column(String(255), nullable=True)
     student_identification_number = Column(String(50), nullable=True)
     student_born_date = Column(Date, nullable=True)
-    student_age = Column(String(10), nullable=True)
+    student_age = Column(String(50), nullable=True)
     student_nee_id = Column(Integer, nullable=True)
     student_nee = Column(String(255), nullable=True)
     student_school = Column(String(255), nullable=True)

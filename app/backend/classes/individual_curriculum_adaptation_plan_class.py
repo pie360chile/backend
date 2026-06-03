@@ -44,6 +44,15 @@ def _json_dump(value: Any) -> Optional[str]:
         return None
 
 
+def _clip_optional_str(value: Any, max_len: int = 255) -> Optional[str]:
+    if value is None:
+        return None
+    s = str(value).strip()
+    if not s:
+        return None
+    return s[:max_len]
+
+
 def _json_load(value: Any, default: Any = None) -> Any:
     if value is None or value == "":
         return default
@@ -205,6 +214,14 @@ class IndividualCurriculumAdaptationPlanClass:
             plan.semester_id = data.get("semester_id")
         if "report_date" in data:
             plan.report_date = _parse_date(data.get("report_date"))
+        str_limits = {
+            "student_full_name": 255,
+            "student_identification_number": 50,
+            "student_age": 50,
+            "student_nee": 255,
+            "student_school": 255,
+            "student_course": 255,
+        }
         for field in (
             "student_full_name",
             "student_identification_number",
@@ -221,7 +238,10 @@ class IndividualCurriculumAdaptationPlanClass:
             "progress_state",
         ):
             if field in data:
-                setattr(plan, field, data.get(field))
+                if field in str_limits:
+                    setattr(plan, field, _clip_optional_str(data.get(field), str_limits[field]))
+                else:
+                    setattr(plan, field, data.get(field))
         if "student_born_date" in data:
             plan.student_born_date = _parse_date(data.get("student_born_date"))
         if "student_nee_id" in data:

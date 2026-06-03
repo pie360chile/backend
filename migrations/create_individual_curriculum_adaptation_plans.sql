@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS `individual_curriculum_adaptation_plans` (
   `student_full_name` VARCHAR(255) NULL,
   `student_identification_number` VARCHAR(50) NULL,
   `student_born_date` DATE NULL,
-  `student_age` VARCHAR(10) NULL,
+  `student_age` VARCHAR(50) NULL,
   `student_nee_id` INT NULL,
   `student_nee` VARCHAR(255) NULL,
   `student_school` VARCHAR(255) NULL,

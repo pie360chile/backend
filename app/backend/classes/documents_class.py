@@ -3748,19 +3748,24 @@ class DocumentsClass:
             alignment=TA_CENTER,
         )
 
-        indicator_row_style = ParagraphStyle(
-            "PaciProgressIndicatorRow",
-            parent=small_style,
-            fontSize=9,
-            leading=11,
-            leftIndent=12,
+        indicator_title_style = ParagraphStyle(
+            "PaciProgressIndicatorTitle",
+            parent=label_style,
+            fontSize=10,
+            fontName="Helvetica-Bold",
+            textColor=colors.HexColor("#475569"),
+            spaceBefore=2,
+            spaceAfter=2,
         )
 
-        def cell_indicator_description(text: str, show_label: bool) -> Paragraph:
-            body = esc(text) or "—"
-            if show_label:
-                return Paragraph(f"<b>Indicadores</b><br/>{body}", indicator_row_style)
-            return Paragraph(f"• {body}", indicator_row_style)
+        indicator_box_style = ParagraphStyle(
+            "PaciProgressIndicatorBox",
+            parent=small_style,
+            fontSize=9,
+            leading=12,
+            leftIndent=4,
+            rightIndent=4,
+        )
 
         table_rows: List[List[Any]] = [
             [
@@ -3772,23 +3777,40 @@ class DocumentsClass:
             ]
         ]
 
-        indicator_bg = colors.HexColor("#FAFBFC")
-        indicator_row_indices: List[int] = []
+        indicator_title_bg = colors.HexColor("#F1F5F9")
+        indicator_box_bg = colors.HexColor("#FFFFFF")
+        indicator_title_row_indices: List[int] = []
+        indicator_value_row_indices: List[int] = []
 
-        for row in progress_rows:
+        for i, row in enumerate(progress_rows):
             if not isinstance(row, dict):
                 continue
             kind = str(row.get("kind") or "oa")
             status = row.get("status") or row.get("rating") or ""
-            if kind == "indicator":
+
+            def append_indicator_title_row() -> None:
                 row_idx = len(table_rows)
-                indicator_row_indices.append(row_idx)
+                indicator_title_row_indices.append(row_idx)
                 table_rows.append(
                     [
-                        cell_indicator_description(
-                            row.get("description") or "",
-                            bool(row.get("show_indicators_label")),
-                        ),
+                        Paragraph("<b>Indicadores</b>", indicator_title_style),
+                        Paragraph("", small_style),
+                    ]
+                )
+
+            if kind == "indicator-title":
+                append_indicator_title_row()
+            elif kind == "indicator":
+                prev_kind = ""
+                if i > 0 and isinstance(progress_rows[i - 1], dict):
+                    prev_kind = str(progress_rows[i - 1].get("kind") or "")
+                if prev_kind not in ("indicator", "indicator-title"):
+                    append_indicator_title_row()
+                row_idx = len(table_rows)
+                indicator_value_row_indices.append(row_idx)
+                table_rows.append(
+                    [
+                        Paragraph(esc(row.get("description") or "") or "—", indicator_box_style),
                         cell_value(status),
                     ]
                 )
@@ -3819,8 +3841,13 @@ class DocumentsClass:
                 ("BACKGROUND", (0, 0), (-1, 0), header_bg),
                 ("TEXTCOLOR", (0, 0), (-1, 0), header_text),
             ]
-            for idx in indicator_row_indices:
-                style_rules.append(("BACKGROUND", (0, idx), (-1, idx), indicator_bg))
+            for idx in indicator_title_row_indices:
+                style_rules.append(("BACKGROUND", (0, idx), (-1, idx), indicator_title_bg))
+                style_rules.append(("SPAN", (0, idx), (1, idx)))
+                style_rules.append(("ALIGN", (0, idx), (1, idx), "LEFT"))
+            for idx in indicator_value_row_indices:
+                style_rules.append(("BACKGROUND", (0, idx), (0, idx), indicator_box_bg))
+                style_rules.append(("BOX", (0, idx), (0, idx), 0.5, colors.HexColor("#E2E8F0")))
             table.setStyle(TableStyle(style_rules))
             elements.append(table)
             elements.append(Spacer(1, 0.12 * inch))
