@@ -2031,6 +2031,75 @@ class IndividualSupportPlanProfessionalModel(Base):
     updated_date = Column(DateTime, nullable=True)
     deleted_date = Column(DateTime, nullable=True)
 
+
+class IndividualCurriculumAdaptationPlanModel(Base):
+    __tablename__ = 'individual_curriculum_adaptation_plans'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    student_id = Column(Integer, nullable=False)
+    document_type_id = Column(Integer, nullable=False, default=21)
+    school_id = Column(Integer, nullable=True)
+    semester_id = Column(Integer, nullable=True)
+    report_date = Column(Date, nullable=True)
+
+    student_full_name = Column(String(255), nullable=True)
+    student_identification_number = Column(String(50), nullable=True)
+    student_born_date = Column(Date, nullable=True)
+    student_age = Column(String(10), nullable=True)
+    student_nee_id = Column(Integer, nullable=True)
+    student_nee = Column(String(255), nullable=True)
+    student_school = Column(String(255), nullable=True)
+    student_course_id = Column(Integer, nullable=True)
+    student_course = Column(String(255), nullable=True)
+
+    school_background = Column(Text, nullable=True)
+    evaluation_background = Column(Text, nullable=True)
+    nee_diagnosis = Column(Text, nullable=True)
+    curricular_adaptations = Column(Text, nullable=True)
+    curricular_adaptation_subjects = Column(Text, nullable=True)
+    support_resources = Column(Text, nullable=True)
+    evaluation_criteria = Column(Text, nullable=True)
+    progress_state = Column(Text, nullable=True)
+
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+
+class IndividualCurriculumAdaptationPlanProfessionalModel(Base):
+    __tablename__ = 'individual_curriculum_adaptation_plan_professionals'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    individual_curriculum_adaptation_plan_id = Column(Integer, nullable=False)
+    professional_id = Column(Integer, nullable=False)
+    professional_role = Column(String(255), nullable=True)
+    support_roles = Column(Text, nullable=True)
+    phone = Column(String(50), nullable=True)
+    email = Column(String(255), nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+
+class IndividualCurriculumAdaptationPlanFamilyMemberModel(Base):
+    __tablename__ = 'individual_curriculum_adaptation_plan_family_members'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    individual_curriculum_adaptation_plan_id = Column(Integer, nullable=False)
+    guardian_id = Column(Integer, nullable=True)
+    name = Column(String(255), nullable=True)
+    identification_number = Column(String(50), nullable=True)
+    family_member_id = Column(Integer, nullable=True)
+    address = Column(String(500), nullable=True)
+    phone = Column(String(50), nullable=True)
+    email = Column(String(255), nullable=True)
+    is_emergency_contact = Column(Integer, nullable=False, default=0)
+    is_guardian = Column(Integer, nullable=False, default=1)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+
 class AuditModel(Base):
     __tablename__ = 'audits'
     

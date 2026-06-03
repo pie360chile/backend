@@ -2110,6 +2110,108 @@ class IndividualSupportPlanList(BaseModel):
     student_id: Optional[int] = None
     school_id: Optional[int] = None
 
+
+# Document 21 – Individual Curriculum Adaptation Plan (ICAP / PACI)
+class IcapAchievementIndicatorSchema(BaseModel):
+    id: Optional[str] = None
+    text: Optional[str] = None
+
+
+class IcapLearningObjectiveSchema(BaseModel):
+    id: str
+    level_code: str
+    level_description: str
+    is_priority: Optional[bool] = False
+    adapted_description: Optional[str] = None
+    adapted_level_code: Optional[str] = None
+    is_not_adapted: Optional[bool] = False
+    oa_not_worked: Optional[bool] = False
+    achievement_indicators_enabled: Optional[bool] = False
+    achievement_indicators: Optional[List[IcapAchievementIndicatorSchema]] = None
+
+
+class IcapCurricularAdaptationSubjectSchema(BaseModel):
+    subject_id: int
+    subject_name: Optional[str] = None
+    adaptation_type: Optional[str] = None
+    strategies: Optional[str] = None
+    learning_objectives: Optional[List[IcapLearningObjectiveSchema]] = None
+
+
+class IcapProfessionalSchema(BaseModel):
+    professional_id: int
+    professional_role: Optional[str] = None
+    support_roles: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+
+
+class IcapFamilyMemberSchema(BaseModel):
+    guardian_id: Optional[int] = None
+    name: Optional[str] = None
+    identification_number: Optional[str] = None
+    family_member_id: Optional[int] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    is_emergency_contact: Optional[bool] = False
+    is_guardian: Optional[bool] = True
+
+
+class StoreIndividualCurriculumAdaptationPlan(BaseModel):
+    student_id: int
+    document_type_id: Optional[int] = 21
+    school_id: Optional[int] = None
+    semester_id: Optional[int] = None
+    report_date: Optional[str] = None
+    student_full_name: Optional[str] = None
+    student_identification_number: Optional[str] = None
+    student_born_date: Optional[str] = None
+    student_age: Optional[str] = None
+    student_nee_id: Optional[int] = None
+    student_nee: Optional[str] = None
+    student_school: Optional[str] = None
+    student_course_id: Optional[int] = None
+    student_course: Optional[str] = None
+    school_background: Optional[str] = None
+    evaluation_background: Optional[str] = None
+    nee_diagnosis: Optional[str] = None
+    curricular_adaptations: Optional[str] = None
+    curricular_adaptation_subjects: Optional[List[IcapCurricularAdaptationSubjectSchema]] = None
+    support_resources: Optional[str] = None
+    evaluation_criteria: Optional[str] = None
+    progress_state: Optional[str] = None
+    professionals: Optional[List[IcapProfessionalSchema]] = None
+    family_members: Optional[List[IcapFamilyMemberSchema]] = None
+
+
+class UpdateIndividualCurriculumAdaptationPlan(BaseModel):
+    student_id: Optional[int] = None
+    document_type_id: Optional[int] = None
+    school_id: Optional[int] = None
+    semester_id: Optional[int] = None
+    report_date: Optional[str] = None
+    student_full_name: Optional[str] = None
+    student_identification_number: Optional[str] = None
+    student_born_date: Optional[str] = None
+    student_age: Optional[str] = None
+    student_nee_id: Optional[int] = None
+    student_nee: Optional[str] = None
+    student_school: Optional[str] = None
+    student_course_id: Optional[int] = None
+    student_course: Optional[str] = None
+    school_background: Optional[str] = None
+    evaluation_background: Optional[str] = None
+    nee_diagnosis: Optional[str] = None
+    curricular_adaptations: Optional[str] = None
+    curricular_adaptation_subjects: Optional[List[IcapCurricularAdaptationSubjectSchema]] = None
+    support_resources: Optional[str] = None
+    evaluation_criteria: Optional[str] = None
+    progress_state: Optional[str] = None
+    professionals: Optional[List[IcapProfessionalSchema]] = None
+    family_members: Optional[List[IcapFamilyMemberSchema]] = None
+
+
 # Audit schemas
 class StoreAudit(BaseModel):
     user_id: int

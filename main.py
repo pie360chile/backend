@@ -100,6 +100,9 @@ from app.backend.routes.psychopedagogical_evaluations import psychopedagogical_e
 from app.backend.routes.conners_teacher_evaluations import conners_teacher_evaluations
 from app.backend.routes.diagnosis_summary import diagnosis_summary
 from app.backend.routes.cesp import cesp
+from app.backend.routes.individual_curriculum_adaptation_plans import (
+    individual_curriculum_adaptation_plans,
+)
 from app.backend.routes.idtel_reports import idtel_reports
 from app.backend.routes.psychomotor_evaluation_reports import psychomotor_evaluation_reports
 from app.backend.routes.pedagogical_evaluation_classroom_first_grade import pedagogical_evaluation_classroom_first_grade
@@ -244,6 +247,8 @@ app.include_router(events)
 app.include_router(bank_descriptions)
 app.include_router(progress_status_students)
 app.include_router(individual_support_plans)
+app.include_router(individual_curriculum_adaptation_plans)
+app.include_router(individual_curriculum_adaptation_plans, prefix="/api")
 app.include_router(progress_status_individual_supports)
 app.include_router(fonoaudiological_reports)
 app.include_router(school_integration_program_exit_certificates)
