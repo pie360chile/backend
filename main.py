@@ -104,6 +104,7 @@ from app.backend.routes.individual_curriculum_adaptation_plans import (
     individual_curriculum_adaptation_plans,
 )
 from app.backend.routes.idtel_reports import idtel_reports
+from app.backend.routes.fur_forms import fur_forms
 from app.backend.routes.psychomotor_evaluation_reports import psychomotor_evaluation_reports
 from app.backend.routes.pedagogical_evaluation_classroom_first_grade import pedagogical_evaluation_classroom_first_grade
 from app.backend.routes.pedagogical_evaluation_classroom_second_grade import pedagogical_evaluation_classroom_second_grade
@@ -295,6 +296,7 @@ app.include_router(conners_teacher_evaluations)
 app.include_router(diagnosis_summary)
 app.include_router(cesp)
 app.include_router(idtel_reports)
+app.include_router(fur_forms)
 app.include_router(psychomotor_evaluation_reports)
 app.include_router(pedagogical_evaluation_classroom_first_grade)
 app.include_router(pedagogical_evaluation_classroom_second_grade)

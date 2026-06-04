@@ -2507,6 +2507,18 @@ class UpdateFonoaudiologicalReport(BaseModel):
     suggestions_family: Optional[str] = None
     suggestions_establishment: Optional[str] = None
 
+class StoreFurForm(BaseModel):
+    """Document 6 – Formulario de revaluación (FUR). Acepta todos los campos del formulario."""
+    student_id: int
+    school_id: Optional[int] = None
+    student_identification_number: Optional[str] = None
+    document_type_id: Optional[int] = 6
+    fur_variant: Optional[str] = "dea"
+
+    class Config:
+        extra = "allow"
+
+
 class StoreIdtelReport(BaseModel):
     """Document 9 – Informe fonoaudiológico IDTEL. Acepta todos los campos del formulario."""
     student_id: int

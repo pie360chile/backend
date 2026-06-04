@@ -2182,6 +2182,20 @@ class FonoaudiologicalReportModel(Base):
     updated_date = Column(DateTime, nullable=True)
     deleted_date = Column(DateTime, nullable=True)
 
+class FurFormModel(Base):
+    """Document 6 – Formulario de revaluación (FUR). Campos del formulario en JSON."""
+    __tablename__ = 'fur_forms'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    student_id = Column(Integer, nullable=False)
+    school_id = Column(Integer, nullable=True)
+    student_identification_number = Column(String(50), nullable=True)
+    document_type_id = Column(Integer, nullable=False, default=6)
+    fur_variant = Column(String(80), nullable=False, default='dea')
+    form_data = Column(Text, nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+
+
 class IdtelReportModel(Base):
     """Document 9 – Informe fonoaudiológico IDTEL."""
     __tablename__ = 'idtel_report'
