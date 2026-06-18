@@ -13,6 +13,33 @@ def _split_origins(raw: str | None) -> List[str]:
     return [part.strip() for part in str(raw).split(",") if part.strip()]
 
 
+# Frontend del agente (Firebase Hosting)
+AGENT_APP_ORIGINS: tuple[str, ...] = (
+    "https://agent-8ceae.web.app",
+    "https://agent-8ceae.firebaseapp.com",
+)
+
+_DEFAULT_CORS_RAW = ",".join(
+    [
+        "*",
+        "https://newerp-ghdegyc9cpcpc6gq.eastus-01.azurewebsites.net",
+        *AGENT_APP_ORIGINS,
+    ]
+)
+
+
+def resolve_cors_origins(origins: List[str]) -> tuple[list[str], bool]:
+    """Con allow_credentials=True, '*' no es válido: usamos orígenes explícitos."""
+    merged: list[str] = []
+    for origin in [*origins, *AGENT_APP_ORIGINS]:
+        if origin and origin not in merged:
+            merged.append(origin)
+    explicit = [origin for origin in merged if origin != "*"]
+    if explicit:
+        return explicit, True
+    return ["*"], False
+
+
 @dataclass(frozen=True)
 class Settings:
     database_url: str = field(
@@ -35,10 +62,7 @@ class Settings:
     )
     cors_origins: List[str] = field(
         default_factory=lambda: _split_origins(
-            os.getenv(
-                "CORS_ORIGINS",
-                "*,https://newerp-ghdegyc9cpcpc6gq.eastus-01.azurewebsites.net",
-            )
+            os.getenv("CORS_ORIGINS", _DEFAULT_CORS_RAW)
         )
     )
     api_root_path: str = field(default_factory=lambda: os.getenv("API_ROOT_PATH", "/api"))

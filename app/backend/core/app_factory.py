@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.backend.api.router import register_routers
-from app.backend.core.config import apply_settings_to_process_env, settings
+from app.backend.core.config import apply_settings_to_process_env, resolve_cors_origins, settings
 
 
 def register_exception_handlers(app: FastAPI) -> None:
@@ -38,10 +38,11 @@ def register_exception_handlers(app: FastAPI) -> None:
 
 
 def register_middleware(app: FastAPI) -> None:
+    cors_origins, allow_credentials = resolve_cors_origins(settings.cors_origins)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origins,
-        allow_credentials=True,
+        allow_origins=cors_origins,
+        allow_credentials=allow_credentials,
         allow_methods=["*"],
         allow_headers=["*"],
     )
