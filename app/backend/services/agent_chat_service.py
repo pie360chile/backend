@@ -184,11 +184,13 @@ def iter_chat_with_agent_events(
 
         if openai_file_ids:
             if total_files and len(openai_file_ids) < total_files:
+                names_preview = ", ".join(selected_names[:4])
+                extra = f" ({names_preview})" if names_preview else ""
                 yield {
                     "type": "step",
                     "message": (
-                        f"Usando {len(openai_file_ids)} de {total_files} archivos relevantes "
-                        "(plantillas + datos del caso solicitado)."
+                        f"Usando {len(openai_file_ids)} de {total_files} archivos relevantes"
+                        f"{extra}."
                     ),
                 }
             else:

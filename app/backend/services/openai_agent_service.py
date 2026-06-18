@@ -195,6 +195,10 @@ def _build_instructions(agent: AgentModel, available_files: list[str] | None = N
         "no generes informes de otros estudiantes que aparezcan en los archivos fuente.\n"
         "- Abre en el code interpreter solo los archivos listados abajo; "
         "no proceses otros estudiantes ni documentos que no correspondan a esta solicitud.\n"
+        "- Para un solo estudiante, abre como máximo la plantilla/formato y el archivo de ese caso; "
+        "no abras PDFs de otros alumnos ni documentos de referencia que no uses.\n"
+        "- Sé eficiente: extrae solo los datos necesarios del informe fuente; "
+        "no re-leas ni reproceses archivos que ya no necesitas.\n"
         "- NO incluyas enlaces sandbox:, rutas /mnt/data/ ni URLs de descarga en tu respuesta; "
         "la plataforma mostrará botones de descarga automáticamente.\n"
         "- NUNCA pegues código Python ni logs del intérprete en tu respuesta al usuario; "
@@ -229,11 +233,22 @@ def _build_code_interpreter_tool(agent: AgentModel, file_ids: list[str]) -> dict
     }
 
 
+def _container_id_from_stream_event(event: Any) -> str | None:
+    item = getattr(event, "item", None)
+    if item is not None:
+        container_id = getattr(item, "container_id", None)
+        if container_id:
+            return container_id
+    return getattr(event, "container_id", None)
+
+
 def _finalize_openai_response(
     db: Session,
     agent: AgentModel,
     response: Any,
     file_ids: list[str],
+    *,
+    early_saved: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     container_id = _extract_container_id(response, agent)
     if container_id:
@@ -258,6 +273,7 @@ def _finalize_openai_response(
                 response,
                 container_id,
                 file_ids,
+                early_saved=early_saved,
             )
         except Exception as exc:
             logger.warning("No se pudieron guardar archivos de respuesta: %s", exc)
@@ -279,6 +295,8 @@ def _finalize_openai_response(
             f"No se pudo guardar {best_mentioned} en el servidor. "
             "Vuelve a pedir al agente que genere el documento."
         )
+    elif response_files:
+        response_files_warning = None
 
     reply = sanitize_reply_sandbox_links(reply, response_files)
     if _is_code_interpreter_dump(reply):
@@ -390,6 +408,8 @@ def stream_chat_with_openai_responses(
     tools = [_build_code_interpreter_tool(agent, file_ids)]
     file_names = instruction_file_names or _agent_uploaded_file_names(db, agent.id)
     seen_steps: set[str] = set()
+    early_saved: list[dict[str, Any]] = []
+    stream_container_id: str | None = agent.openai_container_id
 
     def emit_step(label: str) -> dict[str, Any] | None:
         if label in seen_steps:
@@ -420,6 +440,30 @@ def stream_chat_with_openai_responses(
                 post_step = emit_step(_POST_INTERPRETER_STEP)
                 if post_step:
                     yield post_step
+                container_id = _container_id_from_stream_event(event) or stream_container_id
+                if container_id:
+                    stream_container_id = container_id
+                    if not early_saved:
+                        from app.backend.services.agent_response_files_service import try_capture_from_container
+
+                        captured = try_capture_from_container(
+                            db,
+                            agent.id,
+                            container_id,
+                            file_ids,
+                        )
+                        if captured:
+                            early_saved = captured
+                            save_event = emit_step(
+                                f"Archivo guardado: {captured[0]['name']}"
+                            )
+                            if save_event:
+                                yield save_event
+
+            if etype == "response.code_interpreter_call.in_progress":
+                container_id = _container_id_from_stream_event(event)
+                if container_id:
+                    stream_container_id = container_id
 
             delta = _extract_text_delta(event)
             if delta:
@@ -433,7 +477,13 @@ def stream_chat_with_openai_responses(
     save_step = emit_step("Guardando archivos generados, si los hay…")
     if save_step:
         yield save_step
-    result = _finalize_openai_response(db, agent, response, file_ids)
+    result = _finalize_openai_response(
+        db,
+        agent,
+        response,
+        file_ids,
+        early_saved=early_saved or None,
+    )
     yield {"type": "done", "data": result}
 
 

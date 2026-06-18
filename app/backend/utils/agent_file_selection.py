@@ -21,6 +21,14 @@ _TEMPLATE_HINTS = (
     "informe de familia",
 )
 
+_TEMPLATE_PRIORITY = (
+    "formato",
+    "cartilla",
+    "informe de familia",
+    "plantilla",
+    "modelo",
+)
+
 _STOPWORDS = {
     "para",
     "como",
@@ -91,6 +99,24 @@ def _file_name_matches_tokens(display_name: str, tokens: list[str]) -> bool:
     return matched >= 1
 
 
+def _template_priority(display_name: str) -> int:
+    lower = _normalize(display_name.replace("_", " ").replace("-", " "))
+    for index, hint in enumerate(_TEMPLATE_PRIORITY):
+        if hint in lower:
+            return index
+    return len(_TEMPLATE_PRIORITY)
+
+
+def _pick_template_rows(rows: list[AgentFileModel], limit: int) -> list[AgentFileModel]:
+    templates = [row for row in rows if _is_template_file(row.display_name)]
+    templates.sort(key=lambda row: (_template_priority(row.display_name), row.uploaded_at or 0))
+    return templates[:limit]
+
+
+def _is_single_student_query(tokens: list[str]) -> bool:
+    return len(tokens) >= 2
+
+
 def select_agent_file_rows(
     db: Session,
     agent_id: str,
@@ -109,11 +135,19 @@ def select_agent_file_rows(
     if not rows:
         return []
 
-    if len(rows) <= max_files:
-        return rows
-
     tokens = _message_name_tokens(message)
+    single_student = _is_single_student_query(tokens)
+    if single_student:
+        max_files = min(max_files, 5)
+    max_templates = 2 if single_student else 3
+
     hit_file_ids = {hit["fileId"] for hit in (knowledge_hits or []) if hit.get("fileId")}
+    if single_student and hit_file_ids:
+        hit_file_ids = {
+            row.id
+            for row in rows
+            if row.id in hit_file_ids and _file_name_matches_tokens(row.display_name, tokens)
+        }
 
     selected: list[AgentFileModel] = []
     selected_ids: set[str] = set()
@@ -124,23 +158,21 @@ def select_agent_file_rows(
         selected.append(row)
         selected_ids.add(row.id)
 
+    for row in _pick_template_rows(rows, max_templates):
+        add(row)
+
     for row in rows:
-        if _is_template_file(row.display_name):
+        if _file_name_matches_tokens(row.display_name, tokens):
             add(row)
 
     for row in rows:
         if row.id in hit_file_ids:
             add(row)
 
-    for row in rows:
-        if _file_name_matches_tokens(row.display_name, tokens):
-            add(row)
-
     if not selected:
-        return rows
+        return rows[:max_files]
 
     if len(selected) > max_files:
-        # Plantillas primero, luego el resto por orden de subida
         templates = [r for r in selected if _is_template_file(r.display_name)]
         others = [r for r in selected if not _is_template_file(r.display_name)]
         selected = (templates + others)[:max_files]

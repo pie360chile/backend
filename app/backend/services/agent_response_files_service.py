@@ -140,11 +140,12 @@ def _extract_container_citations(response: Any) -> list[dict[str, str]]:
     seen: set[str] = set()
     output = getattr(response, "output", None) or []
     for item in output:
-        if getattr(item, "type", None) != "message":
-            continue
-        for block in getattr(item, "content", None) or []:
-            if getattr(block, "type", None) != "output_text":
-                continue
+        blocks: list[Any] = []
+        if getattr(item, "type", None) == "message":
+            blocks = list(getattr(item, "content", None) or [])
+        elif getattr(item, "type", None) == "code_interpreter_call":
+            blocks = list(getattr(item, "outputs", None) or [])
+        for block in blocks:
             for ann in getattr(block, "annotations", None) or []:
                 if getattr(ann, "type", None) != "container_file_citation":
                     continue
@@ -193,17 +194,17 @@ def _normalize_name_token(value: str) -> str:
 def _is_user_upload_mirror(filename: str, user_names: set[str]) -> bool:
     """Detecta copias en el contenedor de archivos que el usuario ya subió."""
     lower = filename.lower()
+    normalized = _normalize_name_token(Path(lower).stem)
     if lower.startswith("file-"):
         for display in user_names:
-            stem = Path(display).stem
-            token = _normalize_name_token(stem)
-            if len(token) >= 8 and token in _normalize_name_token(lower):
+            token = _normalize_name_token(Path(display).stem)
+            if len(token) >= 8 and token in normalized:
                 return True
     for display in user_names:
         if display.lower() == lower:
             return True
         stem = Path(display).stem.lower()
-        if stem and stem in lower and lower.startswith("file-"):
+        if stem and lower.startswith("file-") and stem in lower:
             return True
     return False
 
@@ -254,15 +255,21 @@ def _known_openai_file_ids(db: Session, agent_id: str) -> set[str]:
 
 
 def _download_container_file(client: Any, container_id: str, file_id: str) -> bytes:
-    content = client.containers.files.content.retrieve(file_id, container_id=container_id)
+    content = client.containers.files.content.retrieve(
+        file_id,
+        container_id=container_id,
+        timeout=120.0,
+    )
     return content.read()
 
 
-def _list_assistant_container_citations(
+def _list_container_generated_citations(
     client: Any,
     container_id: str,
+    *,
+    user_ids: set[str],
 ) -> list[dict[str, str]]:
-    """Fallback cuando el modelo no incluye container_file_citation en el mensaje."""
+    """Lista archivos del contenedor que no son los uploads del usuario."""
     try:
         page = client.containers.files.list(container_id=container_id, limit=100)
     except Exception as exc:
@@ -272,12 +279,15 @@ def _list_assistant_container_citations(
     citations: list[dict[str, str]] = []
     seen: set[str] = set()
     for row in getattr(page, "data", None) or []:
-        if (getattr(row, "source", None) or "").lower() != "assistant":
-            continue
         file_id = getattr(row, "id", None)
-        path = getattr(row, "path", None) or ""
-        filename = Path(path).name if path else ""
-        if not file_id or file_id in seen or not _is_response_document(filename):
+        if not file_id or file_id in seen or file_id in user_ids:
+            continue
+        source = (getattr(row, "source", None) or "").lower()
+        if source == "user":
+            continue
+        path = getattr(row, "path", None) or getattr(row, "filename", None) or ""
+        filename = Path(str(path)).name if path else ""
+        if not filename or not _is_response_document(filename):
             continue
         seen.add(file_id)
         citations.append(
@@ -286,10 +296,128 @@ def _list_assistant_container_citations(
                 "file_id": file_id,
                 "filename": filename,
                 "created_at": int(getattr(row, "created_at", 0) or 0),
+                "source": source or "generated",
             }
         )
     citations.sort(key=lambda row: row.get("created_at", 0), reverse=True)
     return citations
+
+
+def _list_assistant_container_citations(
+    client: Any,
+    container_id: str,
+    *,
+    user_ids: set[str] | None = None,
+) -> list[dict[str, str]]:
+    """Fallback cuando el modelo no incluye container_file_citation en el mensaje."""
+    return _list_container_generated_citations(
+        client,
+        container_id,
+        user_ids=user_ids or set(),
+    )
+
+
+def _save_response_bytes(
+    db: Session,
+    agent_id: str,
+    *,
+    content: bytes,
+    display_name: str,
+    container_id: str,
+    file_id: str,
+) -> dict[str, Any] | None:
+    if not content:
+        return None
+    try:
+        storage_path, visible_name = build_response_storage_path(display_name)
+    except AgentFileError as exc:
+        logger.warning("Nombre de respuesta inválido %s: %s", display_name, exc)
+        return None
+
+    ensure_responses_dir(agent_id)
+    destination = agent_dir(agent_id) / storage_path
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(content)
+
+    now = datetime.utcnow()
+    row = AgentResponseFileModel(
+        id=storage_path,
+        agent_id=agent_id,
+        display_name=visible_name,
+        size_bytes=len(content),
+        openai_container_id=container_id,
+        openai_file_id=file_id,
+        created_at=now,
+    )
+    db.add(row)
+    db.flush()
+    return _response_file_dict(row)
+
+
+def try_capture_from_container(
+    db: Session,
+    agent_id: str,
+    container_id: str,
+    user_openai_file_ids: list[str],
+    mentioned: set[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Descarga y guarda el archivo generado en cuanto existe en el contenedor."""
+    from app.backend.services.openai_agent_service import get_openai_client
+
+    if not container_id:
+        return []
+
+    client = get_openai_client()
+    user_ids = set(user_openai_file_ids)
+    known_ids = _known_openai_file_ids(db, agent_id)
+    user_names = _user_upload_display_names(db, agent_id)
+    mention_set = mentioned or set()
+
+    citations = _list_container_generated_citations(client, container_id, user_ids=user_ids)
+    picks = _pick_candidates(
+        citations,
+        user_ids=user_ids,
+        known_ids=known_ids,
+        user_names=user_names,
+        mentioned=mention_set,
+    )
+    if not picks and citations:
+        picks = citations[:MAX_SAVED_FILES_PER_CHAT]
+
+    saved: list[dict[str, Any]] = []
+    for meta in picks:
+        file_id = meta["file_id"]
+        cite_container = meta["container_id"]
+        display_name = safe_display_name(meta["filename"])
+        try:
+            content = _download_container_file(client, cite_container, file_id)
+        except Exception as exc:
+            logger.warning(
+                "Captura temprana: no se pudo descargar %s del contenedor %s: %s",
+                file_id,
+                cite_container,
+                exc,
+            )
+            continue
+        row = _save_response_bytes(
+            db,
+            agent_id,
+            content=content,
+            display_name=display_name,
+            container_id=cite_container,
+            file_id=file_id,
+        )
+        if row:
+            known_ids.add(file_id)
+            saved.append(row)
+            break
+    if saved:
+        logger.info(
+            "Captura temprana guardó %s para agente %s",
+            saved[0]["name"],
+            agent_id,
+        )
+    return saved
 
 
 def _pick_candidates(
@@ -312,6 +440,9 @@ def _pick_candidates(
             continue
         pool.append(cite)
 
+    if not pool and citations:
+        pool = citations[:MAX_SAVED_FILES_PER_CHAT]
+
     if not pool:
         return []
 
@@ -325,8 +456,13 @@ def persist_code_interpreter_outputs(
     response: Any,
     container_id: str | None,
     user_openai_file_ids: list[str],
+    *,
+    early_saved: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
-    """Guarda solo el archivo nuevo que el modelo citó en esta respuesta (máx. 1)."""
+    """Guarda solo el archivo nuevo que el modelo generó (máx. 1)."""
+    if early_saved:
+        return early_saved[:MAX_SAVED_FILES_PER_CHAT]
+
     from app.backend.services.openai_agent_service import get_openai_client
 
     container_id = container_id or _extract_container_id_from_response(response)
@@ -341,7 +477,7 @@ def persist_code_interpreter_outputs(
     mentioned = extract_filenames_from_response_output(response)
     citations = _extract_container_citations(response)
     if not citations:
-        citations = _list_assistant_container_citations(client, container_id)
+        citations = _list_container_generated_citations(client, container_id, user_ids=user_ids)
         if citations:
             logger.info(
                 "persist_code_interpreter_outputs: usando listado del contenedor (agente=%s, n=%s)",
@@ -358,14 +494,14 @@ def persist_code_interpreter_outputs(
     )
 
     if not picks:
-        logger.info(
-            "persist_code_interpreter_outputs: sin archivo nuevo citado (agente=%s, mencionados=%s)",
+        logger.warning(
+            "persist_code_interpreter_outputs: sin archivo guardable (agente=%s, mencionados=%s, citas=%s)",
             agent_id,
             sorted(mentioned),
+            len(citations),
         )
         return []
 
-    ensure_responses_dir(agent_id)
     saved: list[dict[str, Any]] = []
 
     for meta in picks:
@@ -378,28 +514,17 @@ def persist_code_interpreter_outputs(
             logger.warning("No se pudo descargar archivo %s del contenedor: %s", file_id, exc)
             continue
 
-        try:
-            storage_path, visible_name = build_response_storage_path(display_name)
-        except AgentFileError:
-            continue
-
-        destination = agent_dir(agent_id) / storage_path
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_bytes(content)
-
-        now = datetime.utcnow()
-        row = AgentResponseFileModel(
-            id=storage_path,
-            agent_id=agent_id,
-            display_name=visible_name,
-            size_bytes=len(content),
-            openai_container_id=cite_container,
-            openai_file_id=file_id,
-            created_at=now,
+        row = _save_response_bytes(
+            db,
+            agent_id,
+            content=content,
+            display_name=display_name,
+            container_id=cite_container,
+            file_id=file_id,
         )
-        db.add(row)
-        db.flush()
-        known_ids.add(file_id)
-        saved.append(_response_file_dict(row))
+        if row:
+            known_ids.add(file_id)
+            saved.append(row)
+            break
 
     return saved
