@@ -171,7 +171,9 @@ def _build_instructions(agent: AgentModel) -> str:
         "- Si el usuario pide un informe, tabla o documento exportable, genera un archivo "
         "(PDF, Word o Excel) con el code interpreter y menciona solo el nombre del archivo.\n"
         "- NO incluyas enlaces sandbox:, rutas /mnt/data/ ni URLs de descarga en tu respuesta; "
-        "la plataforma mostrará botones de descarga automáticamente."
+        "la plataforma mostrará botones de descarga automáticamente.\n"
+        "- NUNCA pegues código Python ni logs del intérprete en tu respuesta al usuario; "
+        "solo un resumen breve en español y el nombre del archivo generado."
     )
     if role_text:
         return f"{role_text}\n\n{base_rules}"
@@ -233,9 +235,33 @@ def _finalize_openai_response(
         except Exception as exc:
             logger.warning("No se pudieron guardar archivos de respuesta: %s", exc)
 
-    from app.backend.services.agent_response_files_service import sanitize_reply_sandbox_links
+    from app.backend.services.agent_response_files_service import (
+        extract_mentioned_filenames,
+        sanitize_reply_sandbox_links,
+    )
 
     reply = sanitize_reply_sandbox_links(reply, response_files)
+    if _is_code_interpreter_dump(reply):
+        if response_files:
+            names = ", ".join(item["name"] for item in response_files)
+            reply = (
+                f"Listo. Generé el documento: {names}. "
+                "Usa el botón «Descargar» que aparece debajo de este mensaje."
+            )
+        else:
+            mentioned = extract_mentioned_filenames(reply)
+            if mentioned:
+                reply = (
+                    f"Listo. Generé el archivo {mentioned[0]}. "
+                    "Si no ves el botón de descarga aquí, búscalo en "
+                    "«Archivos del agente» → «Respuestas generadas»."
+                )
+            else:
+                reply = (
+                    "Listo. Generé el documento solicitado. "
+                    "Si no ves el botón de descarga aquí, búscalo en "
+                    "«Archivos del agente» → «Respuestas generadas»."
+                )
 
     return {
         "reply": reply,
@@ -280,14 +306,28 @@ def _step_from_stream_event(event: Any) -> str | None:
 
 
 def _extract_text_delta(event: Any) -> str:
+    """Solo texto final del asistente; nunca logs/código del code interpreter."""
     etype = getattr(event, "type", None) or ""
     if etype in ("response.output_text.delta", "response.text.delta"):
         return getattr(event, "delta", None) or getattr(event, "text", None) or ""
-    delta = getattr(event, "delta", None)
-    if isinstance(delta, str) and delta:
-        return delta
-    text = getattr(event, "text", None)
-    return text if isinstance(text, str) else ""
+    return ""
+
+
+def _is_code_interpreter_dump(text: str) -> bool:
+    if not text or len(text) < 80:
+        return False
+    markers = (
+        "import ",
+        "def ",
+        "subprocess.",
+        "doc.save(",
+        "for p in ",
+        "Pt(12)",
+        "qn('w:",
+        "capture_output=True",
+    )
+    hits = sum(1 for marker in markers if marker in text)
+    return hits >= 2
 
 
 def stream_chat_with_openai_responses(

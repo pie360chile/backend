@@ -52,7 +52,7 @@ def extract_mentioned_filenames(text: str) -> set[str]:
     for match in _SANDBOX_PATH_RE.finditer(text):
         names.add(Path(match.group(1)).name)
     for match in re.finditer(
-        r"([A-Za-z0-9áéíóúÁÉÍÓÚñÑ_\-\.]+\.(?:pdf|docx?|xlsx?|csv))\b",
+        r"([A-Za-z0-9áéíóúÁÉÍÓÚñÑ_\-.]+?\.(?:pdf|docx?|xlsx?|csv))",
         text,
         re.IGNORECASE,
     ):
