@@ -10,7 +10,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.backend.db.models import AgentResponseFileModel
+from app.backend.db.models import AgentFileModel, AgentResponseFileModel
 from app.backend.utils.agent_files import (
     AgentFileError,
     agent_dir,
@@ -21,6 +21,14 @@ from app.backend.utils.agent_files import (
 )
 
 logger = logging.getLogger(__name__)
+
+MAX_SAVED_FILES_PER_CHAT = 1
+
+_SANDBOX_PATH_RE = re.compile(
+    r"(?:sandbox:)?/mnt/data/([^\s\)\]\"']+)",
+    re.IGNORECASE,
+)
+_MARKDOWN_LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 
 
 def _response_file_dict(row: AgentResponseFileModel) -> dict[str, Any]:
@@ -35,13 +43,6 @@ def _response_file_dict(row: AgentResponseFileModel) -> dict[str, Any]:
 def _is_response_document(filename: str) -> bool:
     suffix = Path(filename).suffix.lower()
     return bool(suffix and suffix in RESPONSE_EXTENSIONS)
-
-
-_SANDBOX_PATH_RE = re.compile(
-    r"(?:sandbox:)?/mnt/data/([^\s\)\]\"']+)",
-    re.IGNORECASE,
-)
-_MARKDOWN_LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 
 
 def extract_mentioned_filenames(text: str) -> set[str]:
@@ -60,28 +61,16 @@ def extract_mentioned_filenames(text: str) -> set[str]:
     return names
 
 
-def extract_filenames_from_response(response: Any) -> set[str]:
+def extract_filenames_from_response_output(response: Any) -> set[str]:
+    """Solo nombres citados en la respuesta al usuario, no en logs/código interno."""
     names: set[str] = set()
     output = getattr(response, "output", None) or []
     for item in output:
-        item_type = getattr(item, "type", None)
-        if item_type == "code_interpreter_call":
-            for attr in ("outputs", "output", "logs", "code"):
-                chunk = getattr(item, attr, None)
-                if isinstance(chunk, str):
-                    names.update(extract_mentioned_filenames(chunk))
-                elif isinstance(chunk, list):
-                    for part in chunk:
-                        if isinstance(part, str):
-                            names.update(extract_mentioned_filenames(part))
-                        else:
-                            text = getattr(part, "text", None) or getattr(part, "logs", None)
-                            if isinstance(text, str):
-                                names.update(extract_mentioned_filenames(text))
-        if item_type == "message":
-            for block in getattr(item, "content", None) or []:
-                text = getattr(block, "text", None) or ""
-                names.update(extract_mentioned_filenames(text))
+        if getattr(item, "type", None) != "message":
+            continue
+        for block in getattr(item, "content", None) or []:
+            text = getattr(block, "text", None) or ""
+            names.update(extract_mentioned_filenames(text))
     names.update(extract_mentioned_filenames(getattr(response, "output_text", None) or ""))
     return names
 
@@ -150,23 +139,35 @@ def _extract_container_id_from_response(response: Any) -> str | None:
     return None
 
 
-def _list_container_files(client: Any, container_id: str) -> list[Any]:
-    collected: list[Any] = []
-    after: str | None = None
-    while True:
-        page = client.containers.files.list(
-            container_id,
-            limit=100,
-            order="desc",
-            **({"after": after} if after else {}),
-        )
-        collected.extend(page.data)
-        if not getattr(page, "has_more", False):
-            break
-        if not page.data:
-            break
-        after = page.data[-1].id
-    return collected
+def _user_upload_display_names(db: Session, agent_id: str) -> set[str]:
+    rows = (
+        db.query(AgentFileModel.display_name)
+        .filter(AgentFileModel.agent_id == agent_id)
+        .all()
+    )
+    return {row[0] for row in rows if row[0]}
+
+
+def _normalize_name_token(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", value.lower())
+
+
+def _is_user_upload_mirror(filename: str, user_names: set[str]) -> bool:
+    """Detecta copias en el contenedor de archivos que el usuario ya subió."""
+    lower = filename.lower()
+    if lower.startswith("file-"):
+        for display in user_names:
+            stem = Path(display).stem
+            token = _normalize_name_token(stem)
+            if len(token) >= 8 and token in _normalize_name_token(lower):
+                return True
+    for display in user_names:
+        if display.lower() == lower:
+            return True
+        stem = Path(display).stem.lower()
+        if stem and stem in lower and lower.startswith("file-"):
+            return True
+    return False
 
 
 def _filename_matches_mention(filename: str, mentioned: set[str]) -> bool:
@@ -181,19 +182,25 @@ def _filename_matches_mention(filename: str, mentioned: set[str]) -> bool:
             return True
         if n_stem and (n_stem in stem or stem in n_stem):
             return True
-        if n_stem.replace("_", "-") in stem or n_stem.replace("_", " ") in stem.replace("_", " "):
-            return True
     return False
 
 
-def _is_generated_container_file(item: Any) -> bool:
-    source = (getattr(item, "source", None) or "").lower()
-    path = getattr(item, "path", None) or ""
-    if source == "assistant":
-        return True
-    if "/mnt/data/" in path:
-        return True
-    return False
+def _candidate_score(filename: str, mentioned: set[str]) -> int:
+    lower = filename.lower()
+    score = 0
+    if lower.endswith(".docx"):
+        score += 20
+    elif lower.endswith(".pdf"):
+        score += 10
+    if _filename_matches_mention(filename, mentioned):
+        score += 40
+    if lower.startswith("informe"):
+        score += 8
+    if lower.startswith("file-"):
+        score -= 30
+    if "formato" in lower or "cuestionario" in lower or "cartilla" in lower:
+        score -= 50
+    return score
 
 
 def _known_openai_file_ids(db: Session, agent_id: str) -> set[str]:
@@ -213,6 +220,33 @@ def _download_container_file(client: Any, container_id: str, file_id: str) -> by
     return content.read()
 
 
+def _pick_candidates(
+    citations: list[dict[str, str]],
+    *,
+    user_ids: set[str],
+    known_ids: set[str],
+    user_names: set[str],
+    mentioned: set[str],
+) -> list[dict[str, str]]:
+    pool: list[dict[str, str]] = []
+    for cite in citations:
+        file_id = cite["file_id"]
+        filename = cite.get("filename") or "archivo"
+        if file_id in user_ids or file_id in known_ids:
+            continue
+        if _is_user_upload_mirror(filename, user_names):
+            continue
+        if not _is_response_document(filename):
+            continue
+        pool.append(cite)
+
+    if not pool:
+        return []
+
+    pool.sort(key=lambda row: _candidate_score(row.get("filename") or "", mentioned), reverse=True)
+    return pool[:MAX_SAVED_FILES_PER_CHAT]
+
+
 def persist_code_interpreter_outputs(
     db: Session,
     agent_id: str,
@@ -220,7 +254,7 @@ def persist_code_interpreter_outputs(
     container_id: str | None,
     user_openai_file_ids: list[str],
 ) -> list[dict[str, Any]]:
-    """Descarga PDF/Excel/Word generados y los guarda en files/agents/{id}/responses/."""
+    """Guarda solo el archivo nuevo que el modelo citó en esta respuesta (máx. 1)."""
     from app.backend.services.openai_agent_service import get_openai_client
 
     container_id = container_id or _extract_container_id_from_response(response)
@@ -231,74 +265,30 @@ def persist_code_interpreter_outputs(
     client = get_openai_client()
     known_ids = _known_openai_file_ids(db, agent_id)
     user_ids = set(user_openai_file_ids)
-    mentioned_names = extract_filenames_from_response(response)
-    candidates: dict[str, dict[str, str]] = {}
+    user_names = _user_upload_display_names(db, agent_id)
+    mentioned = extract_filenames_from_response_output(response)
+    citations = _extract_container_citations(response)
 
-    for cite in _extract_container_citations(response):
-        if cite["file_id"] in user_ids or cite["file_id"] in known_ids:
-            continue
-        candidates[cite["file_id"]] = cite
+    picks = _pick_candidates(
+        citations,
+        user_ids=user_ids,
+        known_ids=known_ids,
+        user_names=user_names,
+        mentioned=mentioned,
+    )
 
-    assistant_files: list[dict[str, Any]] = []
-    try:
-        for item in _list_container_files(client, container_id):
-            file_id = getattr(item, "id", None)
-            if not file_id or file_id in user_ids or file_id in known_ids:
-                continue
-            path = getattr(item, "path", None) or ""
-            filename = Path(path).name if path else file_id
-            is_document = _is_response_document(filename)
-            is_mentioned = _filename_matches_mention(filename, mentioned_names)
-            is_generated = _is_generated_container_file(item)
-            created_at = getattr(item, "created_at", 0) or 0
-
-            if is_generated:
-                assistant_files.append(
-                    {
-                        "container_id": container_id,
-                        "file_id": file_id,
-                        "filename": filename,
-                        "created_at": created_at,
-                    }
-                )
-
-            if not is_document and not is_mentioned and not is_generated:
-                continue
-            if file_id not in candidates:
-                candidates[file_id] = {
-                    "container_id": container_id,
-                    "file_id": file_id,
-                    "filename": filename,
-                }
-    except Exception as exc:
-        logger.warning("No se pudieron listar archivos del contenedor %s: %s", container_id, exc)
-
-    if not candidates and mentioned_names and assistant_files:
-        assistant_files.sort(key=lambda row: row.get("created_at", 0), reverse=True)
-        matched = [
-            row
-            for row in assistant_files
-            if _filename_matches_mention(row["filename"], mentioned_names)
-            and _is_response_document(row["filename"])
-        ]
-        picks = matched or [row for row in assistant_files if _is_response_document(row["filename"])]
-        if not picks and assistant_files:
-            picks = [assistant_files[0]]
-        for row in picks[:3]:
-            candidates[row["file_id"]] = row
-
-    if not candidates:
-        logger.warning(
-            "persist_code_interpreter_outputs: sin candidatos (agente=%s, mencionados=%s)",
+    if not picks:
+        logger.info(
+            "persist_code_interpreter_outputs: sin archivo nuevo citado (agente=%s, mencionados=%s)",
             agent_id,
-            sorted(mentioned_names),
+            sorted(mentioned),
         )
         return []
 
     ensure_responses_dir(agent_id)
     saved: list[dict[str, Any]] = []
 
-    for meta in candidates.values():
+    for meta in picks:
         file_id = meta["file_id"]
         cite_container = meta["container_id"]
         display_name = safe_display_name(meta["filename"])

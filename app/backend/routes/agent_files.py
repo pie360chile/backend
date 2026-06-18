@@ -91,6 +91,30 @@ async def download_response_file(agent_id: str, stored_filename: str, db: Sessio
     return FileResponse(path=result["path"], filename=result["filename"])
 
 
+@agent_files.delete("/{agent_id}/responses")
+async def delete_all_response_files(agent_id: str, db: Session = Depends(get_db)):
+    result = AgentClass(db).delete_all_response_files(agent_id)
+    if isinstance(result, dict) and result.get("status") == "error":
+        code = status.HTTP_404_NOT_FOUND if "no encontrado" in result.get("message", "").lower() else status.HTTP_400_BAD_REQUEST
+        return _error(code, result.get("message", "Error"))
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={"status": 200, "message": "Respuestas generadas eliminadas", "data": result},
+    )
+
+
+@agent_files.delete("/{agent_id}/responses/{stored_filename:path}")
+async def delete_response_file(agent_id: str, stored_filename: str, db: Session = Depends(get_db)):
+    stored_path = stored_filename if stored_filename.startswith("responses/") else f"responses/{stored_filename}"
+    result = AgentClass(db).delete_response_file(agent_id, stored_path)
+    if isinstance(result, dict) and result.get("status") == "error":
+        return _error(status.HTTP_404_NOT_FOUND, result.get("message", "Archivo no encontrado"))
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={"status": 200, "message": "Archivo de respuesta eliminado", "data": result},
+    )
+
+
 @agent_files.get("/{agent_id}/download/{stored_filename:path}")
 async def download_file(agent_id: str, stored_filename: str, db: Session = Depends(get_db)):
     result = AgentClass(db).resolve_file(agent_id, stored_filename)

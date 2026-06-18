@@ -160,25 +160,49 @@ def _extract_container_id(response: Any, agent: AgentModel | None = None) -> str
     return None
 
 
-def _build_instructions(agent: AgentModel) -> str:
+def _agent_uploaded_file_names(db: Session, agent_id: str) -> list[str]:
+    rows = (
+        db.query(AgentFileModel.display_name)
+        .filter(AgentFileModel.agent_id == agent_id)
+        .order_by(AgentFileModel.uploaded_at.asc())
+        .all()
+    )
+    return [row[0] for row in rows if row[0]]
+
+
+def _build_instructions(agent: AgentModel, available_files: list[str] | None = None) -> str:
     role_text = strip_html(agent.role_instructions or "").strip()
     base_rules = (
         "Reglas:\n"
         "- Responde en español.\n"
+        "- El ROL DEL AGENTE (texto anterior) tiene prioridad: si ya indica formatos oficiales, "
+        "cartilla técnica o estructura del informe, aplícalos aunque el usuario no los repita en el chat.\n"
         "- Usa los archivos del agente disponibles en el code interpreter cuando sea necesario.\n"
         "- Si no encuentras la información en los archivos, dilo claramente.\n"
         "- Cita el nombre del documento cuando uses información de él.\n"
         "- Puedes ejecutar código Python para analizar PDF, Excel, CSV y otros archivos cargados.\n"
-        "- Si el usuario pide un informe, tabla o documento exportable, genera un archivo "
-        "(PDF, Word o Excel) con el code interpreter y menciona solo el nombre del archivo.\n"
+        "- Si el usuario pide un informe, tabla o documento exportable, genera UN solo archivo "
+        "(preferiblemente Word .docx) con el code interpreter y menciona solo su nombre.\n"
+        "- Genera el informe solo para la persona o caso que el usuario pidió; "
+        "no generes informes de otros estudiantes que aparezcan en los archivos fuente.\n"
+        "- Abre en el code interpreter la plantilla que corresponda según el rol y el tipo de informe "
+        "(familia, psicopedagógico, etc.) y respeta su estructura, secciones, tablas y estilo.\n"
         "- NO incluyas enlaces sandbox:, rutas /mnt/data/ ni URLs de descarga en tu respuesta; "
         "la plataforma mostrará botones de descarga automáticamente.\n"
         "- NUNCA pegues código Python ni logs del intérprete en tu respuesta al usuario; "
         "solo un resumen breve en español y el nombre del archivo generado."
     )
+    parts: list[str] = []
     if role_text:
-        return f"{role_text}\n\n{base_rules}"
-    return base_rules
+        parts.append(role_text)
+    if available_files:
+        listing = "\n".join(f"- {name}" for name in available_files[:50])
+        parts.append(
+            "Archivos cargados del agente (disponibles en el code interpreter):\n"
+            f"{listing}"
+        )
+    parts.append(base_rules)
+    return "\n\n".join(parts)
 
 
 def _build_code_interpreter_tool(agent: AgentModel, file_ids: list[str]) -> dict[str, Any]:
@@ -352,6 +376,7 @@ def stream_chat_with_openai_responses(
     """Genera eventos {type: step|text_delta} y al final {type: done, data: ...}."""
     client = get_openai_client()
     tools = [_build_code_interpreter_tool(agent, file_ids)]
+    file_names = _agent_uploaded_file_names(db, agent.id)
     seen_steps: set[str] = set()
 
     def emit_step(label: str) -> dict[str, Any] | None:
@@ -366,7 +391,7 @@ def stream_chat_with_openai_responses(
 
     with client.responses.stream(
         model=settings.openai_agent_model,
-        instructions=_build_instructions(agent),
+        instructions=_build_instructions(agent, file_names),
         input=message,
         tools=tools,
     ) as stream:
@@ -407,10 +432,11 @@ def chat_with_openai_responses(
 ) -> dict[str, Any]:
     client = get_openai_client()
     tools = [_build_code_interpreter_tool(agent, file_ids)]
+    file_names = _agent_uploaded_file_names(db, agent.id)
 
     response = client.responses.create(
         model=settings.openai_agent_model,
-        instructions=_build_instructions(agent),
+        instructions=_build_instructions(agent, file_names),
         input=message,
         tools=tools,
     )

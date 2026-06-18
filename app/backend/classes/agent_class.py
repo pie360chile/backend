@@ -381,6 +381,67 @@ class AgentClass:
             self.db.rollback()
             return {"status": "error", "message": str(exc)}
 
+    def delete_response_file(self, agent_id: str, stored_filename: str) -> dict[str, Any] | dict[str, str]:
+        try:
+            validate_agent_id(agent_id)
+            safe_name = validate_stored_filename(stored_filename)
+            if not safe_name.startswith("responses/"):
+                return {"status": "error", "message": "Archivo de respuesta no encontrado"}
+            row = (
+                self.db.query(AgentResponseFileModel)
+                .filter(AgentResponseFileModel.agent_id == agent_id, AgentResponseFileModel.id == safe_name)
+                .first()
+            )
+            if not row:
+                return {"status": "error", "message": "Archivo de respuesta no encontrado"}
+
+            target = agent_dir(agent_id) / safe_name
+            if target.is_file():
+                target.unlink()
+
+            self.db.delete(row)
+            agent = self.db.query(AgentModel).filter(AgentModel.id == agent_id).first()
+            if agent:
+                agent.updated_at = datetime.utcnow()
+            self.db.commit()
+            return {"id": safe_name}
+        except AgentFileError as exc:
+            self.db.rollback()
+            return {"status": "error", "message": str(exc)}
+        except Exception as exc:
+            self.db.rollback()
+            return {"status": "error", "message": str(exc)}
+
+    def delete_all_response_files(self, agent_id: str) -> dict[str, Any] | dict[str, str]:
+        try:
+            validate_agent_id(agent_id)
+            agent = self.db.query(AgentModel).filter(AgentModel.id == agent_id).first()
+            if not agent:
+                return {"status": "error", "message": "Agente no encontrado"}
+
+            rows = (
+                self.db.query(AgentResponseFileModel)
+                .filter(AgentResponseFileModel.agent_id == agent_id)
+                .all()
+            )
+            deleted = 0
+            for row in rows:
+                target = agent_dir(agent_id) / row.id
+                if target.is_file():
+                    target.unlink()
+                self.db.delete(row)
+                deleted += 1
+
+            agent.updated_at = datetime.utcnow()
+            self.db.commit()
+            return {"deleted": deleted}
+        except AgentFileError as exc:
+            self.db.rollback()
+            return {"status": "error", "message": str(exc)}
+        except Exception as exc:
+            self.db.rollback()
+            return {"status": "error", "message": str(exc)}
+
     def delete_file(self, agent_id: str, stored_filename: str) -> dict[str, Any] | dict[str, str]:
         try:
             validate_agent_id(agent_id)
