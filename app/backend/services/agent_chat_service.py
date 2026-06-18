@@ -17,14 +17,15 @@ from app.backend.services.openai_agent_service import (
 from app.backend.utils.agent_document_index import search_agent_knowledge, strip_html
 from app.backend.utils.agent_file_selection import select_agent_file_rows
 from app.backend.utils.agent_files import ensure_responses_dir
+from app.backend.utils.agent_student_lookup import resolve_student_context_for_agent
 
 def _prepare_openai_files(
     db: Session,
     agent: AgentModel,
     message: str,
     hits: list[dict[str, Any]],
-) -> tuple[list[str], list[str], int]:
-    """Devuelve (openai_file_ids, nombres usados, total archivos del agente)."""
+) -> tuple[list[str], list[str], int, list]:
+    """Devuelve (openai_file_ids, nombres usados, total archivos del agente, filas seleccionadas)."""
     from app.backend.db.models import AgentFileModel
 
     ensure_responses_dir(agent.id)
@@ -43,7 +44,7 @@ def _prepare_openai_files(
         db.flush()
 
     openai_file_ids = sync_agent_openai_files(db, agent.id, only_rows=selected_rows)
-    return openai_file_ids, selected_names, total
+    return openai_file_ids, selected_names, total, selected_rows
 
 
 def _fallback_reply(message: str, hits: list[dict[str, Any]], reason: str | None = None) -> str:
@@ -101,11 +102,22 @@ def chat_with_agent(
             agent.openai_container_updated_at = None
             db.flush()
 
-        openai_file_ids, _, total_files = _prepare_openai_files(db, agent, trimmed, hits)
+        openai_file_ids, selected_names, total_files, selected_rows = _prepare_openai_files(
+            db, agent, trimmed, hits
+        )
+        student_context = resolve_student_context_for_agent(db, trimmed)
         db.commit()
         db.refresh(agent)
 
-        result = chat_with_openai_responses(db, agent, trimmed, openai_file_ids)
+        result = chat_with_openai_responses(
+            db,
+            agent,
+            trimmed,
+            openai_file_ids,
+            student_context=student_context,
+            selected_rows=selected_rows,
+            instruction_file_names=selected_names,
+        )
         db.commit()
 
         return {
@@ -181,7 +193,24 @@ def iter_chat_with_agent_events(
             db.flush()
 
         yield {"type": "step", "message": "Preparando archivos relevantes para esta consulta…"}
-        openai_file_ids, selected_names, total_files = _prepare_openai_files(db, agent, trimmed, hits)
+        openai_file_ids, selected_names, total_files, selected_rows = _prepare_openai_files(
+            db, agent, trimmed, hits
+        )
+        from app.backend.utils.agent_familia_template import resolve_familia_template_from_rows
+
+        base_tpl, tpl_kind = resolve_familia_template_from_rows(agent.id, selected_rows)
+        if tpl_kind == "form" and base_tpl:
+            yield {
+                "type": "step",
+                "message": f"Plantilla formulario detectada: {base_tpl}. Se excluye formato ministerial de tablas.",
+            }
+        student_context = resolve_student_context_for_agent(db, trimmed)
+        if student_context:
+            student_name = student_context.get("student_full_name") or "el estudiante"
+            yield {
+                "type": "step",
+                "message": f"Datos personales y apoderado cargados desde la base de datos ({student_name}).",
+            }
         db.commit()
         db.refresh(agent)
 
@@ -200,7 +229,13 @@ def iter_chat_with_agent_events(
             yield {"type": "step", "message": "No hay archivos adjuntos; responderé solo con el rol del agente."}
 
         for event in stream_chat_with_openai_responses(
-            db, agent, trimmed, openai_file_ids, instruction_file_names=selected_names
+            db,
+            agent,
+            trimmed,
+            openai_file_ids,
+            instruction_file_names=selected_names,
+            student_context=student_context,
+            selected_rows=selected_rows,
         ):
             if not event:
                 continue

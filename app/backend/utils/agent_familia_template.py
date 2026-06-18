@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from pathlib import Path
+from typing import Any
 
 
 def _normalize(text: str) -> str:
@@ -25,11 +27,78 @@ def is_familia_form_template(display_name: str) -> bool:
         return True
     if "informe familiar" in lower or "informe_familiar" in lower.replace(" ", "_"):
         return True
+    if "con formulario" in lower or "tipo formulario" in lower:
+        return True
     # Generado desde admin o plantilla PIE360 (no el formato ministerial vacío)
     if "informe familia" in lower or "informe_familia" in lower.replace(" ", "_"):
         if "formato" not in lower:
             return True
     return False
+
+
+def agent_has_familia_form_template(
+    file_names: list[str],
+    *,
+    file_paths: dict[str, Path] | None = None,
+) -> bool:
+    for name in file_names or []:
+        if is_familia_form_file(name, (file_paths or {}).get(name)):
+            return True
+    return False
+
+
+def filter_familia_template_file_names(
+    file_names: list[str],
+    *,
+    file_paths: dict[str, Path] | None = None,
+) -> list[str]:
+    """Si hay plantilla formulario, excluye FORMATO INFORME DE FAMILIA (tablas)."""
+    names = file_names or []
+    if not agent_has_familia_form_template(names, file_paths=file_paths):
+        return names
+    return [
+        n
+        for n in names
+        if not is_familia_tabla_file(n, (file_paths or {}).get(n))
+    ]
+
+
+def build_form_template_supremacy_block(base_filename: str, excluded: list[str]) -> str:
+    excluded_txt = ", ".join(f"«{n}»" for n in excluded) if excluded else "(ninguno)"
+    return (
+        "=== PLANTILLA FORMULARIO — PRIORIDAD SOBRE FORMATO MINISTERIAL ===\n"
+        f"OBLIGATORIO: genera el informe copiando y rellenando SOLO «{base_filename}».\n"
+        f"PROHIBIDO abrir o completar plantillas de tablas ministeriales: {excluded_txt}.\n"
+        "Pasos: (1) lee bloque DATOS EN BASE DE DATOS; (2) shutil.copy plantilla formulario; "
+        "(3) rellena content controls / placeholders; (4) completa narrativa desde archivos del caso.\n"
+    )
+
+
+def docx_has_form_controls(path: Path) -> bool:
+    """True si el .docx tiene content controls (plantilla formulario PIE360)."""
+    try:
+        from docx import Document
+        from docx.oxml.ns import qn
+
+        doc = Document(str(path))
+        count = sum(1 for _ in doc.element.body.iter(qn("w:sdt")))
+        return count >= 3
+    except Exception:
+        return False
+
+
+def is_familia_form_file(display_name: str, disk_path: Path | None = None) -> bool:
+    if is_familia_form_template(display_name):
+        return True
+    if disk_path and disk_path.suffix.lower() == ".docx" and disk_path.is_file():
+        return docx_has_form_controls(disk_path)
+    return False
+
+
+def is_familia_tabla_file(display_name: str, disk_path: Path | None = None) -> bool:
+    if is_familia_form_file(display_name, disk_path):
+        return False
+    return is_familia_tabla_template(display_name)
 
 
 def is_familia_tabla_template(display_name: str) -> bool:
@@ -51,17 +120,124 @@ def familia_form_template_priority(display_name: str) -> int:
     return 20
 
 
-def pick_familia_base_template(file_names: list[str] | None) -> tuple[str | None, str]:
+def pick_familia_base_template(
+    file_names: list[str] | None,
+    *,
+    agent_id: str | None = None,
+    file_paths: dict[str, Path] | None = None,
+) -> tuple[str | None, str]:
     """Devuelve (nombre_archivo, tipo) con tipo form | tabla | none."""
     names = file_names or []
-    form = [n for n in names if is_familia_form_template(n)]
-    tabla = [n for n in names if is_familia_tabla_template(n)]
+    form: list[str] = []
+    tabla: list[str] = []
+    for name in names:
+        disk = (file_paths or {}).get(name)
+        if is_familia_form_file(name, disk):
+            form.append(name)
+        elif is_familia_tabla_file(name, disk):
+            tabla.append(name)
     if form:
         form.sort(key=familia_form_template_priority)
         return form[0], "form"
     if tabla:
         return tabla[0], "tabla"
     return None, "none"
+
+
+def resolve_familia_template_from_rows(
+    agent_id: str,
+    rows: list[Any],
+) -> tuple[str | None, str]:
+    """Clasifica plantilla familia inspeccionando archivos en disco."""
+    from app.backend.utils.agent_files import agent_dir
+
+    names: list[str] = []
+    paths: dict[str, Path] = {}
+    for row in rows:
+        name = getattr(row, "display_name", None) or ""
+        if not name:
+            continue
+        names.append(name)
+        fid = getattr(row, "id", None)
+        if fid:
+            paths[name] = agent_dir(agent_id) / fid
+    return pick_familia_base_template(names, file_paths=paths)
+
+
+def resolve_form_template_path(agent_id: str, rows: list[Any]) -> Path | None:
+    """Ruta en disco de la plantilla formulario familia, si existe."""
+    from app.backend.utils.agent_files import agent_dir
+
+    base, kind = resolve_familia_template_from_rows(agent_id, rows)
+    if kind != "form" or not base:
+        return None
+    for row in rows:
+        name = getattr(row, "display_name", None) or ""
+        fid = getattr(row, "id", None)
+        if name == base and fid:
+            path = agent_dir(agent_id) / fid
+            if path.is_file():
+                return path
+    return None
+
+
+def build_no_fabrication_rules() -> str:
+    """Prohibición de inventar datos no presentes en BD o archivos."""
+    return (
+        "- NO INVENTAR DATOS (OBLIGATORIO): usa únicamente información que esté en "
+        "«DATOS DEL ESTUDIANTE EN BASE DE DATOS», en los archivos del caso o en el rol. "
+        "Prohibido fabricar fechas, calendarizaciones, nombres, RUT, diagnósticos o frases "
+        "genéricas del tipo «Según calendarización del establecimiento», "
+        "«antecedente no informado» como párrafo, o textos explicativos en celdas de fecha.\n"
+        "- Si falta un dato: en campos de identificación escribe «No informado»; "
+        "en celdas de FECHA deja la celda vacía (no escribas nada). "
+        "Nunca sustituyas una fecha faltante por un párrafo.\n"
+        "- Fechas de seguimiento → doc.tables[3] fila 17: solo fechas DD/MM/YYYY "
+        "en las celdas de valor (cols 4-9), una por celda asignada. "
+        "Usa evaluation_date_1, evaluation_date_2, evaluation_date_3 de la BD si existen; "
+        "si no existen, deja esas celdas vacías.\n"
+    )
+
+
+def build_paragraph_width_rules() -> str:
+    """Reglas para que el texto ocupe todo el ancho de la celda/campo."""
+    return (
+        "- ANCHO COMPLETO (OBLIGATORIO): cada párrafo narrativo debe ocupar el 100% del "
+        "ancho útil de su celda o campo (de borde a borde). Alineación justificada "
+        "(WD_ALIGN_PARAGRAPH.JUSTIFY); sin sangrías (left_indent/right_indent = 0); "
+        "sin tabulaciones ni cuadros de texto estrechos.\n"
+        "- Escribe en los párrafos de plantilla que ya tienen justificado; no crees párrafos "
+        "nuevos alineados a la izquierda que dejen franjas vacías a la derecha.\n"
+        "- Si un apartado tiene 2+ párrafos en la misma celda, cada párrafo va justificado "
+        "y a ancho completo (usa \\n\\n y reutiliza párrafos vacíos de la plantilla).\n"
+        "  Patrón Python:\n"
+        "    from docx.enum.text import WD_ALIGN_PARAGRAPH\n"
+        "    from docx.shared import Pt, Cm\n"
+        "    def aplicar_ancho_completo(p):\n"
+        "        p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY\n"
+        "        p.paragraph_format.left_indent = Cm(0)\n"
+        "        p.paragraph_format.right_indent = Cm(0)\n"
+        "        p.paragraph_format.first_line_indent = Cm(0)\n"
+        "        p.paragraph_format.space_before = Pt(0)\n"
+        "        p.paragraph_format.space_after = Pt(0)\n"
+        + build_no_fabrication_rules()
+    )
+
+
+def build_redaction_min_paragraphs_rules() -> str:
+    """Reglas de extensión mínima para textos narrativos del informe."""
+    return (
+        "- REDACCIÓN (OBLIGATORIO): cada apartado narrativo del Word debe tener "
+        "como mínimo 2 párrafos completos (no una sola oración ni un solo bloque). "
+        "Aplica a motivo de evaluación, diagnóstico, fortalezas, necesidades de apoyo "
+        "(pedagógico, social/afectivo y salud), trabajo colaborativo, apoyos en el hogar, "
+        "acuerdos y cualquier sección de desarrollo del rol.\n"
+        "- Cada párrafo debe aportar información distinta (contexto + implicancia, "
+        "observación + orientación, etc.). Separa párrafos con un solo salto de línea "
+        "(\\n o w:br); no uses un único párrafo largo para cumplir extensión.\n"
+        "- Antes de exportar, revisa que ningún campo narrativo quede con menos de 2 párrafos.\n"
+        + build_paragraph_width_rules()
+    )
 
 
 def build_familia_form_rules(base_filename: str) -> str:
@@ -128,4 +304,5 @@ def build_familia_form_rules(base_filename: str) -> str:
         "                      if t != p.text: p.text = t\n"
         "      doc.save(ruta)\n"
         "- Conserva tipografía y alineación de la plantilla; no uses cell.text sobre filas de rótulo.\n"
+        + build_paragraph_width_rules()
     )

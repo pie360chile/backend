@@ -14,8 +14,15 @@ from app.backend.db.models import AgentFileModel, AgentModel
 from app.backend.utils.agent_document_index import role_instructions_to_text, strip_html
 from app.backend.utils.agent_familia_template import (
     build_familia_form_rules,
+    build_form_template_supremacy_block,
+    build_redaction_min_paragraphs_rules,
+    filter_familia_template_file_names,
+    is_familia_form_file,
+    is_familia_tabla_file,
     pick_familia_base_template,
+    resolve_familia_template_from_rows,
 )
+from app.backend.utils.agent_student_lookup import format_student_context_block
 from app.backend.utils.agent_files import agent_dir
 
 logger = logging.getLogger(__name__)
@@ -213,7 +220,10 @@ def _build_familia_tabla_rules() -> str:
         "        for run in p.runs: run.text = ''\n"
         "        r = p.runs[0] if p.runs else p.add_run()\n"
         "        r.text = texto; r.font.size = Pt(10); r.bold = False\n"
-        "- RELLENO DE TABLAS (FORMATO INFORME DE FAMILIA.docx): usa python-docx con índices exactos.\n"
+        "        aplicar_ancho_completo(p)\n"
+        "- Contenido narrativo → doc.tables[3] (justificado, ancho completo, 10 pt):\n"
+        "    fila 3 p0: motivo; fila 5 p0: diagnóstico; fila 8/10 p1: fortalezas y necesidades;\n"
+        "    fila 12 p0: trabajo colaborativo; fila 14 p0: apoyos hogar; fila 16 p1+: acuerdos (mín. 2 párrafos).\n"
         "  Estudiante → doc.tables[1]: fila 3 nombre+RUT; fila 5 nombre social+fecha; fila 6 edad/curso/establecimiento.\n"
         "  Profesional → doc.tables[2]: fila 3 nombre+RUT; fila 5 nombre social+rol; fila 6 tel/email/fecha.\n"
         "  Receptor → doc.tables[2]: fila 10 nombre+RUT; fila 12 nombre social+teléfono.\n"
@@ -221,8 +231,43 @@ def _build_familia_tabla_rules() -> str:
     )
 
 
-def _build_platform_rules(available_files: list[str] | None = None) -> str:
-    base_file, template_kind = pick_familia_base_template(available_files)
+def _familia_template_state(
+    agent_id: str,
+    available_files: list[str] | None,
+    selected_rows: list[Any] | None,
+) -> tuple[str | None, str, list[str], dict[str, Path]]:
+    """(base_file, kind, filtered_names, disk_paths) inspeccionando disco si hay filas."""
+    paths: dict[str, Path] = {}
+    names: list[str] = []
+
+    if selected_rows:
+        for row in selected_rows:
+            name = getattr(row, "display_name", None) or ""
+            if not name:
+                continue
+            names.append(name)
+            fid = getattr(row, "id", None)
+            if fid:
+                paths[name] = agent_dir(agent_id) / fid
+        base_file, template_kind = resolve_familia_template_from_rows(agent_id, selected_rows)
+    else:
+        names = list(available_files or [])
+        base_file, template_kind = pick_familia_base_template(names)
+        for row_id in names:
+            paths[row_id] = Path()  # sin ruta en disco
+
+    filtered = filter_familia_template_file_names(names, file_paths=paths)
+    return base_file, template_kind, filtered, paths
+
+
+def _build_platform_rules(
+    available_files: list[str] | None = None,
+    *,
+    base_file: str | None = None,
+    template_kind: str | None = None,
+) -> str:
+    if base_file is None or template_kind is None:
+        base_file, template_kind = pick_familia_base_template(available_files)
 
     common = (
         "=== REGLAS DE LA PLATAFORMA (no reemplazan ni acortan el rol) ===\n"
@@ -242,6 +287,7 @@ def _build_platform_rules(available_files: list[str] | None = None) -> str:
         "entre viñetas o párrafos. No dejes párrafos vacíos entre ítems de una lista.\n"
         "- Si usas python-docx: reutiliza párrafos existentes de la plantilla; "
         "no insertes párrafos nuevos con spacing distinto.\n"
+        + build_redaction_min_paragraphs_rules()
     )
 
     if template_kind == "form" and base_file:
@@ -262,7 +308,12 @@ def _build_platform_rules(available_files: list[str] | None = None) -> str:
     return common + familia + tail
 
 
-def _build_instructions(agent: AgentModel, available_files: list[str] | None = None) -> str:
+def _build_instructions(
+    agent: AgentModel,
+    available_files: list[str] | None = None,
+    student_context: dict[str, Any] | None = None,
+    selected_rows: list[Any] | None = None,
+) -> str:
     role_text = role_instructions_to_text(agent.role_instructions or "").strip()
     if not role_text:
         role_text = strip_html(agent.role_instructions or "").strip()
@@ -282,13 +333,31 @@ def _build_instructions(agent: AgentModel, available_files: list[str] | None = N
     parts: list[str] = [role_supremacy]
     if role_text:
         parts.append(f"=== ROL DEL AGENTE (OBLIGATORIO) ===\n{role_text}")
-    if available_files:
-        listing = "\n".join(f"- {name}" for name in available_files[:50])
+
+    file_names = list(available_files or [])
+    base_file, template_kind, filtered_names, paths = _familia_template_state(
+        agent.id, file_names, selected_rows
+    )
+    if template_kind == "form" and base_file:
+        excluded = [
+            n
+            for n in file_names
+            if is_familia_tabla_file(n, paths.get(n))
+            and not is_familia_form_file(n, paths.get(n))
+        ]
+        parts.append(build_form_template_supremacy_block(base_file, excluded))
+
+    if filtered_names:
+        listing = "\n".join(f"- {name}" for name in filtered_names[:50])
         parts.append(
             "=== ARCHIVOS EN EL CODE INTERPRETER ===\n"
             f"{listing}"
         )
-    parts.append(_build_platform_rules(available_files))
+    if student_context:
+        parts.append(format_student_context_block(student_context))
+    parts.append(
+        _build_platform_rules(filtered_names, base_file=base_file, template_kind=template_kind)
+    )
     return "\n\n".join(parts)
 
 
@@ -324,6 +393,8 @@ def _finalize_openai_response(
     file_ids: list[str],
     *,
     early_saved: list[dict[str, Any]] | None = None,
+    student_context: dict[str, Any] | None = None,
+    selected_rows: list[Any] | None = None,
 ) -> dict[str, Any]:
     container_id = _extract_container_id(response, agent)
     if container_id:
@@ -350,6 +421,21 @@ def _finalize_openai_response(
                 file_ids,
                 early_saved=early_saved,
             )
+            if response_files and student_context:
+                from app.backend.utils.agent_familia_prefill import postprocess_saved_familia_docx
+                from app.backend.utils.agent_familia_template import resolve_form_template_path
+
+                form_path = (
+                    resolve_form_template_path(agent.id, selected_rows)
+                    if selected_rows
+                    else None
+                )
+                response_files = postprocess_saved_familia_docx(
+                    agent.id,
+                    response_files,
+                    student_context,
+                    form_template_path=form_path,
+                )
         except Exception as exc:
             logger.warning("No se pudieron guardar archivos de respuesta: %s", exc)
             response_files_warning = (
@@ -512,6 +598,8 @@ def stream_chat_with_openai_responses(
     message: str,
     file_ids: list[str],
     instruction_file_names: list[str] | None = None,
+    student_context: dict[str, Any] | None = None,
+    selected_rows: list[Any] | None = None,
 ):
     """Genera eventos {type: step|text_delta} y al final {type: done, data: ...}."""
     client = get_openai_client()
@@ -542,7 +630,9 @@ def stream_chat_with_openai_responses(
 
     with client.responses.stream(
         model=settings.openai_agent_model,
-        instructions=_build_instructions(agent, file_names),
+        instructions=_build_instructions(
+            agent, file_names, student_context, selected_rows=selected_rows
+        ),
         input=message,
         tools=tools,
     ) as stream:
@@ -590,6 +680,25 @@ def stream_chat_with_openai_responses(
                             container_id,
                             file_ids,
                         )
+                        if captured and student_context:
+                            from app.backend.utils.agent_familia_prefill import (
+                                postprocess_saved_familia_docx,
+                            )
+                            from app.backend.utils.agent_familia_template import (
+                                resolve_form_template_path,
+                            )
+
+                            form_path = (
+                                resolve_form_template_path(agent.id, selected_rows)
+                                if selected_rows
+                                else None
+                            )
+                            captured = postprocess_saved_familia_docx(
+                                agent.id,
+                                captured,
+                                student_context,
+                                form_template_path=form_path,
+                            )
                         if captured:
                             early_saved = captured
                             save_event = emit_step(
@@ -621,6 +730,8 @@ def stream_chat_with_openai_responses(
         response,
         file_ids,
         early_saved=early_saved or None,
+        student_context=student_context,
+        selected_rows=selected_rows,
     )
     yield {"type": "done", "data": result}
 
@@ -630,16 +741,28 @@ def chat_with_openai_responses(
     agent: AgentModel,
     message: str,
     file_ids: list[str],
+    student_context: dict[str, Any] | None = None,
+    selected_rows: list[Any] | None = None,
+    instruction_file_names: list[str] | None = None,
 ) -> dict[str, Any]:
     client = get_openai_client()
     tools = [_build_code_interpreter_tool(agent, file_ids)]
-    file_names = _agent_uploaded_file_names(db, agent.id)
+    file_names = instruction_file_names or _agent_uploaded_file_names(db, agent.id)
 
     response = client.responses.create(
         model=settings.openai_agent_model,
-        instructions=_build_instructions(agent, file_names),
+        instructions=_build_instructions(
+            agent, file_names, student_context, selected_rows=selected_rows
+        ),
         input=message,
         tools=tools,
     )
 
-    return _finalize_openai_response(db, agent, response, file_ids)
+    return _finalize_openai_response(
+        db,
+        agent,
+        response,
+        file_ids,
+        student_context=student_context,
+        selected_rows=selected_rows,
+    )

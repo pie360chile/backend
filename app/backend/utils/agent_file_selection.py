@@ -5,16 +5,17 @@ from __future__ import annotations
 import re
 import unicodedata
 from pathlib import Path
-from typing import Any
 
 from sqlalchemy.orm import Session
 
 from app.backend.db.models import AgentFileModel
 from app.backend.utils.agent_familia_template import (
     familia_form_template_priority,
-    is_familia_form_template,
+    is_familia_form_file,
+    is_familia_tabla_file,
     is_familia_tabla_template,
 )
+from app.backend.utils.agent_files import agent_dir
 
 _TEMPLATE_HINTS = (
     "formato",
@@ -144,16 +145,31 @@ def _pick_template_rows(
     limit: int,
     *,
     intent: str = "general",
+    agent_id: str | None = None,
 ) -> list[AgentFileModel]:
     templates = [row for row in rows if _is_template_file(row.display_name)]
+
+    def _disk_path(row: AgentFileModel) -> Path | None:
+        if not agent_id:
+            return None
+        return agent_dir(agent_id) / row.id
+
     if intent == "familia":
-        templates = [
+        form_templates = [
             row
             for row in templates
-            if is_familia_form_template(row.display_name)
-            or is_familia_tabla_template(row.display_name)
-            or "cartilla" in _normalize(row.display_name)
+            if is_familia_form_file(row.display_name, _disk_path(row))
         ]
+        if form_templates:
+            templates = form_templates
+            limit = 1
+        else:
+            templates = [
+                row
+                for row in templates
+                if is_familia_tabla_file(row.display_name, _disk_path(row))
+                or "cartilla" in _normalize(row.display_name)
+            ]
     templates.sort(
         key=lambda row: (_template_priority(row.display_name, intent), row.uploaded_at or 0)
     )
@@ -206,7 +222,7 @@ def select_agent_file_rows(
         selected.append(row)
         selected_ids.add(row.id)
 
-    for row in _pick_template_rows(rows, max_templates, intent=intent):
+    for row in _pick_template_rows(rows, max_templates, intent=intent, agent_id=agent_id):
         add(row)
 
     for row in rows:
@@ -219,6 +235,15 @@ def select_agent_file_rows(
 
     if not selected:
         return rows[:max_files]
+
+    if intent == "familia" and any(
+        is_familia_form_file(r.display_name, agent_dir(agent_id) / r.id) for r in rows
+    ):
+        selected = [
+            r
+            for r in selected
+            if not is_familia_tabla_file(r.display_name, agent_dir(agent_id) / r.id)
+        ]
 
     if len(selected) > max_files:
         templates = [r for r in selected if _is_template_file(r.display_name)]
