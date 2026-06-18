@@ -12,6 +12,7 @@ from app.backend.db.models import AgentFileModel
 from app.backend.utils.agent_familia_template import (
     familia_form_template_priority,
     is_familia_form_file,
+    is_familia_form_template,
     is_familia_tabla_file,
     is_familia_tabla_template,
 )
