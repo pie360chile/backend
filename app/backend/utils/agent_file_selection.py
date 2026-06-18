@@ -9,6 +9,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.backend.db.models import AgentFileModel
 from app.backend.utils.agent_familia_template import (
     familia_form_template_priority,
     is_familia_form_template,
