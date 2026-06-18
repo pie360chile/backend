@@ -6,16 +6,18 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from app.backend.api.router import register_routers
 from app.backend.core.config import apply_settings_to_process_env, resolve_cors_origins, settings
+from app.backend.core.cors_utils import cors_headers_for_origin, is_origin_allowed
 
 
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(HTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException):
+        origin = request.headers.get("origin")
         return JSONResponse(
             status_code=exc.status_code,
             content={
@@ -23,10 +25,12 @@ def register_exception_handlers(app: FastAPI) -> None:
                 "message": exc.detail,
                 "data": None,
             },
+            headers=cors_headers_for_origin(origin),
         )
 
     @app.exception_handler(Exception)
     async def general_exception_handler(request: Request, exc: Exception):
+        origin = request.headers.get("origin")
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
@@ -34,6 +38,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                 "message": f"Internal server error: {str(exc)}",
                 "data": None,
             },
+            headers=cors_headers_for_origin(origin),
         )
 
 
@@ -42,10 +47,32 @@ def register_middleware(app: FastAPI) -> None:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=cors_origins,
+        allow_origin_regex=r"https://agent-[a-z0-9-]+\.(web\.app|firebaseapp\.com)",
         allow_credentials=allow_credentials,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def ensure_cors_on_all_responses(request: Request, call_next):
+        origin = request.headers.get("origin")
+        if request.method == "OPTIONS" and is_origin_allowed(origin):
+            return Response(
+                status_code=204,
+                headers={
+                    **cors_headers_for_origin(origin),
+                    "Access-Control-Allow-Methods": "DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT",
+                    "Access-Control-Allow-Headers": request.headers.get(
+                        "access-control-request-headers", "*"
+                    ),
+                    "Access-Control-Max-Age": "600",
+                },
+            )
+        response = await call_next(request)
+        for key, value in cors_headers_for_origin(origin).items():
+            response.headers[key] = value
+        return response
 
     @app.middleware("http")
     async def period_year_middleware(request: Request, call_next):

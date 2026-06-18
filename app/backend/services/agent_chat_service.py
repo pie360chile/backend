@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Iterator
 
 from sqlalchemy.orm import Session
 
@@ -11,6 +11,7 @@ from app.backend.db.models import AgentModel
 from app.backend.services.openai_agent_service import (
     chat_with_openai_responses,
     is_container_expired,
+    stream_chat_with_openai_responses,
     sync_agent_openai_files,
 )
 from app.backend.utils.agent_document_index import search_agent_knowledge, strip_html
@@ -96,4 +97,100 @@ def chat_with_agent(
             "usedChunks": len(hits),
             "warning": str(exc),
             "rolePreview": role_preview or None,
+        }
+
+
+def iter_chat_with_agent_events(
+    db: Session,
+    agent_id: str,
+    message: str,
+    top_k: int = 5,
+) -> Iterator[dict[str, Any]]:
+    agent = db.query(AgentModel).filter(AgentModel.id == agent_id).first()
+    if not agent:
+        yield {"type": "error", "message": "Agente no encontrado"}
+        return
+
+    trimmed = (message or "").strip()
+    if not trimmed:
+        yield {"type": "error", "message": "El mensaje está vacío"}
+        return
+
+    yield {"type": "step", "message": "Buscando fragmentos relevantes en tus documentos…"}
+    hits = search_agent_knowledge(db, agent_id, trimmed, top_k=top_k)
+    citations = [
+        {
+            "fileId": hit["fileId"],
+            "fileName": hit["fileName"],
+            "chunkIndex": hit["chunkIndex"],
+            "score": hit["score"],
+        }
+        for hit in hits
+    ]
+    if hits:
+        yield {
+            "type": "step",
+            "message": f"Se encontraron {len(hits)} fragmento(s) relacionados en los archivos indexados.",
+        }
+
+    if not settings.openai_api_key:
+        yield {
+            "type": "done",
+            "data": {
+                "reply": _fallback_reply(trimmed, hits, "Configure OPENAI_API_KEY"),
+                "citations": citations,
+                "usedChunks": len(hits),
+            },
+        }
+        return
+
+    try:
+        if is_container_expired(agent.openai_container_updated_at):
+            agent.openai_container_id = None
+            agent.openai_container_updated_at = None
+            db.flush()
+
+        yield {"type": "step", "message": "Sincronizando archivos del agente con OpenAI…"}
+        openai_file_ids = sync_agent_openai_files(db, agent_id)
+        db.commit()
+        db.refresh(agent)
+
+        if openai_file_ids:
+            yield {
+                "type": "step",
+                "message": f"{len(openai_file_ids)} archivo(s) listos para el análisis.",
+            }
+        else:
+            yield {"type": "step", "message": "No hay archivos adjuntos; responderé solo con el rol del agente."}
+
+        for event in stream_chat_with_openai_responses(db, agent, trimmed, openai_file_ids):
+            if not event:
+                continue
+            if event.get("type") == "done":
+                payload = event["data"]
+                db.commit()
+                yield {
+                    "type": "done",
+                    "data": {
+                        "reply": payload["reply"],
+                        "citations": citations,
+                        "usedChunks": len(hits),
+                        "openaiFilesUsed": payload.get("openaiFilesUsed", 0),
+                        "containerId": payload.get("containerId"),
+                        "model": payload.get("model"),
+                        "responseFiles": payload.get("responseFiles") or [],
+                    },
+                }
+            else:
+                yield event
+    except Exception as exc:
+        db.rollback()
+        yield {
+            "type": "done",
+            "data": {
+                "reply": _fallback_reply(trimmed, hits, f"No se pudo usar OpenAI: {exc}"),
+                "citations": citations,
+                "usedChunks": len(hits),
+                "warning": str(exc),
+            },
         }

@@ -192,22 +192,12 @@ def _build_code_interpreter_tool(agent: AgentModel, file_ids: list[str]) -> dict
     }
 
 
-def chat_with_openai_responses(
+def _finalize_openai_response(
     db: Session,
     agent: AgentModel,
-    message: str,
+    response: Any,
     file_ids: list[str],
 ) -> dict[str, Any]:
-    client = get_openai_client()
-    tools = [_build_code_interpreter_tool(agent, file_ids)]
-
-    response = client.responses.create(
-        model=settings.openai_agent_model,
-        instructions=_build_instructions(agent),
-        input=message,
-        tools=tools,
-    )
-
     container_id = _extract_container_id(response)
     if container_id:
         agent.openai_container_id = container_id
@@ -241,3 +231,90 @@ def chat_with_openai_responses(
         "model": settings.openai_agent_model,
         "responseFiles": response_files,
     }
+
+
+_STREAM_STEP_LABELS: dict[str, str] = {
+    "response.created": "Solicitud enviada al modelo…",
+    "response.in_progress": "El modelo está procesando tu consulta…",
+    "response.queued": "Tu solicitud está en cola…",
+    "response.code_interpreter_call.in_progress": "Preparando el intérprete de código…",
+    "response.code_interpreter_call.interpreting": "Ejecutando Python para analizar tus archivos…",
+    "response.code_interpreter_call.code_done": "Código listo, corriendo el análisis…",
+    "response.code_interpreter_call.completed": "Análisis de archivos completado.",
+    "response.output_item.added": "Generando la respuesta…",
+    "response.reasoning_summary_text.delta": "Razonando sobre los antecedentes…",
+    "response.reasoning_summary_part.added": "Organizando el análisis…",
+}
+
+
+def _step_from_stream_event(event: Any) -> str | None:
+    etype = getattr(event, "type", None) or ""
+    return _STREAM_STEP_LABELS.get(etype)
+
+
+def stream_chat_with_openai_responses(
+    db: Session,
+    agent: AgentModel,
+    message: str,
+    file_ids: list[str],
+):
+    """Genera eventos {type: step|text_delta} y al final {type: done, data: ...}."""
+    client = get_openai_client()
+    tools = [_build_code_interpreter_tool(agent, file_ids)]
+    seen_steps: set[str] = set()
+
+    def emit_step(label: str) -> dict[str, Any] | None:
+        if label in seen_steps:
+            return None
+        seen_steps.add(label)
+        return {"type": "step", "message": label}
+
+    first_step = emit_step(f"Conectando con {settings.openai_agent_model}…")
+    if first_step:
+        yield first_step
+
+    with client.responses.stream(
+        model=settings.openai_agent_model,
+        instructions=_build_instructions(agent),
+        input=message,
+        tools=tools,
+    ) as stream:
+        for event in stream:
+            step_label = _step_from_stream_event(event)
+            if step_label:
+                step_event = emit_step(step_label)
+                if step_event:
+                    yield step_event
+
+            etype = getattr(event, "type", None) or ""
+            if etype == "response.output_text.delta":
+                delta = getattr(event, "delta", None) or ""
+                if delta:
+                    yield {"type": "text_delta", "delta": delta}
+
+        response = stream.get_final_response()
+
+    save_step = emit_step("Guardando archivos generados, si los hay…")
+    if save_step:
+        yield save_step
+    result = _finalize_openai_response(db, agent, response, file_ids)
+    yield {"type": "done", "data": result}
+
+
+def chat_with_openai_responses(
+    db: Session,
+    agent: AgentModel,
+    message: str,
+    file_ids: list[str],
+) -> dict[str, Any]:
+    client = get_openai_client()
+    tools = [_build_code_interpreter_tool(agent, file_ids)]
+
+    response = client.responses.create(
+        model=settings.openai_agent_model,
+        instructions=_build_instructions(agent),
+        input=message,
+        tools=tools,
+    )
+
+    return _finalize_openai_response(db, agent, response, file_ids)

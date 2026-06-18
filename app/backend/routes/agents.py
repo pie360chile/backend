@@ -1,11 +1,12 @@
-from fastapi import APIRouter, Depends, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, Request, status
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.backend.classes.agent_class import AgentClass
-from app.backend.db.database import get_db
+from app.backend.core.cors_utils import cors_headers_for_origin
+from app.backend.db.database import SessionLocal, get_db
 from app.backend.schemas.agents import AgentChatRequest, AgentCreate, AgentKnowledgeSearch, AgentUpdate
-from app.backend.services.agent_chat_service import chat_with_agent
+from app.backend.services.agent_chat_service import chat_with_agent, iter_chat_with_agent_events
 from app.backend.utils.agent_document_index import search_agent_knowledge
 
 agents = APIRouter(prefix="/agents", tags=["Agents"])
@@ -118,4 +119,33 @@ async def chat_with_agent_route(agent_id: str, payload: AgentChatRequest, db: Se
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={"status": 200, "message": "Respuesta generada", "data": result},
+    )
+
+
+@agents.post("/{agent_id}/chat/stream")
+async def chat_with_agent_stream_route(agent_id: str, payload: AgentChatRequest, request: Request):
+    import json
+
+    origin = request.headers.get("origin")
+    stream_headers = {
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+        **cors_headers_for_origin(origin),
+    }
+
+    def event_stream():
+        db = SessionLocal()
+        try:
+            for event in iter_chat_with_agent_events(db, agent_id, payload.message, top_k=payload.top_k):
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        except Exception as exc:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(exc)}, ensure_ascii=False)}\n\n"
+        finally:
+            db.close()
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers=stream_headers,
     )
