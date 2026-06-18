@@ -8,6 +8,7 @@ from app.backend.db.database import SessionLocal, get_db
 from app.backend.schemas.agents import AgentChatRequest, AgentCreate, AgentKnowledgeSearch, AgentUpdate
 from app.backend.services.agent_chat_service import chat_with_agent, iter_chat_with_agent_events
 from app.backend.utils.agent_document_index import search_agent_knowledge
+from app.backend.utils.stream_keepalive import iter_with_keepalive
 
 agents = APIRouter(prefix="/agents", tags=["Agents"])
 
@@ -137,7 +138,12 @@ async def chat_with_agent_stream_route(agent_id: str, payload: AgentChatRequest,
     def event_stream():
         db = SessionLocal()
         try:
-            for event in iter_chat_with_agent_events(db, agent_id, payload.message, top_k=payload.top_k):
+            events = iter_with_keepalive(
+                iter_chat_with_agent_events(db, agent_id, payload.message, top_k=payload.top_k),
+                interval_seconds=12.0,
+                message="Sigo trabajando en tu solicitud…",
+            )
+            for event in events:
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         except Exception as exc:
             yield f"data: {json.dumps({'type': 'error', 'message': str(exc)}, ensure_ascii=False)}\n\n"

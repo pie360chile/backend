@@ -169,7 +169,9 @@ def _build_instructions(agent: AgentModel) -> str:
         "- Cita el nombre del documento cuando uses información de él.\n"
         "- Puedes ejecutar código Python para analizar PDF, Excel, CSV y otros archivos cargados.\n"
         "- Si el usuario pide un informe, tabla o documento exportable, genera un archivo "
-        "(PDF, Word o Excel) con el code interpreter y menciona el nombre del archivo generado."
+        "(PDF, Word o Excel) con el code interpreter y menciona solo el nombre del archivo.\n"
+        "- NO incluyas enlaces sandbox:, rutas /mnt/data/ ni URLs de descarga en tu respuesta; "
+        "la plataforma mostrará botones de descarga automáticamente."
     )
     if role_text:
         return f"{role_text}\n\n{base_rules}"
@@ -212,17 +214,28 @@ def _finalize_openai_response(
     response_files: list[dict[str, Any]] = []
     if container_id:
         try:
+            from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+
             from app.backend.services.agent_response_files_service import persist_code_interpreter_outputs
 
-            response_files = persist_code_interpreter_outputs(
-                db,
-                agent.id,
-                response,
-                container_id,
-                file_ids,
-            )
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(
+                    persist_code_interpreter_outputs,
+                    db,
+                    agent.id,
+                    response,
+                    container_id,
+                    file_ids,
+                )
+                response_files = future.result(timeout=180)
+        except FuturesTimeoutError:
+            logger.warning("Timeout guardando archivos generados por code interpreter")
         except Exception as exc:
             logger.warning("No se pudieron guardar archivos de respuesta: %s", exc)
+
+    from app.backend.services.agent_response_files_service import sanitize_reply_sandbox_links
+
+    reply = sanitize_reply_sandbox_links(reply, response_files)
 
     return {
         "reply": reply,
@@ -242,14 +255,39 @@ _STREAM_STEP_LABELS: dict[str, str] = {
     "response.code_interpreter_call.code_done": "Código listo, corriendo el análisis…",
     "response.code_interpreter_call.completed": "Análisis de archivos completado.",
     "response.output_item.added": "Generando la respuesta…",
+    "response.output_item.done": "Bloque de respuesta generado…",
+    "response.output_text.done": "Texto de respuesta listo…",
+    "response.content_part.added": "Escribiendo la respuesta…",
+    "response.content_part.done": "Sección de respuesta completada…",
+    "response.completed": "Modelo finalizó la generación…",
     "response.reasoning_summary_text.delta": "Razonando sobre los antecedentes…",
     "response.reasoning_summary_part.added": "Organizando el análisis…",
+    "response.reasoning_summary_text.done": "Razonamiento completado…",
+    "response.reasoning_text.delta": "Elaborando el informe…",
+    "response.reasoning_text.done": "Redacción interna completada…",
 }
+
+_POST_INTERPRETER_STEP = "Redactando la respuesta final (puede tardar varios minutos)…"
 
 
 def _step_from_stream_event(event: Any) -> str | None:
     etype = getattr(event, "type", None) or ""
-    return _STREAM_STEP_LABELS.get(etype)
+    if etype in _STREAM_STEP_LABELS:
+        return _STREAM_STEP_LABELS[etype]
+    if "reasoning" in etype:
+        return "Elaborando el informe con los datos analizados…"
+    return None
+
+
+def _extract_text_delta(event: Any) -> str:
+    etype = getattr(event, "type", None) or ""
+    if etype in ("response.output_text.delta", "response.text.delta"):
+        return getattr(event, "delta", None) or getattr(event, "text", None) or ""
+    delta = getattr(event, "delta", None)
+    if isinstance(delta, str) and delta:
+        return delta
+    text = getattr(event, "text", None)
+    return text if isinstance(text, str) else ""
 
 
 def stream_chat_with_openai_responses(
@@ -280,18 +318,25 @@ def stream_chat_with_openai_responses(
         tools=tools,
     ) as stream:
         for event in stream:
+            etype = getattr(event, "type", None) or ""
+
             step_label = _step_from_stream_event(event)
             if step_label:
                 step_event = emit_step(step_label)
                 if step_event:
                     yield step_event
 
-            etype = getattr(event, "type", None) or ""
-            if etype == "response.output_text.delta":
-                delta = getattr(event, "delta", None) or ""
-                if delta:
-                    yield {"type": "text_delta", "delta": delta}
+            if etype == "response.code_interpreter_call.completed":
+                yield {"type": "step", "message": _POST_INTERPRETER_STEP}
+                seen_steps.add(_POST_INTERPRETER_STEP)
 
+            delta = _extract_text_delta(event)
+            if delta:
+                yield {"type": "text_delta", "delta": delta}
+
+        consolidating = emit_step("Consolidando respuesta del modelo…")
+        if consolidating:
+            yield consolidating
         response = stream.get_final_response()
 
     save_step = emit_step("Guardando archivos generados, si los hay…")
