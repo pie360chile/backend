@@ -206,7 +206,6 @@ def chat_with_openai_responses(
         instructions=_build_instructions(agent),
         input=message,
         tools=tools,
-        temperature=0.2,
     )
 
     container_id = _extract_container_id(response)
