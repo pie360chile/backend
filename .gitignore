@@ -1,2 +1,6 @@
 .env
 .pie360backend
+
+# Archivos temporales de Microsoft Word (bloqueo al abrir .docx)
+~$*
+**/~$*
