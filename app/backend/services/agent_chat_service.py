@@ -185,23 +185,18 @@ def iter_chat_with_agent_events(
         db.commit()
         db.refresh(agent)
 
-        if openai_file_ids:
-            if total_files and len(openai_file_ids) < total_files:
-                names_preview = ", ".join(selected_names[:4])
-                extra = f" ({names_preview})" if names_preview else ""
-                yield {
-                    "type": "step",
-                    "message": (
-                        f"Usando {len(openai_file_ids)} de {total_files} archivos relevantes"
-                        f"{extra}."
-                    ),
-                }
-            else:
-                yield {
-                    "type": "step",
-                    "message": f"{len(openai_file_ids)} archivo(s) listos para el análisis.",
-                }
-        else:
+        if openai_file_ids and selected_names:
+            yield {
+                "type": "step",
+                "message": (
+                    f"Usando {len(openai_file_ids)} de {total_files} archivos del agente."
+                    if total_files and len(openai_file_ids) < total_files
+                    else f"{len(openai_file_ids)} archivo(s) listos para el análisis."
+                ),
+            }
+            for name in selected_names:
+                yield {"type": "step", "message": f"Leyendo archivo: {name}"}
+        elif not openai_file_ids:
             yield {"type": "step", "message": "No hay archivos adjuntos; responderé solo con el rol del agente."}
 
         for event in stream_chat_with_openai_responses(

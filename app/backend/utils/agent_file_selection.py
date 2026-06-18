@@ -9,7 +9,11 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.backend.db.models import AgentFileModel
+from app.backend.utils.agent_familia_template import (
+    familia_form_template_priority,
+    is_familia_form_template,
+    is_familia_tabla_template,
+)
 
 _TEMPLATE_HINTS = (
     "formato",
@@ -19,6 +23,9 @@ _TEMPLATE_HINTS = (
     "informe_evaluacion",
     "informe_evaluaci",
     "informe de familia",
+    "family_report",
+    "informe_familia",
+    "informe_familiar",
 )
 
 _TEMPLATE_PRIORITY = (
@@ -99,17 +106,56 @@ def _file_name_matches_tokens(display_name: str, tokens: list[str]) -> bool:
     return matched >= 1
 
 
-def _template_priority(display_name: str) -> int:
+def _message_intent(message: str) -> str:
+    """familia | evaluacion | general"""
+    norm = _normalize(message)
+    if "familia" in norm:
+        return "familia"
+    if "psicopedagog" in norm or "evaluacion" in norm or "evaluaci" in norm:
+        return "evaluacion"
+    return "general"
+
+
+def _template_priority(display_name: str, intent: str = "general") -> int:
     lower = _normalize(display_name.replace("_", " ").replace("-", " "))
+    if intent == "familia":
+        if is_familia_form_template(display_name):
+            return familia_form_template_priority(display_name)
+        if "cartilla" in lower:
+            return 2
+        if is_familia_tabla_template(display_name):
+            return 10
+    elif intent == "evaluacion":
+        if "cartilla" in lower:
+            return 0
+        if "formato" in lower and "evaluaci" in lower:
+            return 1
+        if "familia" in lower:
+            return 50
     for index, hint in enumerate(_TEMPLATE_PRIORITY):
         if hint in lower:
             return index
     return len(_TEMPLATE_PRIORITY)
 
 
-def _pick_template_rows(rows: list[AgentFileModel], limit: int) -> list[AgentFileModel]:
+def _pick_template_rows(
+    rows: list[AgentFileModel],
+    limit: int,
+    *,
+    intent: str = "general",
+) -> list[AgentFileModel]:
     templates = [row for row in rows if _is_template_file(row.display_name)]
-    templates.sort(key=lambda row: (_template_priority(row.display_name), row.uploaded_at or 0))
+    if intent == "familia":
+        templates = [
+            row
+            for row in templates
+            if is_familia_form_template(row.display_name)
+            or is_familia_tabla_template(row.display_name)
+            or "cartilla" in _normalize(row.display_name)
+        ]
+    templates.sort(
+        key=lambda row: (_template_priority(row.display_name, intent), row.uploaded_at or 0)
+    )
     return templates[:limit]
 
 
@@ -136,10 +182,11 @@ def select_agent_file_rows(
         return []
 
     tokens = _message_name_tokens(message)
+    intent = _message_intent(message)
     single_student = _is_single_student_query(tokens)
     if single_student:
         max_files = min(max_files, 5)
-    max_templates = 2 if single_student else 3
+    max_templates = 3 if intent == "familia" else (2 if single_student else 3)
 
     hit_file_ids = {hit["fileId"] for hit in (knowledge_hits or []) if hit.get("fileId")}
     if single_student and hit_file_ids:
@@ -158,7 +205,7 @@ def select_agent_file_rows(
         selected.append(row)
         selected_ids.add(row.id)
 
-    for row in _pick_template_rows(rows, max_templates):
+    for row in _pick_template_rows(rows, max_templates, intent=intent):
         add(row)
 
     for row in rows:

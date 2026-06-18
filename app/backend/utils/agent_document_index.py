@@ -21,6 +21,26 @@ def strip_html(value: str) -> str:
     return unescape(re.sub(r"\s+", " ", text)).strip()
 
 
+def role_instructions_to_text(value: str) -> str:
+    """Convierte HTML del rol a texto estructurado (títulos, listas, párrafos)."""
+    if not value or not value.strip():
+        return ""
+    text = value
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"</p>", "\n\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"</div>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"</li>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"</h[1-6]>", "\n\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"<h[1-6][^>]*>", "\n\n## ", text, flags=re.IGNORECASE)
+    text = re.sub(r"<li[^>]*>", "\n- ", text, flags=re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", "", text)
+    text = unescape(text)
+    text = re.sub(r"[ \t]+\n", "\n", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = re.sub(r" +", " ", text)
+    return text.strip()
+
+
 def extract_text_from_file(file_path: Path) -> str:
     suffix = file_path.suffix.lower()
 

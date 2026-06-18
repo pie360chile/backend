@@ -11,7 +11,11 @@ from sqlalchemy.orm import Session
 
 from app.backend.core.config import settings
 from app.backend.db.models import AgentFileModel, AgentModel
-from app.backend.utils.agent_document_index import strip_html
+from app.backend.utils.agent_document_index import role_instructions_to_text, strip_html
+from app.backend.utils.agent_familia_template import (
+    build_familia_form_rules,
+    pick_familia_base_template,
+)
 from app.backend.utils.agent_files import agent_dir
 
 logger = logging.getLogger(__name__)
@@ -178,42 +182,113 @@ def _agent_uploaded_file_names(db: Session, agent_id: str) -> list[str]:
     return [row[0] for row in rows if row[0]]
 
 
-def _build_instructions(agent: AgentModel, available_files: list[str] | None = None) -> str:
-    role_text = strip_html(agent.role_instructions or "").strip()
-    base_rules = (
-        "Reglas:\n"
-        "- Responde en español.\n"
-        "- El ROL DEL AGENTE (texto anterior) tiene prioridad: si ya indica formatos oficiales, "
-        "cartilla técnica o estructura del informe, aplícalos aunque el usuario no los repita en el chat.\n"
-        "- Usa los archivos del agente disponibles en el code interpreter cuando sea necesario.\n"
-        "- Si no encuentras la información en los archivos, dilo claramente.\n"
-        "- Cita el nombre del documento cuando uses información de él.\n"
-        "- Puedes ejecutar código Python para analizar PDF, Excel, CSV y otros archivos cargados.\n"
-        "- Si el usuario pide un informe, tabla o documento exportable, genera UN solo archivo "
-        "(preferiblemente Word .docx) con el code interpreter y menciona solo su nombre.\n"
-        "- Genera el informe solo para la persona o caso que el usuario pidió; "
-        "no generes informes de otros estudiantes que aparezcan en los archivos fuente.\n"
-        "- Abre en el code interpreter solo los archivos listados abajo; "
-        "no proceses otros estudiantes ni documentos que no correspondan a esta solicitud.\n"
-        "- Para un solo estudiante, abre como máximo la plantilla/formato y el archivo de ese caso; "
-        "no abras PDFs de otros alumnos ni documentos de referencia que no uses.\n"
-        "- Sé eficiente: extrae solo los datos necesarios del informe fuente; "
-        "no re-leas ni reproceses archivos que ya no necesitas.\n"
-        "- NO incluyas enlaces sandbox:, rutas /mnt/data/ ni URLs de descarga en tu respuesta; "
-        "la plataforma mostrará botones de descarga automáticamente.\n"
-        "- NUNCA pegues código Python ni logs del intérprete en tu respuesta al usuario; "
-        "solo un resumen breve en español y el nombre del archivo generado."
+def _build_familia_tabla_rules() -> str:
+    return (
+        "- Para informe a la familia (solo si NO hay plantilla tipo formulario en archivos): "
+        "abre FORMATO INFORME DE FAMILIA.docx como plantilla base y solo completa celdas.\n"
+        "- TIPOGRAFÍA UNIFORME (OBLIGATORIO): todo el texto de contenido del informe "
+        "(diagnóstico, fortalezas, necesidades de apoyo, trabajo colaborativo, acuerdos, "
+        "conclusiones) debe ir en 10 pt, sin negrita. NUNCA uses cell.text = ... ni "
+        "add_paragraph() con estilo por defecto (11 pt). Copia 10 pt del párrafo de plantilla "
+        "o aplica run.font.size = Pt(10) en cada run de contenido.\n"
+        "- TEXTO ARRIBA EN LA CELDA: el contenido debe empezar en la primera línea útil de la "
+        "celda, sin espacio en blanco arriba. Antes de escribir, elimina párrafos vacíos "
+        "sobrantes; space_before y space_after = 0; no centres verticalmente el texto.\n"
+        "- Contenido narrativo → doc.tables[3] (escribe en el párrafo indicado, 10 pt):\n"
+        "    fila 3 p0: motivo e instrumentos; fila 5 p0: diagnóstico (borra p1 vacío);\n"
+        "    fila 8 p1: fortalezas (cols 0-2) y necesidades (cols 3-9) ámbito pedagógico;\n"
+        "    fila 10 p1: fortalezas y necesidades ámbito social/afectivo;\n"
+        "    fila 12 p0: trabajo colaborativo; fila 14 p0: apoyos en hogar;\n"
+        "    fila 16 p0: acuerdos y compromisos.\n"
+        "  En filas 8 y 10 NO sobrescribas el párrafo 0 (título 'Fortalezas…' / 'Necesidades…'); "
+        "escribe el cuerpo en el párrafo 1.\n"
+        "  Patrón Python (tamaño y posición correctos):\n"
+        "    from docx.shared import Pt\n"
+        "    def poner_contenido(celda, texto, idx=0):\n"
+        "        while len(celda.paragraphs) > idx + 1 and not celda.paragraphs[-1].text.strip():\n"
+        "            celda.paragraphs[-1]._element.getparent().remove(celda.paragraphs[-1]._element)\n"
+        "        p = celda.paragraphs[idx]\n"
+        "        p.paragraph_format.space_before = Pt(0)\n"
+        "        p.paragraph_format.space_after = Pt(0)\n"
+        "        for run in p.runs: run.text = ''\n"
+        "        r = p.runs[0] if p.runs else p.add_run()\n"
+        "        r.text = texto; r.font.size = Pt(10); r.bold = False\n"
+        "- RELLENO DE TABLAS (FORMATO INFORME DE FAMILIA.docx): usa python-docx con índices exactos.\n"
+        "  Estudiante → doc.tables[1]: fila 3 nombre+RUT; fila 5 nombre social+fecha; fila 6 edad/curso/establecimiento.\n"
+        "  Profesional → doc.tables[2]: fila 3 nombre+RUT; fila 5 nombre social+rol; fila 6 tel/email/fecha.\n"
+        "  Receptor → doc.tables[2]: fila 10 nombre+RUT; fila 12 nombre social+teléfono.\n"
+        "  El RUT del profesional NUNCA va en Rol/cargo. Si falta RUT estudiante: 'No informado' en fila 3 celda 3.\n"
     )
-    parts: list[str] = []
+
+
+def _build_platform_rules(available_files: list[str] | None = None) -> str:
+    base_file, template_kind = pick_familia_base_template(available_files)
+
+    common = (
+        "=== REGLAS DE LA PLATAFORMA (no reemplazan ni acortan el rol) ===\n"
+        "- Responde en español.\n"
+        "- Usa el code interpreter con los archivos listados abajo.\n"
+        "- Genera UN solo archivo .docx por solicitud, solo para el estudiante o caso pedido.\n"
+        "- En tu razonamiento interno, narra el trabajo como un proceso paso a paso "
+        "(archivos que abres, contrastes, plan del documento, maquetación Word, revisión "
+        "visual de tablas/saltos de página y exportación final).\n"
+        "- En el mensaje al usuario (chat): confirma brevemente qué generaste y el nombre del archivo.\n"
+        "- En el archivo Word: aplica el ROL DEL AGENTE completo; revisa maquetación antes de dar por finalizado.\n"
+        "- Formato Word: conserva la plantilla tal cual. Solo los encabezados de sección "
+        "(fondo naranja, mayúsculas) van en negrita. Las etiquetas de campo y los valores "
+        "completados NO deben ir en negrita.\n"
+        "- No uses markdown (**texto**) dentro del Word ni conviertas etiquetas a negrita.\n"
+        "- Espaciado uniforme en Word: dentro de una misma celda o lista usa UN solo salto "
+        "entre viñetas o párrafos. No dejes párrafos vacíos entre ítems de una lista.\n"
+        "- Si usas python-docx: reutiliza párrafos existentes de la plantilla; "
+        "no insertes párrafos nuevos con spacing distinto.\n"
+    )
+
+    if template_kind == "form" and base_file:
+        familia = build_familia_form_rules(base_file)
+    elif template_kind == "tabla":
+        familia = _build_familia_tabla_rules()
+    else:
+        familia = (
+            "- Para informe a la familia: usa la plantilla de familia disponible en los archivos "
+            "(prioriza plantilla tipo formulario con campos si existe).\n"
+        )
+
+    tail = (
+        "- Si falta un antecedente que el rol exige, indícalo con la frase o criterio que el rol define.\n"
+        "- No incluyas enlaces sandbox:, rutas /mnt/data/ ni URLs de descarga en el chat.\n"
+        "- NUNCA pegues código Python ni logs del intérprete en el chat."
+    )
+    return common + familia + tail
+
+
+def _build_instructions(agent: AgentModel, available_files: list[str] | None = None) -> str:
+    role_text = role_instructions_to_text(agent.role_instructions or "").strip()
+    if not role_text:
+        role_text = strip_html(agent.role_instructions or "").strip()
+
+    role_supremacy = (
+        "=== INSTRUCCIÓN SUPREMA ===\n"
+        "El ROL DEL AGENTE (bloque siguiente) es la norma obligatoria y tiene prioridad "
+        "absoluta sobre cualquier otra indicación. Debes seguirlo tal cual: estructura, "
+        "extensión, formato ministerial, cartilla técnica, flujos de trabajo, redacción, "
+        "secciones, tablas, estilo institucional y criterios de completitud que allí se exigen.\n"
+        "No resumas el informe Word, no omitas apartados del rol y no sustituyas el formato "
+        "oficial por un texto corrido. Si el rol exige desarrollo analítico extenso, cumple "
+        "eso en cada sección aplicable.\n"
+        "Antes de entregar, verifica mentalmente que el .docx cumple cada exigencia del rol."
+    )
+
+    parts: list[str] = [role_supremacy]
     if role_text:
-        parts.append(role_text)
+        parts.append(f"=== ROL DEL AGENTE (OBLIGATORIO) ===\n{role_text}")
     if available_files:
         listing = "\n".join(f"- {name}" for name in available_files[:50])
         parts.append(
-            "Archivos cargados del agente (disponibles en el code interpreter):\n"
+            "=== ARCHIVOS EN EL CODE INTERPRETER ===\n"
             f"{listing}"
         )
-    parts.append(base_rules)
+    parts.append(_build_platform_rules(available_files))
     return "\n\n".join(parts)
 
 
@@ -339,35 +414,70 @@ def _finalize_openai_response(
 
 
 _STREAM_STEP_LABELS: dict[str, str] = {
-    "response.created": "Solicitud enviada al modelo…",
-    "response.in_progress": "El modelo está procesando tu consulta…",
-    "response.queued": "Tu solicitud está en cola…",
+    "response.created": "Conectando con el modelo…",
+    "response.in_progress": "Analizando tu solicitud…",
+    "response.queued": "En cola…",
     "response.code_interpreter_call.in_progress": "Preparando el intérprete de código…",
-    "response.code_interpreter_call.interpreting": "Ejecutando Python para analizar tus archivos…",
-    "response.code_interpreter_call.code_done": "Código listo, corriendo el análisis…",
-    "response.code_interpreter_call.completed": "Análisis de archivos completado.",
-    "response.output_item.added": "Generando la respuesta…",
-    "response.output_item.done": "Bloque de respuesta generado…",
-    "response.output_text.done": "Texto de respuesta listo…",
-    "response.content_part.added": "Escribiendo la respuesta…",
-    "response.content_part.done": "Sección de respuesta completada…",
-    "response.completed": "Modelo finalizó la generación…",
-    "response.reasoning_summary_text.delta": "Razonando sobre los antecedentes…",
-    "response.reasoning_summary_part.added": "Organizando el análisis…",
-    "response.reasoning_summary_text.done": "Razonamiento completado…",
-    "response.reasoning_text.delta": "Elaborando el informe…",
-    "response.reasoning_text.done": "Redacción interna completada…",
+    "response.code_interpreter_call.interpreting": "Ejecutando comando (Python)…",
+    "response.code_interpreter_call.code_done": "Código listo, aplicando cambios…",
+    "response.code_interpreter_call.completed": "Comando completado.",
+    "response.output_item.added": "Redactando respuesta…",
+    "response.output_item.done": "Bloque de respuesta listo…",
+    "response.output_text.done": "Texto final listo…",
+    "response.content_part.added": "Escribiendo respuesta…",
+    "response.content_part.done": "Respuesta escrita…",
+    "response.completed": "Trabajo del modelo finalizado…",
 }
 
-_POST_INTERPRETER_STEP = "Redactando la respuesta final (puede tardar varios minutos)…"
+_GENERIC_REASONING_STEPS = frozenset(
+    {
+        "Razonando sobre los antecedentes…",
+        "Organizando el análisis…",
+        "Razonamiento completado…",
+        "Elaborando el informe…",
+        "Redacción interna completada…",
+        "Elaborando el informe con los datos analizados…",
+    }
+)
+
+_POST_INTERPRETER_STEP = "Preparando el documento Word final…"
+
+
+def _extract_reasoning_delta(event: Any) -> str:
+    etype = getattr(event, "type", None) or ""
+    if etype in (
+        "response.reasoning_summary_text.delta",
+        "response.reasoning_text.delta",
+    ):
+        return getattr(event, "delta", None) or getattr(event, "text", None) or ""
+    return ""
+
+
+def _flush_thinking_paragraphs(
+    buffer: str,
+    *,
+    final: bool = False,
+) -> tuple[list[str], str]:
+    """Divide el razonamiento en párrafos estilo ChatGPT."""
+    paragraphs: list[str] = []
+    remaining = buffer
+    while "\n\n" in remaining:
+        head, remaining = remaining.split("\n\n", 1)
+        text = head.strip()
+        if len(text) >= 30:
+            paragraphs.append(text)
+    if final:
+        text = remaining.strip()
+        if len(text) >= 30:
+            paragraphs.append(text)
+        remaining = ""
+    return paragraphs, remaining
 
 
 def _step_from_stream_event(event: Any) -> str | None:
     etype = getattr(event, "type", None) or ""
     if etype in _STREAM_STEP_LABELS:
         return _STREAM_STEP_LABELS[etype]
-    if "reasoning" in etype:
-        return "Elaborando el informe con los datos analizados…"
     return None
 
 
@@ -410,12 +520,21 @@ def stream_chat_with_openai_responses(
     seen_steps: set[str] = set()
     early_saved: list[dict[str, Any]] = []
     stream_container_id: str | None = agent.openai_container_id
+    thinking_buffer = ""
+    has_thinking_steps = False
 
     def emit_step(label: str) -> dict[str, Any] | None:
+        if label in _GENERIC_REASONING_STEPS and has_thinking_steps:
+            return None
         if label in seen_steps:
             return None
         seen_steps.add(label)
         return {"type": "step", "message": label}
+
+    def emit_thinking_step(text: str) -> dict[str, Any]:
+        nonlocal has_thinking_steps
+        has_thinking_steps = True
+        return {"type": "thinking_step", "message": text}
 
     first_step = emit_step(f"Conectando con {settings.openai_agent_model}…")
     if first_step:
@@ -435,6 +554,25 @@ def stream_chat_with_openai_responses(
                 step_event = emit_step(step_label)
                 if step_event:
                     yield step_event
+
+            reasoning_delta = _extract_reasoning_delta(event)
+            if reasoning_delta:
+                thinking_buffer += reasoning_delta
+                yield {"type": "thinking_delta", "delta": reasoning_delta}
+                new_paragraphs, thinking_buffer = _flush_thinking_paragraphs(thinking_buffer)
+                for paragraph in new_paragraphs:
+                    yield emit_thinking_step(paragraph)
+
+            if etype in (
+                "response.reasoning_summary_text.done",
+                "response.reasoning_text.done",
+            ):
+                final_paragraphs, thinking_buffer = _flush_thinking_paragraphs(
+                    thinking_buffer,
+                    final=True,
+                )
+                for paragraph in final_paragraphs:
+                    yield emit_thinking_step(paragraph)
 
             if etype == "response.code_interpreter_call.completed":
                 post_step = emit_step(_POST_INTERPRETER_STEP)
