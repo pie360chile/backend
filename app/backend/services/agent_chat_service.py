@@ -16,6 +16,7 @@ from app.backend.services.openai_agent_service import (
 )
 from app.backend.utils.agent_document_index import search_agent_knowledge, strip_html
 from app.backend.utils.agent_file_selection import select_agent_file_rows
+from app.backend.utils.agent_files import ensure_responses_dir
 
 def _prepare_openai_files(
     db: Session,
@@ -25,6 +26,8 @@ def _prepare_openai_files(
 ) -> tuple[list[str], list[str], int]:
     """Devuelve (openai_file_ids, nombres usados, total archivos del agente)."""
     from app.backend.db.models import AgentFileModel
+
+    ensure_responses_dir(agent.id)
 
     total = (
         db.query(AgentFileModel)

@@ -336,8 +336,16 @@ def _save_response_bytes(
 
     ensure_responses_dir(agent_id)
     destination = agent_dir(agent_id) / storage_path
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_bytes(content)
+    try:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(content)
+    except OSError as exc:
+        logger.error(
+            "No se pudo escribir respuesta en %s: %s",
+            destination,
+            exc,
+        )
+        return None
 
     now = datetime.utcnow()
     row = AgentResponseFileModel(

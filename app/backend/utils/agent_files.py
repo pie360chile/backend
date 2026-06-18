@@ -8,7 +8,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 AGENT_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
-AGENTS_ROOT = Path("files/agents")
+
+
+def _agents_root() -> Path:
+    try:
+        from app.backend.core.config import settings
+
+        return Path(settings.files_dir) / "agents"
+    except Exception:
+        return Path("files/agents")
 
 ALLOWED_EXTENSIONS = {
     ".pdf",
@@ -41,12 +49,13 @@ def validate_agent_id(agent_id: str) -> str:
 
 
 def agent_dir(agent_id: str) -> Path:
-    return AGENTS_ROOT / validate_agent_id(agent_id)
+    return _agents_root() / validate_agent_id(agent_id)
 
 
 def ensure_agent_dir(agent_id: str) -> Path:
     directory = agent_dir(agent_id)
     directory.mkdir(parents=True, exist_ok=True)
+    ensure_responses_dir(agent_id)
     return directory
 
 
@@ -55,6 +64,9 @@ def responses_dir(agent_id: str) -> Path:
 
 
 def ensure_responses_dir(agent_id: str) -> Path:
+    """Crea files/agents/{id}/responses si no existe (informes generados por el chat)."""
+    agent_path = agent_dir(agent_id)
+    agent_path.mkdir(parents=True, exist_ok=True)
     directory = responses_dir(agent_id)
     directory.mkdir(parents=True, exist_ok=True)
     return directory
