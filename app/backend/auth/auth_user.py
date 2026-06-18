@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 import bcrypt
 from argon2 import PasswordHasher
 
-oauth2_scheme = OAuth2PasswordBearer("/login_users/token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/authentications/login")
 # Usar solo Argon2 para evitar problemas de compatibilidad con bcrypt 5.0.0
 # Argon2 no tiene límite de 72 bytes y es más seguro
 argon2_hasher = PasswordHasher()
@@ -95,7 +95,7 @@ def get_current_active_user(current_user: UserModel = Depends(get_current_user))
     return current_user
 
 
-oauth2_scheme_optional = OAuth2PasswordBearer("/login_users/token", auto_error=False)
+oauth2_scheme_optional = OAuth2PasswordBearer("/authentications/login", auto_error=False)
 
 
 def get_optional_current_user(token: Union[str, None] = Depends(oauth2_scheme_optional)):

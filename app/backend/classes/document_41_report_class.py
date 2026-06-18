@@ -3,7 +3,7 @@ import json
 from datetime import datetime
 from typing import Any
 from sqlalchemy.orm import Session
-from app.backend.db.models import Document41PsychomotorReportModel
+from app.backend.db.models import PsychomotorEvaluationReportModel as Document41PsychomotorReportModel
 
 
 class Document41ReportClass:

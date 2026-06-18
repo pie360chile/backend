@@ -1,0 +1,2055 @@
+from app.backend.db.database import Base
+from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Date, Time, ForeignKey, Float, Boolean, Text, Numeric, Enum, UniqueConstraint, select
+from sqlalchemy.orm import column_property
+from datetime import datetime
+
+class CustomerModel(Base):
+    __tablename__ = 'customers'
+
+    id = Column(Integer, primary_key=True)
+    country_id = Column(Integer)
+    region_id = Column(Integer)
+    commune_id = Column(Integer)
+    package_id = Column(Integer)
+    bill_or_ticket_id = Column(Integer)
+    deleted_status_id = Column(Integer)
+    identification_number = Column(String(255))
+    names = Column(String(255))
+    lastnames = Column(String(255))
+    address = Column(String(255))
+    company_name = Column(String(255))
+    phone = Column(String(255))
+    email = Column(String(255))
+    license_time = Column(Date)
+    added_date = Column(DateTime())
+    updated_date = Column(DateTime())
+
+class RegionModel(Base):
+    __tablename__ = 'regions'
+
+    id = Column(Integer, primary_key=True)
+    region = Column(String(255))
+    added_date = Column(DateTime())
+    updated_date = Column(DateTime())
+
+class ProvinceModel(Base):
+    """Provincias (Inspection listado/provincias): id remoto, nombre, región padre."""
+    __tablename__ = 'provinces'
+
+    id = Column(Integer, primary_key=True)
+    province = Column(String(255))
+    region_id = Column(Integer)
+    added_date = Column(DateTime())
+    updated_date = Column(DateTime())
+
+class UserModel(Base):
+    __tablename__ = 'users'
+
+    id = Column(Integer, primary_key=True)
+    customer_id = Column(Integer)
+    deleted_status_id = Column(Integer)
+    rut = Column(String(255))
+    full_name = Column(String(255))
+    email = Column(String(255))
+    phone = Column(String(255))
+    hashed_password = Column(Text)
+    added_date = Column(DateTime())
+    updated_date = Column(DateTime())
+
+class UsersRolModel(Base):
+    __tablename__ = 'users_rols'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'))
+    rol_id = Column(Integer, ForeignKey('rols.id'))
+    deleted_status_id = Column(Integer)
+    period_year = Column(Integer, nullable=True)
+    added_date = Column(DateTime())
+    updated_date = Column(DateTime())
+
+class RolModel(Base):
+    __tablename__ = 'rols'
+
+    id = Column(Integer, primary_key=True)
+    customer_id = Column(Integer)
+    school_id = Column(Integer)
+    deleted_status_id = Column(Integer)
+    rol = Column(String(255))
+    added_date = Column(DateTime())
+    updated_date = Column(DateTime())
+
+class PermissionModel(Base):
+    __tablename__ = 'permissions'
+
+    id = Column(Integer, primary_key=True)
+    permission = Column(String(255))
+    permission_type_id = Column(Integer)
+    permission_order_id = Column(Integer)
+    added_date = Column(DateTime())
+    updated_date = Column(DateTime())
+
+class RolPermissionModel(Base):
+    __tablename__ = 'rols_permissions'
+
+    id = Column(Integer, primary_key=True)
+    rol_id = Column(Integer, ForeignKey('rols.id'))
+    permission_id = Column(Integer, ForeignKey('permissions.id'))
+    added_date = Column(DateTime())
+    updated_date = Column(DateTime())
+
+class TeachingModel(Base):
+    __tablename__ = 'teachings'
+
+    id = Column(Integer, primary_key=True)
+    school_id = Column(Integer)
+    teaching_type_id = Column(Integer)
+    teaching_name = Column(String(255))
+    added_date = Column(DateTime())
+    updated_date = Column(DateTime())
+    deleted_status_id = Column(Integer)
+
+class CourseModel(Base):
+    __tablename__ = 'courses'
+
+    id = Column(Integer, primary_key=True)
+    school_id = Column(Integer)
+    teaching_id = Column(Integer)
+    course_name = Column(String(255))
+    period_year = Column(Integer, nullable=True)
+    added_date = Column(DateTime())
+    updated_date = Column(DateTime())
+    deleted_status_id = Column(Integer)
+
+class CommuneModel(Base):
+    __tablename__ = 'communes'
+
+    id = Column(Integer, primary_key=True)
+    region_id = Column(Integer)
+    commune = Column(String(255))
+    added_date = Column(DateTime())
+    updated_date = Column(DateTime())
+
+class NativeLanguageProficiencyModel(Base):
+    __tablename__ = 'native_language_proficiencies'
+
+    id = Column(Integer, primary_key=True)
+    native_language_proficiency = Column(String(255))
+    added_date = Column(DateTime())
+    updated_date = Column(DateTime())
+
+class FamilyMemberModel(Base):
+    __tablename__ = 'family_members'
+
+    id = Column(Integer, primary_key=True)
+    deleted_status_id = Column(Integer)
+    family_member = Column(String(255))
+    added_date = Column(DateTime())
+    updated_date = Column(DateTime())
+
+class NewsModel(Base):
+    __tablename__ = 'news'
+
+    id = Column(Integer, primary_key=True)
+    deleted_status_id = Column(Integer)
+    title = Column(String(255))
+    short_description = Column(String(255))
+    description = Column(Text())
+    image = Column(String(255))
+    added_date = Column(DateTime())
+    updated_date = Column(DateTime())
+
+class NationalityModel(Base):
+    __tablename__ = 'nationalities'
+
+    id = Column(Integer, primary_key=True)
+    deleted_status_id = Column(Integer)
+    nationality = Column(String(255))
+    added_date = Column(DateTime())
+    updated_date = Column(DateTime())
+
+class GenderModel(Base):
+    __tablename__ = 'genders'
+
+    id = Column(Integer, primary_key=True)
+    deleted_status_id = Column(Integer)
+    gender = Column(String(255))
+    added_date = Column(DateTime())
+    updated_date = Column(DateTime())
+
+class SchoolModel(Base):
+    __tablename__ = 'schools'
+
+    id = Column(Integer, primary_key=True)
+    customer_id = Column(Integer)
+    deleted_status_id = Column(Integer)
+    school_name = Column(String(255))
+    school_address = Column(String(255))
+    director_name = Column(String(255))
+    community_school_password = Column(String(255))
+    added_date = Column(DateTime())
+    updated_date = Column(DateTime())
+
+class StudentModel(Base):
+    __tablename__ = 'students'
+
+    id = Column(Integer, primary_key=True)
+    deleted_status_id = Column(Integer)
+    school_id = Column(Integer)
+    identification_number = Column(String(255))
+    period_year = Column(String(10), nullable=True)
+    added_date = Column(DateTime())
+    updated_date = Column(DateTime())
+
+class StudentAcademicInfoModel(Base):
+    __tablename__ = 'student_academic_data'
+
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer)
+    special_educational_need_id = Column(Integer)
+    course_id = Column(Integer)
+    platform_status_id = Column(Integer, nullable=True)
+    resolution_number = Column(String(255), nullable=True)
+    sip_admission_year = Column(Integer)
+    diagnostic_date = Column(Date, nullable=True)
+    psychopedagogical_evaluation_status = Column(String(50), nullable=True)
+    psychopedagogical_evaluation_year = Column(Integer, nullable=True)
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+
+class PlatformStatusModel(Base):
+    __tablename__ = 'platform_statuses'
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100))
+
+class StudentPersonalInfoModel(Base):
+    __tablename__ = 'student_personal_data'
+
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer)
+    region_id = Column(Integer)
+    commune_id = Column(Integer)
+    gender_id = Column(Integer)
+    proficiency_native_language_id = Column(Integer)
+    proficiency_language_used_id = Column(Integer)
+    identification_number = Column(String(255))
+    names = Column(String(255))
+    father_lastname = Column(String(255))
+    mother_lastname = Column(String(255))
+    social_name = Column(String(255))
+    born_date = Column(String(255))
+    nationality_id = Column(Integer, nullable=True)
+    address = Column(String(255))
+    phone = Column(String(255))
+    email = Column(String(255))
+    native_language = Column(String(255))
+    language_usually_used = Column(String(255))
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+
+class StudentDocumentModel(Base):
+    __tablename__ = 'birth_certificates'
+
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer)
+    birth_certificate = Column(Text)
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+
+class StudentGuardianModel(Base):
+    __tablename__ = 'student_guardians'
+
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer)
+    family_member_id = Column(Integer)
+    gender_id = Column(Integer)
+    identification_number = Column(String(255))
+    names = Column(String(255))
+    father_lastname = Column(String(255))
+    mother_lastname = Column(String(255))
+    born_date = Column(Date)
+    email = Column(String(255))
+    celphone = Column(String(255))
+    city = Column(String(255))
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+
+class ProfessionalModel(Base):
+    """
+    Perfil académico del usuario (carrera): una fila típica por user_id.
+    Colegio / año escolar live en users_rols + rols; teaching/course en professionals_teachings_courses.
+    """
+
+    __tablename__ = 'professionals'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=True)
+    career_type_id = Column(Integer, nullable=True)
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+    # RUT/documento vive en `users`; expone el mismo dato para código legado que filtraba por professionals.identification_number
+    identification_number = column_property(
+        select(UserModel.rut).where(UserModel.id == user_id).correlate_except(UserModel).scalar_subquery()
+    )
+
+class ProfessionalTeachingCourseModel(Base):
+    __tablename__ = 'professionals_teachings_courses'
+
+    id = Column(Integer, primary_key=True)
+    professional_id = Column(Integer)
+    teaching_id = Column(Integer)
+    course_id = Column(Integer)
+    teacher_type_id = Column(Integer, nullable=True)  # Regular / Especialidad
+    career_type_id = Column(Integer, nullable=True)  # Especialidad de esta asignación
+    deleted_status_id = Column(Integer)
+    subject = Column(String(255), nullable=True)
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+
+class StudentProfessionalModel(Base):
+    __tablename__ = 'students_professionals'
+
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer)
+    professional_id = Column(Integer)
+    career_type_id = Column(Integer, nullable=True)
+    hours = Column(Integer, nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class CoordinatorsCourseModel(Base):
+    __tablename__ = 'coordinators_courses'
+
+    id = Column(Integer, primary_key=True)
+    school_id = Column(Integer)
+    course_id = Column(Integer)
+    professional_id = Column(Integer)
+    coordinator_type_id = Column(Integer)
+    phone = Column(String(255), nullable=True)
+    email = Column(String(255), nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class MeetingSchedulalingModel(Base):
+    __tablename__ = 'meeting_schedualings'
+
+    id = Column(Integer, primary_key=True)
+    school_id = Column(Integer)
+    course_id = Column(Integer)
+    period_id = Column(Integer, nullable=True)
+    meeting_date = Column(Date, nullable=True)
+    meeting_time = Column(String(255), nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class MeetingSchedualingAgreementModel(Base):
+    __tablename__ = 'meeting_schedualing_agreements'
+
+    id = Column(Integer, primary_key=True)
+    meeting_schedualing_id = Column(Integer)
+    agreements = Column(String(255), nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class MeetingSchedualingRegisterProfessionalModel(Base):
+    __tablename__ = 'meeting_schedualing_registers_professionals'
+
+    id = Column(Integer, primary_key=True)
+    meeting_schedualing_register_id = Column(Integer)
+    professional_id = Column(Integer)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class DiversifiedStrategyModel(Base):
+    __tablename__ = 'diversified_strategies'
+
+    id = Column(Integer, primary_key=True)
+    course_id = Column(Integer, nullable=True)
+    planning_learning_styles = Column(Text, nullable=True)
+    planning_strengths = Column(String(255), nullable=True)
+    planning_support_needs = Column(String(255), nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+
+class RegularTeacherDiversifiedStrategyModel(Base):
+    __tablename__ = 'regular_teacher_diversified_strategies'
+
+    id = Column(Integer, primary_key=True)
+    school_id = Column(Integer, nullable=True)
+    course_id = Column(Integer, nullable=True)
+    subject_id = Column(Integer, nullable=True)
+    strategy = Column(Text, nullable=True)
+    period = Column(String(255), nullable=True)
+    criteria = Column(String(255), nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+
+class SubjectModel(Base):
+    __tablename__ = 'subjects'
+
+    id = Column(Integer, primary_key=True)
+    school_id = Column(Integer, nullable=True)
+    subject = Column(String(255), nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class CurriculumSubjectModel(Base):
+    """
+    Catálogo nacional de asignaturas (curriculum subjects).
+    Distinto de `subjects`, que son asignaturas por colegio (school_id).
+  """
+
+    __tablename__ = 'curriculum_subjects'
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(255), nullable=False)
+    name_es = Column(String(255), nullable=False)
+    category = Column(String(64), nullable=True)
+    sort_order = Column(Integer, nullable=False, default=0)
+    is_active = Column(Integer, nullable=False, default=1)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class EducationLevelModel(Base):
+    """Niveles educativos (1° básico, 2° medio, etc.)."""
+
+    __tablename__ = 'education_levels'
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(128), nullable=False)
+    name_es = Column(String(128), nullable=False)
+    education_stage = Column(String(32), nullable=False)
+    grade_number = Column(Integer, nullable=True)
+    oa_level_code = Column(String(8), nullable=True)
+    sort_order = Column(Integer, nullable=False, default=0)
+    is_active = Column(Integer, nullable=False, default=1)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class CurriculumSubjectLevelModel(Base):
+    """Vincula una asignatura del catálogo con un nivel (cada par puede tener OA)."""
+
+    __tablename__ = 'curriculum_subject_levels'
+
+    id = Column(Integer, primary_key=True)
+    curriculum_subject_id = Column(Integer, ForeignKey('curriculum_subjects.id', ondelete='CASCADE'), nullable=False)
+    education_level_id = Column(Integer, ForeignKey('education_levels.id', ondelete='CASCADE'), nullable=False)
+    ministry_subject_code = Column(String(16), nullable=False)
+    is_active = Column(Integer, nullable=False, default=1)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class LearningObjectiveModel(Base):
+    """Objetivo de aprendizaje (OA) Mineduc por asignatura + nivel."""
+
+    __tablename__ = 'learning_objectives'
+
+    id = Column(Integer, primary_key=True)
+    curriculum_subject_level_id = Column(
+        Integer, ForeignKey('curriculum_subject_levels.id', ondelete='CASCADE'), nullable=False
+    )
+    code = Column(String(32), nullable=False)
+    description = Column(Text, nullable=False)
+    is_priority = Column(Integer, nullable=False, default=0)
+    sort_order = Column(Integer, nullable=False, default=0)
+    is_active = Column(Integer, nullable=False, default=1)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class CollaborativeWorkModel(Base):
+    __tablename__ = 'collaborative_works'
+
+    id = Column(Integer, primary_key=True)
+    school_id = Column(Integer, nullable=True)
+    course_id = Column(Integer, nullable=True)
+    planning_collab_co_teaching = Column(String(255), nullable=True)
+    planning_collab_assistants = Column(String(255), nullable=True)
+    planning_collab_students = Column(String(255), nullable=True)
+    planning_collab_family = Column(String(255), nullable=True)
+    planning_collab_community = Column(String(255), nullable=True)
+    planning_observations = Column(String(255), nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class SupportOrganizationModel(Base):
+    __tablename__ = 'support_organizations'
+
+    id = Column(Integer, primary_key=True)
+    school_id = Column(Integer, nullable=True)
+    course_id = Column(Integer, nullable=True)
+    subject_id = Column(Integer, nullable=True)
+    hours_support_regular_classroom = Column(String(255), nullable=True)
+    hours_support_outside_classroom = Column(String(255), nullable=True)
+    specialized_support_types = Column(String(255), nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class DiversityCriterionModel(Base):
+    __tablename__ = 'diversity_criteria'
+
+    id = Column(Integer, primary_key=True)
+    key = Column('key', String(80), nullable=False)
+    label = Column(String(255), nullable=True)
+    sort_order = Column(Integer, default=0)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class DiversityStrategyOptionModel(Base):
+    __tablename__ = 'diversity_strategy_options'
+
+    id = Column(Integer, primary_key=True)
+    diversity_criterion_id = Column(Integer, nullable=True)
+    label = Column(String(255), nullable=True)
+    sort_order = Column(Integer, default=0)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class CourseDiversityResponseModel(Base):
+    __tablename__ = 'course_diversity_responses'
+
+    id = Column(Integer, primary_key=True)
+    course_id = Column(Integer, nullable=False)
+    diversity_criterion_id = Column(Integer, nullable=False)
+    criterion_selected = Column(Integer, default=0)  # 0=no, 1=si
+    diversity_strategy_option_id = Column(Integer, nullable=True)
+    how_text = Column(Text, nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class CourseDiversityResponseStudentModel(Base):
+    __tablename__ = 'course_diversity_response_students'
+
+    id = Column(Integer, primary_key=True)
+    course_diversity_response_id = Column(Integer, nullable=False)
+    student_id = Column(Integer, nullable=False)
+    added_date = Column(DateTime, nullable=True)
+
+class CourseDiversityObservationModel(Base):
+    __tablename__ = 'course_diversity_observations'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    course_id = Column(Integer, ForeignKey('courses.id', ondelete='CASCADE'), nullable=False)
+    observations = Column(Text, nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+
+class AdjustmentAspectModel(Base):
+    __tablename__ = 'adjustment_aspects'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    key = Column(String(80), nullable=False, unique=True)
+    label = Column(String(255), nullable=False)
+    sort_order = Column(Integer, default=0)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class CourseAdjustmentModel(Base):
+    __tablename__ = 'course_adjustments'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    course_id = Column(Integer, ForeignKey('courses.id', ondelete='CASCADE'), nullable=False)
+    adjustment_aspect_id = Column(Integer, ForeignKey('adjustment_aspects.id', ondelete='CASCADE'), nullable=False)
+    other_aspect_text = Column(String(500), nullable=True)
+    value = Column(Text, nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class CourseAdjustmentStudentModel(Base):
+    __tablename__ = 'course_adjustment_students'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    course_adjustment_id = Column(Integer, ForeignKey('course_adjustments.id', ondelete='CASCADE'), nullable=False)
+    student_id = Column(Integer, ForeignKey('students.id', ondelete='CASCADE'), nullable=False)
+    added_date = Column(DateTime, nullable=True)
+
+class CurricularAdequacyTypeModel(Base):
+    __tablename__ = 'curricular_adequacy_types'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    key = Column(String(80), nullable=False, unique=True)
+    label = Column(String(500), nullable=False)
+    sort_order = Column(Integer, default=0)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class CourseCurricularAdequacyModel(Base):
+    __tablename__ = 'course_curricular_adequacies'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    course_id = Column(Integer, ForeignKey('courses.id', ondelete='CASCADE'), nullable=False)
+    curricular_adequacy_type_id = Column(Integer, ForeignKey('curricular_adequacy_types.id', ondelete='CASCADE'), nullable=False)
+    applied = Column(Integer, default=0)  # 0=no, 1=sí
+    scope_text = Column(Text, nullable=True)
+    strategies_text = Column(String(500), nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class CourseCurricularAdequacySubjectModel(Base):
+    __tablename__ = 'course_curricular_adequacy_subjects'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    course_curricular_adequacy_id = Column(Integer, ForeignKey('course_curricular_adequacies.id', ondelete='CASCADE'), nullable=False)
+    subject_id = Column(Integer, ForeignKey('subjects.id', ondelete='CASCADE'), nullable=False)
+    added_date = Column(DateTime, nullable=True)
+
+class CourseCurricularAdequacyStudentModel(Base):
+    __tablename__ = 'course_curricular_adequacy_students'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    course_curricular_adequacy_id = Column(Integer, ForeignKey('course_curricular_adequacies.id', ondelete='CASCADE'), nullable=False)
+    student_id = Column(Integer, ForeignKey('students.id', ondelete='CASCADE'), nullable=False)
+    added_date = Column(DateTime, nullable=True)
+
+class CourseIndividualSupportModel(Base):
+    __tablename__ = 'course_individual_supports'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    course_id = Column(Integer, ForeignKey('courses.id', ondelete='CASCADE'), nullable=False)
+    support_area_id = Column(Integer, ForeignKey('support_areas.id', ondelete='SET NULL'), nullable=True)
+    horario = Column(String(255), nullable=True)
+    fecha_inicio = Column(Date, nullable=True)
+    fecha_termino = Column(Date, nullable=True)
+    observations = Column(Text, nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class CourseIndividualSupportStudentModel(Base):
+    __tablename__ = 'course_individual_support_students'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    course_individual_support_id = Column(Integer, ForeignKey('course_individual_supports.id', ondelete='CASCADE'), nullable=False)
+    student_id = Column(Integer, ForeignKey('students.id', ondelete='CASCADE'), nullable=False)
+    added_date = Column(DateTime, nullable=True)
+
+class CourseRecordSupportModel(Base):
+    """Card 2: Registro de apoyos por curso y área (objetivos de aprendizaje)."""
+    __tablename__ = 'course_record_support'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    course_id = Column(Integer, ForeignKey('courses.id', ondelete='CASCADE'), nullable=False)
+    support_area_id = Column(Integer, ForeignKey('support_areas.id', ondelete='CASCADE'), nullable=False)
+    learning_objectives = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
+
+class CourseRecordSupportStudentModel(Base):
+    """Estudiantes que recibirán los apoyos por área (N:M)."""
+    __tablename__ = 'course_record_support_students'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    course_record_support_id = Column(Integer, ForeignKey('course_record_support.id', ondelete='CASCADE'), nullable=False)
+    student_id = Column(Integer, ForeignKey('students.id', ondelete='CASCADE'), nullable=False)
+    created_at = Column(DateTime, nullable=True)
+
+class CourseRecordSupportInterventionModel(Base):
+    """Cada fila = un 'Ingresar apoyo' (fecha, horas, lugar, profesional, actividades)."""
+    __tablename__ = 'course_record_support_interventions'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    course_id = Column(Integer, ForeignKey('courses.id', ondelete='CASCADE'), nullable=False)
+    support_area_id = Column(Integer, ForeignKey('support_areas.id', ondelete='CASCADE'), nullable=False)
+    date = Column(Date, nullable=False)
+    pedagogical_hours = Column(Numeric(6, 2), nullable=True)
+    place = Column(String(255), nullable=True)
+    professional_id = Column(Integer, ForeignKey('professionals.id', ondelete='SET NULL'), nullable=True)
+    activities_description = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
+
+class CourseTeacherRecordObservationModel(Base):
+    __tablename__ = 'course_teacher_record_observations'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    course_id = Column(Integer, ForeignKey('courses.id', ondelete='CASCADE'), nullable=False)
+    subject_id = Column(Integer, ForeignKey('subjects.id', ondelete='CASCADE'), nullable=False)
+    observations = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
+
+class CourseTeacherRecordActivityModel(Base):
+    __tablename__ = 'course_teacher_record_activities'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    course_id = Column(Integer, ForeignKey('courses.id', ondelete='CASCADE'), nullable=False)
+    subject_id = Column(Integer, ForeignKey('subjects.id', ondelete='CASCADE'), nullable=False)
+    date = Column(Date, nullable=False)
+    pedagogical_hours = Column(Numeric(6, 2), nullable=False, default=0)
+    teacher_names = Column(Text, nullable=True)  # JSON array of names
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
+
+class CourseActivityFamilyModel(Base):
+    """IV.1 Trabajo con la familia, apoderados y/o estudiante."""
+
+    __tablename__ = 'course_activity_family'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    course_id = Column(Integer, ForeignKey('courses.id', ondelete='CASCADE'), nullable=False)
+    date = Column(Date, nullable=True)
+    attendees = Column(Text, nullable=True)
+    objectives = Column(Text, nullable=True)
+    activities = Column(Text, nullable=True)
+    agreements = Column(Text, nullable=True)
+    results = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
+
+class CourseActivityCommunityModel(Base):
+    """IV.2 Trabajo con la comunidad y el entorno escolar."""
+
+    __tablename__ = 'course_activity_community'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    course_id = Column(Integer, ForeignKey('courses.id', ondelete='CASCADE'), nullable=False)
+    date = Column(Date, nullable=True)
+    attendees = Column(Text, nullable=True)
+    objectives = Column(Text, nullable=True)
+    activities = Column(Text, nullable=True)
+    agreements = Column(Text, nullable=True)
+    results = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
+
+class CourseActivityOtherModel(Base):
+    """V.3 Otras reuniones (acta)."""
+
+    __tablename__ = 'course_activity_other'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    course_id = Column(Integer, ForeignKey('courses.id', ondelete='CASCADE'), nullable=False)
+    date = Column(Date, nullable=True)
+    attendees = Column(Text, nullable=True)
+    objectives = Column(Text, nullable=True)
+    activities = Column(Text, nullable=True)
+    agreements = Column(Text, nullable=True)
+    results = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
+
+class CourseLearningAchievementModel(Base):
+    """Card 3: Registro de logros de aprendizaje por curso, estudiante y período (1, 2 o 3)."""
+    __tablename__ = 'course_learning_achievements'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    course_id = Column(Integer, ForeignKey('courses.id', ondelete='CASCADE'), nullable=False)
+    student_id = Column(Integer, ForeignKey('students.id', ondelete='CASCADE'), nullable=False)
+    period_id = Column(Integer, nullable=False)  # 1, 2, 3
+    achievements = Column(Text, nullable=True)
+    comments = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
+
+class EvalDiversityTypeModel(Base):
+    __tablename__ = 'eval_diversity_types'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    key = Column(String(80), nullable=False, unique=True)
+    label = Column(String(500), nullable=False)
+    sort_order = Column(Integer, default=0)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class CourseEvalDiversityModel(Base):
+    __tablename__ = 'course_eval_diversity'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    course_id = Column(Integer, ForeignKey('courses.id', ondelete='CASCADE'), nullable=False)
+    eval_diversity_type_id = Column(Integer, ForeignKey('eval_diversity_types.id', ondelete='CASCADE'), nullable=False)
+    strategies_text = Column(Text, nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class CourseEvalDiversityObservationModel(Base):
+    __tablename__ = 'course_eval_diversity_observations'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    course_id = Column(Integer, ForeignKey('courses.id', ondelete='CASCADE'), nullable=False, unique=True)
+    observations = Column(Text, nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class FamilyCommunityStrategyTypeModel(Base):
+    __tablename__ = 'family_community_strategy_types'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    key = Column(String(80), nullable=False, unique=True)
+    label = Column(String(255), nullable=False)
+    sort_order = Column(Integer, default=0)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class CourseFamilyCommunityModel(Base):
+    __tablename__ = 'course_family_community'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    course_id = Column(Integer, ForeignKey('courses.id', ondelete='CASCADE'), nullable=False)
+    family_community_strategy_type_id = Column(Integer, ForeignKey('family_community_strategy_types.id', ondelete='CASCADE'), nullable=False)
+    descripcion = Column(Text, nullable=True)
+    seguimiento = Column(Text, nullable=True)
+    evaluacion = Column(Text, nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class CourseFamilyCommunityObservationModel(Base):
+    __tablename__ = 'course_family_community_observations'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    course_id = Column(Integer, ForeignKey('courses.id', ondelete='CASCADE'), nullable=False, unique=True)
+    observations = Column(Text, nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class PackageModel(Base):
+    __tablename__ = 'packages'
+
+    id = Column(Integer, primary_key=True)
+    deleted_status_id = Column(Integer)
+    package_name = Column(String(255))
+    students_per_package = Column(Integer)
+    professionals_per_package = Column(Integer)
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+
+class SpecialEducationalNeedModel(Base):
+    __tablename__ = 'special_educational_needs'
+
+    id = Column(Integer, primary_key=True)
+    school_id = Column(Integer, nullable=True)
+    special_educational_need_type_id = Column(Integer)
+    deleted_status_id = Column(Integer)
+    special_educational_needs = Column(String(255))
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+
+class DiagnosisSummaryModel(Base):
+    """Resumen por diagnóstico: cupos disponibles y ocupados por NEE, curso y año (year_index: 0=1er año, 1=2do año)."""
+    __tablename__ = 'diagnosis_summary'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    school_id = Column(Integer, nullable=True)
+    special_educational_need_id = Column(Integer, nullable=False)
+    course_id = Column(Integer, nullable=False)
+    year_index = Column(Integer, nullable=False, default=0)  # 0 = 1er año, 1 = 2do año
+    available_slots = Column(Integer, nullable=False, default=0)
+    occupied_slots = Column(Integer, nullable=False, default=0)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+
+class SupportAreaModel(Base):
+    __tablename__ = 'support_areas'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    support_area = Column(String(255), nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class DynamicFormModel(Base):
+    """Formularios dinámicos (preguntas configurables). Campos en JSON (fields_json)."""
+
+    __tablename__ = 'dynamic_forms'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    school_id = Column(Integer, nullable=True)
+    course_id = Column(Integer, nullable=True)
+    period_year = Column(Integer, nullable=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    fields_json = Column(Text, nullable=False)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class DynamicFormSubmissionModel(Base):
+    """Respuestas enviadas a un formulario dinámico (un registro por estudiante y formulario)."""
+
+    __tablename__ = 'dynamic_form_submissions'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    dynamic_form_id = Column(Integer, nullable=False)
+    student_id = Column(Integer, nullable=False)
+    school_id = Column(Integer, nullable=True)
+    period_year = Column(Integer, nullable=True)
+    answers_json = Column(Text, nullable=False)
+    submitted_by_user_id = Column(Integer, nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+
+class InformalTestTemplateModel(Base):
+    """Plantillas de pruebas informales por colegio (catálogo reutilizable entre estudiantes)."""
+
+    __tablename__ = 'informal_test_templates'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    school_id = Column(Integer, nullable=False)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class InformalTestTemplateQuestionModel(Base):
+    """Preguntas de una plantilla de prueba informal."""
+
+    __tablename__ = 'informal_test_template_questions'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    template_id = Column(Integer, ForeignKey('informal_test_templates.id', ondelete='CASCADE'), nullable=False)
+    question_order = Column(Integer, nullable=False)
+    question_text = Column(Text, nullable=False)
+    question_type = Column(String(50), nullable=False)  # short_text|long_text|single_choice|multiple_choice|number|date
+    options_json = Column(Text, nullable=True)
+    required = Column(Boolean, nullable=False, default=False)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+
+class InformalTestSubmissionModel(Base):
+    """Respuestas enviadas para una plantilla de prueba informal por estudiante."""
+
+    __tablename__ = 'informal_test_submissions'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    informal_test_template_id = Column(Integer, ForeignKey('informal_test_templates.id', ondelete='CASCADE'), nullable=False)
+    school_id = Column(Integer, nullable=False)
+    student_id = Column(Integer, nullable=False)
+    professional_id = Column(Integer, nullable=True)
+    answers_json = Column(Text, nullable=False)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class DifferentiatedStrategiesImplementationModel(Base):
+    __tablename__ = 'differentiated_strategies_implementations'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    period_id = Column(Integer, nullable=True)
+    actions_taken = Column(String(255), nullable=True)
+    applied_strategies = Column(String(255), nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class DocumentTypeModel(Base):
+    __tablename__ = 'document_types'
+
+    id = Column(Integer, primary_key=True)
+    document_type_id = Column(Integer)
+    document = Column(String(255))
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+
+class DocumentModel(Base):
+    __tablename__ = 'documents'
+
+    id = Column(Integer, primary_key=True)
+    document_type_id = Column(Integer)
+    career_type_id = Column(Integer)
+    document = Column(String(255))
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+    deleted_date = Column(DateTime, nullable=True)
+
+class BirthCertificateDocumentModel(Base):
+    __tablename__ = 'birth_certificate_documents'
+
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer)
+    birth_certificate = Column(String(255))
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+
+class MessageModel(Base):
+    __tablename__ = 'messages'
+
+    id = Column(Integer, primary_key=True)
+    customer_id = Column(Integer)
+    message_type_id = Column(Integer)
+    response_id = Column(Integer)
+    message_response_id = Column(Integer)
+    deleted_status_id = Column(Integer)
+    subject = Column(String(255))
+    message = Column(String(255))
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+
+class ActionIncidentModel(Base):
+    __tablename__ = 'actions_incidents'
+
+    id = Column(Integer, primary_key=True)
+    school_id = Column(Integer)
+    student_id = Column(Integer)
+    professional_id = Column(Integer)
+    action_incident_type_id = Column(Integer)
+    status_id = Column(Integer)
+    deleted_status_id = Column(Integer)
+    title = Column(String(255))
+    incident_date = Column(DateTime)
+    incident_time = Column(Time)
+    background = Column(Text)
+    conduct = Column(Text)
+    consequences = Column(Text)
+    recommendations = Column(Text)
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+
+class ScheduleModel(Base):
+    __tablename__ = 'schedules'
+
+    id = Column(Integer, primary_key=True)
+    schedule_id = Column(Integer)
+    names = Column(String(255))
+    lastnames = Column(String(255))
+    email = Column(String(255))
+    celphone = Column(String(255))
+    reason = Column(Text)
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+
+class DownloadModel(Base):
+    __tablename__ = 'downloads'
+
+    id = Column(Integer, primary_key=True)
+    download_type_id = Column(Integer)
+    title = Column(String(255))
+    description = Column(Text)
+    url = Column(String(255))
+    tag = Column(String(255))
+    quantity = Column(String(255))
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+
+class VideoModel(Base):
+    __tablename__ = 'videos'
+
+    id = Column(Integer, primary_key=True)
+    title = Column(String(255))
+    url = Column(String(255))
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+
+class CareerTypeModel(Base):
+    __tablename__ = 'career_types'
+
+    id = Column(Integer, primary_key=True)
+    career_type = Column(String(255))
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+
+class FaqModel(Base):
+    __tablename__ = 'faqs'
+
+    id = Column(Integer, primary_key=True)
+    question = Column(Text)
+    answer = Column(Text)
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+
+class ContactModel(Base):
+    __tablename__ = 'contacts'
+
+    id = Column(Integer, primary_key=True)
+    subject_type_id = Column(Integer)
+    schedule_type_id = Column(Integer)
+    names = Column(String(255))
+    lastnames = Column(String(255))
+    email = Column(String(255))
+    celphone = Column(String(255))
+    message = Column(Text)
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+
+class FolderModel(Base):
+    __tablename__ = 'folders'
+
+    id = Column(Integer, primary_key=True)
+    school_id = Column(Integer, nullable=True)
+    course_id = Column(Integer, nullable=True)
+    student_id = Column(Integer)
+    document_id = Column(Integer)
+    version_id = Column(Integer)
+    detail_id = Column(Integer, nullable=True)
+    professional_id = Column(Integer, nullable=True)  # 0 cuando no viene del frontend
+    file = Column(String(255), nullable=True)
+    period_year = Column(String(255), nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class DocumentAlertModel(Base):
+    __tablename__ = 'document_alerts'
+
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer)
+    professional_id = Column(Integer)
+    document_id = Column(Integer)
+    must_be_finish_date = Column(DateTime, nullable=True)
+    document_uploaded_date = Column(DateTime, nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+
+# -----------------------------------------------------------------------------
+# Document 20: Community Education Support Program (CESP)
+# -----------------------------------------------------------------------------
+
+class PeriodTypeModel(Base):
+    __tablename__ = 'period_types'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(100), nullable=False)
+
+class CespDocumentModel(Base):
+    __tablename__ = 'cesp_documents'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    student_id = Column(Integer, nullable=False)
+    document_type_id = Column(Integer, nullable=False, default=20)
+    elaboration_date = Column(Date, nullable=True)
+    period_type_id = Column(Integer, nullable=False, default=1)
+    pharmacological_treatment = Column(String(10), nullable=True)  # 'yes' | 'no'
+    external_specialists = Column(String(10), nullable=True)  # 'yes' | 'no'
+    profile_interaction = Column(Text, nullable=True)
+    profile_involvement = Column(Text, nullable=True)
+    profile_behavior_repertoire = Column(Text, nullable=True)
+    profile_skills = Column(Text, nullable=True)
+    profile_challenges = Column(Text, nullable=True)
+    profile_support_needs = Column(Text, nullable=True)
+    profile_interests = Column(Text, nullable=True)
+    stressors_triggers = Column(Text, nullable=True)
+    prevention_measures = Column(Text, nullable=True)
+    suggestions_special = Column(Text, nullable=True)
+    strategies_phase1_manifestations = Column(Text, nullable=True)
+    strategies_phase1_strategies = Column(Text, nullable=True)
+    strategies_phase2_manifestations = Column(Text, nullable=True)
+    strategies_phase2_strategies = Column(Text, nullable=True)
+    strategies_phase3_manifestations = Column(Text, nullable=True)
+    strategies_phase3_strategies = Column(Text, nullable=True)
+    strategies_phase4_manifestations = Column(Text, nullable=True)
+    strategies_phase4_strategies = Column(Text, nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class CespGuardianModel(Base):
+    __tablename__ = 'cesp_guardians'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    cesp_document_id = Column(Integer, nullable=False)
+    guardian_id = Column(Integer, nullable=True)
+    name = Column(String(255), nullable=True)
+    identification_number = Column(String(50), nullable=True)
+    family_member_id = Column(Integer, nullable=True)
+    address = Column(String(500), nullable=True)
+    phone = Column(String(50), nullable=True)
+    email = Column(String(255), nullable=True)
+    is_emergency_contact = Column(Integer, nullable=False, default=0)
+    is_guardian = Column(Integer, nullable=False, default=1)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+
+class CespParticipantProfessionalModel(Base):
+    __tablename__ = 'cesp_participant_professionals'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    cesp_document_id = Column(Integer, nullable=False)
+    professional_id = Column(Integer, nullable=False)
+    professional_role = Column(String(255), nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+
+class CespSupportTeamMemberModel(Base):
+    __tablename__ = 'cesp_support_team_members'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    cesp_document_id = Column(Integer, nullable=False)
+    professional_id = Column(Integer, nullable=False)
+    professional_role = Column(String(255), nullable=True)
+    support_roles = Column(Text, nullable=True)
+    phone = Column(String(50), nullable=True)
+    email = Column(String(255), nullable=True)
+    sort_order = Column(Integer, nullable=False, default=0)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+
+class HealthEvaluationModel(Base):
+    __tablename__ = 'health_evaluations'
+
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer)
+    gender_id = Column(Integer)
+    nationality_id = Column(Integer)
+    consultation_reason_id = Column(Integer)
+    profesional_id = Column(Integer)
+    procedence_id = Column(Integer)
+    # Identificación del/la estudiante
+    full_name = Column(String(255))
+    identification_number = Column(String(255))
+    born_date = Column(Date)
+    age = Column(Integer)
+    native_language = Column(String(255))
+    language_usually_used = Column(String(255))
+    # Motivo de consulta
+    consultation_reason_detail = Column(Text)
+    # Identificación del profesional - médico
+    professional_identification_number = Column(String(255))
+    professional_registration_number = Column(String(255))
+    professional_specialty = Column(String(255))
+    procedence_other = Column(String(255))
+    professional_contact = Column(String(255))
+    evaluation_date = Column(Date)
+    reevaluation_date = Column(Date)
+    # Valoración del estado de salud general
+    general_assessment = Column(Text)
+    # Diagnóstico
+    diagnosis = Column(Text)
+    # Indicaciones
+    indications = Column(Text)
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+
+class PsychopedagogicalEvaluationInfoModel(Base):
+    """Document 27 – Psychopedagogical Evaluation Information."""
+    __tablename__ = 'psychopedagogical_evaluation_info'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    student_id = Column(Integer, ForeignKey('students.id', ondelete='CASCADE'), nullable=False)
+    social_name = Column(String(255), nullable=True)
+    age = Column(String(100), nullable=True)
+    evaluation_date = Column(Date, nullable=True)
+    diagnosis = Column(String(500), nullable=True)
+    diagnosis_issue_date = Column(Date, nullable=True)
+    admission_type = Column(String(50), nullable=True)  # ingreso|reevaluacion|otro
+    admission_type_other = Column(String(255), nullable=True)
+    instruments_applied = Column(Text, nullable=True)
+    school_history_background = Column(Text, nullable=True)
+    cognitive_analysis = Column(Text, nullable=True)
+    cognitive_quantitative_matrix = Column(Text, nullable=True)
+    cognitive_general_scales = Column(Text, nullable=True)
+    # Nombre de archivo en files/system/students (misma convención que folders.file) para IV imagen cuantitativa.
+    cognitive_quantitative_image_file = Column(String(255), nullable=True)
+    personal_analysis = Column(Text, nullable=True)
+    motor_analysis = Column(Text, nullable=True)
+    cognitive_synthesis = Column(Text, nullable=True)
+    personal_synthesis = Column(Text, nullable=True)
+    motor_synthesis = Column(Text, nullable=True)
+    suggestions_to_school = Column(Text, nullable=True)
+    suggestions_to_classroom_team = Column(Text, nullable=True)
+    suggestions_to_student = Column(Text, nullable=True)
+    suggestions_to_family = Column(Text, nullable=True)
+    other_suggestions = Column(Text, nullable=True)
+    conclusion = Column(Text, nullable=True)
+    professional_id = Column(Integer, ForeignKey('professionals.id', ondelete='SET NULL'), nullable=True)
+    professional_identification_number = Column(String(50), nullable=True)
+    professional_registration_number = Column(String(100), nullable=True)
+    professional_specialty = Column(String(255), nullable=True)
+    created_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
+
+class PsychopedagogicalEvaluationScaleModel(Base):
+    """Scales VII (pedagogical) and VIII (social_communicative) – indicator 1-10, value 1|2|3|N/O."""
+    __tablename__ = 'psychopedagogical_evaluation_scale'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    psychopedagogical_evaluation_info_id = Column(
+        Integer, ForeignKey('psychopedagogical_evaluation_info.id', ondelete='CASCADE'), nullable=False
+    )
+    scale_type = Column(String(50), nullable=False)  # 'pedagogical' | 'social_communicative'
+    indicator_number = Column(Integer, nullable=False)  # 1-10
+    value = Column(String(10), nullable=False)  # '1', '2', '3', 'N/O'
+    created_at = Column(DateTime, nullable=True)
+
+class ConnersTeacherEvaluationModel(Base):
+    """Document 29: Conners Teacher Abbreviated + Conduct – header (one row per form)."""
+    __tablename__ = 'conners_teacher_evaluations'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    student_id = Column(BigInteger, nullable=False)  # BIGINT UNSIGNED; FK to students.id optional via ALTER
+    evaluation_date = Column(Date, nullable=False)
+    evaluator_name = Column(String(255), nullable=False, default='')
+    evaluation_type = Column(String(50), nullable=False, default='ingreso')  # ENUM: ingreso | reevaluacion
+    comments_observations = Column(Text, nullable=True)
+    total_score = Column(Integer, nullable=True)  # TINYINT UNSIGNED: sum of 10 items (0-30)
+    created_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
+
+class ConnersTeacherScoreModel(Base):
+    """Document 29: Conners 10-item scale (one row per item; score 0-3)."""
+    __tablename__ = 'conners_teacher_scores'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    evaluation_id = Column(
+        Integer, ForeignKey('conners_teacher_evaluations.id', ondelete='CASCADE', onupdate='CASCADE'), nullable=False
+    )
+    item_index = Column(Integer, nullable=False)  # TINYINT 1-10
+    score = Column(Integer, nullable=False)  # TINYINT 0-3 (Nada/Un poco/Bastante/Mucho)
+
+class ConnersConductResponseModel(Base):
+    """Document 29: Conduct questionnaire 18 items (one row per item; response n/p/b/m)."""
+    __tablename__ = 'conners_conduct_responses'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    evaluation_id = Column(
+        Integer, ForeignKey('conners_teacher_evaluations.id', ondelete='CASCADE', onupdate='CASCADE'), nullable=False
+    )
+    item_index = Column(Integer, nullable=False)  # TINYINT 1-18
+    response = Column(String(1), nullable=False)  # ENUM n,p,b,m (Nada/Poco/Bastante/Mucho)
+
+class FamilyReportModel(Base):
+    __tablename__ = 'family_reports'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    student_id = Column(Integer, nullable=False)
+    document_type_id = Column(Integer, nullable=False, default=7)
+    version = Column(Integer, nullable=False, default=1)
+    added_date = Column(DateTime, default=datetime.utcnow)
+    updated_date = Column(DateTime, onupdate=datetime.utcnow)
+
+    student_full_name = Column(String(255), nullable=True)
+    student_identification_number = Column(String(20), nullable=True)
+    student_social_name = Column(String(255), nullable=True)
+    student_born_date = Column(Date, nullable=True)
+    student_age = Column(String(50), nullable=True)
+    student_course = Column(String(100), nullable=True)
+    student_school = Column(String(255), nullable=True)
+
+    professional_id = Column(Integer, nullable=True)
+    professional_identification_number = Column(String(20), nullable=True)
+    professional_social_name = Column(String(255), nullable=True)
+    professional_role = Column(String(255), nullable=True)
+    professional_phone = Column(String(50), nullable=True)
+    professional_email = Column(String(255), nullable=True)
+
+    report_delivery_date = Column(Date, nullable=True)
+    receiver_full_name = Column(String(255), nullable=True)
+    receiver_identification_number = Column(String(20), nullable=True)
+    receiver_social_name = Column(String(255), nullable=True)
+    receiver_phone = Column(String(50), nullable=True)
+    receiver_email = Column(String(255), nullable=True)
+    receiver_relationship = Column(String(255), nullable=True)
+    receiver_presence_of = Column(String(255), nullable=True)
+    guardian_type = Column(String(20), nullable=True)  # 'primary', 'substitute'
+    has_power_of_attorney = Column(String(10), nullable=True)  # 'yes', 'no'
+    evaluation_type = Column(String(20), nullable=True)  # 'admission', 'revaluation'
+    evaluation_date = Column(Date, nullable=True)
+    applied_instruments = Column(Text, nullable=True)
+    diagnosis = Column(Text, nullable=True)
+    pedagogical_strengths = Column(Text, nullable=True)
+    pedagogical_support_needs = Column(Text, nullable=True)
+    social_affective_strengths = Column(Text, nullable=True)
+    social_affective_support_needs = Column(Text, nullable=True)
+    health_strengths = Column(Text, nullable=True)
+    health_support_needs = Column(Text, nullable=True)
+    collaborative_work = Column(Text, nullable=True)
+    home_support = Column(Text, nullable=True)
+    agreements_commitments = Column(Text, nullable=True)
+    evaluation_date_1 = Column(Date, nullable=True)
+    evaluation_date_2 = Column(Date, nullable=True)
+    evaluation_date_3 = Column(Date, nullable=True)
+
+class InterconsultationModel(Base):
+    __tablename__ = 'interconsultations'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    student_id = Column(Integer, nullable=False)
+    document_type_id = Column(Integer, nullable=False, default=24)
+
+    # I. Identificación del/la estudiante
+    full_name = Column(String(255), nullable=True)
+    gender_id = Column(Integer, nullable=True)
+    identification_number = Column(String(32), nullable=True)
+    born_date = Column(Date, nullable=True)
+    age = Column(String(16), nullable=True)
+    nationality_id = Column(Integer, nullable=True)
+    native_language = Column(String(128), nullable=True)
+    language_usually_used = Column(String(128), nullable=True)
+    address = Column(String(512), nullable=True)
+    region_id = Column(Integer, nullable=True)
+    commune_id = Column(Integer, nullable=True)
+    city = Column(String(128), nullable=True)
+    responsible_id = Column(Integer, nullable=True)
+    contact_phone = Column(String(32), nullable=True)
+    contact_email = Column(String(128), nullable=True)
+    educational_establishment = Column(String(255), nullable=True)
+    course_level = Column(String(64), nullable=True)
+    program_type_id = Column(Integer, nullable=True)
+    establishment_address = Column(String(512), nullable=True)
+    establishment_commune = Column(String(128), nullable=True)
+    establishment_phone = Column(String(32), nullable=True)
+    establishment_email = Column(String(128), nullable=True)
+
+    # II. Motivo de la interconsulta
+    additional_information_id = Column(Integer, nullable=True)
+    question_to_answer = Column(Text, nullable=True)
+    attached_documents = Column(Text, nullable=True)
+    referring_professional = Column(Text, nullable=True)
+
+    # III. Resultados
+    reception_date = Column(Date, nullable=True)
+    evaluation_summary = Column(Text, nullable=True)
+    indications_support = Column(Text, nullable=True)
+
+    # IV. Identificación del profesional que evalúa
+    professional_id = Column(Integer, nullable=True)
+    professional_identification_number = Column(String(32), nullable=True)
+    professional_registration_number = Column(String(64), nullable=True)
+    professional_specialty = Column(String(128), nullable=True)
+    procedence_id = Column(Integer, nullable=True)
+    procedence_other = Column(String(255), nullable=True)
+    professional_contact_phone = Column(String(32), nullable=True)
+    evaluation_date = Column(Date, nullable=True)
+    required_new_control_id = Column(Integer, nullable=True)
+    new_control_date = Column(Date, nullable=True)
+
+    added_date = Column(DateTime, default=datetime.utcnow)
+    updated_date = Column(DateTime, onupdate=datetime.utcnow)
+
+class GuardianAttendanceCertificateModel(Base):
+    """Document 25 - Certificado de asistencia del apoderado (Ley TEA)."""
+    __tablename__ = "guardian_attendance_certificate"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    student_id = Column(Integer, nullable=False)
+    document_type_id = Column(Integer, nullable=False, default=25)
+
+    professional_id = Column(Integer, nullable=True, comment="Responsible professional for the certificate")
+    certificate_date = Column(Date, nullable=True, comment="Certificate date")
+    start_time = Column(Time, nullable=True, comment="Start time (guardian attendance)")
+    end_time = Column(Time, nullable=True, comment="End time (guardian attendance)")
+
+    added_date = Column(DateTime, default=datetime.utcnow)
+    updated_date = Column(DateTime, onupdate=datetime.utcnow)
+
+class EventModel(Base):
+    __tablename__ = 'events'
+    
+    id = Column(Integer, primary_key=True)
+    title = Column(String(255))
+    color = Column(String(255))
+    start_date = Column(DateTime)
+    end_date = Column(DateTime)
+    description = Column(Text)
+    added_date = Column(DateTime)
+    updated_date = Column(DateTime)
+
+class BankDescriptionModel(Base):
+    __tablename__ = 'bank_descriptions'
+    
+    id = Column(Integer, primary_key=True)
+    school_id = Column(Integer, nullable=True)
+    document_id = Column(Integer, nullable=True)
+    question_number = Column(Integer, nullable=True)
+    bank_description = Column(String(255), nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+
+class ProgressStatusStudentModel(Base):
+    __tablename__ = 'progress_status_students'
+    
+    id = Column(Integer, primary_key=True)
+    version_id = Column(Integer, nullable=True)
+    student_id = Column(Integer, nullable=False)
+    school_id = Column(Integer, nullable=False)
+    document_id = Column(Integer, nullable=False, default=18)
+    nee_id = Column(Integer, nullable=True)
+    course_id = Column(Integer, nullable=True)
+    guardian_relationship_id = Column(Integer, nullable=True)
+    period_id = Column(Integer, nullable=True)
+    responsible_professionals = Column(Text, nullable=True)  # JSON almacenado como Text
+    progress_date = Column(Date, nullable=True)
+    
+    # II. Estado de avance por área
+    pedagogical_language = Column(Text, nullable=True)
+    pedagogical_mathematics = Column(Text, nullable=True)
+    psychopedagogical = Column(Text, nullable=True)
+    speech_therapy = Column(Text, nullable=True)
+    psychological = Column(Text, nullable=True)
+    kinesiology = Column(Text, nullable=True)
+    occupational_therapy = Column(Text, nullable=True)
+    deaf_co_educator = Column(Text, nullable=True)
+    
+    # III. Síntesis, comentarios u observaciones
+    synthesis_comments = Column(Text, nullable=True)
+    
+    # IV. Sugerencias
+    suggestions_family = Column(Text, nullable=True)
+    suggestions_establishment = Column(Text, nullable=True)
+    
+    # Archivo adjunto
+    file = Column(String(500), nullable=True)
+    
+    # Campos de auditoría
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class IndividualSupportPlanModel(Base):
+    __tablename__ = 'individual_support_plans'
+    
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer, nullable=True)
+    document_type_id = Column(Integer, nullable=True)
+    school_id = Column(Integer, nullable=True)
+    period_id = Column(Integer, nullable=True)
+    
+    # I. Identificación del/la estudiante
+    student_full_name = Column(String(255), nullable=True)
+    student_identification_number = Column(String(50), nullable=True)
+    student_born_date = Column(Date, nullable=True)
+    student_age = Column(String(10), nullable=True)
+    student_nee_id = Column(Integer, nullable=True)
+    student_school = Column(String(255), nullable=True)
+    student_course_id = Column(Integer, nullable=True)
+    elaboration_date = Column(Date, nullable=True)
+    
+    # II. Fortalezas del/la estudiante
+    social_affective_strengths = Column(Text, nullable=True)
+    cognitive_strengths = Column(Text, nullable=True)
+    curricular_strengths = Column(Text, nullable=True)
+    family_strengths = Column(Text, nullable=True)
+    
+    # III. Propuesta de intervención - Ed. Diferencial
+    intervention_ed_diferencial = Column(Text, nullable=True)  # Objetivos separados por comas
+    intervention_ed_diferencial_strategies = Column(Text, nullable=True)
+    
+    # III. Propuesta de intervención - Psicopedagogía
+    intervention_psicopedagogia = Column(Text, nullable=True)  # Objetivos separados por comas
+    intervention_psicopedagogia_strategies = Column(Text, nullable=True)
+    
+    # III. Propuesta de intervención - Fonoaudiología
+    intervention_fonoaudiologia = Column(Text, nullable=True)  # Objetivos separados por comas
+    intervention_fonoaudiologia_strategies = Column(Text, nullable=True)
+    
+    # III. Propuesta de intervención - Psicología
+    intervention_psicologia = Column(Text, nullable=True)  # Objetivos separados por comas
+    intervention_psicologia_strategies = Column(Text, nullable=True)
+    
+    # III. Propuesta de intervención - Terapia ocupacional
+    intervention_terapia_ocupacional = Column(Text, nullable=True)  # Objetivos separados por comas
+    intervention_terapia_ocupacional_strategies = Column(Text, nullable=True)
+    
+    # III. Propuesta de intervención - Kinesiología
+    intervention_kinesiologia = Column(Text, nullable=True)  # Objetivos separados por comas
+    intervention_kinesiologia_strategies = Column(Text, nullable=True)
+    
+    # III. Propuesta de intervención - Co-educador sordo
+    intervention_coeducador_sordo = Column(Text, nullable=True)  # Objetivos separados por comas
+    intervention_coeducador_sordo_strategies = Column(Text, nullable=True)
+    
+    # III. Propuesta de intervención - Int. lengua de señas
+    intervention_int_lengua_senas = Column(Text, nullable=True)  # Objetivos separados por comas
+    intervention_int_lengua_senas_strategies = Column(Text, nullable=True)
+    
+    # IV. Seguimiento del PAI
+    follow_up_pai = Column(Text, nullable=True)
+    
+    # Campos de auditoría
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class IndividualSupportPlanProfessionalModel(Base):
+    __tablename__ = 'individual_support_plan_professionals'
+    
+    id = Column(Integer, primary_key=True)
+    individual_support_plan_id = Column(Integer, nullable=False)
+    professional_id = Column(Integer, nullable=False)
+    career_type_id = Column(Integer, nullable=True)
+    registration_number = Column(String(100), nullable=True)
+    days_hours = Column(String(255), nullable=True)  # Días y horarios de apoyo
+    from_date = Column(Date, nullable=True)
+    to_date = Column(Date, nullable=True)
+    support_modality = Column(String(255), nullable=True)
+    
+    # Campos de auditoría
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class IndividualCurriculumAdaptationPlanModel(Base):
+    __tablename__ = 'individual_curriculum_adaptation_plans'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    student_id = Column(Integer, nullable=False)
+    document_type_id = Column(Integer, nullable=False, default=21)
+    school_id = Column(Integer, nullable=True)
+    semester_id = Column(Integer, nullable=True)
+    report_date = Column(Date, nullable=True)
+
+    student_full_name = Column(String(255), nullable=True)
+    student_identification_number = Column(String(50), nullable=True)
+    student_born_date = Column(Date, nullable=True)
+    student_age = Column(String(50), nullable=True)
+    student_nee_id = Column(Integer, nullable=True)
+    student_nee = Column(String(255), nullable=True)
+    student_school = Column(String(255), nullable=True)
+    student_course_id = Column(Integer, nullable=True)
+    student_course = Column(String(255), nullable=True)
+
+    school_background = Column(Text, nullable=True)
+    evaluation_background = Column(Text, nullable=True)
+    nee_diagnosis = Column(Text, nullable=True)
+    curricular_adaptations = Column(Text, nullable=True)
+    curricular_adaptation_subjects = Column(Text, nullable=True)
+    support_resources = Column(Text, nullable=True)
+    evaluation_criteria = Column(Text, nullable=True)
+    progress_state = Column(Text, nullable=True)
+
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class IndividualCurriculumAdaptationPlanProfessionalModel(Base):
+    __tablename__ = 'individual_curriculum_adaptation_plan_professionals'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    individual_curriculum_adaptation_plan_id = Column(Integer, nullable=False)
+    professional_id = Column(Integer, nullable=False)
+    professional_role = Column(String(255), nullable=True)
+    support_roles = Column(Text, nullable=True)
+    phone = Column(String(50), nullable=True)
+    email = Column(String(255), nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class IndividualCurriculumAdaptationPlanFamilyMemberModel(Base):
+    __tablename__ = 'individual_curriculum_adaptation_plan_family_members'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    individual_curriculum_adaptation_plan_id = Column(Integer, nullable=False)
+    guardian_id = Column(Integer, nullable=True)
+    name = Column(String(255), nullable=True)
+    identification_number = Column(String(50), nullable=True)
+    family_member_id = Column(Integer, nullable=True)
+    address = Column(String(500), nullable=True)
+    phone = Column(String(50), nullable=True)
+    email = Column(String(255), nullable=True)
+    is_emergency_contact = Column(Integer, nullable=False, default=0)
+    is_guardian = Column(Integer, nullable=False, default=1)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class AuditModel(Base):
+    __tablename__ = 'audits'
+    
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    rol_id = Column(Integer, ForeignKey('rols.id'), nullable=True)
+    added_date = Column(DateTime, nullable=True, default=datetime.utcnow)
+    updated_date = Column(DateTime, nullable=True, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class ProgressStatusIndividualSupportModel(Base):
+    __tablename__ = 'progress_status_individual_supports'
+    
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer, nullable=False)
+    school_id = Column(Integer, nullable=True)
+    document_type_id = Column(Integer, nullable=True)  # Documento 19 - Estado de avance PAI
+    
+    # I. Identificación del/la estudiante
+    student_full_name = Column(String(255), nullable=True)
+    student_identification_number = Column(String(50), nullable=True)
+    student_born_date = Column(Date, nullable=True)
+    student_age = Column(String(10), nullable=True)
+    student_nee_id = Column(Integer, nullable=True)
+    student_school = Column(String(255), nullable=True)
+    student_course_id = Column(Integer, nullable=True)
+    
+    # Fecha y periodo
+    progress_date = Column(Date, nullable=True)  # Fecha estado de avance
+    period_id = Column(Integer, nullable=True)  # 1=1er Trimestre, 2=2do Trimestre, 3=1er Semestre, 4=2do Semestre
+    
+    # Apoderado/a
+    guardian_relationship_id = Column(Integer, nullable=True)  # Relación con el/la estudiante (family_member_id)
+    guardian_name = Column(String(255), nullable=True)
+    
+    # Profesionales responsables
+    responsible_professionals = Column(String(500), nullable=True)  # IDs de profesionales separados por coma
+    
+    # PAI seleccionado y objetivos
+    selected_pai_id = Column(Integer, nullable=True)  # ID del Plan de Apoyo Individual (individual_support_plans.id)
+    pai_objectives = Column(Text, nullable=True)  # JSON Array [{id, number, description, progress_level}]
+    pai_observations = Column(Text, nullable=True)
+    
+    # Sugerencias
+    suggestions_family = Column(Text, nullable=True)
+    suggestions_establishment = Column(Text, nullable=True)
+    
+    # Campos de auditoría
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class FonoaudiologicalReportModel(Base):
+    __tablename__ = 'fonoaudiological_report'
+    
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer, nullable=False)
+    document_type_id = Column(Integer, nullable=True)  # 8
+    student_full_name = Column(String(255), nullable=True)
+    student_identification_number = Column(String(50), nullable=True)
+    student_born_date = Column(Date, nullable=True)
+    establishment_id = Column(String(255), nullable=True)  # Nombre o ID del establecimiento
+    course_id = Column(Integer, nullable=True)
+    responsible_professionals = Column(Text, nullable=True)  # JSON: IDs de profesionales responsables
+    report_date = Column(Date, nullable=True)
+    type_id = Column(Integer, nullable=True)  # 1=Ingreso, 2=Reevaluación (tinyint)
+    reason_evaluation = Column(Text, nullable=True)
+    evaluation_instruments = Column(Text, nullable=True)
+    relevant_background = Column(Text, nullable=True)
+    behaviors_observed = Column(Text, nullable=True)
+    orofacial_auditory = Column(Text, nullable=True)
+    phonological_level = Column(Text, nullable=True)
+    morphosyntactic_level = Column(Text, nullable=True)
+    semantic_level = Column(Text, nullable=True)
+    pragmatic_level = Column(Text, nullable=True)
+    additional_observations = Column(Text, nullable=True)
+    diagnostic_synthesis = Column(Text, nullable=True)
+    suggestions_family = Column(Text, nullable=True)
+    suggestions_establishment = Column(Text, nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    deleted_date = Column(DateTime, nullable=True)
+
+class FurFormModel(Base):
+    """Document 6 – Formulario de revaluación (FUR). Campos del formulario en JSON."""
+    __tablename__ = 'fur_forms'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    student_id = Column(Integer, nullable=False)
+    school_id = Column(Integer, nullable=True)
+    student_identification_number = Column(String(50), nullable=True)
+    document_type_id = Column(Integer, nullable=False, default=6)
+    fur_variant = Column(String(80), nullable=False, default='dea')
+    form_data = Column(Text, nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+
+class IdtelReportModel(Base):
+    """Document 9 – Informe fonoaudiológico IDTEL."""
+    __tablename__ = 'idtel_report'
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer, nullable=False)
+    document_type_id = Column(Integer, nullable=True)  # 9
+    form_data = Column(Text, nullable=True)  # JSON con todos los campos del formulario
+    quantitative_locked = Column(Boolean, default=False, nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+
+class PsychomotorEvaluationReportModel(Base):
+    """Informe de evaluación psicomotriz (áreas motoras, síntesis, sugerencias)."""
+    __tablename__ = 'psychomotor_evaluation_report'
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer, nullable=False)
+    document_type_id = Column(Integer, nullable=True)
+    form_data = Column(Text, nullable=True)  # JSON con todos los campos del formulario
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+
+class EvaluaResultReportModel(Base):
+    """Informes Resultado Prueba Evalua (título; folders.detail_id → id). Tabla evalua_result_report."""
+    __tablename__ = 'evalua_result_report'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    student_id = Column(Integer, nullable=False)
+    document_catalog_id = Column(Integer, nullable=True)
+    title = Column(String(500), nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+
+class SchoolIntegrationProgramExitCertificateModel(Base):
+    __tablename__ = 'school_integration_program_exit_certificate'
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer, nullable=True)
+    professional_id = Column(Integer, nullable=True)
+    document_description = Column(String(255), nullable=True)
+    professional_certification_number = Column(String(255), nullable=True)
+    professional_career = Column(String(255), nullable=True)
+    guardian_id = Column(Integer, nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+
+
+# Anamnesis (documento tipo 3)
+
+class AnamnesisModel(Base):
+    __tablename__ = 'anamnesis'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    student_id = Column(Integer, nullable=False)
+    version = Column(Integer, nullable=False, default=1)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+    # Sección 1
+    student_full_name = Column(String(255), nullable=True)
+    gender_id = Column(Integer, nullable=True)
+    born_date = Column(Date, nullable=True)
+    age = Column(String(50), nullable=True)
+    nationality_id = Column(Integer, nullable=True)
+    address = Column(String(500), nullable=True)
+    phone = Column(String(50), nullable=True)
+    native_language = Column(String(100), nullable=True)
+    native_language_domain = Column(Text, nullable=True)  # JSON
+    language_used = Column(String(100), nullable=True)
+    language_used_domain = Column(Text, nullable=True)  # JSON
+    current_schooling = Column(String(100), nullable=True)
+    school_name = Column(String(255), nullable=True)
+    # Sección 4
+    interview_reason = Column(Text, nullable=True)
+    # Sección 5
+    diagnosis_has = Column(Integer, nullable=True)  # 1=Sí, 2=No
+    diagnosis_detail = Column(Text, nullable=True)
+    specialists = Column(Text, nullable=True)  # JSON
+    first_year_notes = Column(Text, nullable=True)
+    birth_type_id = Column(Integer, nullable=True)
+    birth_reason = Column(String(255), nullable=True)
+    birth_medical_assistance = Column(Integer, nullable=True)
+    birth_weight = Column(String(50), nullable=True)
+    birth_height = Column(String(50), nullable=True)
+    first_year_conditions = Column(Text, nullable=True)  # JSON
+    first_year_periodic_health_checkups = Column(Integer, nullable=True)
+    first_year_vaccines = Column(Integer, nullable=True)
+    first_year_observations = Column(Text, nullable=True)
+    # 5.2
+    sm_head_control = Column(String(100), nullable=True)
+    sm_sits_alone = Column(String(100), nullable=True)
+    sm_walks_without_support = Column(String(100), nullable=True)
+    sm_first_words = Column(String(100), nullable=True)
+    sm_first_phrases = Column(String(100), nullable=True)
+    sm_dresses_alone = Column(String(100), nullable=True)
+    sm_bladder_day = Column(String(100), nullable=True)
+    sm_bladder_night = Column(String(100), nullable=True)
+    sm_bowel_day = Column(String(100), nullable=True)
+    sm_bowel_night = Column(String(100), nullable=True)
+    sm_observations_1 = Column(Text, nullable=True)
+    sm_motor_activity = Column(String(50), nullable=True)
+    sm_muscle_tone = Column(String(50), nullable=True)
+    sm_walking_stability = Column(Integer, nullable=True)
+    sm_frequent_falls = Column(Integer, nullable=True)
+    sm_lateral_dominance = Column(String(10), nullable=True)
+    sm_fine_grab = Column(Integer, nullable=True)
+    sm_fine_grip = Column(Integer, nullable=True)
+    sm_fine_pinch = Column(Integer, nullable=True)
+    sm_fine_draw = Column(Integer, nullable=True)
+    sm_fine_write = Column(Integer, nullable=True)
+    sm_fine_thread = Column(Integer, nullable=True)
+    sm_cog_reacts_familiar = Column(Integer, nullable=True)
+    sm_cog_demands_company = Column(Integer, nullable=True)
+    sm_cog_smiles_babbles = Column(Integer, nullable=True)
+    sm_cog_manipulates_explores = Column(Integer, nullable=True)
+    sm_cog_understands_prohibitions = Column(Integer, nullable=True)
+    sm_cog_poor_eye_hand = Column(Integer, nullable=True)
+    sm_observations_2 = Column(Text, nullable=True)
+    # 5.3
+    vision_interested_stimuli = Column(Integer, nullable=True)
+    vision_irritated_eyes = Column(Integer, nullable=True)
+    vision_headaches = Column(Integer, nullable=True)
+    vision_squints = Column(Integer, nullable=True)
+    vision_follows_movement = Column(Integer, nullable=True)
+    vision_abnormal_movements = Column(Integer, nullable=True)
+    vision_erroneous_behaviors = Column(Integer, nullable=True)
+    vision_diagnosis = Column(Integer, nullable=True)
+    hearing_interested_stimuli = Column(Integer, nullable=True)
+    hearing_recognizes_voices = Column(Integer, nullable=True)
+    hearing_turns_head = Column(Integer, nullable=True)
+    hearing_ears_to_tv = Column(Integer, nullable=True)
+    hearing_covers_ears = Column(Integer, nullable=True)
+    hearing_earaches = Column(Integer, nullable=True)
+    hearing_pronunciation_adequate = Column(Integer, nullable=True)
+    hearing_diagnosis = Column(Integer, nullable=True)
+    vision_hearing_observations = Column(Text, nullable=True)
+    # 5.4
+    language_communication_method = Column(String(50), nullable=True)
+    language_communication_other = Column(String(255), nullable=True)
+    language_exp_babbles = Column(Integer, nullable=True)
+    language_exp_vocalizes_gestures = Column(Integer, nullable=True)
+    language_exp_emits_words = Column(Integer, nullable=True)
+    language_exp_emits_phrases = Column(Integer, nullable=True)
+    language_exp_relates_experiences = Column(Integer, nullable=True)
+    language_exp_clear_pronunciation = Column(Integer, nullable=True)
+    language_comp_identifies_objects = Column(Integer, nullable=True)
+    language_comp_identifies_people = Column(Integer, nullable=True)
+    language_comp_understands_abstract = Column(Integer, nullable=True)
+    language_comp_responds_coherently = Column(Integer, nullable=True)
+    language_comp_follows_simple_instructions = Column(Integer, nullable=True)
+    language_comp_follows_complex_instructions = Column(Integer, nullable=True)
+    language_comp_follows_group_instructions = Column(Integer, nullable=True)
+    language_comp_understands_stories = Column(Integer, nullable=True)
+    language_oral_loss = Column(Text, nullable=True)
+    language_observations = Column(Text, nullable=True)
+    # 5.5
+    social_relates_spontaneously = Column(Integer, nullable=True)
+    social_explains_behaviors = Column(Integer, nullable=True)
+    social_participates_groups = Column(Integer, nullable=True)
+    social_prefers_individual = Column(Integer, nullable=True)
+    social_echolalic_language = Column(Integer, nullable=True)
+    social_difficulty_adapting = Column(Integer, nullable=True)
+    social_relates_collaboratively = Column(Integer, nullable=True)
+    social_respects_social_norms = Column(Integer, nullable=True)
+    social_respects_school_norms = Column(Integer, nullable=True)
+    social_shows_humor = Column(Integer, nullable=True)
+    social_stereotyped_movements = Column(Integer, nullable=True)
+    social_frequent_tantrums = Column(Integer, nullable=True)
+    social_reaction_lights = Column(String(50), nullable=True)
+    social_reaction_sounds = Column(String(50), nullable=True)
+    social_reaction_strange_people = Column(String(50), nullable=True)
+    social_observations = Column(Text, nullable=True)
+    # 5.6
+    health_vaccines_up_to_date = Column(Integer, nullable=True)
+    health_epilepsy = Column(Integer, nullable=True)
+    health_heart_problems = Column(Integer, nullable=True)
+    health_paraplegia = Column(Integer, nullable=True)
+    health_hearing_loss = Column(Integer, nullable=True)
+    health_vision_loss = Column(Integer, nullable=True)
+    health_motor_disorder = Column(Integer, nullable=True)
+    health_bronchorespiratory = Column(Integer, nullable=True)
+    health_infectious_disease = Column(Integer, nullable=True)
+    health_emotional_disorder = Column(Integer, nullable=True)
+    health_behavioral_disorder = Column(Integer, nullable=True)
+    health_other = Column(Integer, nullable=True)
+    health_other_specify = Column(String(255), nullable=True)
+    health_problems_treatment = Column(Text, nullable=True)
+    health_diet = Column(String(50), nullable=True)
+    health_diet_other = Column(String(255), nullable=True)
+    health_weight = Column(String(50), nullable=True)
+    health_sleep_pattern = Column(String(50), nullable=True)
+    health_sleep_insomnia = Column(Integer, default=0)
+    health_sleep_nightmares = Column(Integer, default=0)
+    health_sleep_terrors = Column(Integer, default=0)
+    health_sleep_sleepwalking = Column(Integer, default=0)
+    health_sleep_good_mood = Column(Integer, default=0)
+    health_sleep_hours = Column(String(50), nullable=True)
+    health_sleeps_alone = Column(String(50), nullable=True)
+    health_sleeps_specify = Column(String(255), nullable=True)
+    health_mood_behavior = Column(String(255), nullable=True)
+    health_mood_other = Column(String(255), nullable=True)
+    health_current_observations = Column(Text, nullable=True)
+    # Sección 6
+    family_health_history = Column(Text, nullable=True)
+    family_health_observations = Column(Text, nullable=True)
+    # Sección 7
+    school_entry_age = Column(String(50), nullable=True)
+    attended_kindergarten = Column(Integer, nullable=True)
+    schools_count = Column(String(50), nullable=True)
+    teaching_modality = Column(String(50), nullable=True)
+    changes_reason = Column(Text, nullable=True)
+    repeated_grade = Column(Integer, nullable=True)
+    repeated_courses = Column(String(255), nullable=True)
+    repeated_reason = Column(Text, nullable=True)
+    current_level = Column(String(100), nullable=True)
+    learning_difficulty = Column(Integer, nullable=True)
+    participation_difficulty = Column(Integer, nullable=True)
+    disruptive_behavior = Column(Integer, nullable=True)
+    attends_regularly = Column(Integer, nullable=True)
+    attends_gladly = Column(Integer, nullable=True)
+    family_support_homework = Column(Integer, nullable=True)
+    friends = Column(Integer, nullable=True)
+    family_attitude = Column(String(500), nullable=True)
+    performance_assessment = Column(String(50), nullable=True)
+    performance_reasons = Column(String(500), nullable=True)
+    response_difficulties = Column(Text, nullable=True)  # JSON
+    response_difficulties_other = Column(String(255), nullable=True)
+    response_success = Column(Text, nullable=True)  # JSON
+    response_success_other = Column(String(255), nullable=True)
+    rewards = Column(Text, nullable=True)  # JSON
+    rewards_other = Column(String(255), nullable=True)
+    supporters = Column(Text, nullable=True)  # JSON
+    supporters_other_professionals = Column(Text, nullable=True)
+    expectations = Column(String(50), nullable=True)
+    environment = Column(String(50), nullable=True)
+    final_comments = Column(Text, nullable=True)
+
+class AnamnesisInformantModel(Base):
+    __tablename__ = 'anamnesis_informants'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    anamnesis_id = Column(Integer, nullable=False)
+    sort_order = Column(Integer, default=0)
+    name = Column(String(255), nullable=True)
+    relationship = Column(String(100), nullable=True)
+    presence = Column(String(255), nullable=True)
+    interview_date = Column(Date, nullable=True)
+
+class AnamnesisInterviewerModel(Base):
+    __tablename__ = 'anamnesis_interviewers'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    anamnesis_id = Column(Integer, nullable=False)
+    sort_order = Column(Integer, default=0)
+    professional_id = Column(Integer, nullable=True)
+    role = Column(String(100), nullable=True)
+    interview_date = Column(Date, nullable=True)
+
+class AnamnesisHouseholdMemberModel(Base):
+    __tablename__ = 'anamnesis_household_members'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    anamnesis_id = Column(Integer, nullable=False)
+    sort_order = Column(Integer, default=0)
+    name = Column(String(255), nullable=True)
+    relationship = Column(String(100), nullable=True)
+    age = Column(String(50), nullable=True)
+    schooling = Column(String(100), nullable=True)
+    occupation = Column(String(255), nullable=True)
+
+class ProfessionalDocumentAssignmentModel(Base):
+    """Asignación documento–estudiante por profesional, curso y período (status_id 0/1)."""
+
+    __tablename__ = 'professional_document_assignments'
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    period_year = Column(Integer, nullable=False)
+    course_id = Column(Integer, nullable=False)
+    professional_id = Column(Integer, nullable=False)
+    student_id = Column(Integer, nullable=False)
+    document_type_id = Column(Integer, nullable=False)
+    document_catalog_id = Column(Integer, nullable=False, default=0)
+    status_id = Column(Integer, nullable=False, default=0)
+    deadline_at = Column(Date, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+
+class AlertModel(Base):
+    """Alertas in-app (campana): tipo, texto, vínculo a recurso, estatus revisada."""
+
+    __tablename__ = 'alerts'
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    school_id = Column(Integer, nullable=True)
+    professional_id = Column(Integer, nullable=False)
+    course_id = Column(Integer, nullable=False)
+    reference_id = Column(BigInteger, nullable=False)
+    status_id = Column(Integer, nullable=False, default=0)
+    period_year = Column(Integer, nullable=False)
+    alert_type = Column(String(64), nullable=False)
+    title = Column(String(512), nullable=True)
+    message = Column(Text, nullable=True)
+    reference_kind = Column(String(64), nullable=False, default='professional_document_assignment')
+    extra = Column(Text, nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+

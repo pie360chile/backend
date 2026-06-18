@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from app.backend.db.database import get_db
 from app.backend.auth.auth_user import get_current_active_user
-from app.backend.schemas import UserLogin, StoreDocument41PsychomotorReport
+from app.backend.schemas import UserLogin, StorePsychomotorEvaluationReport
 from app.backend.classes.document_41_report_class import Document41ReportClass
 
 document_41_reports = APIRouter(
@@ -14,7 +14,7 @@ document_41_reports = APIRouter(
 
 @document_41_reports.post("/store")
 async def store_document_41(
-    data: StoreDocument41PsychomotorReport,
+    data: StorePsychomotorEvaluationReport,
     session_user: UserLogin = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
@@ -63,7 +63,7 @@ async def get_document_41_by_student(
 @document_41_reports.put("/{id}")
 async def update_document_41(
     id: int,
-    data: StoreDocument41PsychomotorReport,
+    data: StorePsychomotorEvaluationReport,
     session_user: UserLogin = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
