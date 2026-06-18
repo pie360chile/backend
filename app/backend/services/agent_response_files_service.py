@@ -45,6 +45,44 @@ def _is_response_document(filename: str) -> bool:
     return bool(suffix and suffix in RESPONSE_EXTENSIONS)
 
 
+_MIN_MENTIONED_STEM_LEN = 10
+
+
+def _is_plausible_generated_filename(name: str) -> bool:
+    suffix = Path(name).suffix.lower()
+    if suffix not in RESPONSE_EXTENSIONS:
+        return False
+    stem = Path(name).stem.strip()
+    if len(stem) < _MIN_MENTIONED_STEM_LEN:
+        return False
+    return True
+
+
+def filter_mentioned_filenames(names: set[str]) -> set[str]:
+    """Quita fragmentos como Diaz.docx dentro de Informe_Isabella_Diaz.docx."""
+    plausible = {name for name in names if _is_plausible_generated_filename(name)}
+    if not plausible:
+        return set()
+
+    maximal: set[str] = set()
+    for name in sorted(plausible, key=len, reverse=True):
+        lower = name.lower()
+        if any(
+            other.lower() != lower and other.lower().endswith(lower)
+            for other in maximal
+        ):
+            continue
+        maximal.add(name)
+    return maximal
+
+
+def best_mentioned_filename(names: set[str]) -> str:
+    filtered = filter_mentioned_filenames(names)
+    if not filtered:
+        return ""
+    return max(filtered, key=lambda name: len(Path(name).stem))
+
+
 def extract_mentioned_filenames(text: str) -> set[str]:
     """Nombres de archivo citados en texto del modelo (sandbox, rutas, etc.)."""
     names: set[str] = set()
@@ -58,7 +96,7 @@ def extract_mentioned_filenames(text: str) -> set[str]:
         re.IGNORECASE,
     ):
         names.add(match.group(1))
-    return names
+    return filter_mentioned_filenames(names)
 
 
 def extract_filenames_from_response_output(response: Any) -> set[str]:
@@ -220,6 +258,40 @@ def _download_container_file(client: Any, container_id: str, file_id: str) -> by
     return content.read()
 
 
+def _list_assistant_container_citations(
+    client: Any,
+    container_id: str,
+) -> list[dict[str, str]]:
+    """Fallback cuando el modelo no incluye container_file_citation en el mensaje."""
+    try:
+        page = client.containers.files.list(container_id=container_id, limit=100)
+    except Exception as exc:
+        logger.warning("No se pudo listar archivos del contenedor %s: %s", container_id, exc)
+        return []
+
+    citations: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for row in getattr(page, "data", None) or []:
+        if (getattr(row, "source", None) or "").lower() != "assistant":
+            continue
+        file_id = getattr(row, "id", None)
+        path = getattr(row, "path", None) or ""
+        filename = Path(path).name if path else ""
+        if not file_id or file_id in seen or not _is_response_document(filename):
+            continue
+        seen.add(file_id)
+        citations.append(
+            {
+                "container_id": container_id,
+                "file_id": file_id,
+                "filename": filename,
+                "created_at": int(getattr(row, "created_at", 0) or 0),
+            }
+        )
+    citations.sort(key=lambda row: row.get("created_at", 0), reverse=True)
+    return citations
+
+
 def _pick_candidates(
     citations: list[dict[str, str]],
     *,
@@ -268,6 +340,14 @@ def persist_code_interpreter_outputs(
     user_names = _user_upload_display_names(db, agent_id)
     mentioned = extract_filenames_from_response_output(response)
     citations = _extract_container_citations(response)
+    if not citations:
+        citations = _list_assistant_container_citations(client, container_id)
+        if citations:
+            logger.info(
+                "persist_code_interpreter_outputs: usando listado del contenedor (agente=%s, n=%s)",
+                agent_id,
+                len(citations),
+            )
 
     picks = _pick_candidates(
         citations,

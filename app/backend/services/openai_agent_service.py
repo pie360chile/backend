@@ -267,15 +267,16 @@ def _finalize_openai_response(
             )
 
     from app.backend.services.agent_response_files_service import (
+        best_mentioned_filename,
         extract_mentioned_filenames,
         sanitize_reply_sandbox_links,
     )
 
     mentioned = extract_mentioned_filenames(reply)
-    first_mentioned = sorted(mentioned)[0] if mentioned else ""
-    if first_mentioned and not response_files and not response_files_warning:
+    best_mentioned = best_mentioned_filename(mentioned)
+    if best_mentioned and not response_files and not response_files_warning:
         response_files_warning = (
-            f"No se pudo guardar {first_mentioned} en el servidor. "
+            f"No se pudo guardar {best_mentioned} en el servidor. "
             "Vuelve a pedir al agente que genere el documento."
         )
 
@@ -291,10 +292,10 @@ def _finalize_openai_response(
             reply = response_files_warning
         else:
             mentioned = extract_mentioned_filenames(reply)
-            if mentioned:
-                first_name = sorted(mentioned)[0]
+            best_name = best_mentioned_filename(mentioned)
+            if best_name:
                 reply = (
-                    f"Generé el archivo {first_name}, pero no pude guardarlo en el servidor. "
+                    f"Generé el archivo {best_name}, pero no pude guardarlo en el servidor. "
                     "Vuelve a pedir el informe."
                 )
             else:
@@ -416,8 +417,9 @@ def stream_chat_with_openai_responses(
                     yield step_event
 
             if etype == "response.code_interpreter_call.completed":
-                yield {"type": "step", "message": _POST_INTERPRETER_STEP}
-                seen_steps.add(_POST_INTERPRETER_STEP)
+                post_step = emit_step(_POST_INTERPRETER_STEP)
+                if post_step:
+                    yield post_step
 
             delta = _extract_text_delta(event)
             if delta:
