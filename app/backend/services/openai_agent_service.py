@@ -127,17 +127,25 @@ def ensure_openai_file_for_row(
         return None
 
 
-def sync_agent_openai_files(db: Session, agent_id: str) -> list[str]:
+def sync_agent_openai_files(
+    db: Session,
+    agent_id: str,
+    *,
+    only_rows: list[AgentFileModel] | None = None,
+) -> list[str]:
     agent = db.query(AgentModel).filter(AgentModel.id == agent_id).first()
     if not agent:
         return []
 
-    rows = (
-        db.query(AgentFileModel)
-        .filter(AgentFileModel.agent_id == agent_id)
-        .order_by(AgentFileModel.uploaded_at.asc())
-        .all()
-    )
+    if only_rows is not None:
+        rows = only_rows
+    else:
+        rows = (
+            db.query(AgentFileModel)
+            .filter(AgentFileModel.agent_id == agent_id)
+            .order_by(AgentFileModel.uploaded_at.asc())
+            .all()
+        )
     file_ids: list[str] = []
     for row in rows:
         disk_path = agent_dir(agent_id) / row.id
@@ -185,8 +193,8 @@ def _build_instructions(agent: AgentModel, available_files: list[str] | None = N
         "(preferiblemente Word .docx) con el code interpreter y menciona solo su nombre.\n"
         "- Genera el informe solo para la persona o caso que el usuario pidió; "
         "no generes informes de otros estudiantes que aparezcan en los archivos fuente.\n"
-        "- Abre en el code interpreter la plantilla que corresponda según el rol y el tipo de informe "
-        "(familia, psicopedagógico, etc.) y respeta su estructura, secciones, tablas y estilo.\n"
+        "- Abre en el code interpreter solo los archivos listados abajo; "
+        "no proceses otros estudiantes ni documentos que no correspondan a esta solicitud.\n"
         "- NO incluyas enlaces sandbox:, rutas /mnt/data/ ni URLs de descarga en tu respuesta; "
         "la plataforma mostrará botones de descarga automáticamente.\n"
         "- NUNCA pegues código Python ni logs del intérprete en tu respuesta al usuario; "
@@ -264,9 +272,10 @@ def _finalize_openai_response(
     )
 
     mentioned = extract_mentioned_filenames(reply)
-    if mentioned and not response_files and not response_files_warning:
+    first_mentioned = sorted(mentioned)[0] if mentioned else ""
+    if first_mentioned and not response_files and not response_files_warning:
         response_files_warning = (
-            f"No se pudo guardar {mentioned[0]} en el servidor. "
+            f"No se pudo guardar {first_mentioned} en el servidor. "
             "Vuelve a pedir al agente que genere el documento."
         )
 
@@ -283,8 +292,9 @@ def _finalize_openai_response(
         else:
             mentioned = extract_mentioned_filenames(reply)
             if mentioned:
+                first_name = sorted(mentioned)[0]
                 reply = (
-                    f"Generé el archivo {mentioned[0]}, pero no pude guardarlo en el servidor. "
+                    f"Generé el archivo {first_name}, pero no pude guardarlo en el servidor. "
                     "Vuelve a pedir el informe."
                 )
             else:
@@ -372,11 +382,12 @@ def stream_chat_with_openai_responses(
     agent: AgentModel,
     message: str,
     file_ids: list[str],
+    instruction_file_names: list[str] | None = None,
 ):
     """Genera eventos {type: step|text_delta} y al final {type: done, data: ...}."""
     client = get_openai_client()
     tools = [_build_code_interpreter_tool(agent, file_ids)]
-    file_names = _agent_uploaded_file_names(db, agent.id)
+    file_names = instruction_file_names or _agent_uploaded_file_names(db, agent.id)
     seen_steps: set[str] = set()
 
     def emit_step(label: str) -> dict[str, Any] | None:

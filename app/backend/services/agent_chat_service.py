@@ -15,6 +15,32 @@ from app.backend.services.openai_agent_service import (
     sync_agent_openai_files,
 )
 from app.backend.utils.agent_document_index import search_agent_knowledge, strip_html
+from app.backend.utils.agent_file_selection import select_agent_file_rows
+
+def _prepare_openai_files(
+    db: Session,
+    agent: AgentModel,
+    message: str,
+    hits: list[dict[str, Any]],
+) -> tuple[list[str], list[str], int]:
+    """Devuelve (openai_file_ids, nombres usados, total archivos del agente)."""
+    from app.backend.db.models import AgentFileModel
+
+    total = (
+        db.query(AgentFileModel)
+        .filter(AgentFileModel.agent_id == agent.id)
+        .count()
+    )
+    selected_rows = select_agent_file_rows(db, agent.id, message, hits)
+    selected_names = [row.display_name for row in selected_rows if row.display_name]
+
+    if total and len(selected_rows) < total:
+        agent.openai_container_id = None
+        agent.openai_container_updated_at = None
+        db.flush()
+
+    openai_file_ids = sync_agent_openai_files(db, agent.id, only_rows=selected_rows)
+    return openai_file_ids, selected_names, total
 
 
 def _fallback_reply(message: str, hits: list[dict[str, Any]], reason: str | None = None) -> str:
@@ -72,7 +98,7 @@ def chat_with_agent(
             agent.openai_container_updated_at = None
             db.flush()
 
-        openai_file_ids = sync_agent_openai_files(db, agent_id)
+        openai_file_ids, _, total_files = _prepare_openai_files(db, agent, trimmed, hits)
         db.commit()
         db.refresh(agent)
 
@@ -151,20 +177,31 @@ def iter_chat_with_agent_events(
             agent.openai_container_updated_at = None
             db.flush()
 
-        yield {"type": "step", "message": "Sincronizando archivos del agente con OpenAI…"}
-        openai_file_ids = sync_agent_openai_files(db, agent_id)
+        yield {"type": "step", "message": "Preparando archivos relevantes para esta consulta…"}
+        openai_file_ids, selected_names, total_files = _prepare_openai_files(db, agent, trimmed, hits)
         db.commit()
         db.refresh(agent)
 
         if openai_file_ids:
-            yield {
-                "type": "step",
-                "message": f"{len(openai_file_ids)} archivo(s) listos para el análisis.",
-            }
+            if total_files and len(openai_file_ids) < total_files:
+                yield {
+                    "type": "step",
+                    "message": (
+                        f"Usando {len(openai_file_ids)} de {total_files} archivos relevantes "
+                        "(plantillas + datos del caso solicitado)."
+                    ),
+                }
+            else:
+                yield {
+                    "type": "step",
+                    "message": f"{len(openai_file_ids)} archivo(s) listos para el análisis.",
+                }
         else:
             yield {"type": "step", "message": "No hay archivos adjuntos; responderé solo con el rol del agente."}
 
-        for event in stream_chat_with_openai_responses(db, agent, trimmed, openai_file_ids):
+        for event in stream_chat_with_openai_responses(
+            db, agent, trimmed, openai_file_ids, instruction_file_names=selected_names
+        ):
             if not event:
                 continue
             if event.get("type") == "done":
