@@ -149,13 +149,14 @@ def sync_agent_openai_files(db: Session, agent_id: str) -> list[str]:
     return file_ids
 
 
-def _extract_container_id(response: Any) -> str | None:
-    output = getattr(response, "output", None) or []
-    for item in output:
-        if getattr(item, "type", None) == "code_interpreter_call":
-            container_id = getattr(item, "container_id", None)
-            if container_id:
-                return container_id
+def _extract_container_id(response: Any, agent: AgentModel | None = None) -> str | None:
+    from app.backend.services.agent_response_files_service import _extract_container_id_from_response
+
+    container_id = _extract_container_id_from_response(response)
+    if container_id:
+        return container_id
+    if agent and agent.openai_container_id and not is_container_expired(agent.openai_container_updated_at):
+        return agent.openai_container_id
     return None
 
 
@@ -202,7 +203,7 @@ def _finalize_openai_response(
     response: Any,
     file_ids: list[str],
 ) -> dict[str, Any]:
-    container_id = _extract_container_id(response)
+    container_id = _extract_container_id(response, agent)
     if container_id:
         agent.openai_container_id = container_id
         agent.openai_container_updated_at = _utcnow()
@@ -214,31 +215,36 @@ def _finalize_openai_response(
         reply = "No pude generar una respuesta. Intenta reformular la pregunta."
 
     response_files: list[dict[str, Any]] = []
+    response_files_warning: str | None = None
     if container_id:
         try:
-            from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
-
             from app.backend.services.agent_response_files_service import persist_code_interpreter_outputs
 
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(
-                    persist_code_interpreter_outputs,
-                    db,
-                    agent.id,
-                    response,
-                    container_id,
-                    file_ids,
-                )
-                response_files = future.result(timeout=180)
-        except FuturesTimeoutError:
-            logger.warning("Timeout guardando archivos generados por code interpreter")
+            response_files = persist_code_interpreter_outputs(
+                db,
+                agent.id,
+                response,
+                container_id,
+                file_ids,
+            )
         except Exception as exc:
             logger.warning("No se pudieron guardar archivos de respuesta: %s", exc)
+            response_files_warning = (
+                "No se pudo guardar el archivo generado en el servidor. "
+                "Vuelve a pedir el informe o contacta al administrador."
+            )
 
     from app.backend.services.agent_response_files_service import (
         extract_mentioned_filenames,
         sanitize_reply_sandbox_links,
     )
+
+    mentioned = extract_mentioned_filenames(reply)
+    if mentioned and not response_files and not response_files_warning:
+        response_files_warning = (
+            f"No se pudo guardar {mentioned[0]} en el servidor. "
+            "Vuelve a pedir al agente que genere el documento."
+        )
 
     reply = sanitize_reply_sandbox_links(reply, response_files)
     if _is_code_interpreter_dump(reply):
@@ -248,20 +254,26 @@ def _finalize_openai_response(
                 f"Listo. Generé el documento: {names}. "
                 "Usa el botón «Descargar» que aparece debajo de este mensaje."
             )
+        elif response_files_warning:
+            reply = response_files_warning
         else:
             mentioned = extract_mentioned_filenames(reply)
             if mentioned:
                 reply = (
-                    f"Listo. Generé el archivo {mentioned[0]}. "
-                    "Si no ves el botón de descarga aquí, búscalo en "
-                    "«Archivos del agente» → «Respuestas generadas»."
+                    f"Generé el archivo {mentioned[0]}, pero no pude guardarlo en el servidor. "
+                    "Vuelve a pedir el informe."
                 )
             else:
                 reply = (
-                    "Listo. Generé el documento solicitado. "
-                    "Si no ves el botón de descarga aquí, búscalo en "
-                    "«Archivos del agente» → «Respuestas generadas»."
+                    "Generé el documento, pero no pude guardarlo en el servidor. "
+                    "Vuelve a pedir el informe."
                 )
+    elif response_files:
+        names = ", ".join(item["name"] for item in response_files)
+        reply = (
+            f"Listo. Generé el documento: {names}. "
+            "Usa el botón «Descargar» debajo de este mensaje."
+        )
 
     return {
         "reply": reply,
@@ -269,6 +281,7 @@ def _finalize_openai_response(
         "openaiFilesUsed": len(file_ids),
         "model": settings.openai_agent_model,
         "responseFiles": response_files,
+        "responseFilesWarning": response_files_warning,
     }
 
 

@@ -87,6 +87,7 @@ def chat_with_agent(
             "containerId": result.get("containerId"),
             "model": result.get("model"),
             "responseFiles": result.get("responseFiles") or [],
+            "responseFilesWarning": result.get("responseFilesWarning"),
         }
     except Exception as exc:
         db.rollback()
@@ -179,6 +180,7 @@ def iter_chat_with_agent_events(
                         "containerId": payload.get("containerId"),
                         "model": payload.get("model"),
                         "responseFiles": payload.get("responseFiles") or [],
+                        "responseFilesWarning": payload.get("responseFilesWarning"),
                     },
                 }
             else:

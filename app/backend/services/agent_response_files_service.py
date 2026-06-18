@@ -137,6 +137,19 @@ def _extract_container_citations(response: Any) -> list[dict[str, str]]:
     return citations
 
 
+def _extract_container_id_from_response(response: Any) -> str | None:
+    output = getattr(response, "output", None) or []
+    for item in output:
+        if getattr(item, "type", None) == "code_interpreter_call":
+            container_id = getattr(item, "container_id", None)
+            if container_id:
+                return container_id
+    for cite in _extract_container_citations(response):
+        if cite.get("container_id"):
+            return cite["container_id"]
+    return None
+
+
 def _list_container_files(client: Any, container_id: str) -> list[Any]:
     collected: list[Any] = []
     after: str | None = None
@@ -160,9 +173,26 @@ def _filename_matches_mention(filename: str, mentioned: set[str]) -> bool:
     if not mentioned:
         return False
     lower = filename.lower()
+    stem = Path(lower).stem
     for name in mentioned:
-        if lower == name.lower() or lower.endswith(f"_{name.lower()}"):
+        n = name.lower()
+        n_stem = Path(n).stem
+        if lower == n or lower.endswith(f"_{n}"):
             return True
+        if n_stem and (n_stem in stem or stem in n_stem):
+            return True
+        if n_stem.replace("_", "-") in stem or n_stem.replace("_", " ") in stem.replace("_", " "):
+            return True
+    return False
+
+
+def _is_generated_container_file(item: Any) -> bool:
+    source = (getattr(item, "source", None) or "").lower()
+    path = getattr(item, "path", None) or ""
+    if source == "assistant":
+        return True
+    if "/mnt/data/" in path:
+        return True
     return False
 
 
@@ -193,7 +223,9 @@ def persist_code_interpreter_outputs(
     """Descarga PDF/Excel/Word generados y los guarda en files/agents/{id}/responses/."""
     from app.backend.services.openai_agent_service import get_openai_client
 
+    container_id = container_id or _extract_container_id_from_response(response)
     if not container_id:
+        logger.warning("persist_code_interpreter_outputs: sin container_id para agente %s", agent_id)
         return []
 
     client = get_openai_client()
@@ -205,10 +237,9 @@ def persist_code_interpreter_outputs(
     for cite in _extract_container_citations(response):
         if cite["file_id"] in user_ids or cite["file_id"] in known_ids:
             continue
-        if not _is_response_document(cite["filename"]):
-            continue
         candidates[cite["file_id"]] = cite
 
+    assistant_files: list[dict[str, Any]] = []
     try:
         for item in _list_container_files(client, container_id):
             file_id = getattr(item, "id", None)
@@ -218,7 +249,20 @@ def persist_code_interpreter_outputs(
             filename = Path(path).name if path else file_id
             is_document = _is_response_document(filename)
             is_mentioned = _filename_matches_mention(filename, mentioned_names)
-            if not is_document and not is_mentioned:
+            is_generated = _is_generated_container_file(item)
+            created_at = getattr(item, "created_at", 0) or 0
+
+            if is_generated:
+                assistant_files.append(
+                    {
+                        "container_id": container_id,
+                        "file_id": file_id,
+                        "filename": filename,
+                        "created_at": created_at,
+                    }
+                )
+
+            if not is_document and not is_mentioned and not is_generated:
                 continue
             if file_id not in candidates:
                 candidates[file_id] = {
@@ -229,7 +273,26 @@ def persist_code_interpreter_outputs(
     except Exception as exc:
         logger.warning("No se pudieron listar archivos del contenedor %s: %s", container_id, exc)
 
+    if not candidates and mentioned_names and assistant_files:
+        assistant_files.sort(key=lambda row: row.get("created_at", 0), reverse=True)
+        matched = [
+            row
+            for row in assistant_files
+            if _filename_matches_mention(row["filename"], mentioned_names)
+            and _is_response_document(row["filename"])
+        ]
+        picks = matched or [row for row in assistant_files if _is_response_document(row["filename"])]
+        if not picks and assistant_files:
+            picks = [assistant_files[0]]
+        for row in picks[:3]:
+            candidates[row["file_id"]] = row
+
     if not candidates:
+        logger.warning(
+            "persist_code_interpreter_outputs: sin candidatos (agente=%s, mencionados=%s)",
+            agent_id,
+            sorted(mentioned_names),
+        )
         return []
 
     ensure_responses_dir(agent_id)
