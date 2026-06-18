@@ -199,27 +199,20 @@ def build_no_fabrication_rules() -> str:
     )
 
 
-def build_paragraph_width_rules() -> str:
-    """Reglas para que el texto ocupe todo el ancho de la celda/campo."""
+def build_typography_preserve_rules() -> str:
+    """Conservar tipografía y alineación de la plantilla; no forzar justificado."""
     return (
-        "- ANCHO COMPLETO (OBLIGATORIO): cada párrafo narrativo debe ocupar el 100% del "
-        "ancho útil de su celda o campo (de borde a borde). Alineación justificada "
-        "(WD_ALIGN_PARAGRAPH.JUSTIFY); sin sangrías (left_indent/right_indent = 0); "
-        "sin tabulaciones ni cuadros de texto estrechos.\n"
-        "- Escribe en los párrafos de plantilla que ya tienen justificado; no crees párrafos "
-        "nuevos alineados a la izquierda que dejen franjas vacías a la derecha.\n"
-        "- Si un apartado tiene 2+ párrafos en la misma celda, cada párrafo va justificado "
-        "y a ancho completo (usa \\n\\n y reutiliza párrafos vacíos de la plantilla).\n"
-        "  Patrón Python:\n"
-        "    from docx.enum.text import WD_ALIGN_PARAGRAPH\n"
-        "    from docx.shared import Pt, Cm\n"
-        "    def aplicar_ancho_completo(p):\n"
-        "        p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY\n"
-        "        p.paragraph_format.left_indent = Cm(0)\n"
-        "        p.paragraph_format.right_indent = Cm(0)\n"
-        "        p.paragraph_format.first_line_indent = Cm(0)\n"
-        "        p.paragraph_format.space_before = Pt(0)\n"
-        "        p.paragraph_format.space_after = Pt(0)\n"
+        "- TIPOGRAFÍA DE PLANTILLA (OBLIGATORIO): NO cambies fuente, tamaño, negrita, "
+        "color ni alineación del párrafo/campo. Copia el formato del primer run existente "
+        "en la plantilla (rPr: w:rFonts, w:sz, w:color, w:b). "
+        "PROHIBIDO usar p.text = ... o cell.text = ... (destruye runs y cambia la letra).\n"
+        "- ALINEACIÓN: conserva la alineación que ya trae cada párrafo de la plantilla. "
+        "PROHIBIDO aplicar WD_ALIGN_PARAGRAPH.JUSTIFY si el párrafo no lo traía. "
+        "No modifiques paragraph_format.alignment salvo para restaurar el valor original.\n"
+        "- Al rellenar content controls (w:sdt), escribe solo en w:t dentro del w:sdtContent "
+        "preservando w:rPr del run; si no hay run, clónalo del párrafo vecino de la plantilla.\n"
+        "- Texto arriba en celda: space_before/space_after = 0; elimina párrafos vacíos sobrantes; "
+        "no centres verticalmente.\n"
         + build_no_fabrication_rules()
     )
 
@@ -227,16 +220,23 @@ def build_paragraph_width_rules() -> str:
 def build_redaction_min_paragraphs_rules() -> str:
     """Reglas de extensión mínima para textos narrativos del informe."""
     return (
-        "- REDACCIÓN (OBLIGATORIO): cada apartado narrativo del Word debe tener "
-        "como mínimo 2 párrafos completos (no una sola oración ni un solo bloque). "
-        "Aplica a motivo de evaluación, diagnóstico, fortalezas, necesidades de apoyo "
-        "(pedagógico, social/afectivo y salud), trabajo colaborativo, apoyos en el hogar, "
-        "acuerdos y cualquier sección de desarrollo del rol.\n"
-        "- Cada párrafo debe aportar información distinta (contexto + implicancia, "
-        "observación + orientación, etc.). Separa párrafos con un solo salto de línea "
-        "(\\n o w:br); no uses un único párrafo largo para cumplir extensión.\n"
-        "- Antes de exportar, revisa que ningún campo narrativo quede con menos de 2 párrafos.\n"
-        + build_paragraph_width_rules()
+        "- REDACCIÓN EXTENSA (OBLIGATORIO): cada apartado narrativo debe tener "
+        "exactamente 2 párrafos LARGOS y desarrollados (no oraciones sueltas ni párrafos "
+        "de 2-3 líneas). Aplica a motivo de evaluación, instrumentos, diagnóstico, "
+        "fortalezas, necesidades de apoyo (pedagógico, social/afectivo y salud), "
+        "trabajo colaborativo, apoyos en el hogar, acuerdos y secciones del rol.\n"
+        "- Extensión mínima por párrafo: 6 a 10 oraciones completas (aprox. 120-200 palabras). "
+        "Desarrolla contexto escolar, observaciones del expediente, implicancias pedagógicas "
+        "y orientaciones concretas. Un párrafo breve de 1-4 oraciones es INACEPTABLE.\n"
+        "- Párrafo 1: antecedentes, contexto e instrumentos/fuentes. "
+        "Párrafo 2: hallazgos, interpretación e implicancias para apoyos y seguimiento.\n"
+        "- Extrae contenido de la cartilla, evaluación psicopedagógica y archivos del caso; "
+        "no resumas en frases genéricas.\n"
+        "- Separa párrafos con un salto (w:br o párrafo vacío de plantilla), sin espacios "
+        "extra entre ellos.\n"
+        "- Antes de exportar, revisa cada campo narrativo: si algún párrafo tiene menos "
+        "de 6 oraciones, amplíalo antes de guardar.\n"
+        + build_typography_preserve_rules()
     )
 
 
@@ -304,5 +304,7 @@ def build_familia_form_rules(base_filename: str) -> str:
         "                      if t != p.text: p.text = t\n"
         "      doc.save(ruta)\n"
         "- Conserva tipografía y alineación de la plantilla; no uses cell.text sobre filas de rótulo.\n"
-        + build_paragraph_width_rules()
+        "- Para narrativa: 2 párrafos largos (6-10 oraciones c/u) por campo; "
+        "sin justificar ni cambiar fuente.\n"
+        + build_typography_preserve_rules()
     )
