@@ -82,22 +82,61 @@ def extract_rut_from_message(message: str) -> str | None:
     return None
 
 
+def _rut_matches_stored(target: str, *values: str | None) -> bool:
+    if not target:
+        return False
+    for val in values:
+        if val and _normalize_rut(val) == target:
+            return True
+    return False
+
+
+def _rut_search_terms(rut: str) -> set[str]:
+    """Variantes de texto para LIKE en BD (con/sin puntos, guión, DV)."""
+    target = _normalize_rut(rut)
+    if not target or len(target) < 8:
+        return set()
+
+    body = target[:-1]
+    dv = target[-1]
+    terms = {
+        body,
+        target,
+        f"{body}-{dv}",
+        f"{body}-{dv.upper()}",
+        _format_rut_display(rut),
+    }
+    if len(body) == 8:
+        dotted = f"{body[:2]}.{body[2:5]}.{body[5:]}"
+        terms.add(f"{dotted}-{dv.upper()}")
+        terms.add(f"{dotted}-{dv.lower()}")
+        terms.add(dotted)
+    return {t.strip() for t in terms if t and t.strip()}
+
+
+def _student_row_ruts(row: dict[str, Any]) -> tuple[str | None, str | None]:
+    personal = row.get("personal_data") or {}
+    return (
+        row.get("identification_number"),
+        personal.get("identification_number"),
+    )
+
+
 def find_student_id_by_rut(db: Session, rut: str) -> int | None:
     """Busca estudiante por RUT en students y student_personal_data."""
     target = _normalize_rut(rut)
     if not target or len(target) < 8:
         return None
 
-    body = target[:-1]
     service = StudentClass(db)
     candidates: dict[int, dict[str, Any]] = {}
 
-    for search in {body, target, f"{body}-{target[-1]}"}:
+    for term in _rut_search_terms(rut):
         for kwargs in (
-            {"rut": search},
-            {"identification_number": search},
+            {"rut": term},
+            {"identification_number": term},
         ):
-            result = service.get_all(page=1, items_per_page=30, **kwargs)
+            result = service.get_all(page=1, items_per_page=50, **kwargs)
             rows = result.get("data", []) if isinstance(result, dict) else []
             for row in rows:
                 sid = row.get("id")
@@ -106,11 +145,8 @@ def find_student_id_by_rut(db: Session, rut: str) -> int | None:
 
     exact: list[int] = []
     for sid, row in candidates.items():
-        personal = row.get("personal_data") or {}
-        stored = _normalize_rut(
-            row.get("identification_number") or personal.get("identification_number")
-        )
-        if stored == target:
+        st_rut, pi_rut = _student_row_ruts(row)
+        if _rut_matches_stored(target, st_rut, pi_rut):
             exact.append(sid)
 
     if len(exact) == 1:
@@ -118,8 +154,48 @@ def find_student_id_by_rut(db: Session, rut: str) -> int | None:
     if len(exact) > 1:
         return max(exact)
 
+    # Respaldo: comparación normalizada en SQL (RUT solo en personal_data u otro formato)
+    body = target[:-1]
+    if len(body) >= 7:
+        from sqlalchemy import or_
+
+        from app.backend.db.models import StudentPersonalInfoModel
+
+        pattern = f"%{body}%"
+        rows = (
+            db.query(
+                StudentModel.id,
+                StudentModel.identification_number,
+                StudentPersonalInfoModel.identification_number,
+            )
+            .outerjoin(
+                StudentPersonalInfoModel,
+                StudentModel.id == StudentPersonalInfoModel.student_id,
+            )
+            .filter(
+                StudentModel.deleted_status_id == 0,
+                or_(
+                    StudentModel.identification_number.like(pattern),
+                    StudentPersonalInfoModel.identification_number.like(pattern),
+                ),
+            )
+            .limit(80)
+            .all()
+        )
+        direct: list[int] = []
+        for sid, st_rut, pi_rut in rows:
+            if _rut_matches_stored(target, st_rut, pi_rut):
+                direct.append(int(sid))
+        if len(direct) == 1:
+            return direct[0]
+        if len(direct) > 1:
+            return max(direct)
+
     if len(candidates) == 1:
-        return next(iter(candidates))
+        sid, row = next(iter(candidates.items()))
+        st_rut, pi_rut = _student_row_ruts(row)
+        if _rut_matches_stored(target, st_rut, pi_rut):
+            return sid
 
     return None
 
@@ -146,6 +222,13 @@ def check_familia_rut_requirement(db: Session, message: str) -> str | None:
         return (
             f"No encontré un estudiante en PIE360 con el RUT {rut}.\n\n"
             "Verifica que el RUT esté correcto y que el estudiante esté registrado en la plataforma."
+        )
+
+    context = build_student_context(db, student_id)
+    if not context:
+        return (
+            f"Encontré el RUT {rut} pero no pude cargar la ficha del estudiante en PIE360.\n\n"
+            "Revisa que el estudiante tenga datos personales completos en la plataforma."
         )
 
     return None
