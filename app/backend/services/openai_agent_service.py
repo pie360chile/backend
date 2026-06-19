@@ -275,6 +275,19 @@ def _build_platform_rules(
     if base_file is None or template_kind is None:
         base_file, template_kind = pick_familia_base_template(available_files)
 
+    format_word = (
+        "- Formato Word narrativo (informe familia): texto JUSTIFICADO (w:jc both / "
+        "WD_ALIGN_PARAGRAPH.JUSTIFY) en doc.tables[3]. Un w:p por bloque; PROHIBIDO w:br "
+        "dentro del mismo párrafo (estira líneas cortas con espacios enormes). "
+        "Solo encabezados de sección (fondo naranja) en negrita.\n"
+        if familia_base_doc_name
+        else (
+            "- Formato Word: conserva la plantilla tal cual (misma fuente, tamaño y alineación). "
+            "PROHIBIDO forzar texto justificado. Solo los encabezados de sección "
+            "(fondo naranja, mayúsculas) van en negrita. Las etiquetas de campo y los valores "
+            "completados NO deben ir en negrita.\n"
+        )
+    )
     common = (
         "=== REGLAS DE LA PLATAFORMA (no reemplazan ni acortan el rol) ===\n"
         "- Responde en español.\n"
@@ -285,13 +298,10 @@ def _build_platform_rules(
         "visual de tablas/saltos de página y exportación final).\n"
         "- En el mensaje al usuario (chat): confirma brevemente qué generaste y el nombre del archivo.\n"
         "- En el archivo Word: aplica el ROL DEL AGENTE completo; revisa maquetación antes de dar por finalizado.\n"
-        "- Formato Word: conserva la plantilla tal cual (misma fuente, tamaño y alineación). "
-        "PROHIBIDO forzar texto justificado. Solo los encabezados de sección "
-        "(fondo naranja, mayúsculas) van en negrita. Las etiquetas de campo y los valores "
-        "completados NO deben ir en negrita.\n"
-        "- No uses markdown (**texto**) dentro del Word ni conviertas etiquetas a negrita.\n"
-        "- Espaciado uniforme en Word: dentro de una misma celda o lista usa UN solo salto "
-        "entre viñetas o párrafos. No dejes párrafos vacíos entre ítems de una lista.\n"
+        + format_word
+        + "- No uses markdown (**texto**) dentro del Word ni conviertas etiquetas a negrita.\n"
+        "- Espaciado uniforme en Word: dentro de una misma celda usa w:p distintos por bloque "
+        "(no w:br). No dejes párrafos vacíos entre bloques.\n"
         "- Si usas python-docx: reutiliza párrafos existentes de la plantilla; "
         "no insertes párrafos nuevos con spacing distinto.\n"
     )

@@ -362,16 +362,15 @@ def apply_familia_arial_10_to_formtext(docx_path: Path) -> None:
 
 
 def compact_familia_formtext_narrative(docx_path: Path) -> None:
-    """Compacta narrativa en celdas FORMTEXT (justificado, w:br entre párrafos)."""
+    """Compacta narrativa en celdas FORMTEXT (justificado, sin w:br)."""
     from docx import Document
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
 
     from app.backend.utils.agent_familia_prefill import (
+        _apply_narrative_paragraph_format,
         _is_label_paragraph,
         _paragraph_has_placeholder,
-        _ppr_set_justify,
-        _zero_paragraph_spacing,
     )
 
     doc = Document(str(docx_path))
@@ -418,13 +417,11 @@ def compact_familia_formtext_narrative(docx_path: Path) -> None:
                         continue
                     segments = [b.strip() for b in re.split(r"\n\s*\n", raw) if b.strip()]
                     if len(segments) > 1:
-                        joined = "\n".join(segments)
-                        _set_formtext_paragraph_value(p_el, joined, qn, OxmlElement)
+                        _set_formtext_paragraph_value(p_el, segments[0], qn, OxmlElement)
                     ppr = p_el.find(qn("w:pPr"))
                     if ppr is None:
                         ppr = OxmlElement("w:pPr")
                         p_el.insert(0, ppr)
-                    _ppr_set_justify(ppr, qn, OxmlElement)
-                    _zero_paragraph_spacing(ppr, qn, OxmlElement)
+                    _apply_narrative_paragraph_format(ppr, qn, OxmlElement)
 
     doc.save(str(docx_path))

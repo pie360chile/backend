@@ -261,9 +261,10 @@ def compact_familia_tabla_narrative(docx_path: Path) -> None:
     from docx.oxml.ns import qn
 
     from app.backend.utils.agent_familia_prefill import (
+        _append_narrative_paragraph,
+        _apply_narrative_paragraph_format,
         _is_label_paragraph,
-        _ppr_set_justify,
-        _zero_paragraph_spacing,
+        _split_paragraph_segments,
     )
 
     doc = Document(str(docx_path))
@@ -287,34 +288,32 @@ def compact_familia_tabla_narrative(docx_path: Path) -> None:
             continue
 
         skip_label = (table_idx, row_idx, col_idx) in append_slots
-        body_parts = [
-            _paragraph_text(p, qn).strip()
-            for i, p in enumerate(paragraphs)
-            if not (skip_label and i == 0)
+        body_paragraphs = [
+            p for i, p in enumerate(paragraphs) if not (skip_label and i == 0)
         ]
-        body = "\n\n".join(p for p in body_parts if p)
-        if body and not _is_label_paragraph(body):
-            segments = [b.strip() for b in re.split(r"\n\s*\n", body) if b.strip()]
-            if len(segments) > 1:
-                for p_el in paragraphs[1:] if skip_label else paragraphs:
-                    tc_el.remove(p_el)
-                target = OxmlElement("w:p")
-                tc_el.append(target)
-                ppr = OxmlElement("w:pPr")
-                _ppr_set_justify(ppr, qn, OxmlElement)
-                _zero_paragraph_spacing(ppr, qn, OxmlElement)
-                target.append(ppr)
-                first = True
-                for seg in segments:
-                    if not first:
-                        br_run = OxmlElement("w:r")
-                        br_run.append(OxmlElement("w:br"))
-                        target.append(br_run)
-                    first = False
-                    _append_run_text(target, seg, qn, OxmlElement, None)
-                paragraphs = tc_el.findall(qn("w:p"))
 
-        for pi, p_el in enumerate(paragraphs):
+        segments: list[str] = []
+        has_br = False
+        for p_el in body_paragraphs:
+            text = _paragraph_text(p_el, qn).strip()
+            if not text or _is_label_paragraph(text):
+                continue
+            if any(r.find(qn("w:br")) is not None for r in p_el.findall(qn("w:r"))):
+                has_br = True
+                segments.extend(_split_paragraph_segments(p_el, qn))
+            else:
+                for block in re.split(r"\n\s*\n", text):
+                    block = block.strip()
+                    if block:
+                        segments.append(block)
+
+        if segments and (len(segments) > 1 or has_br):
+            for p_el in body_paragraphs:
+                tc_el.remove(p_el)
+            for seg in segments:
+                _append_narrative_paragraph(tc_el, seg, qn, OxmlElement, None)
+
+        for pi, p_el in enumerate(tc_el.findall(qn("w:p"))):
             if skip_label and pi == 0:
                 continue
             text = _paragraph_text(p_el, qn).strip()
@@ -324,8 +323,7 @@ def compact_familia_tabla_narrative(docx_path: Path) -> None:
             if ppr is None:
                 ppr = OxmlElement("w:pPr")
                 p_el.insert(0, ppr)
-            _ppr_set_justify(ppr, qn, OxmlElement)
-            _zero_paragraph_spacing(ppr, qn, OxmlElement)
+            _apply_narrative_paragraph_format(ppr, qn, OxmlElement)
 
     doc.save(str(docx_path))
 

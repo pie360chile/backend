@@ -214,24 +214,25 @@ def build_no_fabrication_rules() -> str:
 
 
 def build_typography_preserve_rules() -> str:
-    """Conservar tipografía de la plantilla; narrativa justificada."""
+    """Conservar tipografía; narrativa justificada con un w:p por bloque."""
     return (
         "- TIPOGRAFÍA RESPUESTAS (OBLIGATORIO): todo el texto que escribes en campos del formulario "
         "(identificación arriba y narrativa abajo) debe ser Arial 10 pt, sin negrita. "
         "Copia rPr de la plantilla pero fuerza w:rFonts ascii/hAnsi=Arial y w:sz val=20.\n"
-        "- ALINEACIÓN NARRATIVA (OBLIGATORIO): todo párrafo narrativo del informe "
-        "(instrumentos, diagnóstico, fortalezas, necesidades de apoyo, acuerdos, etc.) "
-        "debe ir JUSTIFICADO (w:jc both / WD_ALIGN_PARAGRAPH.JUSTIFY). "
-        "Campos cortos de identificación (nombre, RUT, fecha suelta) pueden ir a la izquierda.\n"
+        "- ALINEACIÓN NARRATIVA (OBLIGATORIO): texto JUSTIFICADO (w:jc both). "
+        "PROHIBIDO w:br dentro del mismo párrafo para separar bloques: Word estira cada línea "
+        "corta y aparecen espacios enormes entre palabras (ej. «la          respuesta          correcta»). "
+        "Usa un w:p independiente por bloque; la última línea de cada párrafo queda a la izquierda.\n"
+        "- PÁRRAFOS NARRATIVOS: un w:p por bloque. PROHIBIDO unir bloques con w:br en el mismo w:p.\n"
         "- TIPOGRAFÍA DE PLANTILLA (OBLIGATORIO): NO cambies fuente, tamaño, negrita, "
         "color ni alineación del párrafo/campo. Copia el formato del primer run existente "
         "en la plantilla (rPr: w:rFonts, w:sz, w:color, w:b). "
         "PROHIBIDO usar p.text = ... o cell.text = ... (destruye runs y cambia la letra).\n"
         "- Al rellenar content controls (w:sdt), escribe solo en w:t dentro del w:sdtContent "
         "preservando w:rPr del run; si no hay run, clónalo del párrafo vecino de la plantilla.\n"
-        "- ESPACIADO NARRATIVO (OBLIGATORIO): los dos párrafos de cada campo van separados por "
-        "UN solo salto (w:br con run.add_break() dentro del MISMO w:p), NO con add_paragraph() "
-        "ni con \\n\\n. Si usas w:p distintos, space_before=Pt(0) y space_after=Pt(0) en ambos. "
+        "- ESPACIADO NARRATIVO (OBLIGATORIO): cada bloque narrativo va en su propio w:p "
+        "(add_paragraph o párrafo existente), con space_before=Pt(0) y space_after=Pt(0). "
+        "PROHIBIDO w:br para simular párrafos (causa espacios gigantes si hay justificado). "
         "PROHIBIDO dejar párrafos vacíos entre bloques (causan huecos grandes en Word).\n"
         "- Texto arriba en celda: space_before/space_after = 0; elimina párrafos vacíos sobrantes; "
         "no centres verticalmente.\n"
@@ -387,6 +388,6 @@ def build_familia_form_rules(base_filename: str) -> str:
         "      doc.save(ruta)\n"
         "- Conserva tipografía de la plantilla; no uses cell.text sobre filas de rótulo.\n"
         "- Para narrativa: 2 párrafos largos (6-10 oraciones c/u) por campo; "
-        "texto justificado (w:jc both), Arial 10 pt.\n"
+        "texto justificado (w:jc both), un w:p por bloque (sin w:br), Arial 10 pt.\n"
         + build_typography_preserve_rules()
     )

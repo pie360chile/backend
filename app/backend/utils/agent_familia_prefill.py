@@ -124,6 +124,7 @@ def _paragraph_has_placeholder(text: str) -> bool:
 
 
 def _ppr_set_justify(ppr: Any, qn: Any, OxmlElement: Any) -> None:
+    """Justificado estándar (w:jc both). La última línea de cada w:p queda a la izquierda."""
     for jc in list(ppr.findall(qn("w:jc"))):
         ppr.remove(jc)
     jc_el = OxmlElement("w:jc")
@@ -131,10 +132,59 @@ def _ppr_set_justify(ppr: Any, qn: Any, OxmlElement: Any) -> None:
     ppr.append(jc_el)
 
 
+def _apply_narrative_paragraph_format(ppr: Any, qn: Any, OxmlElement: Any) -> None:
+    _ppr_set_justify(ppr, qn, OxmlElement)
+    _zero_paragraph_spacing(ppr, qn, OxmlElement)
+
+
+def _append_narrative_paragraph(
+    parent: Any,
+    text: str,
+    qn: Any,
+    OxmlElement: Any,
+    ref_r_pr: Any | None,
+) -> None:
+    from copy import deepcopy
+
+    new_p = OxmlElement("w:p")
+    ppr = OxmlElement("w:pPr")
+    _apply_narrative_paragraph_format(ppr, qn, OxmlElement)
+    new_p.append(ppr)
+    r = OxmlElement("w:r")
+    if ref_r_pr is not None:
+        r.append(deepcopy(ref_r_pr))
+    wt = OxmlElement("w:t")
+    wt.text = text
+    if text.startswith(" ") or text.endswith(" "):
+        wt.set(qn("xml:space"), "preserve")
+    r.append(wt)
+    new_p.append(r)
+    parent.append(new_p)
+
+
+def _split_paragraph_segments(p_el: Any, qn: Any) -> list[str]:
+    """Parte un w:p en bloques de texto separados por w:br."""
+    segments: list[str] = []
+    buf: list[str] = []
+    for r in p_el.findall(qn("w:r")):
+        wt = r.find(qn("w:t"))
+        if wt is not None and wt.text:
+            buf.append(wt.text)
+        if r.find(qn("w:br")) is not None:
+            chunk = "".join(buf).strip()
+            if chunk:
+                segments.append(chunk)
+            buf = []
+    tail = "".join(buf).strip()
+    if tail:
+        segments.append(tail)
+    return segments
+
+
 def _reformat_narrative_sdt_content(sdt_content_el: Any, qn: Any, OxmlElement: Any) -> None:
     """
-    Unifica párrafos narrativos en un solo w:p con w:br, alineación justificada
-    y sin espaciado extra entre bloques.
+    Normaliza narrativa: un w:p por bloque, justificado, sin w:br.
+    w:br + justify en el mismo párrafo estira líneas cortas con espacios enormes.
     """
     from copy import deepcopy
 
@@ -152,57 +202,38 @@ def _reformat_narrative_sdt_content(sdt_content_el: Any, qn: Any, OxmlElement: A
                 if rpr is not None:
                     ref_r_pr = deepcopy(rpr)
                     break
-        for block in re.split(r"\n\s*\n", raw):
-            block = block.strip()
-            if block:
-                segments.append(block)
+        if any(r.find(qn("w:br")) is not None for r in p.findall(qn("w:r"))):
+            segments.extend(_split_paragraph_segments(p, qn))
+        else:
+            for block in re.split(r"\n\s*\n", raw):
+                block = block.strip()
+                if block:
+                    segments.append(block)
+
+    for p in sdt_content_el.iter(qn("w:p")):
+        ppr = p.find(qn("w:pPr"))
+        if ppr is None:
+            ppr = OxmlElement("w:pPr")
+            p.insert(0, ppr)
+        _apply_narrative_paragraph_format(ppr, qn, OxmlElement)
 
     if not segments:
-        for p in sdt_content_el.iter(qn("w:p")):
-            ppr = p.find(qn("w:pPr"))
-            if ppr is None:
-                ppr = OxmlElement("w:pPr")
-                p.insert(0, ppr)
-            _ppr_set_justify(ppr, qn, OxmlElement)
-            _zero_paragraph_spacing(ppr, qn, OxmlElement)
         return
 
     for child in list(sdt_content_el):
         sdt_content_el.remove(child)
 
-    new_p = OxmlElement("w:p")
-    ppr = OxmlElement("w:pPr")
-    _ppr_set_justify(ppr, qn, OxmlElement)
-    _zero_paragraph_spacing(ppr, qn, OxmlElement)
-    new_p.append(ppr)
-
-    first = True
     for seg in segments:
-        if not first:
-            br_run = OxmlElement("w:r")
-            if ref_r_pr is not None:
-                br_run.append(deepcopy(ref_r_pr))
-            br_run.append(OxmlElement("w:br"))
-            new_p.append(br_run)
-        first = False
-        r = OxmlElement("w:r")
-        if ref_r_pr is not None:
-            r.append(deepcopy(ref_r_pr))
-        t = OxmlElement("w:t")
-        t.text = seg
-        r.append(t)
-        new_p.append(r)
-
-    sdt_content_el.append(new_p)
+        _append_narrative_paragraph(sdt_content_el, seg, qn, OxmlElement, ref_r_pr)
 
 
 def _compact_sdt_content_spacing(sdt_content_el: Any, qn: Any, OxmlElement: Any) -> None:
-    """Reformatea párrafos narrativos: justificado, saltos con w:br."""
+    """Reformatea párrafos narrativos: justificado, un w:p por bloque (sin w:br)."""
     _reformat_narrative_sdt_content(sdt_content_el, qn, OxmlElement)
 
 
 def compact_familia_narrative_spacing(docx_path: Path) -> None:
-    """Justifica narrativa, unifica párrafos con w:br y compacta espaciado."""
+    """Justifica narrativa, separa bloques en w:p distintos (sin w:br) y compacta espaciado."""
     from app.backend.utils.agent_familia_formtext import (
         compact_familia_formtext_narrative,
         docx_has_legacy_formtext,
