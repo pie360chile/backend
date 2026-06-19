@@ -268,7 +268,6 @@ def refill_familia_identification_only(
         FAMILIA_IDENTIFICATION_KEYS,
         docx_has_familia_placeholders,
         list_familia_placeholder_keys_in_doc,
-        replace_familia_placeholders_in_doc,
         restore_familia_identification_from_template,
     )
 
@@ -277,27 +276,26 @@ def refill_familia_identification_only(
 
     if tpl and tpl.is_file() and docx_has_familia_placeholders(tpl):
         restored = restore_familia_identification_from_template(path, tpl, replacements)
-        if restored:
-            return sorted(set(restored))
+        return sorted(set(restored)) if restored else ["template_restore"]
 
     doc = Document(str(path))
     placeholder_keys = list_familia_placeholder_keys_in_doc(doc)
 
-    filled: list[str] = []
-    if placeholder_keys:
-        filled.extend(
-            replace_familia_placeholders_in_doc(
-                doc,
-                replacements,
-                keys_filter=FAMILIA_IDENTIFICATION_KEYS,
-            )
+    if placeholder_keys or (tpl and tpl.is_file() and docx_has_familia_placeholders(tpl)):
+        from app.backend.utils.agent_familia_placeholder_fill import (
+            fill_familia_identification_tables,
         )
-    else:
-        filled.extend(
-            _fill_tabla_slot_rows(
-                doc, FAMILIA_TABLA_IDENTIFICATION_SLOTS, replacements, qn, OxmlElement
-            )
+
+        id_replacements = {k: v for k, v in replacements.items() if k in FAMILIA_IDENTIFICATION_KEYS}
+        filled = fill_familia_identification_tables(doc, id_replacements)
+        doc.save(str(path))
+        return sorted(set(filled))
+
+    filled = list(
+        _fill_tabla_slot_rows(
+            doc, FAMILIA_TABLA_IDENTIFICATION_SLOTS, replacements, qn, OxmlElement
         )
+    )
     doc.save(str(path))
     return sorted(set(filled))
 
