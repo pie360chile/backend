@@ -19,8 +19,7 @@ from app.backend.utils.agent_familia_formtext import (
 logger = logging.getLogger(__name__)
 
 FillMode = Literal["replace", "append"]
-
-# (tabla, fila, columna, clave, modo)
+# (tabla, fila, columna, clave, modo) — tabla 3 = narrativa; tablas 1-2 = identificación
 FAMILIA_TABLA_SLOTS: tuple[tuple[int, int, int, str, FillMode], ...] = (
     (1, 3, 0, "student_full_name", "replace"),
     (1, 3, 3, "student_identification_number", "replace"),
@@ -56,6 +55,9 @@ FAMILIA_TABLA_SLOTS: tuple[tuple[int, int, int, str, FillMode], ...] = (
     (3, 17, 8, "evaluation_date_4", "replace"),
     (3, 17, 9, "evaluation_date_5", "replace"),
 )
+
+FAMILIA_TABLA_IDENTIFICATION_SLOTS = tuple(s for s in FAMILIA_TABLA_SLOTS if s[0] in (1, 2))
+FAMILIA_TABLA_NARRATIVE_SLOTS = tuple(s for s in FAMILIA_TABLA_SLOTS if s[0] == 3)
 
 
 def docx_is_familia_ministerial_tabla(path: Path) -> bool:
@@ -125,13 +127,25 @@ def _set_cell_plain_text(
     if mode == "append" and paragraphs:
         label = _paragraph_text(paragraphs[0], qn).strip()
         if label:
-            if len(paragraphs) > 1:
-                target = paragraphs[1]
-                _clear_paragraph_runs(target, qn)
-            else:
+            target = None
+            for p_el in paragraphs[1:]:
+                if not _paragraph_text(p_el, qn).strip():
+                    target = p_el
+                    break
+            if target is None:
                 target = OxmlElement("w:p")
                 tc_el.append(target)
+            else:
+                _clear_paragraph_runs(target, qn)
             _append_run_text(target, text, qn, OxmlElement, ref_r_pr)
+            return True
+
+    # replace: solo rellena celda vacía o segundo párrafo; no borra etiquetas de fila superior
+    if paragraphs:
+        existing = _paragraph_text(paragraphs[0], qn).strip()
+        if existing and not _is_label_like(existing):
+            _clear_paragraph_runs(paragraphs[0], qn)
+            _append_run_text(paragraphs[0], text, qn, OxmlElement, ref_r_pr)
             return True
 
     for p_el in paragraphs:
@@ -142,15 +156,53 @@ def _set_cell_plain_text(
     return True
 
 
+def _is_label_like(text: str) -> bool:
+    letters = [c for c in text if c.isalpha()]
+    if len(letters) < 6:
+        return True
+    upper = sum(1 for c in letters if c.isupper())
+    return (upper / len(letters)) > 0.75
+
+
+def _fill_tabla_slot_rows(
+    doc: Any,
+    slots: tuple[tuple[int, int, int, str, FillMode], ...],
+    replacements: dict[str, str],
+    qn: Any,
+    OxmlElement: Any,
+) -> list[str]:
+    seen: set[tuple[int, int, int]] = set()
+    filled_keys: list[str] = []
+    for table_idx, row_idx, col_idx, key, mode in slots:
+        slot = (table_idx, row_idx, col_idx)
+        if slot in seen:
+            continue
+        seen.add(slot)
+        tc_el = _get_cell_element(doc, table_idx, row_idx, col_idx, qn)
+        if tc_el is None:
+            continue
+        value = _resolve_replacement(key, replacements)
+        if not value:
+            continue
+        if _set_cell_plain_text(tc_el, value, qn, OxmlElement, mode=mode):
+            filled_keys.append(key)
+    return filled_keys
+
+
 def fill_familia_tabla_cells(
     template_path: str | Path,
     replacements: dict[str, str],
     output_path: str | Path,
 ) -> dict[str, Any]:
-    """Rellena celdas vacías del informe familia ministerial (tablas planas)."""
+    """Rellena informe familia ministerial (tablas planas)."""
     from docx import Document
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
+
+    from app.backend.utils.agent_familia_placeholder_fill import (
+        docx_has_familia_placeholders,
+        fill_familia_identification_placeholders,
+    )
 
     template_path = Path(template_path)
     output_path = Path(output_path)
@@ -159,33 +211,71 @@ def fill_familia_tabla_cells(
 
         shutil.copy2(template_path, output_path)
 
-    doc = Document(str(output_path))
     if not docx_is_familia_ministerial_tabla(output_path):
         return {"status": "error", "message": "No es plantilla ministerial de tablas planas"}
 
-    seen: set[tuple[int, int, int]] = set()
     filled_keys: list[str] = []
+    use_placeholders = docx_has_familia_placeholders(output_path)
 
-    for table_idx, row_idx, col_idx, key, mode in FAMILIA_TABLA_SLOTS:
-        slot = (table_idx, row_idx, col_idx)
-        if slot in seen:
-            continue
-        seen.add(slot)
+    if use_placeholders:
+        id_result = fill_familia_identification_placeholders(
+            output_path, replacements, output_path
+        )
+        filled_keys.extend(id_result.get("filled_keys") or [])
 
-        tc_el = _get_cell_element(doc, table_idx, row_idx, col_idx, qn)
-        if tc_el is None:
-            continue
-
-        value = _resolve_replacement(key, replacements)
-        if not value:
-            continue
-
-        if _set_cell_plain_text(tc_el, value, qn, OxmlElement, mode=mode):
-            filled_keys.append(key)
-
+    doc = Document(str(output_path))
+    narrative_slots = FAMILIA_TABLA_NARRATIVE_SLOTS if use_placeholders else FAMILIA_TABLA_SLOTS
+    filled_keys.extend(
+        _fill_tabla_slot_rows(doc, narrative_slots, replacements, qn, OxmlElement)
+    )
     doc.save(str(output_path))
-    logger.info("Tabla familia: %d celdas rellenadas en %s", len(filled_keys), output_path.name)
-    return {"status": "success", "filled_keys": filled_keys}
+
+    mode = "placeholders+narrative" if use_placeholders else "coordinates"
+    logger.info(
+        "Tabla familia (%s): %d campos en %s",
+        mode,
+        len(filled_keys),
+        output_path.name,
+    )
+    return {"status": "success", "filled_keys": filled_keys, "mode": mode}
+
+
+def refill_familia_identification_only(
+    docx_path: Path,
+    replacements: dict[str, str],
+) -> list[str]:
+    """Reaplica solo tablas 1-2 (identificación) sin tocar narrativa de tabla 3."""
+    from docx import Document
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    from app.backend.utils.agent_familia_placeholder_fill import (
+        docx_has_familia_placeholders,
+        replace_familia_placeholders_in_doc,
+        FAMILIA_IDENTIFICATION_KEYS,
+    )
+
+    path = Path(docx_path)
+    if docx_has_familia_placeholders(path):
+        doc = Document(str(path))
+        filled = replace_familia_placeholders_in_doc(
+            doc,
+            replacements,
+            keys_filter=FAMILIA_IDENTIFICATION_KEYS,
+        )
+        doc.save(str(path))
+        return filled
+
+    doc = Document(str(path))
+    filled = _fill_tabla_slot_rows(
+        doc,
+        FAMILIA_TABLA_IDENTIFICATION_SLOTS,
+        replacements,
+        qn,
+        OxmlElement,
+    )
+    doc.save(str(path))
+    return filled
 
 
 def fix_familia_motivo_evaluacion_tabla(
@@ -209,18 +299,15 @@ def fix_familia_motivo_evaluacion_tabla(
     if tc_el is None:
         return
 
-    for p_el in _iter_cell_paragraphs(tc_el, qn):
-        raw = _paragraph_text(p_el, qn)
-        if not raw.strip():
+    for wt in tc_el.iter(qn("w:t")):
+        if not wt.text:
             continue
-        if raw.lstrip().startswith("x"):
+        if "☐" in wt.text:
+            wt.text = wt.text.replace("☐", "x", 1)
+            doc.save(str(docx_path))
             return
-        new_text = re.sub(r"^(\s*)☐", r"\1x", raw, count=1)
-        if new_text == raw:
-            new_text = re.sub(r"^(\s*)", r"\1x ", raw, count=1)
-        _clear_paragraph_runs(p_el, qn)
-        _append_run_text(p_el, new_text, qn, OxmlElement, None)
-        break
+        if wt.text.strip() in ("x", "X"):
+            return
 
     doc.save(str(docx_path))
 

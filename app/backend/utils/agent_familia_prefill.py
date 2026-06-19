@@ -745,15 +745,29 @@ def postprocess_saved_familia_docx(
 
     try:
         replacements = build_familia_identification_replacements(student_context)
-        result = fill_familia_docx(path, replacements, path)
-        if result.get("status") == "error":
-            logger.warning(
-                "Prefill familia falló para %s: %s",
-                path.name,
-                result.get("message"),
-            )
+        from app.backend.utils.agent_familia_tabla_fill import (
+            docx_is_familia_ministerial_tabla,
+            refill_familia_identification_only,
+        )
+
+        if docx_is_familia_ministerial_tabla(path):
+            filled = refill_familia_identification_only(path, replacements)
+            if filled:
+                logger.info(
+                    "Identificación re-aplicada en %s (%d campos)",
+                    path.name,
+                    len(filled),
+                )
         else:
-            logger.info("Prefill familia aplicado en %s", path.name)
+            result = fill_familia_docx(path, replacements, path)
+            if result.get("status") == "error":
+                logger.warning(
+                    "Prefill familia falló para %s: %s",
+                    path.name,
+                    result.get("message"),
+                )
+            else:
+                logger.info("Prefill familia aplicado en %s", path.name)
     except Exception as exc:
         logger.warning("Prefill familia no aplicado en %s: %s", path.name, exc)
 

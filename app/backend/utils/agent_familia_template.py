@@ -289,6 +289,8 @@ def build_familia_hybrid_scope_rules(base_doc_name: str) -> str:
         "  • fila 17 cols 4-9: fechas de seguimiento (solo DD/MM/YYYY o vacío)\n"
         "No recorras doc.tables[1] ni doc.tables[2] con bucles genéricos. "
         "No uses cell.text = ... sobre celdas de identificación.\n"
+        "Si ves placeholders {{student_full_name}}, {{student_identification_number}}, etc., "
+        "NO los toques: PIE360 los reemplaza desde la base de datos al guardar el archivo.\n"
     )
 
 
