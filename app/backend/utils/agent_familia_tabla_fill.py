@@ -225,12 +225,12 @@ def fill_familia_tabla_cells(
 
     doc = Document(str(output_path))
 
-    # Campos de identificación sin placeholder en plantilla → relleno por coordenadas
-    id_slots = (
-        tuple(s for s in FAMILIA_TABLA_IDENTIFICATION_SLOTS if s[3] not in placeholder_keys)
-        if placeholder_keys
-        else FAMILIA_TABLA_IDENTIFICATION_SLOTS
-    )
+    # Si la plantilla usa {{...}}, SOLO placeholders para identificación (sin coordenadas).
+    # Las coordenadas asumen filas ministeriales distintas y desplazan datos si mezclas layouts.
+    id_slots: tuple[tuple[int, int, int, str, FillMode], ...] = ()
+    if not placeholder_keys:
+        id_slots = FAMILIA_TABLA_IDENTIFICATION_SLOTS
+
     filled_keys.extend(_fill_tabla_slot_rows(doc, id_slots, replacements, qn, OxmlElement))
     filled_keys.extend(
         _fill_tabla_slot_rows(doc, FAMILIA_TABLA_NARRATIVE_SLOTS, replacements, qn, OxmlElement)
@@ -275,15 +275,10 @@ def refill_familia_identification_only(
                 keys_filter=FAMILIA_IDENTIFICATION_KEYS,
             )
         )
-
-    id_slots = (
-        tuple(s for s in FAMILIA_TABLA_IDENTIFICATION_SLOTS if s[3] not in placeholder_keys)
-        if placeholder_keys
-        else FAMILIA_TABLA_IDENTIFICATION_SLOTS
-    )
-    filled.extend(
-        _fill_tabla_slot_rows(doc, id_slots, replacements, qn, OxmlElement)
-    )
+    else:
+        filled.extend(
+            _fill_tabla_slot_rows(doc, FAMILIA_TABLA_IDENTIFICATION_SLOTS, replacements, qn, OxmlElement)
+        )
     doc.save(str(path))
     return sorted(set(filled))
 
