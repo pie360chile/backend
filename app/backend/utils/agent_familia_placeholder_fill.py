@@ -6,6 +6,7 @@ import logging
 import re
 import unicodedata
 from copy import deepcopy
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
