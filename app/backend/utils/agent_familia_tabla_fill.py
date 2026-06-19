@@ -328,3 +328,58 @@ def compact_familia_tabla_narrative(docx_path: Path) -> None:
             _zero_paragraph_spacing(ppr, qn, OxmlElement)
 
     doc.save(str(docx_path))
+
+
+# Filas narrativas de doc.tables[3] con altura mínima fija en la plantilla ministerial
+FAMILIA_TABLA_NARRATIVE_ROW_INDICES = (3, 5, 8, 10, 12, 14, 16, 17)
+
+
+def relax_familia_tabla_layout(docx_path: Path) -> None:
+    """
+    Permite que el contenido narrativo fluya entre páginas sin huecos en blanco:
+    quita keepNext/keepLines/pageBreakBefore, cantSplit y alturas fijas de fila.
+    """
+    from docx import Document
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    from app.backend.utils.agent_familia_prefill import _clear_paragraph_pagination_locks
+
+    if not docx_is_familia_ministerial_tabla(docx_path):
+        return
+
+    doc = Document(str(docx_path))
+    tbls = doc.element.body.findall(qn("w:tbl"))
+
+    for tbl_idx, tbl_el in enumerate(tbls):
+        for tr_el in tbl_el.findall(qn("w:tr")):
+            tr_pr = tr_el.find(qn("w:trPr"))
+            if tr_pr is not None:
+                for el in list(tr_pr.findall(qn("w:cantSplit"))):
+                    tr_pr.remove(el)
+
+        if tbl_idx == 3:
+            rows = tbl_el.findall(qn("w:tr"))
+            for row_idx in FAMILIA_TABLA_NARRATIVE_ROW_INDICES:
+                if row_idx >= len(rows):
+                    continue
+                tr_pr = rows[row_idx].find(qn("w:trPr"))
+                if tr_pr is not None:
+                    for el in list(tr_pr.findall(qn("w:trHeight"))):
+                        tr_pr.remove(el)
+                for tc_el in rows[row_idx].findall(qn("w:tc")):
+                    tc_pr = tc_el.find(qn("w:tcPr"))
+                    if tc_pr is None:
+                        continue
+                    for el in list(tc_pr.findall(qn("w:vAlign"))):
+                        tc_pr.remove(el)
+
+        for tc_el in tbl_el.iter(qn("w:tc")):
+            for p_el in tc_el.findall(qn("w:p")):
+                ppr = p_el.find(qn("w:pPr"))
+                if ppr is None:
+                    ppr = OxmlElement("w:pPr")
+                    p_el.insert(0, ppr)
+                _clear_paragraph_pagination_locks(ppr, qn, OxmlElement)
+
+    doc.save(str(docx_path))

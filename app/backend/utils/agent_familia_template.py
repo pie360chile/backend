@@ -235,6 +235,9 @@ def build_typography_preserve_rules() -> str:
         "PROHIBIDO dejar párrafos vacíos entre bloques (causan huecos grandes en Word).\n"
         "- Texto arriba en celda: space_before/space_after = 0; elimina párrafos vacíos sobrantes; "
         "no centres verticalmente.\n"
+        "- PAGINACIÓN (OBLIGATORIO): PROHIBIDO keep_with_next, keep_together, page_break_before "
+        "en párrafos narrativos. No uses cantSplit ni alturas fijas de fila (trHeight exact). "
+        "Las filas deben crecer con el texto y dividirse naturalmente entre páginas.\n"
         + build_no_fabrication_rules()
     )
 

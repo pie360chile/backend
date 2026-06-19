@@ -84,6 +84,15 @@ def _is_label_paragraph(text: str) -> bool:
     return (upper / len(letters)) > 0.82
 
 
+def _clear_paragraph_pagination_locks(ppr: Any, qn: Any, OxmlElement: Any) -> None:
+    """Evita saltos forzados y bloques que Word empuja a la página siguiente."""
+    for tag in ("w:keepNext", "w:keepLines", "w:pageBreakBefore"):
+        for el in list(ppr.findall(qn(tag))):
+            ppr.remove(el)
+    for el in list(ppr.findall(qn("w:widowControl"))):
+        ppr.remove(el)
+
+
 def _zero_paragraph_spacing(ppr: Any, qn: Any, OxmlElement: Any) -> None:
     for sp in list(ppr.findall(qn("w:spacing"))):
         ppr.remove(sp)
@@ -95,6 +104,7 @@ def _zero_paragraph_spacing(ppr: Any, qn: Any, OxmlElement: Any) -> None:
     ppr.append(spacing)
     for ctx in list(ppr.findall(qn("w:contextualSpacing"))):
         ppr.remove(ctx)
+    _clear_paragraph_pagination_locks(ppr, qn, OxmlElement)
 
 
 def _paragraph_has_placeholder(text: str) -> bool:
@@ -200,10 +210,12 @@ def compact_familia_narrative_spacing(docx_path: Path) -> None:
     from app.backend.utils.agent_familia_tabla_fill import (
         compact_familia_tabla_narrative,
         docx_is_familia_ministerial_tabla,
+        relax_familia_tabla_layout,
     )
 
     if docx_is_familia_ministerial_tabla(docx_path):
         compact_familia_tabla_narrative(docx_path)
+        relax_familia_tabla_layout(docx_path)
         return
     if docx_has_legacy_formtext(docx_path):
         compact_familia_formtext_narrative(docx_path)
