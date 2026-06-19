@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -47,24 +48,57 @@ def _formats_for_tag(tag: str) -> tuple[str, ...]:
     return (f"{{{{{tag}}}}}", f"{{{tag}}}", f"[{tag}]")
 
 
-def docx_has_familia_placeholders(path: Path) -> bool:
-    """True si el .docx contiene al menos un placeholder de identificación."""
+def _keys_in_text(text: str) -> set[str]:
+    found: set[str] = set()
+    for m in _PLACEHOLDER_RE.finditer(text or ""):
+        key = m.group(1) or m.group(2) or m.group(3)
+        if key in FAMILIA_IDENTIFICATION_KEYS:
+            found.add(key)
+    return found
+
+
+def _paragraph_visible_text(p_el: Any, qn: Any) -> str:
+    return "".join(t.text or "" for t in p_el.iter(qn("w:t")))
+
+
+def _iter_body_paragraphs(doc: Any, qn: Any):
+    for p_el in doc.element.body.iter(qn("w:p")):
+        yield p_el
+    for section in doc.sections:
+        for hf in (
+            section.header,
+            section.footer,
+            section.first_page_header,
+            section.first_page_footer,
+        ):
+            if hf is None or hf._element is None:
+                continue
+            for p_el in hf._element.iter(qn("w:p")):
+                yield p_el
+
+
+def list_familia_placeholder_keys_in_doc(doc: Any) -> set[str]:
+    """Claves {{...}} presentes (aunque Word las parta en varios w:t del mismo párrafo)."""
+    from docx.oxml.ns import qn
+
+    keys: set[str] = set()
+    for p_el in _iter_body_paragraphs(doc, qn):
+        keys |= _keys_in_text(_paragraph_visible_text(p_el, qn))
+    return keys
+
+
+def list_familia_placeholder_keys_in_path(path: Path) -> set[str]:
     try:
         from docx import Document
-        from docx.oxml.ns import qn
 
         doc = Document(str(path))
-        for t in doc.element.body.iter(qn("w:t")):
-            text = t.text or ""
-            if not text:
-                continue
-            for m in _PLACEHOLDER_RE.finditer(text):
-                key = m.group(1) or m.group(2) or m.group(3)
-                if key in FAMILIA_IDENTIFICATION_KEYS:
-                    return True
-        return False
+        return list_familia_placeholder_keys_in_doc(doc)
     except Exception:
-        return False
+        return set()
+
+
+def docx_has_familia_placeholders(path: Path) -> bool:
+    return bool(list_familia_placeholder_keys_in_path(path))
 
 
 def _replace_text_placeholders(text: str, replacements: dict[str, str]) -> str:
@@ -76,20 +110,57 @@ def _replace_text_placeholders(text: str, replacements: dict[str, str]) -> str:
     return result
 
 
-def _walk_all_wt_elements(doc: Any, qn: Any):
-    for t in doc.element.body.iter(qn("w:t")):
-        yield t
-    for section in doc.sections:
-        for hf in (
-            section.header,
-            section.footer,
-            section.first_page_header,
-            section.first_page_footer,
-        ):
-            if hf is None or hf._element is None:
-                continue
-            for t in hf._element.iter(qn("w:t")):
-                yield t
+def _replace_placeholders_in_paragraph(
+    p_el: Any,
+    qn: Any,
+    OxmlElement: Any,
+    replacements: dict[str, str],
+) -> list[str]:
+    """Reemplaza placeholders en un w:p aunque estén partidos en varios runs."""
+    full = _paragraph_visible_text(p_el, qn)
+    if not full or "{{" not in full and "{" not in full and "[" not in full:
+        return []
+
+    keys_here = _keys_in_text(full)
+    if not keys_here:
+        return []
+
+    applicable = {k: replacements[k] for k in keys_here if k in replacements}
+    if not applicable:
+        return []
+
+    new_full = _replace_text_placeholders(full, applicable)
+    if new_full == full:
+        return []
+
+    ref_r_pr = None
+    for r in p_el.findall(qn("w:r")):
+        rpr = r.find(qn("w:rPr"))
+        if rpr is not None:
+            ref_r_pr = deepcopy(rpr)
+            break
+
+    for child in list(p_el):
+        if child.tag == qn("w:r"):
+            p_el.remove(child)
+
+    r = OxmlElement("w:r")
+    if ref_r_pr is not None:
+        r.append(deepcopy(ref_r_pr))
+    wt = OxmlElement("w:t")
+    wt.text = new_full
+    if new_full.startswith(" ") or new_full.endswith(" "):
+        wt.set(qn("xml:space"), "preserve")
+    r.append(wt)
+    p_el.append(r)
+
+    filled: list[str] = []
+    for tag in applicable:
+        for fmt in _formats_for_tag(tag):
+            if fmt in full:
+                filled.append(tag)
+                break
+    return filled
 
 
 def replace_familia_placeholders_in_doc(
@@ -99,9 +170,10 @@ def replace_familia_placeholders_in_doc(
     keys_filter: frozenset[str] | None = None,
 ) -> list[str]:
     """
-    Sustituye {{clave}} / {clave} / [clave] dentro de w:t sin borrar párrafos ni celdas.
-    Preserva etiquetas, cuadros ☐ y formato de la plantilla.
+    Sustituye {{clave}} por párrafo (no por run suelto).
+    Word suele partir {{student_full_name}} en varios w:t; por eso fallaba el reemplazo.
     """
+    from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
 
     filtered = replacements
@@ -112,19 +184,10 @@ def replace_familia_placeholders_in_doc(
         return []
 
     filled: list[str] = []
-    for wt in _walk_all_wt_elements(doc, qn):
-        original = wt.text or ""
-        if not original:
-            continue
-        if not any(fmt in original for tag in filtered for fmt in _formats_for_tag(tag)):
-            continue
-        new_text = _replace_text_placeholders(original, filtered)
-        if new_text != original:
-            wt.text = new_text
-            for tag in filtered:
-                if any(fmt in original for fmt in _formats_for_tag(tag)):
-                    filled.append(tag)
-                    break
+    for p_el in _iter_body_paragraphs(doc, qn):
+        filled.extend(
+            _replace_placeholders_in_paragraph(p_el, qn, OxmlElement, filtered)
+        )
 
     return sorted(set(filled))
 
@@ -134,7 +197,7 @@ def fill_familia_identification_placeholders(
     replacements: dict[str, str],
     output_path: str | Path,
 ) -> dict[str, Any]:
-    """Copia plantilla y reemplaza solo placeholders de identificación."""
+    """Copia plantilla y reemplaza placeholders de identificación."""
     import shutil
 
     from docx import Document
@@ -159,16 +222,9 @@ def fill_familia_identification_placeholders(
 
 
 def restore_identification_from_context(docx_path: Path, student_context: dict[str, Any]) -> None:
-    """Reaplica identificación desde BD sobre un .docx ya generado (corrige si GPT tocó tablas 1-2)."""
-    from docx import Document
-
+    """Reaplica identificación desde BD (placeholders + coordenadas para el resto)."""
     from app.backend.utils.agent_familia_prefill import build_familia_identification_replacements
+    from app.backend.utils.agent_familia_tabla_fill import refill_familia_identification_only
 
-    if not docx_has_familia_placeholders(docx_path):
-        return
     replacements = build_familia_identification_replacements(student_context)
-    doc = Document(str(docx_path))
-    replace_familia_placeholders_in_doc(
-        doc, replacements, keys_filter=FAMILIA_IDENTIFICATION_KEYS
-    )
-    doc.save(str(docx_path))
+    refill_familia_identification_only(docx_path, replacements)

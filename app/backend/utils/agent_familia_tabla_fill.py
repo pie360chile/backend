@@ -200,8 +200,8 @@ def fill_familia_tabla_cells(
     from docx.oxml.ns import qn
 
     from app.backend.utils.agent_familia_placeholder_fill import (
-        docx_has_familia_placeholders,
         fill_familia_identification_placeholders,
+        list_familia_placeholder_keys_in_path,
     )
 
     template_path = Path(template_path)
@@ -215,22 +215,29 @@ def fill_familia_tabla_cells(
         return {"status": "error", "message": "No es plantilla ministerial de tablas planas"}
 
     filled_keys: list[str] = []
-    use_placeholders = docx_has_familia_placeholders(output_path)
+    placeholder_keys = list_familia_placeholder_keys_in_path(output_path)
 
-    if use_placeholders:
+    if placeholder_keys:
         id_result = fill_familia_identification_placeholders(
             output_path, replacements, output_path
         )
         filled_keys.extend(id_result.get("filled_keys") or [])
 
     doc = Document(str(output_path))
-    narrative_slots = FAMILIA_TABLA_NARRATIVE_SLOTS if use_placeholders else FAMILIA_TABLA_SLOTS
+
+    # Campos de identificación sin placeholder en plantilla → relleno por coordenadas
+    id_slots = (
+        tuple(s for s in FAMILIA_TABLA_IDENTIFICATION_SLOTS if s[3] not in placeholder_keys)
+        if placeholder_keys
+        else FAMILIA_TABLA_IDENTIFICATION_SLOTS
+    )
+    filled_keys.extend(_fill_tabla_slot_rows(doc, id_slots, replacements, qn, OxmlElement))
     filled_keys.extend(
-        _fill_tabla_slot_rows(doc, narrative_slots, replacements, qn, OxmlElement)
+        _fill_tabla_slot_rows(doc, FAMILIA_TABLA_NARRATIVE_SLOTS, replacements, qn, OxmlElement)
     )
     doc.save(str(output_path))
 
-    mode = "placeholders+narrative" if use_placeholders else "coordinates"
+    mode = "placeholders+hybrid" if placeholder_keys else "coordinates"
     logger.info(
         "Tabla familia (%s): %d campos en %s",
         mode,
@@ -244,38 +251,41 @@ def refill_familia_identification_only(
     docx_path: Path,
     replacements: dict[str, str],
 ) -> list[str]:
-    """Reaplica solo tablas 1-2 (identificación) sin tocar narrativa de tabla 3."""
+    """Reaplica tablas 1-2: placeholders primero, coordenadas solo para claves sin {{...}}."""
     from docx import Document
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
 
     from app.backend.utils.agent_familia_placeholder_fill import (
-        docx_has_familia_placeholders,
+        list_familia_placeholder_keys_in_doc,
         replace_familia_placeholders_in_doc,
         FAMILIA_IDENTIFICATION_KEYS,
     )
 
     path = Path(docx_path)
-    if docx_has_familia_placeholders(path):
-        doc = Document(str(path))
-        filled = replace_familia_placeholders_in_doc(
-            doc,
-            replacements,
-            keys_filter=FAMILIA_IDENTIFICATION_KEYS,
-        )
-        doc.save(str(path))
-        return filled
-
     doc = Document(str(path))
-    filled = _fill_tabla_slot_rows(
-        doc,
-        FAMILIA_TABLA_IDENTIFICATION_SLOTS,
-        replacements,
-        qn,
-        OxmlElement,
+    placeholder_keys = list_familia_placeholder_keys_in_doc(doc)
+
+    filled: list[str] = []
+    if placeholder_keys:
+        filled.extend(
+            replace_familia_placeholders_in_doc(
+                doc,
+                replacements,
+                keys_filter=FAMILIA_IDENTIFICATION_KEYS,
+            )
+        )
+
+    id_slots = (
+        tuple(s for s in FAMILIA_TABLA_IDENTIFICATION_SLOTS if s[3] not in placeholder_keys)
+        if placeholder_keys
+        else FAMILIA_TABLA_IDENTIFICATION_SLOTS
+    )
+    filled.extend(
+        _fill_tabla_slot_rows(doc, id_slots, replacements, qn, OxmlElement)
     )
     doc.save(str(path))
-    return filled
+    return sorted(set(filled))
 
 
 def fix_familia_motivo_evaluacion_tabla(
