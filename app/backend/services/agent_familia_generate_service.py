@@ -15,7 +15,6 @@ from app.backend.core.config import settings
 from app.backend.db.models import AgentResponseFileModel
 from app.backend.utils.agent_familia_prefill import (
     apply_familia_arial_10_font,
-    build_familia_form_replacements,
     build_familia_identification_replacements,
     compact_familia_narrative_spacing,
     fill_familia_docx,
@@ -74,11 +73,7 @@ def create_familia_base_for_gpt(
     disk_path = agent_dir(agent_id) / "responses" / f"_base_{token}_{display_name}"
     disk_path.parent.mkdir(parents=True, exist_ok=True)
 
-    replacements = (
-        build_familia_form_replacements(student_context)
-        if settings.openai_agent_familia_fast
-        else build_familia_identification_replacements(student_context)
-    )
+    replacements = build_familia_identification_replacements(student_context)
     _fill_and_save(template_path, disk_path, replacements)
     fix_familia_motivo_evaluacion_row(disk_path, student_context)
     apply_familia_arial_10_font(disk_path)

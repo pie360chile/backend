@@ -379,12 +379,7 @@ def _build_instructions(
         parts.append(f"=== ROL DEL AGENTE (OBLIGATORIO) ===\n{role_text}")
 
     if familia_base_doc_name:
-        parts.append(
-            build_familia_narrative_enrichment_rules(
-                familia_base_doc_name,
-                fast=settings.openai_agent_familia_fast,
-            )
-        )
+        parts.append(build_familia_narrative_enrichment_rules(familia_base_doc_name))
 
     file_names = list(available_files or [])
     base_file, template_kind, filtered_names, paths = _familia_template_state(

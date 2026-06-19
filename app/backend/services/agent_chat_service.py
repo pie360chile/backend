@@ -21,10 +21,7 @@ from app.backend.services.openai_agent_service import (
     upload_local_file_to_openai,
 )
 from app.backend.utils.agent_document_index import search_agent_knowledge, strip_html
-from app.backend.utils.agent_file_selection import (
-    select_agent_file_rows,
-    trim_rows_for_familia_hybrid_speed,
-)
+from app.backend.utils.agent_file_selection import select_agent_file_rows
 from app.backend.utils.agent_files import agent_dir, ensure_responses_dir
 from app.backend.utils.agent_student_lookup import (
     check_familia_rut_requirement,
@@ -51,8 +48,6 @@ def _prepare_openai_files(
         .count()
     )
     selected_rows = select_agent_file_rows(db, agent.id, message, hits)
-    if settings.openai_agent_familia_fast and is_familia_report_request(message):
-        selected_rows = trim_rows_for_familia_hybrid_speed(selected_rows, agent.id)
     selected_names: list[str] = []
 
     if total and len(selected_rows) < total:
