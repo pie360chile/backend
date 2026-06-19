@@ -13,8 +13,10 @@ from app.backend.utils.agent_familia_template import (
     familia_form_template_priority,
     is_familia_form_file,
     is_familia_form_template,
+    is_familia_report_template_filename,
     is_familia_tabla_file,
     is_familia_tabla_template,
+    is_psychoped_case_filename,
 )
 from app.backend.utils.agent_files import agent_dir
 
@@ -259,28 +261,23 @@ def trim_rows_for_familia_hybrid_speed(
     agent_id: str,
 ) -> list[AgentFileModel]:
     """
-    Menos archivos al modelo en modo rápido: sin plantillas duplicadas;
-    prioriza informe psicopedagógico .docx sobre cartilla PDF.
+    Modo rápido: quita solo plantillas familia duplicadas; conserva informe psicopedagógico.
+    Prioriza .docx psicopedagógico sobre cartilla PDF.
     """
     if not rows:
         return rows
 
     case_files: list[AgentFileModel] = []
     for row in rows:
-        disk = agent_dir(agent_id) / row.id
         name = row.display_name or ""
-        if is_familia_form_file(name, disk) or is_familia_tabla_file(name, disk):
+        if is_familia_report_template_filename(name):
             continue
         case_files.append(row)
 
     if not case_files:
         return rows[:2] if len(rows) > 2 else rows
 
-    psychoped = [
-        r
-        for r in case_files
-        if "psicoped" in _normalize(r.display_name or "")
-    ]
+    psychoped = [r for r in case_files if is_psychoped_case_filename(r.display_name or "")]
     if psychoped:
         return psychoped[:1]
 

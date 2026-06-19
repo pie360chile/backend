@@ -120,6 +120,27 @@ def is_familia_tabla_template(display_name: str) -> bool:
     return ("formato" in lower and "familia" in lower) or "informe de familia" in lower
 
 
+def is_familia_report_template_filename(display_name: str) -> bool:
+    """
+    Plantilla del informe familia (por nombre), NO expedientes del estudiante.
+    No inspecciona el .docx: un informe psicopedagógico con form controls no es plantilla.
+    """
+    if is_familia_form_template(display_name) or is_familia_tabla_template(display_name):
+        return True
+    lower = _normalize(display_name.replace("_", " ").replace("-", " "))
+    if "family_report" in lower.replace(" ", "_"):
+        return True
+    if "formato" in lower and "familia" in lower:
+        return True
+    return False
+
+
+def is_psychoped_case_filename(display_name: str) -> bool:
+    """Informe / evaluación psicopedagógica del estudiante (archivo del caso)."""
+    lower = _normalize(display_name.replace("_", " ").replace("-", " "))
+    return "psicoped" in lower or "psychoped" in lower
+
+
 def familia_form_template_priority(display_name: str) -> int:
     lower = _normalize(display_name.replace("_", " ").replace("-", " "))
     if "family_report" in lower:
@@ -268,8 +289,8 @@ def build_fast_familia_redaction_rules() -> str:
         "No exijas dos párrafos largos ni re-escribas texto que ya viene en el .docx base.\n"
         "- Prioriza completar campos vacíos o muy breves; si un campo ya tiene texto de PIE360, "
         "solo amplíalo si tiene menos de 3 oraciones.\n"
-        "- Usa principalmente el informe psicopedagógico del caso; no releas la cartilla PDF "
-        "si el .docx base y el psicopedagógico ya aportan datos.\n"
+        "- Usa el informe psicopedagógico del caso cuando esté en ARCHIVOS EN EL CODE INTERPRETER. "
+        "La cartilla PDF es opcional si el psicopedagógico ya aporta datos.\n"
         "- Un solo paso de Python: abre el base, completa doc.tables[3], guarda y exporta. "
         "PROHIBIDO múltiples rondas de código o relectura de todos los archivos.\n"
         + build_typography_preserve_rules()
@@ -338,8 +359,8 @@ def build_familia_narrative_enrichment_rules(
         fast_block = (
             "=== MODO RÁPIDO (<5 MIN) ===\n"
             f"«{base_doc_name}» puede traer identificación Y narrativa parcial desde PIE360. "
-            "Completa solo lo faltante en doc.tables[3]. Lee como máximo el informe "
-            "psicopedagógico del estudiante (no hace falta releer cartilla si ya hay datos).\n"
+            "Completa lo faltante en doc.tables[3]. El informe psicopedagógico del estudiante "
+            "está en el contenedor si aparece en ARCHIVOS — léelo para la narrativa.\n"
         )
     redaction_tail = (
         build_fast_familia_redaction_rules()
@@ -372,7 +393,7 @@ def build_familia_narrative_enrichment_rules(
         + "Pasos:\n"
         f"  1) Abre «{base_doc_name}» (NO copies otra plantilla ni uses FORMATO INFORME DE FAMILIA.docx).\n"
         + (
-            "  2) Consulta el informe psicopedagógico solo si falta información en el base.\n"
+            "  2) Lee el informe psicopedagógico del estudiante en el contenedor.\n"
             if fast
             else "  2) Lee cartilla, informe psicopedagógico y documentos del estudiante.\n"
         )

@@ -14,6 +14,7 @@ from app.backend.services.agent_familia_generate_service import (
     try_deterministic_familia_report,
 )
 from app.backend.services.openai_agent_service import (
+    attach_file_to_container,
     chat_with_openai_responses,
     is_container_expired,
     stream_chat_with_openai_responses,
@@ -112,6 +113,7 @@ def _file_preparation_step_messages(
 
 
 def _attach_familia_hybrid_base(
+    agent: AgentModel,
     agent_id: str,
     message: str,
     student_context: dict[str, Any] | None,
@@ -129,6 +131,11 @@ def _attach_familia_hybrid_base(
 
     base = create_familia_base_for_gpt(agent_id, student_context, template_path)
     file_id = upload_local_file_to_openai(base["disk_path"], base["display_name"])
+    if agent.openai_container_id and not is_container_expired(agent.openai_container_updated_at):
+        try:
+            attach_file_to_container(agent.openai_container_id, file_id)
+        except Exception:
+            pass
     return (
         [file_id, *openai_file_ids],
         [base["display_name"], *selected_names],
@@ -223,7 +230,13 @@ def chat_with_agent(
         student_context = resolve_student_context_for_agent(db, trimmed)
 
         openai_file_ids, selected_names, base_doc_name, _tpl = _attach_familia_hybrid_base(
-            agent.id, trimmed, student_context, selected_rows, openai_file_ids, selected_names
+            agent,
+            agent.id,
+            trimmed,
+            student_context,
+            selected_rows,
+            openai_file_ids,
+            selected_names,
         )
 
         db.commit()
@@ -398,7 +411,13 @@ def iter_chat_with_agent_events(
                 }
 
         openai_file_ids, selected_names, base_doc_name, template_used = _attach_familia_hybrid_base(
-            agent.id, trimmed, student_context, selected_rows, openai_file_ids, selected_names
+            agent,
+            agent.id,
+            trimmed,
+            student_context,
+            selected_rows,
+            openai_file_ids,
+            selected_names,
         )
         if base_doc_name and template_used:
             yield {

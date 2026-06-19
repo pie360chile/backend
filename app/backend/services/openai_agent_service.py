@@ -97,6 +97,24 @@ def attach_file_to_container(container_id: str, file_id: str) -> None:
     client.containers.files.create(container_id, file_id=file_id)
 
 
+def ensure_openai_files_in_container(agent: AgentModel, file_ids: list[str]) -> None:
+    """Adjunta archivos al contenedor reutilizado (p. ej. base PIE360 recién generada)."""
+    if not file_ids or not agent.openai_container_id:
+        return
+    if is_container_expired(agent.openai_container_updated_at):
+        return
+    for file_id in file_ids:
+        try:
+            attach_file_to_container(agent.openai_container_id, file_id)
+        except Exception as exc:
+            logger.warning(
+                "No se pudo adjuntar %s al contenedor %s: %s",
+                file_id,
+                agent.openai_container_id,
+                exc,
+            )
+
+
 def clear_agent_container(agent: AgentModel) -> None:
     agent.openai_container_id = None
     agent.openai_container_updated_at = None
@@ -382,12 +400,16 @@ def _build_instructions(
         if not familia_base_doc_name:
             parts.append(build_form_template_supremacy_block(base_file, excluded))
 
-    if filtered_names:
-        listing = "\n".join(f"- {name}" for name in filtered_names[:50])
-        parts.append(
-            "=== ARCHIVOS EN EL CODE INTERPRETER ===\n"
-            f"{listing}"
-        )
+    if filtered_names or file_names:
+        listing_names = file_names if familia_base_doc_name and file_names else filtered_names
+        if listing_names:
+            listing = "\n".join(f"- {name}" for name in listing_names[:50])
+            parts.append(
+                "=== ARCHIVOS EN EL CODE INTERPRETER ===\n"
+                f"{listing}\n"
+                "OBLIGATORIO: usa estos archivos del contenedor. Si el informe psicopedagógico "
+                "aparece en la lista, está disponible — no indiques que falta."
+            )
     if student_context:
         parts.append(
             format_student_context_block(
@@ -674,6 +696,8 @@ def stream_chat_with_openai_responses(
     if first_step:
         yield first_step
 
+    ensure_openai_files_in_container(agent, file_ids)
+
     with client.responses.stream(
         model=settings.openai_agent_model,
         instructions=_build_instructions(
@@ -799,6 +823,8 @@ def chat_with_openai_responses(
     client = get_openai_client()
     tools = [_build_code_interpreter_tool(agent, file_ids)]
     file_names = instruction_file_names or _agent_uploaded_file_names(db, agent.id)
+
+    ensure_openai_files_in_container(agent, file_ids)
 
     response = client.responses.create(
         model=settings.openai_agent_model,
