@@ -262,11 +262,16 @@ def compact_familia_tabla_narrative(docx_path: Path) -> None:
 
     from app.backend.utils.agent_familia_prefill import (
         _is_label_paragraph,
-        _ppr_set_left,
+        _ppr_set_justify,
         _zero_paragraph_spacing,
     )
 
     doc = Document(str(docx_path))
+    append_slots = {
+        (table_idx, row_idx, col_idx)
+        for table_idx, row_idx, col_idx, _key, mode in FAMILIA_TABLA_SLOTS
+        if mode == "append"
+    }
     narrative_slots = {
         (ti, ri, ci)
         for ti, ri, ci, key, _mode in FAMILIA_TABLA_SLOTS
@@ -278,30 +283,48 @@ def compact_familia_tabla_narrative(docx_path: Path) -> None:
         if tc_el is None:
             continue
         paragraphs = tc_el.findall(qn("w:p"))
-        if len(paragraphs) < 2:
+        if not paragraphs:
             continue
-        body_parts = [_paragraph_text(p, qn).strip() for p in paragraphs[1:]]
+
+        skip_label = (table_idx, row_idx, col_idx) in append_slots
+        body_parts = [
+            _paragraph_text(p, qn).strip()
+            for i, p in enumerate(paragraphs)
+            if not (skip_label and i == 0)
+        ]
         body = "\n\n".join(p for p in body_parts if p)
-        if not body or _is_label_paragraph(body):
-            continue
-        segments = [b.strip() for b in re.split(r"\n\s*\n", body) if b.strip()]
-        if len(segments) <= 1:
-            continue
-        for p_el in paragraphs[1:]:
-            tc_el.remove(p_el)
-        target = OxmlElement("w:p")
-        tc_el.append(target)
-        ppr = OxmlElement("w:pPr")
-        _ppr_set_left(ppr, qn, OxmlElement)
-        _zero_paragraph_spacing(ppr, qn, OxmlElement)
-        target.append(ppr)
-        first = True
-        for seg in segments:
-            if not first:
-                br_run = OxmlElement("w:r")
-                br_run.append(OxmlElement("w:br"))
-                target.append(br_run)
-            first = False
-            _append_run_text(target, seg, qn, OxmlElement, None)
+        if body and not _is_label_paragraph(body):
+            segments = [b.strip() for b in re.split(r"\n\s*\n", body) if b.strip()]
+            if len(segments) > 1:
+                for p_el in paragraphs[1:] if skip_label else paragraphs:
+                    tc_el.remove(p_el)
+                target = OxmlElement("w:p")
+                tc_el.append(target)
+                ppr = OxmlElement("w:pPr")
+                _ppr_set_justify(ppr, qn, OxmlElement)
+                _zero_paragraph_spacing(ppr, qn, OxmlElement)
+                target.append(ppr)
+                first = True
+                for seg in segments:
+                    if not first:
+                        br_run = OxmlElement("w:r")
+                        br_run.append(OxmlElement("w:br"))
+                        target.append(br_run)
+                    first = False
+                    _append_run_text(target, seg, qn, OxmlElement, None)
+                paragraphs = tc_el.findall(qn("w:p"))
+
+        for pi, p_el in enumerate(paragraphs):
+            if skip_label and pi == 0:
+                continue
+            text = _paragraph_text(p_el, qn).strip()
+            if not text or _is_label_paragraph(text):
+                continue
+            ppr = p_el.find(qn("w:pPr"))
+            if ppr is None:
+                ppr = OxmlElement("w:pPr")
+                p_el.insert(0, ppr)
+            _ppr_set_justify(ppr, qn, OxmlElement)
+            _zero_paragraph_spacing(ppr, qn, OxmlElement)
 
     doc.save(str(docx_path))

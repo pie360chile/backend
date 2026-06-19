@@ -601,7 +601,52 @@ def resolve_student_context_for_agent(db: Session, message: str) -> dict[str, An
     return build_student_context(db, student_id)
 
 
-def format_student_context_block(context: dict[str, Any]) -> str:
+def format_student_context_block(
+    context: dict[str, Any],
+    *,
+    narrative_only: bool = False,
+) -> str:
+    if narrative_only:
+        lines = [
+            "=== DATOS DEL ESTUDIANTE EN BASE DE DATOS (SOLO PARA REDACTAR NARRATIVA) ===",
+            "La IDENTIFICACIÓN superior del .docx (tablas 1 y 2) ya está rellena por PIE360. "
+            "PROHIBIDO volver a escribir nombre, RUT, curso, establecimiento, profesional o apoderado.",
+            "Usa estos datos únicamente como referencia al redactar la parte inferior "
+            "(instrumentos aplicados, diagnóstico, fortalezas, acuerdos, etc.).",
+            f"student_id: {context.get('student_id')}",
+        ]
+        narrative_keys = {
+            "diagnosis": "diagnosis (narrativa)",
+            "applied_instruments": "applied_instruments",
+            "evaluation_reason": "evaluation_reason",
+            "pedagogical_strengths": "pedagogical_strengths",
+            "pedagogical_support_needs": "pedagogical_support_needs",
+            "social_affective_strengths": "social_affective_strengths",
+            "social_affective_support_needs": "social_affective_support_needs",
+            "health_strengths": "health_strengths",
+            "health_support_needs": "health_support_needs",
+            "collaborative_work": "collaborative_work",
+            "home_based_description": "home_based_description",
+            "school_family_agreements": "school_family_agreements",
+            "evaluation_date_1": "evaluation_date_1",
+            "evaluation_date_2": "evaluation_date_2",
+            "evaluation_date_3": "evaluation_date_3",
+        }
+        date_keys = ("evaluation_date_1", "evaluation_date_2", "evaluation_date_3")
+        for key, tag in narrative_keys.items():
+            val = context.get(key)
+            if val:
+                lines.append(f"- {tag}: {val}")
+            elif key in date_keys:
+                lines.append(
+                    f"- {tag}: (sin dato en BD — dejar celda de fecha vacía; NO inventar texto)"
+                )
+        lines.append(
+            "- No uses student_full_name ni RUT para sobrescribir celdas de identificación; "
+            "solo para mencionar al estudiante en párrafos narrativos si el rol lo requiere."
+        )
+        return "\n".join(lines)
+
     lines = [
         "=== DATOS DEL ESTUDIANTE EN BASE DE DATOS (OBLIGATORIO USAR ANTES DE ARMAR EL .DOCX) ===",
         "Consulta autoritativa de PIE360. Usa estos valores para rellenar identificación del estudiante, "

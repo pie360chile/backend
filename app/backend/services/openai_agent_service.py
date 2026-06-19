@@ -228,6 +228,7 @@ def _build_familia_tabla_rules() -> str:
         "  Estudiante → doc.tables[1]: fila 3 nombre+RUT; fila 5 nombre social+fecha; fila 6 edad/curso/establecimiento.\n"
         "  Profesional → doc.tables[2]: fila 3 nombre+RUT; fila 5 nombre social+rol; fila 6 tel/email/fecha.\n"
         "  Receptor → doc.tables[2]: fila 10 nombre+RUT; fila 12 nombre social+teléfono.\n"
+        "  Si el .docx base ya trae identificación rellena (modo híbrido PIE360), NO toques tablas 1 ni 2.\n"
         "  El RUT del profesional NUNCA va en Rol/cargo. Si falta RUT estudiante: 'No informado' en fila 3 celda 3.\n"
     )
 
@@ -296,9 +297,10 @@ def _build_platform_rules(
 
     if familia_base_doc_name:
         familia = (
-            f"- Modo híbrido activo: la identificación ya está en «{familia_base_doc_name}». "
-            "NO vuelvas a copiar la plantilla ni rellenes nombre/RUT/apoderado. "
-            "Redacta solo la parte narrativa inferior según el rol.\n"
+            f"- Modo híbrido activo: «{familia_base_doc_name}» ya trae identificación desde PIE360.\n"
+            "  PROHIBIDO abrir otra plantilla, copiar family_report.docx de cero o rellenar tablas 1 y 2.\n"
+            "  PROHIBIDO modificar doc.tables[0], doc.tables[1], doc.tables[2] y doc.tables[4].\n"
+            "  Redacta SOLO doc.tables[3] desde INSTRUMENTOS APLICADOS hacia abajo, según el rol.\n"
         )
     elif template_kind == "form" and base_file:
         familia = build_familia_form_rules(base_file)
@@ -369,7 +371,12 @@ def _build_instructions(
             f"{listing}"
         )
     if student_context:
-        parts.append(format_student_context_block(student_context))
+        parts.append(
+            format_student_context_block(
+                student_context,
+                narrative_only=bool(familia_base_doc_name),
+            )
+        )
     parts.append(
         _build_platform_rules(
             filtered_names,

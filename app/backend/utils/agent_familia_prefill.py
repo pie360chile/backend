@@ -113,18 +113,18 @@ def _paragraph_has_placeholder(text: str) -> bool:
     )
 
 
-def _ppr_set_left(ppr: Any, qn: Any, OxmlElement: Any) -> None:
+def _ppr_set_justify(ppr: Any, qn: Any, OxmlElement: Any) -> None:
     for jc in list(ppr.findall(qn("w:jc"))):
         ppr.remove(jc)
     jc_el = OxmlElement("w:jc")
-    jc_el.set(qn("w:val"), "left")
+    jc_el.set(qn("w:val"), "both")
     ppr.append(jc_el)
 
 
 def _reformat_narrative_sdt_content(sdt_content_el: Any, qn: Any, OxmlElement: Any) -> None:
     """
-    Unifica párrafos narrativos en un solo w:p con w:br, alineación izquierda
-    y sin justificado (evita ríos de espacio en celdas estrechas).
+    Unifica párrafos narrativos en un solo w:p con w:br, alineación justificada
+    y sin espaciado extra entre bloques.
     """
     from copy import deepcopy
 
@@ -153,7 +153,7 @@ def _reformat_narrative_sdt_content(sdt_content_el: Any, qn: Any, OxmlElement: A
             if ppr is None:
                 ppr = OxmlElement("w:pPr")
                 p.insert(0, ppr)
-            _ppr_set_left(ppr, qn, OxmlElement)
+            _ppr_set_justify(ppr, qn, OxmlElement)
             _zero_paragraph_spacing(ppr, qn, OxmlElement)
         return
 
@@ -162,7 +162,7 @@ def _reformat_narrative_sdt_content(sdt_content_el: Any, qn: Any, OxmlElement: A
 
     new_p = OxmlElement("w:p")
     ppr = OxmlElement("w:pPr")
-    _ppr_set_left(ppr, qn, OxmlElement)
+    _ppr_set_justify(ppr, qn, OxmlElement)
     _zero_paragraph_spacing(ppr, qn, OxmlElement)
     new_p.append(ppr)
 
@@ -187,12 +187,12 @@ def _reformat_narrative_sdt_content(sdt_content_el: Any, qn: Any, OxmlElement: A
 
 
 def _compact_sdt_content_spacing(sdt_content_el: Any, qn: Any, OxmlElement: Any) -> None:
-    """Reformatea párrafos narrativos: izquierda, sin justificar, saltos con w:br."""
+    """Reformatea párrafos narrativos: justificado, saltos con w:br."""
     _reformat_narrative_sdt_content(sdt_content_el, qn, OxmlElement)
 
 
 def compact_familia_narrative_spacing(docx_path: Path) -> None:
-    """Alinea narrativa a la izquierda, quita justificado y unifica párrafos con w:br."""
+    """Justifica narrativa, unifica párrafos con w:br y compacta espaciado."""
     from app.backend.utils.agent_familia_formtext import (
         compact_familia_formtext_narrative,
         docx_has_legacy_formtext,
