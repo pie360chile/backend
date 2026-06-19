@@ -8,12 +8,17 @@ from sqlalchemy.orm import Session
 
 from app.backend.core.config import settings
 from app.backend.db.models import AgentModel
-from app.backend.services.agent_familia_generate_service import try_deterministic_familia_report
+from app.backend.services.agent_familia_generate_service import (
+    can_use_familia_hybrid,
+    create_familia_base_for_gpt,
+    try_deterministic_familia_report,
+)
 from app.backend.services.openai_agent_service import (
     chat_with_openai_responses,
     is_container_expired,
     stream_chat_with_openai_responses,
     sync_agent_openai_files,
+    upload_local_file_to_openai,
 )
 from app.backend.utils.agent_document_index import search_agent_knowledge, strip_html
 from app.backend.utils.agent_file_selection import select_agent_file_rows
@@ -46,6 +51,32 @@ def _prepare_openai_files(
 
     openai_file_ids = sync_agent_openai_files(db, agent.id, only_rows=selected_rows)
     return openai_file_ids, selected_names, total, selected_rows
+
+
+def _attach_familia_hybrid_base(
+    agent_id: str,
+    message: str,
+    student_context: dict[str, Any] | None,
+    selected_rows: list,
+    openai_file_ids: list[str],
+    selected_names: list[str],
+) -> tuple[list[str], list[str], str | None, str | None]:
+    """
+    Si aplica informe familia híbrido, sube base con identificación PIE360 para que GPT redacte.
+    Devuelve (file_ids, names, base_doc_name, template_name).
+    """
+    template_path = can_use_familia_hybrid(message, student_context, selected_rows, agent_id)
+    if not template_path or not student_context or not settings.openai_api_key:
+        return openai_file_ids, selected_names, None, None
+
+    base = create_familia_base_for_gpt(agent_id, student_context, template_path)
+    file_id = upload_local_file_to_openai(base["disk_path"], base["display_name"])
+    return (
+        [file_id, *openai_file_ids],
+        [base["display_name"], *selected_names],
+        base["display_name"],
+        base["template_name"],
+    )
 
 
 def _fallback_reply(message: str, hits: list[dict[str, Any]], reason: str | None = None) -> str:
@@ -125,21 +156,9 @@ def chat_with_agent(
         )
         student_context = resolve_student_context_for_agent(db, trimmed)
 
-        deterministic = try_deterministic_familia_report(
-            db, agent.id, trimmed, selected_rows, student_context
+        openai_file_ids, selected_names, base_doc_name, _tpl = _attach_familia_hybrid_base(
+            agent.id, trimmed, student_context, selected_rows, openai_file_ids, selected_names
         )
-        if deterministic:
-            db.commit()
-            return {
-                "reply": deterministic["reply"],
-                "citations": citations,
-                "usedChunks": len(hits),
-                "openaiFilesUsed": 0,
-                "containerId": None,
-                "model": deterministic.get("model"),
-                "responseFiles": deterministic.get("responseFiles") or [],
-                "responseFilesWarning": None,
-            }
 
         db.commit()
         db.refresh(agent)
@@ -152,6 +171,7 @@ def chat_with_agent(
             student_context=student_context,
             selected_rows=selected_rows,
             instruction_file_names=selected_names,
+            familia_base_doc_name=base_doc_name,
         )
         db.commit()
 
@@ -210,73 +230,38 @@ def iter_chat_with_agent_events(
             "message": f"Se encontraron {len(hits)} fragmento(s) relacionados en los archivos indexados.",
         }
 
-    try:
-        yield {"type": "step", "message": "Preparando archivos relevantes para esta consulta…"}
-        openai_file_ids, selected_names, total_files, selected_rows = _prepare_openai_files(
-            db, agent, trimmed, hits
-        )
-        from app.backend.utils.agent_familia_template import resolve_familia_template_from_rows
-
-        base_tpl, tpl_kind = resolve_familia_template_from_rows(agent.id, selected_rows)
-        if tpl_kind == "form" and base_tpl:
-            yield {
-                "type": "step",
-                "message": f"Plantilla formulario detectada: {base_tpl}. Se excluye formato ministerial de tablas.",
-            }
-
-        student_context = resolve_student_context_for_agent(db, trimmed)
-        if student_context:
-            student_name = student_context.get("student_full_name") or "el estudiante"
-            yield {
-                "type": "step",
-                "message": f"Estudiante encontrado en PIE360: {student_name}.",
-            }
-        else:
-            yield {
-                "type": "step",
-                "message": "No se encontró estudiante en la base de datos por el nombre del mensaje.",
-            }
-
-        deterministic = try_deterministic_familia_report(
-            db, agent.id, trimmed, selected_rows, student_context
-        )
-        if deterministic:
-            yield {
-                "type": "step",
-                "message": (
-                    f"Generando informe con plantilla formulario "
-                    f"«{deterministic.get('templateUsed')}» y datos de la base de datos…"
-                ),
-            }
-            db.commit()
+    if not settings.openai_api_key:
+        try:
+            _, _, _, selected_rows = _prepare_openai_files(db, agent, trimmed, hits)
+            student_context = resolve_student_context_for_agent(db, trimmed)
+            deterministic = try_deterministic_familia_report(
+                db, agent.id, trimmed, selected_rows, student_context
+            )
+            if deterministic:
+                db.commit()
+                yield {
+                    "type": "done",
+                    "data": {
+                        "reply": deterministic["reply"],
+                        "citations": citations,
+                        "usedChunks": len(hits),
+                        "openaiFilesUsed": 0,
+                        "responseFiles": deterministic.get("responseFiles") or [],
+                    },
+                }
+                return
+        except Exception as exc:
+            db.rollback()
             yield {
                 "type": "done",
                 "data": {
-                    "reply": deterministic["reply"],
+                    "reply": _fallback_reply(trimmed, hits, str(exc)),
                     "citations": citations,
                     "usedChunks": len(hits),
-                    "openaiFilesUsed": 0,
-                    "containerId": None,
-                    "model": deterministic.get("model"),
-                    "responseFiles": deterministic.get("responseFiles") or [],
-                    "responseFilesWarning": None,
+                    "warning": str(exc),
                 },
             }
             return
-    except Exception as exc:
-        db.rollback()
-        yield {
-            "type": "done",
-            "data": {
-                "reply": _fallback_reply(trimmed, hits, f"No se pudo generar el informe: {exc}"),
-                "citations": citations,
-                "usedChunks": len(hits),
-                "warning": str(exc),
-            },
-        }
-        return
-
-    if not settings.openai_api_key:
         yield {
             "type": "done",
             "data": {
@@ -293,10 +278,46 @@ def iter_chat_with_agent_events(
             agent.openai_container_updated_at = None
             db.flush()
 
+        yield {"type": "step", "message": "Preparando archivos relevantes para esta consulta…"}
         openai_file_ids, selected_names, total_files, selected_rows = _prepare_openai_files(
             db, agent, trimmed, hits
         )
+        from app.backend.utils.agent_familia_template import resolve_familia_template_from_rows
+
+        base_tpl, tpl_kind = resolve_familia_template_from_rows(agent.id, selected_rows)
+        if tpl_kind == "form" and base_tpl:
+            yield {
+                "type": "step",
+                "message": f"Plantilla formulario detectada: {base_tpl}.",
+            }
+
         student_context = resolve_student_context_for_agent(db, trimmed)
+        if student_context:
+            student_name = student_context.get("student_full_name") or "el estudiante"
+            yield {
+                "type": "step",
+                "message": f"Estudiante encontrado en PIE360: {student_name}.",
+            }
+        else:
+            yield {
+                "type": "step",
+                "message": "No se encontró estudiante en la base de datos por el nombre del mensaje.",
+            }
+
+        openai_file_ids, selected_names, base_doc_name, template_used = _attach_familia_hybrid_base(
+            agent.id, trimmed, student_context, selected_rows, openai_file_ids, selected_names
+        )
+        if base_doc_name and template_used:
+            yield {
+                "type": "step",
+                "message": (
+                    f"Identificación cargada desde PIE360 en «{base_doc_name}». "
+                    f"GPT redactará el contenido según el rol usando la cartilla y archivos del caso…"
+                ),
+            }
+
+        db.commit()
+        db.refresh(agent)
 
         if openai_file_ids and selected_names:
             yield {
@@ -307,7 +328,7 @@ def iter_chat_with_agent_events(
                     else f"{len(openai_file_ids)} archivo(s) listos para el análisis."
                 ),
             }
-            for name in selected_names:
+            for name in selected_names[:8]:
                 yield {"type": "step", "message": f"Leyendo archivo: {name}"}
         elif not openai_file_ids:
             yield {"type": "step", "message": "No hay archivos adjuntos; responderé solo con el rol del agente."}
@@ -320,6 +341,7 @@ def iter_chat_with_agent_events(
             instruction_file_names=selected_names,
             student_context=student_context,
             selected_rows=selected_rows,
+            familia_base_doc_name=base_doc_name,
         ):
             if not event:
                 continue

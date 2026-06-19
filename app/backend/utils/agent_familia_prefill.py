@@ -36,8 +36,8 @@ _NARRATIVE_KEYS = (
 )
 
 
-def build_familia_form_replacements(context: dict[str, Any]) -> dict[str, str]:
-    """Mapeo alineado con documents.py (document_id=7) para fill_docx_form."""
+def build_familia_identification_replacements(context: dict[str, Any]) -> dict[str, str]:
+    """Solo identificación, checkboxes de evaluación y fechas de seguimiento."""
     student_full = str(context.get("student_full_name") or "").strip()
     student_id = str(context.get("student_identification_number") or "").strip()
     student_born = str(context.get("student_born_date") or "").strip()
@@ -62,10 +62,6 @@ def build_familia_form_replacements(context: dict[str, Any]) -> dict[str, str]:
     receiver_id = str(context.get("receiver_identification_number") or "").strip()
     receiver_relation = str(context.get("receiver_relationship") or "").strip()
     receiver_presence = str(context.get("receiver_presence_of") or "").strip()
-
-    eval_date_1 = str(context.get("evaluation_date_1") or "").strip()
-    eval_date_2 = str(context.get("evaluation_date_2") or "").strip()
-    eval_date_3 = str(context.get("evaluation_date_3") or "").strip()
 
     no_info = "No informado"
 
@@ -120,11 +116,33 @@ def build_familia_form_replacements(context: dict[str, Any]) -> dict[str, str]:
         "Nombre social": student_social or no_info,
         "RUT / IPE": student_id or no_info,
         "Rut / Pasaporte": receiver_id or no_info,
-        "evaluation_date_1": eval_date_1,
-        "evaluation_date_2": eval_date_2,
-        "evaluation_date_3": eval_date_3,
     }
 
+    eval_type = str(context.get("evaluation_type") or "").strip().lower()
+    if eval_type in ("admission", "admisión", "ingreso", "1"):
+        replacements["evaluation"] = "1"
+        replacements["Evaluación de Ingreso"] = "x"
+    elif eval_type in ("revaluation", "reevaluación", "2"):
+        replacements["reevaluation"] = "1"
+
+    for key in ("evaluation_date_1", "evaluation_date_2", "evaluation_date_3"):
+        val = str(context.get(key) or "").strip()
+        if val:
+            replacements[key] = val
+
+    return {k: v for k, v in replacements.items() if v}
+
+
+def build_familia_form_replacements(context: dict[str, Any]) -> dict[str, str]:
+    """Identificación + narrativa desde BD (informe guardado en admin)."""
+    return _append_narrative_replacements(
+        build_familia_identification_replacements(context), context
+    )
+
+
+def _append_narrative_replacements(
+    replacements: dict[str, str], context: dict[str, Any]
+) -> dict[str, str]:
     diagnostic = str(context.get("diagnosis") or context.get("diagnostic") or "").strip()
     if diagnostic:
         replacements["diagnostic"] = diagnostic
@@ -201,7 +219,7 @@ def postprocess_saved_familia_docx(
     try:
         from app.backend.classes.documents_class import DocumentsClass
 
-        replacements = build_familia_form_replacements(student_context)
+        replacements = build_familia_identification_replacements(student_context)
         result = DocumentsClass.fill_docx_form(str(path), replacements, str(path))
         if result.get("status") == "error":
             logger.warning(

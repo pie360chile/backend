@@ -14,6 +14,7 @@ from app.backend.db.models import AgentFileModel, AgentModel
 from app.backend.utils.agent_document_index import role_instructions_to_text, strip_html
 from app.backend.utils.agent_familia_template import (
     build_familia_form_rules,
+    build_familia_narrative_enrichment_rules,
     build_form_template_supremacy_block,
     build_redaction_min_paragraphs_rules,
     filter_familia_template_file_names,
@@ -265,6 +266,7 @@ def _build_platform_rules(
     *,
     base_file: str | None = None,
     template_kind: str | None = None,
+    familia_base_doc_name: str | None = None,
 ) -> str:
     if base_file is None or template_kind is None:
         base_file, template_kind = pick_familia_base_template(available_files)
@@ -288,10 +290,17 @@ def _build_platform_rules(
         "entre viñetas o párrafos. No dejes párrafos vacíos entre ítems de una lista.\n"
         "- Si usas python-docx: reutiliza párrafos existentes de la plantilla; "
         "no insertes párrafos nuevos con spacing distinto.\n"
-        + build_redaction_min_paragraphs_rules()
     )
+    if not familia_base_doc_name:
+        common += build_redaction_min_paragraphs_rules()
 
-    if template_kind == "form" and base_file:
+    if familia_base_doc_name:
+        familia = (
+            f"- Modo híbrido activo: la identificación ya está en «{familia_base_doc_name}». "
+            "NO vuelvas a copiar la plantilla ni rellenes nombre/RUT/apoderado. "
+            "Redacta solo la parte narrativa inferior según el rol.\n"
+        )
+    elif template_kind == "form" and base_file:
         familia = build_familia_form_rules(base_file)
     elif template_kind == "tabla":
         familia = _build_familia_tabla_rules()
@@ -314,6 +323,7 @@ def _build_instructions(
     available_files: list[str] | None = None,
     student_context: dict[str, Any] | None = None,
     selected_rows: list[Any] | None = None,
+    familia_base_doc_name: str | None = None,
 ) -> str:
     role_text = role_instructions_to_text(agent.role_instructions or "").strip()
     if not role_text:
@@ -335,6 +345,9 @@ def _build_instructions(
     if role_text:
         parts.append(f"=== ROL DEL AGENTE (OBLIGATORIO) ===\n{role_text}")
 
+    if familia_base_doc_name:
+        parts.append(build_familia_narrative_enrichment_rules(familia_base_doc_name))
+
     file_names = list(available_files or [])
     base_file, template_kind, filtered_names, paths = _familia_template_state(
         agent.id, file_names, selected_rows
@@ -346,7 +359,8 @@ def _build_instructions(
             if is_familia_tabla_file(n, paths.get(n))
             and not is_familia_form_file(n, paths.get(n))
         ]
-        parts.append(build_form_template_supremacy_block(base_file, excluded))
+        if not familia_base_doc_name:
+            parts.append(build_form_template_supremacy_block(base_file, excluded))
 
     if filtered_names:
         listing = "\n".join(f"- {name}" for name in filtered_names[:50])
@@ -357,7 +371,12 @@ def _build_instructions(
     if student_context:
         parts.append(format_student_context_block(student_context))
     parts.append(
-        _build_platform_rules(filtered_names, base_file=base_file, template_kind=template_kind)
+        _build_platform_rules(
+            filtered_names,
+            base_file=base_file,
+            template_kind=template_kind,
+            familia_base_doc_name=familia_base_doc_name,
+        )
     )
     return "\n\n".join(parts)
 
@@ -601,6 +620,7 @@ def stream_chat_with_openai_responses(
     instruction_file_names: list[str] | None = None,
     student_context: dict[str, Any] | None = None,
     selected_rows: list[Any] | None = None,
+    familia_base_doc_name: str | None = None,
 ):
     """Genera eventos {type: step|text_delta} y al final {type: done, data: ...}."""
     client = get_openai_client()
@@ -632,7 +652,11 @@ def stream_chat_with_openai_responses(
     with client.responses.stream(
         model=settings.openai_agent_model,
         instructions=_build_instructions(
-            agent, file_names, student_context, selected_rows=selected_rows
+            agent,
+            file_names,
+            student_context,
+            selected_rows=selected_rows,
+            familia_base_doc_name=familia_base_doc_name,
         ),
         input=message,
         tools=tools,
@@ -745,6 +769,7 @@ def chat_with_openai_responses(
     student_context: dict[str, Any] | None = None,
     selected_rows: list[Any] | None = None,
     instruction_file_names: list[str] | None = None,
+    familia_base_doc_name: str | None = None,
 ) -> dict[str, Any]:
     client = get_openai_client()
     tools = [_build_code_interpreter_tool(agent, file_ids)]
@@ -753,7 +778,11 @@ def chat_with_openai_responses(
     response = client.responses.create(
         model=settings.openai_agent_model,
         instructions=_build_instructions(
-            agent, file_names, student_context, selected_rows=selected_rows
+            agent,
+            file_names,
+            student_context,
+            selected_rows=selected_rows,
+            familia_base_doc_name=familia_base_doc_name,
         ),
         input=message,
         tools=tools,

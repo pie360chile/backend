@@ -240,6 +240,45 @@ def build_redaction_min_paragraphs_rules() -> str:
     )
 
 
+def build_familia_narrative_enrichment_rules(base_doc_name: str) -> str:
+    """Instrucciones cuando PIE360 ya entregó base con identificación rellena."""
+    return (
+        "=== INFORME FAMILIA — BASE PIE360 + REDACCIÓN GPT (OBLIGATORIO) ===\n"
+        f"El archivo «{base_doc_name}» ya tiene la IDENTIFICACIÓN superior rellena desde la base de datos "
+        "(estudiante, profesional, apoderado, fechas, checkboxes de evaluación). NO modifiques esos campos.\n"
+        "Tu trabajo exclusivo: redactar TODOS los apartados narrativos de la PARTE INFERIOR del formulario "
+        "según el ROL DEL AGENTE (bloque anterior), usando la cartilla técnica, la evaluación psicopedagógica "
+        "y los demás archivos del caso en el contenedor.\n"
+        "El ROL DEL AGENTE define qué decir, cómo estructurar cada sección, extensión, tono técnico-pedagógico "
+        "y criterios de completitud. Cada campo narrativo debe cumplir literalmente lo que el rol exige para "
+        "ese apartado; no resumas ni omitas secciones que el rol mencione.\n"
+        "Pasos:\n"
+        f"  1) Abre «{base_doc_name}» (NO copies otra plantilla ni uses FORMATO INFORME DE FAMILIA.docx).\n"
+        "  2) Lee cartilla, informe psicopedagógico y documentos del estudiante.\n"
+        "  3) Completa cada content control narrativo vacío o con placeholder según el rol.\n"
+        "  4) Guarda UN solo .docx final y expórtalo.\n"
+        "Mapeo rol → campos del formulario (parte inferior):\n"
+        "  - Motivo de evaluación / antecedentes → evaluation_reason\n"
+        "  - Instrumentos aplicados → applied_instruments\n"
+        "  - Diagnóstico / diagnóstico NEE → diagnostic, diagnosis\n"
+        "  - Fortalezas pedagógicas → pedagogical_strengths, strengths_1\n"
+        "  - Necesidades de apoyo pedagógico → pedagogical_support_needs, support_needs_1\n"
+        "  - Fortalezas social/afectivo → social_affective_strengths, strengths_2\n"
+        "  - Necesidades social/afectivo → social_affective_support_needs, support_needs_2\n"
+        "  - Fortalezas salud → health_strengths, strengths_3\n"
+        "  - Necesidades salud → health_support_needs, support_needs_3\n"
+        "  - Trabajo colaborativo / apoyos en el establecimiento → collaborative_work\n"
+        "  - Apoyos en el hogar → home_based_description, home_support\n"
+        "  - Acuerdos escuela-familia → school_family_agreements, agreements_commitments\n"
+        "OBLIGATORIO: ningún campo narrativo puede quedar vacío, con «Haz clic o pulse aquí…» ni con texto "
+        "genérico. Extrae contenido concreto del expediente; si el rol exige citar cartilla técnica, Decreto 170 "
+        "o criterios PIE, incorpóralos en la redacción.\n"
+        "PROHIBIDO: borrar o reescribir identificación ya completada; cambiar fuente/alineación; "
+        "usar formato ministerial de tablas; entregar el documento sin redactar la parte inferior.\n"
+        + build_redaction_min_paragraphs_rules()
+    )
+
+
 def build_familia_form_rules(base_filename: str) -> str:
     return (
         f"- PLANTILLA FORMULARIO (OBLIGATORIO): usa «{base_filename}» como base del informe. "
