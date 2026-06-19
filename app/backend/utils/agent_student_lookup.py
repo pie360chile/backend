@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime
 from typing import Any
 
@@ -21,6 +22,17 @@ from app.backend.db.models import (
     StudentPersonalInfoModel,
 )
 from app.backend.utils.agent_file_selection import _message_intent, _message_name_tokens
+
+_RUT_RE = re.compile(
+    r"(?<!\d)"
+    r"(?:"
+    r"(?:\d{1,2}[\.\s])?\d{3}[\.\s]\d{3}[\-\s][\dkK]"
+    r"|"
+    r"\d{7,8}[\-\s][\dkK]"
+    r")"
+    r"(?!\d)",
+    re.IGNORECASE,
+)
 
 
 _IDENTIFICATION_KEYS = (
@@ -44,6 +56,99 @@ _IDENTIFICATION_KEYS = (
     "receiver_email",
     "receiver_relationship",
 )
+
+
+def _normalize_rut(raw: str | None) -> str | None:
+    if not raw:
+        return None
+    s = "".join(c for c in str(raw).strip().lower() if c.isalnum())
+    return s or None
+
+
+def _format_rut_display(raw: str) -> str:
+    n = _normalize_rut(raw)
+    if not n or len(n) < 2:
+        return (raw or "").strip()
+    return f"{n[:-1]}-{n[-1].upper()}"
+
+
+def extract_rut_from_message(message: str) -> str | None:
+    """Extrae el primer RUT chileno válido del mensaje."""
+    for match in _RUT_RE.finditer(message or ""):
+        candidate = match.group(0).strip()
+        normalized = _normalize_rut(candidate)
+        if normalized and len(normalized) >= 8:
+            return _format_rut_display(candidate)
+    return None
+
+
+def find_student_id_by_rut(db: Session, rut: str) -> int | None:
+    """Busca estudiante por RUT en students y student_personal_data."""
+    target = _normalize_rut(rut)
+    if not target or len(target) < 8:
+        return None
+
+    body = target[:-1]
+    service = StudentClass(db)
+    candidates: dict[int, dict[str, Any]] = {}
+
+    for search in {body, target, f"{body}-{target[-1]}"}:
+        for kwargs in (
+            {"rut": search},
+            {"identification_number": search},
+        ):
+            result = service.get_all(page=1, items_per_page=30, **kwargs)
+            rows = result.get("data", []) if isinstance(result, dict) else []
+            for row in rows:
+                sid = row.get("id")
+                if sid is not None:
+                    candidates[int(sid)] = row
+
+    exact: list[int] = []
+    for sid, row in candidates.items():
+        personal = row.get("personal_data") or {}
+        stored = _normalize_rut(
+            row.get("identification_number") or personal.get("identification_number")
+        )
+        if stored == target:
+            exact.append(sid)
+
+    if len(exact) == 1:
+        return exact[0]
+    if len(exact) > 1:
+        return max(exact)
+
+    if len(candidates) == 1:
+        return next(iter(candidates))
+
+    return None
+
+
+def check_familia_rut_requirement(db: Session, message: str) -> str | None:
+    """
+    Si el mensaje pide informe a la familia, exige RUT y estudiante en BD.
+    Devuelve texto de respuesta al usuario si falta algo; None si puede continuar.
+    """
+    if _message_intent(message) != "familia":
+        return None
+
+    rut = extract_rut_from_message(message)
+    if not rut:
+        return (
+            "Para generar el Informe para la Familia necesito el RUT del estudiante "
+            "(por ejemplo: 12.345.678-9).\n\n"
+            "Escribe tu solicitud incluyendo el RUT. Ejemplo:\n"
+            "«Hazme el informe a la familia del estudiante RUT 12.345.678-9»"
+        )
+
+    student_id = find_student_id_by_rut(db, rut)
+    if not student_id:
+        return (
+            f"No encontré un estudiante en PIE360 con el RUT {rut}.\n\n"
+            "Verifica que el RUT esté correcto y que el estudiante esté registrado en la plataforma."
+        )
+
+    return None
 
 
 def _normalize(text: str) -> str:
@@ -314,6 +419,7 @@ def build_student_context(db: Session, student_id: int) -> dict[str, Any] | None
             {
                 "receiver_full_name": receiver_name or None,
                 "receiver_identification_number": guardian.get("identification_number"),
+                "receiver_social_name": guardian.get("social_name"),
                 "receiver_phone": guardian.get("celphone"),
                 "receiver_email": guardian.get("email"),
                 "receiver_relationship": _family_member_label(
@@ -326,26 +432,79 @@ def build_student_context(db: Session, student_id: int) -> dict[str, Any] | None
 
     fr = FamilyReportClass(db).get_by_student_id(student_id)
     if isinstance(fr, dict) and fr.get("status") != "error":
+        _fr_skip = {
+            "id",
+            "student_id",
+            "document_type_id",
+            "version",
+            "added_date",
+            "updated_date",
+            "status",
+        }
         for key, value in fr.items():
-            if not value:
+            if key in _fr_skip or value in (None, ""):
                 continue
-            if key in _IDENTIFICATION_KEYS:
-                if not ctx.get(key):
-                    if key.endswith("_date") or key == "student_born_date":
-                        ctx[key] = _fmt_date(value)
-                    else:
-                        ctx[key] = value
+            if key.endswith("_date") or "born_date" in key:
+                ctx[key] = _fmt_date(value)
             else:
                 ctx[key] = value
+
+    if not ctx.get("student_identification_number"):
+        from app.backend.db.models import StudentModel, StudentPersonalInfoModel
+
+        student_row = (
+            db.query(StudentModel.identification_number)
+            .filter(StudentModel.id == student_id)
+            .first()
+        )
+        if student_row and student_row[0]:
+            ctx["student_identification_number"] = student_row[0]
+        else:
+            personal_row = (
+                db.query(StudentPersonalInfoModel.identification_number)
+                .filter(StudentPersonalInfoModel.student_id == student_id)
+                .first()
+            )
+            if personal_row and personal_row[0]:
+                ctx["student_identification_number"] = personal_row[0]
+
+    _mirror_identification_tags_for_template(ctx)
 
     return {k: v for k, v in ctx.items() if v not in (None, "")}
 
 
+def _mirror_identification_tags_for_template(ctx: dict[str, Any]) -> None:
+    """Expone claves con el mismo nombre que los w:tag de family_report.docx."""
+    if ctx.get("student_born_date") and not ctx.get("student_birth_date"):
+        ctx["student_birth_date"] = ctx["student_born_date"]
+    if ctx.get("professional_social_name") and not ctx.get("professional_full_name"):
+        ctx["professional_full_name"] = ctx["professional_social_name"]
+    if ctx.get("professional_role") and not ctx.get("professional_job_position"):
+        ctx["professional_job_position"] = ctx["professional_role"]
+    if ctx.get("report_delivery_date") and not ctx.get("professional_delivered_date_inform"):
+        ctx["professional_delivered_date_inform"] = ctx["report_delivery_date"]
+    ph = str(ctx.get("professional_phone") or "").strip()
+    em = str(ctx.get("professional_email") or "").strip()
+    if (ph or em) and not ctx.get("professional_phone_email"):
+        ctx["professional_phone_email"] = f"{ph} / {em}".strip(" / ")
+    if ctx.get("receiver_full_name") and not ctx.get("person_full_name"):
+        ctx["person_full_name"] = ctx["receiver_full_name"]
+    if ctx.get("receiver_identification_number") and not ctx.get("person_identification_number"):
+        ctx["person_identification_number"] = ctx["receiver_identification_number"]
+    if ctx.get("receiver_relationship") and not ctx.get("person_relation_student"):
+        ctx["person_relation_student"] = ctx["receiver_relationship"]
+    if ctx.get("receiver_presence_of") and not ctx.get("person_presence"):
+        ctx["person_presence"] = ctx["receiver_presence_of"]
+
+
 def resolve_student_context_for_agent(db: Session, message: str) -> dict[str, Any] | None:
-    """Busca estudiante por nombre en el mensaje y arma datos para el informe."""
+    """Busca estudiante por RUT en el mensaje y arma datos para el informe familia."""
     if _message_intent(message) != "familia":
         return None
-    student_id = find_student_id_by_message(db, message)
+    rut = extract_rut_from_message(message)
+    if not rut:
+        return None
+    student_id = find_student_id_by_rut(db, rut)
     if not student_id:
         return None
     return build_student_context(db, student_id)
@@ -359,52 +518,47 @@ def format_student_context_block(context: dict[str, Any]) -> str:
         f"student_id: {context.get('student_id')}",
     ]
     labels = {
-        "student_full_name": "Nombre estudiante",
-        "student_identification_number": "RUN/RUT estudiante",
-        "student_social_name": "Nombre social estudiante",
-        "student_born_date": "Fecha nacimiento",
-        "student_age": "Edad",
-        "student_course": "Curso/Nivel",
-        "student_school": "Establecimiento",
-        "professional_social_name": "Nombre profesional",
-        "professional_identification_number": "RUT profesional",
-        "professional_role": "Rol/cargo profesional",
-        "professional_phone": "Teléfono profesional",
-        "professional_email": "E-mail profesional",
-        "report_delivery_date": "Fecha entrega informe",
-        "receiver_full_name": "Nombre apoderado/receptor",
-        "receiver_identification_number": "RUT apoderado",
-        "receiver_phone": "Teléfono apoderado",
-        "receiver_email": "E-mail apoderado",
-        "receiver_relationship": "Relación con estudiante",
-        "diagnosis": "Diagnóstico (informe guardado)",
-        "applied_instruments": "Instrumentos (informe guardado)",
-        "evaluation_date_1": "Fecha seguimiento 1",
-        "evaluation_date_2": "Fecha seguimiento 2",
-        "evaluation_date_3": "Fecha seguimiento 3",
+        "student_full_name": "student_full_name",
+        "student_identification_number": "student_identification_number",
+        "student_birth_date": "student_birth_date",
+        "student_age": "student_age",
+        "student_course": "student_course",
+        "student_school": "student_school",
+        "professional_full_name": "professional_full_name",
+        "professional_identification_number": "professional_identification_number",
+        "professional_job_position": "professional_job_position",
+        "professional_phone_email": "professional_phone_email",
+        "professional_delivered_date_inform": "professional_delivered_date_inform",
+        "person_full_name": "person_full_name",
+        "person_identification_number": "person_identification_number",
+        "person_relation_student": "person_relation_student",
+        "person_presence": "person_presence",
+        "diagnosis": "diagnosis (narrativa)",
+        "applied_instruments": "applied_instruments",
+        "evaluation_date_1": "evaluation_date_1",
+        "evaluation_date_2": "evaluation_date_2",
+        "evaluation_date_3": "evaluation_date_3",
     }
     date_keys = ("evaluation_date_1", "evaluation_date_2", "evaluation_date_3")
     id_missing_keys = (
         "student_identification_number",
-        "receiver_full_name",
-        "receiver_identification_number",
-        "receiver_relationship",
+        "person_full_name",
+        "person_identification_number",
+        "person_relation_student",
     )
-    for key, label in labels.items():
+    for key, tag in labels.items():
         val = context.get(key)
         if val:
-            lines.append(f"- {label}: {val}")
+            lines.append(f"- {tag}: {val}")
         elif key in date_keys:
             lines.append(
-                f"- {label}: (sin dato en BD — dejar celda de fecha vacía; NO inventar texto)"
+                f"- {tag}: (sin dato en BD — dejar celda de fecha vacía; NO inventar texto)"
             )
         elif key in id_missing_keys:
-            lines.append(f"- {label}: (sin dato en BD — escribir «No informado»)")
+            lines.append(f"- {tag}: (sin dato en BD — escribir «No informado»)")
 
     lines.append(
-        "- Antes de generar el Word: copia estos datos a los campos del formulario/plantilla "
-        "(Nombres y Apellidos, RUN, Rut, Rol/cargo, receptor, etc.). "
-        "Si un dato de identificación no aparece aquí ni en los archivos, indica «No informado». "
-        "Si faltan fechas de seguimiento, deja las celdas vacías."
+        "- Identificación: rellena SOLO los content controls con esos w:tag exactos. "
+        "No uses otros nombres ni muevas datos entre campos."
     )
     return "\n".join(lines)

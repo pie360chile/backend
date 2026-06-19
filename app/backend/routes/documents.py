@@ -4093,6 +4093,7 @@ async def generate_document(
                 "person_full_name": receiver_full,
                 "person_identification_number": receiver_id_num,
                 "person_relation_student": receiver_relation,
+                "person_presence": receiver_presence,
                 "person_presence_of": receiver_presence,
                 "receiver_full_name": receiver_full,
                 "receiver_identification_number": receiver_id_num,
@@ -4147,6 +4148,22 @@ async def generate_document(
                 replacements,
                 str(out_file),
             )
+
+            if result.get("status") != "error":
+                from app.backend.utils.agent_familia_prefill import (
+                    apply_familia_arial_10_font,
+                    compact_familia_narrative_spacing,
+                    fix_familia_motivo_evaluacion_row,
+                )
+
+                fix_familia_motivo_evaluacion_row(
+                    Path(result["file_path"]),
+                    {
+                        "evaluation_type": fr_data.get("evaluation_type"),
+                    },
+                )
+                compact_familia_narrative_spacing(Path(result["file_path"]))
+                apply_familia_arial_10_font(Path(result["file_path"]))
 
             if result.get("status") == "error":
                 return JSONResponse(

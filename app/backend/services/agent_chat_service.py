@@ -23,7 +23,10 @@ from app.backend.services.openai_agent_service import (
 from app.backend.utils.agent_document_index import search_agent_knowledge, strip_html
 from app.backend.utils.agent_file_selection import select_agent_file_rows
 from app.backend.utils.agent_files import ensure_responses_dir
-from app.backend.utils.agent_student_lookup import resolve_student_context_for_agent
+from app.backend.utils.agent_student_lookup import (
+    check_familia_rut_requirement,
+    resolve_student_context_for_agent,
+)
 
 def _prepare_openai_files(
     db: Session,
@@ -120,6 +123,14 @@ def chat_with_agent(
         }
         for hit in hits
     ]
+
+    rut_prompt = check_familia_rut_requirement(db, trimmed)
+    if rut_prompt:
+        return {
+            "reply": rut_prompt,
+            "citations": citations,
+            "usedChunks": len(hits),
+        }
 
     if not settings.openai_api_key:
         try:
@@ -230,6 +241,18 @@ def iter_chat_with_agent_events(
             "message": f"Se encontraron {len(hits)} fragmento(s) relacionados en los archivos indexados.",
         }
 
+    rut_prompt = check_familia_rut_requirement(db, trimmed)
+    if rut_prompt:
+        yield {
+            "type": "done",
+            "data": {
+                "reply": rut_prompt,
+                "citations": citations,
+                "usedChunks": len(hits),
+            },
+        }
+        return
+
     if not settings.openai_api_key:
         try:
             _, _, _, selected_rows = _prepare_openai_files(db, agent, trimmed, hits)
@@ -294,14 +317,16 @@ def iter_chat_with_agent_events(
         student_context = resolve_student_context_for_agent(db, trimmed)
         if student_context:
             student_name = student_context.get("student_full_name") or "el estudiante"
+            student_rut = student_context.get("student_identification_number") or ""
+            rut_part = f" (RUT {student_rut})" if student_rut else ""
             yield {
                 "type": "step",
-                "message": f"Estudiante encontrado en PIE360: {student_name}.",
+                "message": f"Estudiante encontrado en PIE360: {student_name}{rut_part}.",
             }
         else:
             yield {
                 "type": "step",
-                "message": "No se encontró estudiante en la base de datos por el nombre del mensaje.",
+                "message": "No se encontró estudiante en la base de datos por el RUT del mensaje.",
             }
 
         openai_file_ids, selected_names, base_doc_name, template_used = _attach_familia_hybrid_base(

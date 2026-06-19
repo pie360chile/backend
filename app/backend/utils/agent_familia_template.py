@@ -74,8 +74,8 @@ def build_form_template_supremacy_block(base_filename: str, excluded: list[str])
     )
 
 
-def docx_has_form_controls(path: Path) -> bool:
-    """True si el .docx tiene content controls (plantilla formulario PIE360)."""
+def docx_has_content_controls(path: Path) -> bool:
+    """True si el .docx tiene content controls (w:sdt)."""
     try:
         from docx import Document
         from docx.oxml.ns import qn
@@ -83,6 +83,19 @@ def docx_has_form_controls(path: Path) -> bool:
         doc = Document(str(path))
         count = sum(1 for _ in doc.element.body.iter(qn("w:sdt")))
         return count >= 3
+    except Exception:
+        return False
+
+
+def docx_has_form_controls(path: Path) -> bool:
+    """True si el .docx es rellenable: SDT, FORMTEXT o tablas ministeriales planas."""
+    if docx_has_content_controls(path):
+        return True
+    try:
+        from app.backend.utils.agent_familia_formtext import docx_has_legacy_formtext
+        from app.backend.utils.agent_familia_tabla_fill import docx_is_familia_ministerial_tabla
+
+        return docx_has_legacy_formtext(path) or docx_is_familia_ministerial_tabla(path)
     except Exception:
         return False
 
@@ -202,13 +215,16 @@ def build_no_fabrication_rules() -> str:
 def build_typography_preserve_rules() -> str:
     """Conservar tipografía y alineación de la plantilla; no forzar justificado."""
     return (
+        "- TIPOGRAFÍA RESPUESTAS (OBLIGATORIO): todo el texto que escribes en campos del formulario "
+        "(identificación arriba y narrativa abajo) debe ser Arial 10 pt, sin negrita. "
+        "Copia rPr de la plantilla pero fuerza w:rFonts ascii/hAnsi=Arial y w:sz val=20.\n"
+        "- ALINEACIÓN NARRATIVA (OBLIGATORIO): texto alineado a la IZQUIERDA (w:jc left). "
+        "PROHIBIDO justificar (WD_ALIGN_PARAGRAPH.JUSTIFY, w:jc both o distribute). "
+        "El justificado en celdas estrechas produce espacios enormes entre palabras.\n"
         "- TIPOGRAFÍA DE PLANTILLA (OBLIGATORIO): NO cambies fuente, tamaño, negrita, "
         "color ni alineación del párrafo/campo. Copia el formato del primer run existente "
         "en la plantilla (rPr: w:rFonts, w:sz, w:color, w:b). "
         "PROHIBIDO usar p.text = ... o cell.text = ... (destruye runs y cambia la letra).\n"
-        "- ALINEACIÓN: conserva la alineación que ya trae cada párrafo de la plantilla. "
-        "PROHIBIDO aplicar WD_ALIGN_PARAGRAPH.JUSTIFY si el párrafo no lo traía. "
-        "No modifiques paragraph_format.alignment salvo para restaurar el valor original.\n"
         "- Al rellenar content controls (w:sdt), escribe solo en w:t dentro del w:sdtContent "
         "preservando w:rPr del run; si no hay run, clónalo del párrafo vecino de la plantilla.\n"
         "- ESPACIADO NARRATIVO (OBLIGATORIO): los dos párrafos de cada campo van separados por "
@@ -278,7 +294,8 @@ def build_familia_narrative_enrichment_rules(base_doc_name: str) -> str:
         "genérico. Extrae contenido concreto del expediente; si el rol exige citar cartilla técnica, Decreto 170 "
         "o criterios PIE, incorpóralos en la redacción.\n"
         "PROHIBIDO: borrar o reescribir identificación ya completada; cambiar fuente/alineación; "
-        "usar formato ministerial de tablas; entregar el documento sin redactar la parte inferior.\n"
+        "usar formato ministerial de tablas; entregar el documento sin redactar la parte inferior; "
+        "modificar la fila «MOTIVO DE LA EVALUACIÓN» (checkboxes ingreso/reevaluación — ya viene de PIE360).\n"
         + build_redaction_min_paragraphs_rules()
     )
 
@@ -292,19 +309,12 @@ def build_familia_form_rules(base_filename: str) -> str:
         "«Haz clic o pulse aquí para escribir texto»). Rellénalos sin mover tablas ni cambiar estilos.\n"
         "- Lee primero el expediente del estudiante (docx del caso, cartilla, etc.) y extrae los datos. "
         "Si el formulario ya trae identificación rellena, consérvala.\n"
-        "- Mapeo de campos (tag w:sdt o placeholder → valor):\n"
-        "    Estudiante: student_full_name / Nombres y Apellidos; "
-        "student_identification_number / RUN / Rut (estudiante); "
-        "student_born_date / Fecha nacimiento; student_age / Edad; "
-        "student_course / Curso / Nivel; student_school / Establecimiento.\n"
-        "    Profesional: professional_full_name / professional_social_name / Nombre; "
-        "professional_identification_number / Rut (profesional); "
-        "professional_role / Rol / cargo; professional_phone_email / Teléfono / E-mail; "
-        "report_delivery_date / Fecha entrega de informe.\n"
-        "    Receptor: receiver_full_name / Nombre; receiver_identification_number / Rut; "
-        "receiver_relationship / Relación con el/la estudiante; "
-        "receiver_presence_of / En presencia de.\n"
-        "    Contenido: evaluation_reason / motivo; diagnosis / diagnostic; "
+        "- Identificación (tags w:tag exactos — NO modificar si ya vienen rellenos desde PIE360):\n"
+        "    student_full_name, student_identification_number, student_birth_date, student_age, "
+        "student_course, student_school, professional_full_name, professional_identification_number, "
+        "professional_job_position, professional_phone_email, professional_delivered_date_inform, "
+        "person_full_name, person_identification_number, person_relation_student, person_presence.\n"
+        "    Contenido narrativo: evaluation_reason, diagnostic, strengths_1, support_needs_1, "
         "pedagogical_strengths / strengths_1; pedagogical_support_needs / support_needs_1; "
         "social_affective_strengths / strengths_2; social_affective_support_needs / support_needs_2; "
         "health_strengths / strengths_3; health_support_needs / support_needs_3; "

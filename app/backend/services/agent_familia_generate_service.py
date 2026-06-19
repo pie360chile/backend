@@ -14,8 +14,12 @@ from sqlalchemy.orm import Session
 from app.backend.core.config import settings
 from app.backend.db.models import AgentResponseFileModel
 from app.backend.utils.agent_familia_prefill import (
+    apply_familia_arial_10_font,
     build_familia_form_replacements,
     build_familia_identification_replacements,
+    compact_familia_narrative_spacing,
+    fill_familia_docx,
+    fix_familia_motivo_evaluacion_row,
 )
 from app.backend.utils.agent_familia_template import (
     docx_has_form_controls,
@@ -52,15 +56,9 @@ def _fill_and_save(
     out_path: Path,
     replacements: dict[str, str],
 ) -> None:
-    from app.backend.classes.documents_class import DocumentsClass
-
-    result = DocumentsClass.fill_docx_form(
-        str(template_path),
-        replacements,
-        str(out_path),
-    )
+    result = fill_familia_docx(template_path, replacements, out_path)
     if result.get("status") == "error":
-        raise RuntimeError(result.get("message") or "fill_docx_form falló")
+        raise RuntimeError(result.get("message") or "fill_familia_docx falló")
 
 
 def create_familia_base_for_gpt(
@@ -78,6 +76,8 @@ def create_familia_base_for_gpt(
 
     replacements = build_familia_identification_replacements(student_context)
     _fill_and_save(template_path, disk_path, replacements)
+    fix_familia_motivo_evaluacion_row(disk_path, student_context)
+    apply_familia_arial_10_font(disk_path)
 
     return {
         "disk_path": disk_path,
@@ -102,6 +102,9 @@ def generate_familia_report_docx(
 
     replacements = build_familia_form_replacements(student_context)
     _fill_and_save(template_path, out_path, replacements)
+    fix_familia_motivo_evaluacion_row(out_path, student_context)
+    compact_familia_narrative_spacing(out_path)
+    apply_familia_arial_10_font(out_path)
 
     now = datetime.utcnow()
     row = AgentResponseFileModel(
