@@ -194,6 +194,23 @@ def resolve_form_template_path(agent_id: str, rows: list[Any]) -> Path | None:
     return None
 
 
+def resolve_familia_template_path(agent_id: str, rows: list[Any]) -> Path | None:
+    """Ruta en disco de la plantilla familia prioritaria (formulario o ministerial)."""
+    from app.backend.utils.agent_files import agent_dir
+
+    base, kind = resolve_familia_template_from_rows(agent_id, rows)
+    if kind == "none" or not base:
+        return None
+    for row in rows:
+        name = getattr(row, "display_name", None) or ""
+        fid = getattr(row, "id", None)
+        if name == base and fid:
+            path = agent_dir(agent_id) / fid
+            if path.is_file():
+                return path
+    return None
+
+
 def build_no_fabrication_rules() -> str:
     """Prohibición de inventar datos no presentes en BD o archivos."""
     return (

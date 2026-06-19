@@ -23,7 +23,7 @@ from app.backend.utils.agent_familia_prefill import (
 )
 from app.backend.utils.agent_familia_template import (
     docx_has_form_controls,
-    resolve_form_template_path,
+    resolve_familia_template_path,
 )
 from app.backend.utils.agent_student_lookup import is_familia_report_request
 from app.backend.utils.agent_files import agent_dir, build_response_storage_path, ensure_responses_dir
@@ -39,8 +39,8 @@ def _system_family_report_template() -> Path | None:
 
 
 def resolve_form_template_for_generation(agent_id: str, selected_rows: list[Any]) -> Path | None:
-    """Plantilla formulario del agente o, en su defecto, family_report.docx del sistema."""
-    path = resolve_form_template_path(agent_id, selected_rows)
+    """Plantilla familia del agente (formulario o ministerial) o family_report del sistema."""
+    path = resolve_familia_template_path(agent_id, selected_rows)
     if path and docx_has_form_controls(path):
         return path
     return _system_family_report_template()

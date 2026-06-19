@@ -215,7 +215,10 @@ def fill_familia_tabla_cells(
         return {"status": "error", "message": "No es plantilla ministerial de tablas planas"}
 
     filled_keys: list[str] = []
-    placeholder_keys = list_familia_placeholder_keys_in_path(output_path)
+    # Detectar placeholders en la plantilla (no solo en output ya rellenado).
+    placeholder_keys = list_familia_placeholder_keys_in_path(template_path)
+    if not placeholder_keys:
+        placeholder_keys = list_familia_placeholder_keys_in_path(output_path)
 
     if placeholder_keys:
         id_result = fill_familia_identification_placeholders(
@@ -250,19 +253,33 @@ def fill_familia_tabla_cells(
 def refill_familia_identification_only(
     docx_path: Path,
     replacements: dict[str, str],
+    *,
+    template_path: Path | None = None,
 ) -> list[str]:
-    """Reaplica tablas 1-2: placeholders primero, coordenadas solo para claves sin {{...}}."""
+    """
+    Reaplica tablas 1-2 tras GPT.
+    Si la plantilla usa {{...}}, restaura desde plantilla (el output ya no tiene tags).
+    """
     from docx import Document
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
 
     from app.backend.utils.agent_familia_placeholder_fill import (
+        FAMILIA_IDENTIFICATION_KEYS,
+        docx_has_familia_placeholders,
         list_familia_placeholder_keys_in_doc,
         replace_familia_placeholders_in_doc,
-        FAMILIA_IDENTIFICATION_KEYS,
+        restore_familia_identification_from_template,
     )
 
     path = Path(docx_path)
+    tpl = Path(template_path) if template_path else None
+
+    if tpl and tpl.is_file() and docx_has_familia_placeholders(tpl):
+        restored = restore_familia_identification_from_template(path, tpl, replacements)
+        if restored:
+            return sorted(set(restored))
+
     doc = Document(str(path))
     placeholder_keys = list_familia_placeholder_keys_in_doc(doc)
 
@@ -277,7 +294,9 @@ def refill_familia_identification_only(
         )
     else:
         filled.extend(
-            _fill_tabla_slot_rows(doc, FAMILIA_TABLA_IDENTIFICATION_SLOTS, replacements, qn, OxmlElement)
+            _fill_tabla_slot_rows(
+                doc, FAMILIA_TABLA_IDENTIFICATION_SLOTS, replacements, qn, OxmlElement
+            )
         )
     doc.save(str(path))
     return sorted(set(filled))

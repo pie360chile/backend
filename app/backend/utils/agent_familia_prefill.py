@@ -751,7 +751,11 @@ def postprocess_saved_familia_docx(
         )
 
         if docx_is_familia_ministerial_tabla(path):
-            filled = refill_familia_identification_only(path, replacements)
+            filled = refill_familia_identification_only(
+                path,
+                replacements,
+                template_path=form_template_path,
+            )
             if filled:
                 logger.info(
                     "Identificación re-aplicada en %s (%d campos)",

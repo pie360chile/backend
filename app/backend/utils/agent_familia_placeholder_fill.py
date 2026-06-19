@@ -192,6 +192,68 @@ def replace_familia_placeholders_in_doc(
     return sorted(set(filled))
 
 
+def copy_familia_tables_between_docs(
+    source_path: Path,
+    dest_path: Path,
+    table_indices: tuple[int, ...] = (1, 2),
+) -> None:
+    """Copia tablas de identificación (1 y 2) de source a dest sin tocar narrativa."""
+    from docx import Document
+    from docx.oxml.ns import qn
+
+    src_doc = Document(str(source_path))
+    dst_doc = Document(str(dest_path))
+    src_tbls = src_doc.element.body.findall(qn("w:tbl"))
+    dst_tbls = dst_doc.element.body.findall(qn("w:tbl"))
+
+    for idx in table_indices:
+        if idx >= len(src_tbls) or idx >= len(dst_tbls):
+            continue
+        parent = dst_tbls[idx].getparent()
+        if parent is None:
+            continue
+        parent.replace(dst_tbls[idx], deepcopy(src_tbls[idx]))
+
+    dst_doc.save(str(dest_path))
+
+
+def restore_familia_identification_from_template(
+    output_path: Path,
+    template_path: Path,
+    replacements: dict[str, str],
+) -> list[str]:
+    """
+    Tras GPT, el .docx ya no tiene {{...}}. Regenera tablas 1-2 desde la plantilla
+    con datos de BD y las pega en el informe final (conserva tabla 3 del modelo).
+    """
+    import shutil
+    import uuid
+
+    template_path = Path(template_path)
+    output_path = Path(output_path)
+    if not template_path.is_file() or not output_path.is_file():
+        return []
+
+    if not docx_has_familia_placeholders(template_path):
+        return []
+
+    temp = output_path.parent / f"_familia_id_{uuid.uuid4().hex[:8]}.docx"
+    try:
+        result = fill_familia_identification_placeholders(
+            template_path, replacements, temp
+        )
+        copy_familia_tables_between_docs(temp, output_path, (1, 2))
+        filled = result.get("filled_keys") or []
+        logger.info(
+            "Identificación restaurada desde plantilla (%d claves) en %s",
+            len(filled),
+            output_path.name,
+        )
+        return filled
+    finally:
+        temp.unlink(missing_ok=True)
+
+
 def fill_familia_identification_placeholders(
     template_path: str | Path,
     replacements: dict[str, str],

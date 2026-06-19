@@ -463,10 +463,10 @@ def _finalize_openai_response(
             )
             if response_files and student_context:
                 from app.backend.utils.agent_familia_prefill import postprocess_saved_familia_docx
-                from app.backend.utils.agent_familia_template import resolve_form_template_path
+                from app.backend.utils.agent_familia_template import resolve_familia_template_path
 
                 form_path = (
-                    resolve_form_template_path(agent.id, selected_rows)
+                    resolve_familia_template_path(agent.id, selected_rows)
                     if selected_rows
                     else None
                 )
@@ -730,11 +730,11 @@ def stream_chat_with_openai_responses(
                                 postprocess_saved_familia_docx,
                             )
                             from app.backend.utils.agent_familia_template import (
-                                resolve_form_template_path,
+                                resolve_familia_template_path,
                             )
 
                             form_path = (
-                                resolve_form_template_path(agent.id, selected_rows)
+                                resolve_familia_template_path(agent.id, selected_rows)
                                 if selected_rows
                                 else None
                             )
