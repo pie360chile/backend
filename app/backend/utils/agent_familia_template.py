@@ -211,6 +211,10 @@ def build_typography_preserve_rules() -> str:
         "No modifiques paragraph_format.alignment salvo para restaurar el valor original.\n"
         "- Al rellenar content controls (w:sdt), escribe solo en w:t dentro del w:sdtContent "
         "preservando w:rPr del run; si no hay run, clónalo del párrafo vecino de la plantilla.\n"
+        "- ESPACIADO NARRATIVO (OBLIGATORIO): los dos párrafos de cada campo van separados por "
+        "UN solo salto (w:br con run.add_break() dentro del MISMO w:p), NO con add_paragraph() "
+        "ni con \\n\\n. Si usas w:p distintos, space_before=Pt(0) y space_after=Pt(0) en ambos. "
+        "PROHIBIDO dejar párrafos vacíos entre bloques (causan huecos grandes en Word).\n"
         "- Texto arriba en celda: space_before/space_after = 0; elimina párrafos vacíos sobrantes; "
         "no centres verticalmente.\n"
         + build_no_fabrication_rules()
@@ -232,8 +236,8 @@ def build_redaction_min_paragraphs_rules() -> str:
         "Párrafo 2: hallazgos, interpretación e implicancias para apoyos y seguimiento.\n"
         "- Extrae contenido de la cartilla, evaluación psicopedagógica y archivos del caso; "
         "no resumas en frases genéricas.\n"
-        "- Separa párrafos con un salto (w:br o párrafo vacío de plantilla), sin espacios "
-        "extra entre ellos.\n"
+        "- Separa los dos párrafos con UN solo salto de línea (w:br), sin párrafo vacío intermedio "
+        "ni espacio extra. Revisa que no queden huecos grandes entre párrafos antes de exportar.\n"
         "- Antes de exportar, revisa cada campo narrativo: si algún párrafo tiene menos "
         "de 6 oraciones, amplíalo antes de guardar.\n"
         + build_typography_preserve_rules()

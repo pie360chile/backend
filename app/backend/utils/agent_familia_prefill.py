@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+import re
 import shutil
+import unicodedata
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 _NARRATIVE_KEYS = (
     "evaluation_reason",
+    "applied_instruments",
     "diagnosis",
     "diagnostic",
     "pedagogical_strengths",
@@ -34,6 +37,98 @@ _NARRATIVE_KEYS = (
     "strengths_3",
     "support_needs_3",
 )
+
+
+def _normalize_cc_tag(tag: str) -> str:
+    t = (tag or "").strip().lower()
+    t = unicodedata.normalize("NFKD", t)
+    t = "".join(c for c in t if unicodedata.category(c) != "Mn")
+    t = re.sub(r"[^a-z0-9]+", "_", t)
+    return re.sub(r"_+", "_", t).strip("_")
+
+
+_NARRATIVE_TAG_NORMS = frozenset(_normalize_cc_tag(k) for k in _NARRATIVE_KEYS)
+
+
+def _paragraph_visible_text(p_el: Any, qn: Any) -> str:
+    return "".join((t.text or "") for t in p_el.iter(qn("w:t")))
+
+
+def _is_label_paragraph(text: str) -> bool:
+    s = (text or "").strip()
+    if len(s) < 10:
+        return False
+    letters = [c for c in s if c.isalpha()]
+    if len(letters) < 8:
+        return False
+    upper = sum(1 for c in letters if c.isupper())
+    return (upper / len(letters)) > 0.82
+
+
+def _zero_paragraph_spacing(ppr: Any, qn: Any, OxmlElement: Any) -> None:
+    for sp in list(ppr.findall(qn("w:spacing"))):
+        ppr.remove(sp)
+    spacing = OxmlElement("w:spacing")
+    spacing.set(qn("w:before"), "0")
+    spacing.set(qn("w:after"), "0")
+    spacing.set(qn("w:line"), "240")
+    spacing.set(qn("w:lineRule"), "auto")
+    ppr.append(spacing)
+    for ctx in list(ppr.findall(qn("w:contextualSpacing"))):
+        ppr.remove(ctx)
+
+
+def _compact_sdt_content_spacing(sdt_content_el: Any, qn: Any, OxmlElement: Any) -> None:
+    """Elimina párrafos vacíos y espaciado extra en campos narrativos."""
+    for p in list(sdt_content_el.iter(qn("w:p"))):
+        if not _paragraph_visible_text(p, qn).strip():
+            parent = p.getparent()
+            if parent is not None:
+                parent.remove(p)
+
+    for p in sdt_content_el.iter(qn("w:p")):
+        txt = _paragraph_visible_text(p, qn).strip()
+        if not txt or _is_label_paragraph(txt):
+            continue
+        ppr = p.find(qn("w:pPr"))
+        if ppr is None:
+            ppr = OxmlElement("w:pPr")
+            p.insert(0, ppr)
+        _zero_paragraph_spacing(ppr, qn, OxmlElement)
+
+
+def compact_familia_narrative_spacing(docx_path: Path) -> None:
+    """Compacta espaciado vertical en content controls narrativos del informe familia."""
+    from docx import Document
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    doc = Document(str(docx_path))
+
+    def walk_sdts(parent: Any) -> None:
+        for sdt in parent.iter(qn("w:sdt")):
+            tag_el = sdt.find(".//" + qn("w:tag"))
+            if tag_el is None:
+                continue
+            tag_n = _normalize_cc_tag(tag_el.get(qn("w:val")) or "")
+            if tag_n not in _NARRATIVE_TAG_NORMS:
+                continue
+            sdt_content = sdt.find(qn("w:sdtContent"))
+            if sdt_content is not None:
+                _compact_sdt_content_spacing(sdt_content, qn, OxmlElement)
+
+    walk_sdts(doc.element.body)
+    for section in doc.sections:
+        for hf in (
+            section.header,
+            section.footer,
+            section.first_page_header,
+            section.first_page_footer,
+        ):
+            if hf is not None and hf._element is not None:
+                walk_sdts(hf._element)
+
+    doc.save(str(docx_path))
 
 
 def build_familia_identification_replacements(context: dict[str, Any]) -> dict[str, str]:
@@ -231,5 +326,11 @@ def postprocess_saved_familia_docx(
             logger.info("Prefill familia aplicado en %s", path.name)
     except Exception as exc:
         logger.warning("Prefill familia no aplicado en %s: %s", path.name, exc)
+
+    try:
+        compact_familia_narrative_spacing(path)
+        logger.info("Espaciado narrativo compactado en %s", path.name)
+    except Exception as exc:
+        logger.warning("Compactación de espaciado falló en %s: %s", path.name, exc)
 
     return saved
