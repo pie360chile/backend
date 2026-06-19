@@ -25,6 +25,8 @@ from app.backend.utils.agent_file_selection import select_agent_file_rows
 from app.backend.utils.agent_files import ensure_responses_dir
 from app.backend.utils.agent_student_lookup import (
     check_familia_rut_requirement,
+    extract_rut_from_message,
+    is_familia_report_request,
     resolve_student_context_for_agent,
 )
 
@@ -323,11 +325,24 @@ def iter_chat_with_agent_events(
                 "type": "step",
                 "message": f"Estudiante encontrado en PIE360: {student_name}{rut_part}.",
             }
-        else:
-            yield {
-                "type": "step",
-                "message": "No se encontró estudiante en la base de datos por el RUT del mensaje.",
-            }
+        elif is_familia_report_request(trimmed):
+            rut = extract_rut_from_message(trimmed)
+            if not rut:
+                yield {
+                    "type": "step",
+                    "message": (
+                        "Informe familia: incluye el RUT del estudiante en el mensaje "
+                        "(ej. RUT 23.442.145-K)."
+                    ),
+                }
+            else:
+                yield {
+                    "type": "step",
+                    "message": (
+                        f"No se encontró estudiante en PIE360 con el RUT {rut}. "
+                        "Verifica el RUT en la plataforma."
+                    ),
+                }
 
         openai_file_ids, selected_names, base_doc_name, template_used = _attach_familia_hybrid_base(
             agent.id, trimmed, student_context, selected_rows, openai_file_ids, selected_names

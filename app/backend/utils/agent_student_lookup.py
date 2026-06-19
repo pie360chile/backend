@@ -72,6 +72,14 @@ def _format_rut_display(raw: str) -> str:
     return f"{n[:-1]}-{n[-1].upper()}"
 
 
+def is_familia_report_request(message: str) -> bool:
+    """True si el mensaje pide informe a la familia (con o sin la palabra «familia»)."""
+    if _message_intent(message) == "familia":
+        return True
+    norm = (message or "").lower()
+    return bool(extract_rut_from_message(message) and "informe" in norm)
+
+
 def extract_rut_from_message(message: str) -> str | None:
     """Extrae el primer RUT chileno válido del mensaje."""
     for match in _RUT_RE.finditer(message or ""):
@@ -205,7 +213,7 @@ def check_familia_rut_requirement(db: Session, message: str) -> str | None:
     Si el mensaje pide informe a la familia, exige RUT y estudiante en BD.
     Devuelve texto de respuesta al usuario si falta algo; None si puede continuar.
     """
-    if _message_intent(message) != "familia":
+    if not is_familia_report_request(message):
         return None
 
     rut = extract_rut_from_message(message)
@@ -582,7 +590,7 @@ def _mirror_identification_tags_for_template(ctx: dict[str, Any]) -> None:
 
 def resolve_student_context_for_agent(db: Session, message: str) -> dict[str, Any] | None:
     """Busca estudiante por RUT en el mensaje y arma datos para el informe familia."""
-    if _message_intent(message) != "familia":
+    if not is_familia_report_request(message):
         return None
     rut = extract_rut_from_message(message)
     if not rut:

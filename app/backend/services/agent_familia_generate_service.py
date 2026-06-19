@@ -25,7 +25,7 @@ from app.backend.utils.agent_familia_template import (
     docx_has_form_controls,
     resolve_form_template_path,
 )
-from app.backend.utils.agent_file_selection import _message_intent
+from app.backend.utils.agent_student_lookup import is_familia_report_request
 from app.backend.utils.agent_files import agent_dir, build_response_storage_path, ensure_responses_dir
 
 logger = logging.getLogger(__name__)
@@ -133,7 +133,7 @@ def can_use_familia_hybrid(
     selected_rows: list[Any],
     agent_id: str,
 ) -> Path | None:
-    if _message_intent(message) != "familia":
+    if not is_familia_report_request(message):
         return None
     if not student_context or not student_context.get("student_id"):
         return None
