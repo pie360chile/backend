@@ -17,12 +17,14 @@ from app.backend.services.openai_agent_service import (
     chat_with_openai_responses,
     is_container_expired,
     stream_chat_with_openai_responses,
-    sync_agent_openai_files,
     upload_local_file_to_openai,
 )
 from app.backend.utils.agent_document_index import search_agent_knowledge, strip_html
-from app.backend.utils.agent_file_selection import select_agent_file_rows
-from app.backend.utils.agent_files import ensure_responses_dir
+from app.backend.utils.agent_file_selection import (
+    select_agent_file_rows,
+    trim_rows_for_familia_hybrid_speed,
+)
+from app.backend.utils.agent_files import agent_dir, ensure_responses_dir
 from app.backend.utils.agent_student_lookup import (
     check_familia_rut_requirement,
     extract_rut_from_message,
@@ -38,6 +40,7 @@ def _prepare_openai_files(
 ) -> tuple[list[str], list[str], int, list]:
     """Devuelve (openai_file_ids, nombres usados, total archivos del agente, filas seleccionadas)."""
     from app.backend.db.models import AgentFileModel
+    from app.backend.services.openai_agent_service import ensure_openai_file_for_row
 
     ensure_responses_dir(agent.id)
 
@@ -47,15 +50,65 @@ def _prepare_openai_files(
         .count()
     )
     selected_rows = select_agent_file_rows(db, agent.id, message, hits)
-    selected_names = [row.display_name for row in selected_rows if row.display_name]
+    if settings.openai_agent_familia_fast and is_familia_report_request(message):
+        selected_rows = trim_rows_for_familia_hybrid_speed(selected_rows, agent.id)
+    selected_names: list[str] = []
 
     if total and len(selected_rows) < total:
         agent.openai_container_id = None
         agent.openai_container_updated_at = None
         db.flush()
 
-    openai_file_ids = sync_agent_openai_files(db, agent.id, only_rows=selected_rows)
+    openai_file_ids: list[str] = []
+    for row in selected_rows:
+        disk_path = agent_dir(agent.id) / row.id
+        if not disk_path.is_file():
+            continue
+        openai_id = ensure_openai_file_for_row(db, agent, row, disk_path)
+        if openai_id:
+            openai_file_ids.append(openai_id)
+            if row.display_name:
+                selected_names.append(row.display_name)
     return openai_file_ids, selected_names, total, selected_rows
+
+
+def _file_preparation_step_messages(
+    openai_file_ids: list[str],
+    selected_names: list[str],
+    total_in_agent: int,
+    *,
+    base_doc_name: str | None = None,
+) -> list[str]:
+    """Mensajes claros: conteo alineado con los archivos realmente enviados a OpenAI."""
+    names = list(selected_names)
+    n = len(openai_file_ids)
+    if len(names) != n:
+        names = names[:n]
+
+    case_names = [nm for nm in names if nm != base_doc_name]
+    has_base = bool(base_doc_name and base_doc_name in names)
+    case_count = len(case_names)
+
+    if has_base and case_count:
+        summary = (
+            f"Enviando {n} archivo(s) al modelo "
+            f"(1 base PIE360 + {case_count} del caso). "
+            f"El agente tiene {total_in_agent} archivo(s) en total."
+        )
+    elif total_in_agent and n < total_in_agent:
+        summary = (
+            f"Enviando {n} de {total_in_agent} archivo(s) del agente al modelo."
+        )
+    else:
+        summary = f"Enviando {n} archivo(s) al modelo para esta consulta."
+
+    steps = [summary]
+    for name in names[:8]:
+        if name == base_doc_name:
+            steps.append(f"Base PIE360: {name}")
+        else:
+            steps.append(f"Archivo del caso: {name}")
+    return steps
 
 
 def _attach_familia_hybrid_base(
@@ -360,16 +413,13 @@ def iter_chat_with_agent_events(
         db.refresh(agent)
 
         if openai_file_ids and selected_names:
-            yield {
-                "type": "step",
-                "message": (
-                    f"Usando {len(openai_file_ids)} de {total_files} archivos del agente."
-                    if total_files and len(openai_file_ids) < total_files
-                    else f"{len(openai_file_ids)} archivo(s) listos para el análisis."
-                ),
-            }
-            for name in selected_names[:8]:
-                yield {"type": "step", "message": f"Leyendo archivo: {name}"}
+            for step_msg in _file_preparation_step_messages(
+                openai_file_ids,
+                selected_names,
+                total_files,
+                base_doc_name=base_doc_name,
+            ):
+                yield {"type": "step", "message": step_msg}
         elif not openai_file_ids:
             yield {"type": "step", "message": "No hay archivos adjuntos; responderé solo con el rol del agente."}
 

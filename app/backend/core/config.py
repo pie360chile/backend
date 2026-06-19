@@ -70,6 +70,10 @@ class Settings:
     openai_agent_model: str = field(
         default_factory=lambda: os.getenv("OPENAI_AGENT_MODEL", "gpt-5.5")
     )
+    openai_agent_familia_fast: bool = field(
+        default_factory=lambda: os.getenv("OPENAI_AGENT_FAMILIA_FAST", "true").lower()
+        in ("1", "true", "yes", "on")
+    )
 
 
 settings = Settings()

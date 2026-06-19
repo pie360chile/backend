@@ -260,6 +260,22 @@ def build_typography_preserve_rules() -> str:
     )
 
 
+def build_fast_familia_redaction_rules() -> str:
+    """Redacción más breve para informe familia (objetivo <5 minutos)."""
+    return (
+        "- REDACCIÓN RÁPIDA (OBLIGATORIO — objetivo total <5 minutos): cada apartado narrativo "
+        "de doc.tables[3] lleva UN solo párrafo de 4 a 6 oraciones (aprox. 60-90 palabras). "
+        "No exijas dos párrafos largos ni re-escribas texto que ya viene en el .docx base.\n"
+        "- Prioriza completar campos vacíos o muy breves; si un campo ya tiene texto de PIE360, "
+        "solo amplíalo si tiene menos de 3 oraciones.\n"
+        "- Usa principalmente el informe psicopedagógico del caso; no releas la cartilla PDF "
+        "si el .docx base y el psicopedagógico ya aportan datos.\n"
+        "- Un solo paso de Python: abre el base, completa doc.tables[3], guarda y exporta. "
+        "PROHIBIDO múltiples rondas de código o relectura de todos los archivos.\n"
+        + build_typography_preserve_rules()
+    )
+
+
 def build_redaction_min_paragraphs_rules() -> str:
     """Reglas de extensión mínima para textos narrativos del informe."""
     return (
@@ -311,23 +327,56 @@ def build_familia_hybrid_scope_rules(base_doc_name: str) -> str:
     )
 
 
-def build_familia_narrative_enrichment_rules(base_doc_name: str) -> str:
+def build_familia_narrative_enrichment_rules(
+    base_doc_name: str,
+    *,
+    fast: bool = False,
+) -> str:
     """Instrucciones cuando PIE360 ya entregó base con identificación rellena."""
+    fast_block = ""
+    if fast:
+        fast_block = (
+            "=== MODO RÁPIDO (<5 MIN) ===\n"
+            f"«{base_doc_name}» puede traer identificación Y narrativa parcial desde PIE360. "
+            "Completa solo lo faltante en doc.tables[3]. Lee como máximo el informe "
+            "psicopedagógico del estudiante (no hace falta releer cartilla si ya hay datos).\n"
+        )
+    redaction_tail = (
+        build_fast_familia_redaction_rules()
+        if fast
+        else build_redaction_min_paragraphs_rules()
+    )
     return (
         "=== INFORME FAMILIA — BASE PIE360 + REDACCIÓN GPT (OBLIGATORIO) ===\n"
         f"El archivo «{base_doc_name}» ya tiene la IDENTIFICACIÓN superior rellena desde la base de datos "
         "(estudiante, profesional, apoderado, fechas, checkboxes de evaluación). NO modifiques esos campos.\n"
+        + (fast_block + "\n" if fast_block else "")
         + build_familia_hybrid_scope_rules(base_doc_name)
         + "Tu trabajo exclusivo: redactar los apartados narrativos de doc.tables[3] "
-        "(desde instrumentos aplicados hacia abajo) según el ROL DEL AGENTE, usando la cartilla técnica, "
-        "la evaluación psicopedagógica y los demás archivos del caso en el contenedor.\n"
-        "El ROL DEL AGENTE define qué decir, cómo estructurar cada sección, extensión, tono técnico-pedagógico "
-        "y criterios de completitud. Cada campo narrativo debe cumplir literalmente lo que el rol exige para "
-        "ese apartado; no resumas ni omitas secciones que el rol mencione.\n"
-        "Pasos:\n"
+        "(desde instrumentos aplicados hacia abajo) según el ROL DEL AGENTE"
+        + (
+            ", usando el informe psicopedagógico del caso."
+            if fast
+            else ", usando la cartilla técnica, la evaluación psicopedagógica y los demás archivos del caso en el contenedor."
+        )
+        + "\n"
+        + (
+            "Completa campos vacíos o muy breves; no reescribas bloques que ya tienen texto adecuado.\n"
+            if fast
+            else (
+                "El ROL DEL AGENTE define qué decir, cómo estructurar cada sección, extensión, tono técnico-pedagógico "
+                "y criterios de completitud. Cada campo narrativo debe cumplir literalmente lo que el rol exige para "
+                "ese apartado; no resumas ni omitas secciones que el rol mencione.\n"
+            )
+        )
+        + "Pasos:\n"
         f"  1) Abre «{base_doc_name}» (NO copies otra plantilla ni uses FORMATO INFORME DE FAMILIA.docx).\n"
-        "  2) Lee cartilla, informe psicopedagógico y documentos del estudiante.\n"
-        "  3) Completa SOLO las celdas narrativas vacías de doc.tables[3] según el rol.\n"
+        + (
+            "  2) Consulta el informe psicopedagógico solo si falta información en el base.\n"
+            if fast
+            else "  2) Lee cartilla, informe psicopedagógico y documentos del estudiante.\n"
+        )
+        + "  3) Completa SOLO las celdas narrativas vacías de doc.tables[3] según el rol.\n"
         "  4) Guarda UN solo .docx final y expórtalo.\n"
         "Mapeo rol → campos (solo parte inferior, doc.tables[3]):\n"
         "  - Instrumentos aplicados → applied_instruments (fila 3)\n"
@@ -345,7 +394,7 @@ def build_familia_narrative_enrichment_rules(base_doc_name: str) -> str:
         "PROHIBIDO: borrar o reescribir identificación ya completada; tocar doc.tables[0], [1], [2] o [4]; "
         "usar formato ministerial de tablas distinto al base; entregar el documento sin redactar doc.tables[3]; "
         "modificar la fila «MOTIVO DE LA EVALUACIÓN».\n"
-        + build_redaction_min_paragraphs_rules()
+        + redaction_tail
     )
 
 

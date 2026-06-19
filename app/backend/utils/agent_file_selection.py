@@ -252,3 +252,36 @@ def select_agent_file_rows(
         selected = (templates + others)[:max_files]
 
     return selected
+
+
+def trim_rows_for_familia_hybrid_speed(
+    rows: list[AgentFileModel],
+    agent_id: str,
+) -> list[AgentFileModel]:
+    """
+    Menos archivos al modelo en modo rápido: sin plantillas duplicadas;
+    prioriza informe psicopedagógico .docx sobre cartilla PDF.
+    """
+    if not rows:
+        return rows
+
+    case_files: list[AgentFileModel] = []
+    for row in rows:
+        disk = agent_dir(agent_id) / row.id
+        name = row.display_name or ""
+        if is_familia_form_file(name, disk) or is_familia_tabla_file(name, disk):
+            continue
+        case_files.append(row)
+
+    if not case_files:
+        return rows[:2] if len(rows) > 2 else rows
+
+    psychoped = [
+        r
+        for r in case_files
+        if "psicoped" in _normalize(r.display_name or "")
+    ]
+    if psychoped:
+        return psychoped[:1]
+
+    return case_files[:2]
