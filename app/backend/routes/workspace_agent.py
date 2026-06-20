@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, Form, Header, HTTPException, Query, UploadFile, status
 
 from app.backend.classes.workspace_agent_class import WorkspaceAgentClass
 from app.backend.core.config import settings
 from app.backend.core.responses import api_error, api_response
 from app.backend.schemas.workspace_agent import WorkspaceChatRequest
+from app.backend.utils.agent_upload_token import verify_upload_token
 
 workspace_agent = APIRouter(
     prefix="/workspace-agent",
@@ -14,8 +15,8 @@ workspace_agent = APIRouter(
 
 
 def _require_mcp_secret(
-    authorization: str | None = Header(default=None),
-    x_mcp_secret: str | None = Header(default=None),
+    authorization: str | None = None,
+    x_mcp_secret: str | None = None,
 ) -> None:
     if not settings.mcp_secret:
         return
@@ -29,7 +30,6 @@ def _require_mcp_secret(
 
 
 @workspace_agent.post("/chat")
-def trigger_workspace_agent_chat(body: WorkspaceChatRequest):
     result = WorkspaceAgentClass().trigger_chat(body.input)
     if result.get("status") == "error":
         return api_error(
@@ -61,15 +61,44 @@ async def upload_workspace_agent_file(
     file: UploadFile = File(...),
     filename: str = Form(""),
     agent_id: str = Form(""),
-    _: None = Depends(_require_mcp_secret),
+    token: str = Query(""),
+    authorization: str | None = Header(default=None),
+    x_mcp_secret: str | None = Header(default=None),
 ):
-    """Subida multipart de PDF/Word (alternativa a base64 en MCP). Auth: Bearer MCP_SECRET."""
+    """Subida multipart de .docx. Auth: Bearer MCP_SECRET o ?token= (firmado por prepare_docx_upload)."""
+    resolved_agent_id = agent_id or None
+    resolved_filename = (filename or file.filename or "").strip()
+
+    if token:
+        try:
+            claims = verify_upload_token(token)
+        except ValueError as exc:
+            return api_error(status_code=status.HTTP_401_UNAUTHORIZED, message=str(exc))
+        resolved_agent_id = claims["agent_id"]
+        if not resolved_filename:
+            resolved_filename = claims["filename"]
+        elif _safe_upload_name(resolved_filename) != claims["filename"]:
+            return api_error(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                message="filename no coincide con el token de subida.",
+            )
+    else:
+        try:
+            _require_mcp_secret(authorization, x_mcp_secret)
+        except HTTPException as exc:
+            return api_error(status_code=exc.status_code, message=str(exc.detail))
+
     data = await file.read()
-    name = (filename or file.filename or "").strip()
-    result = WorkspaceAgentClass().upload_file(name, data, agent_id or None)
+    result = WorkspaceAgentClass().upload_file(resolved_filename, data, resolved_agent_id)
     if result.get("status") == "error":
         return api_error(
             status_code=result.get("http_status", status.HTTP_400_BAD_REQUEST),
             message=result.get("message", "Error"),
         )
     return api_response(message=result.get("message", "OK"), data=result.get("data"))
+
+
+def _safe_upload_name(value: str) -> str:
+    from app.backend.utils.agent_workspace_storage import _safe_segment
+
+    return _safe_segment(value.strip())

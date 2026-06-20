@@ -99,6 +99,12 @@ class Settings:
         default_factory=lambda: os.getenv("AGENT_ACCESS_TOKEN", "")
     )
     mcp_secret: str = field(default_factory=lambda: os.getenv("MCP_SECRET", ""))
+    api_public_base: str = field(
+        default_factory=lambda: os.getenv(
+            "API_PUBLIC_BASE",
+            "https://pie360backend.cl/api",
+        )
+    )
 
 
 settings = Settings()

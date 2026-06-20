@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import gzip
 import re
 
 from mcp.server.fastmcp import FastMCP
@@ -10,6 +11,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 
 from app.backend.core.config import settings
 from app.backend.utils import agent_workspace_storage as storage
+from app.backend.utils.agent_upload_token import create_upload_token
 
 # FastAPI usa root_path=/api → ruta interna /mcp = URL pública /api/mcp
 MCP_HTTP_PATH = "/mcp"
@@ -22,10 +24,11 @@ workspace_mcp = FastMCP(
         enable_dns_rebinding_protection=False,
     ),
     instructions=(
-        "Guarda informes generados (PDF, Word) en el servidor PIE360. "
-        "Para archivos pequeños: save_agent_pdf o save_agent_docx. "
-        "Para archivos grandes: begin_agent_file_upload, append_agent_file_chunk, "
-        "finalize_agent_file_upload (chunks de ~256 KB en base64)."
+        "Guarda informes Word (.docx) en PIE360. Flujo automático recomendado: "
+        "1) prepare_docx_upload(filename) → upload_url con token; "
+        "2) code execution: requests.post(upload_url, files={'file': open(ruta_docx,'rb')}); "
+        "3) list_agent_files. Alternativa: save_agent_docx_gzip (docx comprimido en base64). "
+        "Solo .docx, no PDF."
     ),
 )
 
@@ -79,13 +82,61 @@ def save_agent_docx(
 
 
 @workspace_mcp.tool()
+def prepare_docx_upload(
+    filename: str,
+    agent_id: str = "",
+    secret: str = "",
+) -> dict:
+    """Genera URL firmada para subir un .docx por multipart desde code execution (requests/curl)."""
+    _check_secret(secret)
+    aid = storage.resolve_agent_id(agent_id)
+    fname = _ensure_extension(filename, ".docx")
+    token = create_upload_token(fname, aid)
+    base = settings.api_public_base.rstrip("/")
+    upload_url = f"{base}/workspace-agent/files/upload?token={token}"
+    return {
+        "ok": True,
+        "agent_id": aid,
+        "filename": fname,
+        "upload_url": upload_url,
+        "method": "POST",
+        "file_field": "file",
+        "form_field_filename": fname,
+        "expires_minutes": 15,
+        "python_example": (
+            "import requests\n"
+            f"with open(RUTA_DOCX, 'rb') as f:\n"
+            f"    r = requests.post('{upload_url}', files={{'file': f}})\n"
+            "raise SystemExit(r.status_code, r.text)"
+        ),
+    }
+
+
+@workspace_mcp.tool()
+def save_agent_docx_gzip(
+    filename: str,
+    docx_gzip_base64: str,
+    agent_id: str = "",
+    secret: str = "",
+) -> dict:
+    """Guarda un .docx comprimido con gzip (base64). Ideal para informes de ~3 páginas en una sola llamada."""
+    _check_secret(secret)
+    aid = storage.resolve_agent_id(agent_id)
+    fname = _ensure_extension(filename, ".docx")
+    raw = gzip.decompress(base64.b64decode(docx_gzip_base64, validate=True))
+    path = storage.target_file(aid, fname)
+    path.write_bytes(raw)
+    return storage.file_result(path, aid, fname)
+
+
+@workspace_mcp.tool()
 def begin_agent_file_upload(
     filename: str,
     total_chunks: int,
     agent_id: str = "",
     secret: str = "",
 ) -> dict:
-    """Inicia subida por partes. Divide el archivo en chunks de ~256 KB (crudo) antes de codificar en base64."""
+    """Inicia subida por partes. Divide el archivo en chunks de ~64 KB (crudo) antes de codificar en base64."""
     _check_secret(secret)
     return storage.begin_chunked_upload(agent_id, filename, total_chunks)
 

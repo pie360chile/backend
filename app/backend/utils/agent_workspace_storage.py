@@ -13,7 +13,7 @@ from typing import Any
 from app.backend.core.config import settings
 
 # Tamaño recomendado por chunk (bytes crudos) para invocaciones MCP con base64.
-RECOMMENDED_CHUNK_BYTES = 256 * 1024
+RECOMMENDED_CHUNK_BYTES = 64 * 1024
 
 
 def _safe_segment(value: str) -> str:
