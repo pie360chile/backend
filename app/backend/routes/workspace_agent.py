@@ -30,6 +30,7 @@ def _require_mcp_secret(
 
 
 @workspace_agent.post("/chat")
+def trigger_workspace_agent_chat(body: WorkspaceChatRequest):
     result = WorkspaceAgentClass().trigger_chat(body.input)
     if result.get("status") == "error":
         return api_error(
