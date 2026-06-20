@@ -211,3 +211,22 @@ def save_uploaded_bytes(agent_id: str, filename: str, data: bytes) -> dict[str, 
     path = target_file(aid, fname)
     path.write_bytes(data)
     return file_result(path, aid, fname)
+
+
+def save_json_payload(agent_id: str, filename: str, payload: dict[str, Any]) -> dict[str, Any]:
+    aid = resolve_agent_id(agent_id)
+    fname = _ensure_json_filename(filename)
+    path = target_file(aid, fname)
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return file_result(path, aid, fname)
+
+
+def _ensure_json_filename(filename: str) -> str:
+    name = filename.strip()
+    if not name.lower().endswith(".json"):
+        return f"{_safe_segment(name)}.json"
+    base = name[:-5].strip() or "analisis"
+    return f"{_safe_segment(base)}.json"
