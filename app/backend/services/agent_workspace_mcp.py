@@ -22,9 +22,10 @@ workspace_mcp = FastMCP(
         enable_dns_rebinding_protection=False,
     ),
     instructions=(
-        "Guarda informes generados (PDF, Word, texto) en el servidor PIE360. "
-        "Usa agent_id del workspace agent. "
-        "Flujo: save_informe_texto → save_agent_pdf o save_agent_docx."
+        "Guarda informes generados (PDF, Word) en el servidor PIE360. "
+        "Para archivos pequeños: save_agent_pdf o save_agent_docx. "
+        "Para archivos grandes: begin_agent_file_upload, append_agent_file_chunk, "
+        "finalize_agent_file_upload (chunks de ~256 KB en base64)."
     ),
 )
 
@@ -50,12 +51,13 @@ def save_agent_pdf(
     agent_id: str = "",
     secret: str = "",
 ) -> dict:
-    """Guarda un PDF en files/agents/{agent_id}/."""
+    """Guarda un PDF en files/agents/{agent_id}/. Para PDFs grandes usa subida por chunks."""
     _check_secret(secret)
     aid = storage.resolve_agent_id(agent_id)
     fname = _ensure_extension(filename, ".pdf")
+    data = base64.b64decode(pdf_base64, validate=True)
     path = storage.target_file(aid, fname)
-    path.write_bytes(base64.b64decode(pdf_base64, validate=True))
+    path.write_bytes(data)
     return storage.file_result(path, aid, fname)
 
 
@@ -66,13 +68,62 @@ def save_agent_docx(
     agent_id: str = "",
     secret: str = "",
 ) -> dict:
-    """Guarda un Word (.docx) en files/agents/{agent_id}/."""
+    """Guarda un Word (.docx) en files/agents/{agent_id}/. Para archivos grandes usa subida por chunks."""
     _check_secret(secret)
     aid = storage.resolve_agent_id(agent_id)
     fname = _ensure_extension(filename, ".docx")
+    data = base64.b64decode(docx_base64, validate=True)
     path = storage.target_file(aid, fname)
-    path.write_bytes(base64.b64decode(docx_base64, validate=True))
+    path.write_bytes(data)
     return storage.file_result(path, aid, fname)
+
+
+@workspace_mcp.tool()
+def begin_agent_file_upload(
+    filename: str,
+    total_chunks: int,
+    agent_id: str = "",
+    secret: str = "",
+) -> dict:
+    """Inicia subida por partes. Divide el archivo en chunks de ~256 KB (crudo) antes de codificar en base64."""
+    _check_secret(secret)
+    return storage.begin_chunked_upload(agent_id, filename, total_chunks)
+
+
+@workspace_mcp.tool()
+def append_agent_file_chunk(
+    upload_id: str,
+    chunk_index: int,
+    chunk_base64: str,
+    agent_id: str = "",
+    secret: str = "",
+) -> dict:
+    """Envía un fragmento de la subida. chunk_index empieza en 0."""
+    _check_secret(secret)
+    data = base64.b64decode(chunk_base64, validate=True)
+    return storage.append_upload_chunk(agent_id, upload_id, chunk_index, data)
+
+
+@workspace_mcp.tool()
+def finalize_agent_file_upload(
+    upload_id: str,
+    agent_id: str = "",
+    secret: str = "",
+) -> dict:
+    """Ensambla todos los chunks y guarda el archivo final en files/agents/{agent_id}/."""
+    _check_secret(secret)
+    return storage.finalize_chunked_upload(agent_id, upload_id)
+
+
+@workspace_mcp.tool()
+def cancel_agent_file_upload(
+    upload_id: str,
+    agent_id: str = "",
+    secret: str = "",
+) -> dict:
+    """Cancela una subida por partes y elimina los chunks temporales."""
+    _check_secret(secret)
+    return storage.cancel_chunked_upload(agent_id, upload_id)
 
 
 @workspace_mcp.tool()

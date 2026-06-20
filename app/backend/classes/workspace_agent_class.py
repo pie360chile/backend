@@ -14,6 +14,7 @@ from app.backend.utils.agent_workspace_storage import (
     default_agent_id,
     list_agent_files as storage_list_files,
     resolve_agent_id,
+    save_uploaded_bytes,
 )
 
 
@@ -110,3 +111,25 @@ class WorkspaceAgentClass:
                 "files": files,
             },
         }
+
+    def upload_file(
+        self,
+        filename: str,
+        data: bytes,
+        agent_id: str | None = None,
+    ) -> dict[str, Any]:
+        if not data:
+            return {
+                "status": "error",
+                "message": "El archivo está vacío.",
+                "http_status": 400,
+            }
+        name = (filename or "").strip()
+        if not name:
+            return {
+                "status": "error",
+                "message": "filename es obligatorio.",
+                "http_status": 400,
+            }
+        result = save_uploaded_bytes(agent_id, name, data)
+        return {"status": "success", "message": "Archivo guardado.", "data": result}
