@@ -6,13 +6,21 @@ import base64
 import re
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 from app.backend.core.config import settings
 from app.backend.utils import agent_workspace_storage as storage
 
+# FastAPI usa root_path=/api → ruta interna /mcp = URL pública /api/mcp
+MCP_HTTP_PATH = "/mcp"
+
 workspace_mcp = FastMCP(
     name="PIE360 Agent Storage",
     stateless_http=True,
+    streamable_http_path=MCP_HTTP_PATH,
+    transport_security=TransportSecuritySettings(
+        enable_dns_rebinding_protection=False,
+    ),
     instructions=(
         "Guarda informes generados (PDF, Word, texto) en el servidor PIE360. "
         "Usa agent_id del workspace agent. "
@@ -22,7 +30,9 @@ workspace_mcp = FastMCP(
 
 
 def _check_secret(secret: str) -> None:
-    if settings.mcp_secret and secret != settings.mcp_secret:
+    if not settings.mcp_secret:
+        return
+    if secret and secret != settings.mcp_secret:
         raise ValueError("Secret inválido.")
 
 
@@ -175,5 +185,5 @@ def get_default_agent_id(secret: str = "") -> dict:
 
 
 def get_mcp_asgi_app():
-    """Starlette app del MCP (endpoint interno /mcp)."""
+    """Starlette app del MCP (interno /mcp → público /api/mcp)."""
     return workspace_mcp.streamable_http_app()
