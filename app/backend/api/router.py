@@ -126,8 +126,6 @@ from app.backend.routes.school_integration_program_exit_certificates import (
 from app.backend.routes.schools import schools
 from app.backend.routes.settings import settings
 from app.backend.routes.special_educational_needs import special_educational_needs
-from app.backend.routes.agent_files import agent_files
-from app.backend.routes.agents import agents
 from app.backend.routes.student_document_files import student_document_files
 from app.backend.routes.student_guardians import student_guardians
 from app.backend.routes.students import students
@@ -139,6 +137,7 @@ from app.backend.routes.teachings import teachings
 from app.backend.routes.users import users
 from app.backend.routes.videos import videos
 from app.backend.routes.events import events
+from app.backend.routes.workspace_agent import workspace_agent
 
 
 def register_routers(app: FastAPI) -> None:
@@ -179,8 +178,6 @@ def register_routers(app: FastAPI) -> None:
         faqs,
         contacts,
         student_document_files,
-        agent_files,
-        agents,
         folders,
         health_evaluations,
         events,
@@ -237,6 +234,7 @@ def register_routers(app: FastAPI) -> None:
         idtel_reports,
         fur_forms,
         psychomotor_evaluation_reports,
+        workspace_agent,
         pedagogical_evaluation_classroom_first_grade,
         pedagogical_evaluation_classroom_second_grade,
         pedagogical_evaluation_classroom_third_grade,
@@ -258,5 +256,4 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(documents, prefix="/api")
     app.include_router(individual_curriculum_adaptation_plans, prefix="/api")
     app.include_router(document_evalua_result_reports, prefix="/api")
-    app.include_router(agent_files, prefix="/api")
-    app.include_router(agents, prefix="/api")
+    app.include_router(workspace_agent, prefix="/api")

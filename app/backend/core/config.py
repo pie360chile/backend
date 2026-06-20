@@ -13,30 +13,44 @@ def _split_origins(raw: str | None) -> List[str]:
     return [part.strip() for part in str(raw).split(",") if part.strip()]
 
 
-# Frontend del agente (Firebase Hosting)
-AGENT_APP_ORIGINS: tuple[str, ...] = (
-    "https://agent-8ceae.web.app",
-    "https://agent-8ceae.firebaseapp.com",
-)
-
 _DEFAULT_CORS_RAW = ",".join(
     [
-        "*",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://agent-8ceae.web.app",
+        "https://agent-8ceae.firebaseapp.com",
         "https://newerp-ghdegyc9cpcpc6gq.eastus-01.azurewebsites.net",
-        *AGENT_APP_ORIGINS,
     ]
+)
+
+# Si CORS_ORIGINS incluye "*", se agregan estos orígenes de desarrollo local.
+_DEV_CORS_ORIGINS = (
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
 )
 
 
 def resolve_cors_origins(origins: List[str]) -> tuple[list[str], bool]:
     """Con allow_credentials=True, '*' no es válido: usamos orígenes explícitos."""
     merged: list[str] = []
-    for origin in [*origins, *AGENT_APP_ORIGINS]:
-        if origin and origin not in merged:
+    allow_all = "*" in origins
+    for origin in origins:
+        if origin and origin != "*" and origin not in merged:
             merged.append(origin)
-    explicit = [origin for origin in merged if origin != "*"]
-    if explicit:
-        return explicit, True
+    if allow_all:
+        for dev_origin in _DEV_CORS_ORIGINS:
+            if dev_origin not in merged:
+                merged.append(dev_origin)
+    if merged:
+        return merged, True
     return ["*"], False
 
 
@@ -66,10 +80,25 @@ class Settings:
         )
     )
     api_root_path: str = field(default_factory=lambda: os.getenv("API_ROOT_PATH", "/api"))
-    openai_api_key: str | None = field(default_factory=lambda: os.getenv("OPENAI_API_KEY"))
-    openai_agent_model: str = field(
-        default_factory=lambda: os.getenv("OPENAI_AGENT_MODEL", "gpt-5.5")
+    workspace_agent_id: str = field(
+        default_factory=lambda: os.getenv(
+            "WORKSPACE_AGENT_ID",
+            "agtch_6a35d3014cbc8191911eed3847b3e8fe",
+        )
     )
+    workspace_agent_name: str = field(
+        default_factory=lambda: os.getenv("WORKSPACE_AGENT_NAME", "Redactor de Informes PIE")
+    )
+    workspace_agent_api_base: str = field(
+        default_factory=lambda: os.getenv(
+            "WORKSPACE_AGENT_API_BASE",
+            "https://api.chatgpt.com/v1/workspace_agents",
+        )
+    )
+    agent_access_token: str = field(
+        default_factory=lambda: os.getenv("AGENT_ACCESS_TOKEN", "")
+    )
+    mcp_secret: str = field(default_factory=lambda: os.getenv("MCP_SECRET", ""))
 
 
 settings = Settings()

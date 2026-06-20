@@ -8,7 +8,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any, Literal
 
-from app.backend.utils.agent_familia_formtext import (
+from app.backend.utils.familia_report_formtext import (
     _KEY_ALIASES,
     _NARRATIVE_SLOT_KEYS,
     _get_cell_element,
@@ -189,117 +189,6 @@ def _fill_tabla_slot_rows(
     return filled_keys
 
 
-def fill_familia_tabla_cells(
-    template_path: str | Path,
-    replacements: dict[str, str],
-    output_path: str | Path,
-) -> dict[str, Any]:
-    """Rellena informe familia ministerial (tablas planas)."""
-    from docx import Document
-    from docx.oxml import OxmlElement
-    from docx.oxml.ns import qn
-
-    from app.backend.utils.agent_familia_placeholder_fill import (
-        fill_familia_identification_placeholders,
-        list_familia_placeholder_keys_in_path,
-    )
-
-    template_path = Path(template_path)
-    output_path = Path(output_path)
-    if template_path.resolve() != output_path.resolve():
-        import shutil
-
-        shutil.copy2(template_path, output_path)
-
-    if not docx_is_familia_ministerial_tabla(output_path):
-        return {"status": "error", "message": "No es plantilla ministerial de tablas planas"}
-
-    filled_keys: list[str] = []
-    # Detectar placeholders en la plantilla (no solo en output ya rellenado).
-    placeholder_keys = list_familia_placeholder_keys_in_path(template_path)
-    if not placeholder_keys:
-        placeholder_keys = list_familia_placeholder_keys_in_path(output_path)
-
-    if placeholder_keys:
-        id_result = fill_familia_identification_placeholders(
-            output_path, replacements, output_path
-        )
-        filled_keys.extend(id_result.get("filled_keys") or [])
-
-    doc = Document(str(output_path))
-
-    # Si la plantilla usa {{...}}, SOLO placeholders para identificación (sin coordenadas).
-    # Las coordenadas asumen filas ministeriales distintas y desplazan datos si mezclas layouts.
-    id_slots: tuple[tuple[int, int, int, str, FillMode], ...] = ()
-    if not placeholder_keys:
-        id_slots = FAMILIA_TABLA_IDENTIFICATION_SLOTS
-
-    filled_keys.extend(_fill_tabla_slot_rows(doc, id_slots, replacements, qn, OxmlElement))
-    filled_keys.extend(
-        _fill_tabla_slot_rows(doc, FAMILIA_TABLA_NARRATIVE_SLOTS, replacements, qn, OxmlElement)
-    )
-    doc.save(str(output_path))
-
-    mode = "placeholders+hybrid" if placeholder_keys else "coordinates"
-    logger.info(
-        "Tabla familia (%s): %d campos en %s",
-        mode,
-        len(filled_keys),
-        output_path.name,
-    )
-    return {"status": "success", "filled_keys": filled_keys, "mode": mode}
-
-
-def refill_familia_identification_only(
-    docx_path: Path,
-    replacements: dict[str, str],
-    *,
-    template_path: Path | None = None,
-) -> list[str]:
-    """
-    Reaplica tablas 1-2 tras GPT.
-    Si la plantilla usa {{...}}, restaura desde plantilla (el output ya no tiene tags).
-    """
-    from docx import Document
-    from docx.oxml import OxmlElement
-    from docx.oxml.ns import qn
-
-    from app.backend.utils.agent_familia_placeholder_fill import (
-        FAMILIA_IDENTIFICATION_KEYS,
-        docx_has_familia_placeholders,
-        list_familia_placeholder_keys_in_doc,
-        restore_familia_identification_from_template,
-    )
-
-    path = Path(docx_path)
-    tpl = Path(template_path) if template_path else None
-
-    if tpl and tpl.is_file() and docx_has_familia_placeholders(tpl):
-        restored = restore_familia_identification_from_template(path, tpl, replacements)
-        return sorted(set(restored)) if restored else ["template_restore"]
-
-    doc = Document(str(path))
-    placeholder_keys = list_familia_placeholder_keys_in_doc(doc)
-
-    if placeholder_keys or (tpl and tpl.is_file() and docx_has_familia_placeholders(tpl)):
-        from app.backend.utils.agent_familia_placeholder_fill import (
-            fill_familia_identification_tables,
-        )
-
-        id_replacements = {k: v for k, v in replacements.items() if k in FAMILIA_IDENTIFICATION_KEYS}
-        filled = fill_familia_identification_tables(doc, id_replacements)
-        doc.save(str(path))
-        return sorted(set(filled))
-
-    filled = list(
-        _fill_tabla_slot_rows(
-            doc, FAMILIA_TABLA_IDENTIFICATION_SLOTS, replacements, qn, OxmlElement
-        )
-    )
-    doc.save(str(path))
-    return sorted(set(filled))
-
-
 def fix_familia_motivo_evaluacion_tabla(
     docx_path: Path,
     student_context: dict[str, Any] | None = None,
@@ -309,7 +198,7 @@ def fix_familia_motivo_evaluacion_tabla(
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
 
-    from app.backend.utils.agent_familia_prefill import _evaluation_type_flags
+    from app.backend.utils.familia_report_prefill import _evaluation_type_flags
 
     doc = Document(str(docx_path))
     is_admission, is_reeval = _evaluation_type_flags(student_context)
@@ -339,7 +228,7 @@ def apply_familia_arial_10_to_tabla(docx_path: Path) -> None:
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
 
-    from app.backend.utils.agent_familia_prefill import _apply_arial_10_to_run
+    from app.backend.utils.familia_report_prefill import _apply_arial_10_to_run
 
     doc = Document(str(docx_path))
     append_slots = {
@@ -369,7 +258,7 @@ def compact_familia_tabla_narrative(docx_path: Path) -> None:
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
 
-    from app.backend.utils.agent_familia_prefill import (
+    from app.backend.utils.familia_report_prefill import (
         _append_narrative_paragraph,
         _apply_narrative_paragraph_format,
         _is_label_paragraph,
@@ -450,7 +339,7 @@ def relax_familia_tabla_layout(docx_path: Path) -> None:
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
 
-    from app.backend.utils.agent_familia_prefill import _clear_paragraph_pagination_locks
+    from app.backend.utils.familia_report_prefill import _clear_paragraph_pagination_locks
 
     if not docx_is_familia_ministerial_tabla(docx_path):
         return

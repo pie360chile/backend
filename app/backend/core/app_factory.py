@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from app.backend.api.router import register_routers
+from app.backend.core.mcp_integration import combined_app_lifespan, mount_workspace_mcp
 from app.backend.core.config import apply_settings_to_process_env, resolve_cors_origins, settings
 from app.backend.core.cors_utils import cors_headers_for_origin, is_origin_allowed
 
@@ -47,7 +48,6 @@ def register_middleware(app: FastAPI) -> None:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=cors_origins,
-        allow_origin_regex=r"https://agent-[a-z0-9-]+\.(web\.app|firebaseapp\.com)",
         allow_credentials=allow_credentials,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -98,6 +98,7 @@ def create_app() -> FastAPI:
         docs_url=None,
         redoc_url=None,
         openapi_url=None,
+        lifespan=combined_app_lifespan,
     )
 
     register_exception_handlers(app)
@@ -108,4 +109,5 @@ def create_app() -> FastAPI:
     app.mount("/files", StaticFiles(directory=str(files_dir)), name="files")
 
     register_routers(app)
+    mount_workspace_mcp(app)
     return app

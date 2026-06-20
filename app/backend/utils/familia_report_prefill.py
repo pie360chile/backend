@@ -4,13 +4,9 @@ from __future__ import annotations
 
 import logging
 import re
-import shutil
 import unicodedata
 from pathlib import Path
 from typing import Any
-
-from app.backend.utils.agent_familia_template import docx_has_form_controls
-from app.backend.utils.agent_files import agent_dir
 
 logger = logging.getLogger(__name__)
 
@@ -234,11 +230,11 @@ def _compact_sdt_content_spacing(sdt_content_el: Any, qn: Any, OxmlElement: Any)
 
 def compact_familia_narrative_spacing(docx_path: Path) -> None:
     """Justifica narrativa, separa bloques en w:p distintos (sin w:br) y compacta espaciado."""
-    from app.backend.utils.agent_familia_formtext import (
+    from app.backend.utils.familia_report_formtext import (
         compact_familia_formtext_narrative,
         docx_has_legacy_formtext,
     )
-    from app.backend.utils.agent_familia_tabla_fill import (
+    from app.backend.utils.familia_report_tabla_fill import (
         compact_familia_tabla_narrative,
         docx_is_familia_ministerial_tabla,
         relax_familia_tabla_layout,
@@ -342,30 +338,6 @@ def _set_sdt_checkbox_mark(sdt: Any, qn: Any, OxmlElement: Any, checked: bool) -
             break
 
 
-def fill_familia_docx(
-    template_path: str | Path,
-    replacements: dict[str, str],
-    output_path: str | Path,
-) -> dict[str, Any]:
-    """Rellena plantilla familia (tablas planas, FORMTEXT o SDT)."""
-    from app.backend.classes.documents_class import DocumentsClass
-    from app.backend.utils.agent_familia_formtext import (
-        docx_has_legacy_formtext,
-        fill_familia_formtext_fields,
-    )
-    from app.backend.utils.agent_familia_tabla_fill import (
-        docx_is_familia_ministerial_tabla,
-        fill_familia_tabla_cells,
-    )
-
-    path = Path(template_path)
-    if docx_is_familia_ministerial_tabla(path):
-        return fill_familia_tabla_cells(path, replacements, output_path)
-    if docx_has_legacy_formtext(path):
-        return fill_familia_formtext_fields(path, replacements, output_path)
-    return DocumentsClass.fill_docx_form(str(path), replacements, str(output_path))
-
-
 def fix_familia_motivo_evaluacion_row(
     docx_path: Path,
     student_context: dict[str, Any] | None = None,
@@ -374,11 +346,11 @@ def fix_familia_motivo_evaluacion_row(
     Restaura fila MOTIVO DE LA EVALUACIÓN como plantilla original:
     Evaluación: x de Ingreso   x Reevaluación (una x con cuadro).
     """
-    from app.backend.utils.agent_familia_formtext import (
+    from app.backend.utils.familia_report_formtext import (
         docx_has_legacy_formtext,
         fix_familia_motivo_evaluacion_formtext,
     )
-    from app.backend.utils.agent_familia_tabla_fill import (
+    from app.backend.utils.familia_report_tabla_fill import (
         docx_is_familia_ministerial_tabla,
         fix_familia_motivo_evaluacion_tabla,
     )
@@ -490,11 +462,11 @@ def _apply_arial_10_to_run(r: Any, qn: Any, OxmlElement: Any) -> None:
 
 def apply_familia_arial_10_font(docx_path: Path) -> None:
     """Todas las respuestas en content controls: Arial 10, sin negrita."""
-    from app.backend.utils.agent_familia_formtext import (
+    from app.backend.utils.familia_report_formtext import (
         apply_familia_arial_10_to_formtext,
         docx_has_legacy_formtext,
     )
-    from app.backend.utils.agent_familia_tabla_fill import (
+    from app.backend.utils.familia_report_tabla_fill import (
         apply_familia_arial_10_to_tabla,
         docx_is_familia_ministerial_tabla,
     )
@@ -539,9 +511,6 @@ def apply_familia_arial_10_font(docx_path: Path) -> None:
                 walk(hf._element)
 
     doc.save(str(docx_path))
-
-
-def build_familia_identification_replacements(context: dict[str, Any]) -> dict[str, str]:
     """Rellena solo los content controls de identificación (tags exactos de la plantilla)."""
     student_full = str(context.get("student_full_name") or "").strip()
     student_social = str(context.get("student_social_name") or "").strip()
@@ -606,7 +575,7 @@ def build_familia_identification_replacements(context: dict[str, Any]) -> dict[s
 
     replacements: dict[str, str] = {
         "student_full_name": student_full or no_info,
-        "student_social_name": student_social or student_full or no_info,
+        "student_social_name": student_social or no_info,
         "student_identification_number": _fmt_rut(student_id),
         "student_birth_date": student_born or no_info,
         "student_age": student_age or no_info,
@@ -745,7 +714,7 @@ def postprocess_saved_familia_docx(
 
     try:
         replacements = build_familia_identification_replacements(student_context)
-        from app.backend.utils.agent_familia_tabla_fill import (
+        from app.backend.utils.familia_report_tabla_fill import (
             docx_is_familia_ministerial_tabla,
             refill_familia_identification_only,
         )

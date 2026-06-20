@@ -270,7 +270,7 @@ def fix_familia_motivo_evaluacion_formtext(
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
 
-    from app.backend.utils.agent_familia_prefill import _evaluation_type_flags
+    from app.backend.utils.familia_report_prefill import _evaluation_type_flags
 
     doc = Document(str(docx_path))
     if len(doc.tables) < 4 or len(doc.tables[3].rows) < 2:
@@ -323,7 +323,7 @@ def apply_familia_arial_10_to_formtext(docx_path: Path) -> None:
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
 
-    from app.backend.utils.agent_familia_prefill import (
+    from app.backend.utils.familia_report_prefill import (
         FAMILIA_ANSWER_FONT,
         FAMILIA_ANSWER_SIZE_HALF_PT,
         _apply_arial_10_to_run,
@@ -367,7 +367,7 @@ def compact_familia_formtext_narrative(docx_path: Path) -> None:
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
 
-    from app.backend.utils.agent_familia_prefill import (
+    from app.backend.utils.familia_report_prefill import (
         _apply_narrative_paragraph_format,
         _is_label_paragraph,
         _paragraph_has_placeholder,
