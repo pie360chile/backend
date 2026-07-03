@@ -182,12 +182,22 @@ def _reformat_narrative_sdt_content(sdt_content_el: Any, qn: Any, OxmlElement: A
     Normaliza narrativa: un w:p por bloque, justificado, sin w:br.
     w:br + justify en el mismo párrafo estira líneas cortas con espacios enormes.
     """
+    # Plantillas con w:tc dentro de w:sdtContent: reformatear solo dentro de la celda.
+    direct_tc = sdt_content_el.find(qn("w:tc"))
+    if direct_tc is not None:
+        _reformat_narrative_paragraph_container(direct_tc, qn, OxmlElement)
+        return
+
+    _reformat_narrative_paragraph_container(sdt_content_el, qn, OxmlElement)
+
+
+def _reformat_narrative_paragraph_container(container_el: Any, qn: Any, OxmlElement: Any) -> None:
     from copy import deepcopy
 
     segments: list[str] = []
     ref_r_pr = None
 
-    for p in sdt_content_el.iter(qn("w:p")):
+    for p in container_el.iter(qn("w:p")):
         raw = _paragraph_visible_text(p, qn).replace("\r\n", "\n").replace("\r", "\n")
         raw = raw.strip()
         if not raw or _paragraph_has_placeholder(raw) or _is_label_paragraph(raw):
@@ -206,7 +216,7 @@ def _reformat_narrative_sdt_content(sdt_content_el: Any, qn: Any, OxmlElement: A
                 if block:
                     segments.append(block)
 
-    for p in sdt_content_el.iter(qn("w:p")):
+    for p in container_el.iter(qn("w:p")):
         ppr = p.find(qn("w:pPr"))
         if ppr is None:
             ppr = OxmlElement("w:pPr")
@@ -216,11 +226,13 @@ def _reformat_narrative_sdt_content(sdt_content_el: Any, qn: Any, OxmlElement: A
     if not segments:
         return
 
-    for child in list(sdt_content_el):
-        sdt_content_el.remove(child)
+    for child in list(container_el):
+        if child.tag == qn("w:tcPr"):
+            continue
+        container_el.remove(child)
 
     for seg in segments:
-        _append_narrative_paragraph(sdt_content_el, seg, qn, OxmlElement, ref_r_pr)
+        _append_narrative_paragraph(container_el, seg, qn, OxmlElement, ref_r_pr)
 
 
 def _compact_sdt_content_spacing(sdt_content_el: Any, qn: Any, OxmlElement: Any) -> None:

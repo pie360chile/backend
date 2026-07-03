@@ -161,7 +161,7 @@ def fill_familia_template(
             str(output_path),
             remove_literal_strings=list(_WORD_PLACEHOLDERS),
             content_control_tag_aliases=cc_aliases,
-            preserve_empty_content_controls=True,
+            preserve_empty_content_controls=False,
         )
 
     if result.get("status") == "error":

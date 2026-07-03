@@ -10162,6 +10162,129 @@ class DocumentsClass:
                                 return p
                             return paras[-1]
 
+                        def _rewrite_paragraph_with_segments(
+                            p_el,
+                            segs: List[str],
+                            *,
+                            justify_both: bool = False,
+                        ) -> Any:
+                            """Devuelve un w:p nuevo con el texto; reemplaza el párrafo en la celda."""
+                            new_p = OxmlElement("w:p")
+                            ppr = OxmlElement("w:pPr")
+                            if justify_both:
+                                _ppr_set_justify_both(ppr)
+                            else:
+                                _ppr_set_jc_val(ppr, "left")
+                            new_p.append(ppr)
+                            first_seg = True
+                            for seg in segs:
+                                if not first_seg:
+                                    rb = OxmlElement("w:r")
+                                    rb.append(OxmlElement("w:br"))
+                                    new_p.append(rb)
+                                first_seg = False
+                                r = OxmlElement("w:r")
+                                t = OxmlElement("w:t")
+                                if seg:
+                                    t.text = seg
+                                    t.set(qn("xml:space"), "preserve")
+                                r.append(t)
+                                new_p.append(r)
+                            parent = p_el.getparent()
+                            if parent is not None:
+                                parent.replace(p_el, new_p)
+                            return new_p
+
+                        # Plantillas ministeriales: w:sdtContent → w:tc (celda anidada). No quitar w:tc.
+                        direct_tc = sdt_content_el.find(qn("w:tc"))
+                        if direct_tc is not None:
+                            fk = (field_key or "").strip()
+                            long_text_keys = frozenset(
+                                {
+                                    "cognitive_analysis",
+                                    "personal_analysis",
+                                    "motor_analysis",
+                                    "conclusion",
+                                    "cognitive_synthesis",
+                                    "personal_synthesis",
+                                    "motor_synthesis",
+                                    "suggestions_to_school",
+                                    "suggestions_to_classroom_team",
+                                    "suggestions_to_family",
+                                    "suggestions_to_student",
+                                    "other_suggestions",
+                                    "instruments_applied",
+                                    "applied_instruments",
+                                    "school_history_background",
+                                    "diagnostic",
+                                    "pedagogical_field_1",
+                                    "pedagogical_field_2",
+                                    "social_field_1",
+                                    "social_field_2",
+                                    "collaborative_work",
+                                    "supports",
+                                    "agreements",
+                                }
+                            )
+                            justify_both = fk in long_text_keys
+                            paragraphs_here = list(direct_tc.findall(qn("w:p")))
+                            if not paragraphs_here:
+                                new_p = OxmlElement("w:p")
+                                direct_tc.append(new_p)
+                                paragraphs_here = [new_p]
+
+                            if justify_both and len(segments) > 1:
+                                for p in paragraphs_here:
+                                    direct_tc.remove(p)
+                                for segment in segments:
+                                    new_p = OxmlElement("w:p")
+                                    ppr = OxmlElement("w:pPr")
+                                    _ppr_set_justify_both(ppr)
+                                    new_p.append(ppr)
+                                    r = OxmlElement("w:r")
+                                    t = OxmlElement("w:t")
+                                    if segment:
+                                        t.text = segment
+                                        t.set(qn("xml:space"), "preserve")
+                                    r.append(t)
+                                    new_p.append(r)
+                                    direct_tc.append(new_p)
+                                return
+
+                            target_p = None
+                            for p in paragraphs_here:
+                                full = _paragraph_visible_text(p)
+                                if _paragraph_has_placeholder(full.lower()):
+                                    target_p = p
+                                    break
+                            if target_p is None:
+                                for p in paragraphs_here:
+                                    full = _paragraph_visible_text(p).strip()
+                                    if not full:
+                                        target_p = p
+                                        break
+                                    if _is_label_like_all_caps_line(full):
+                                        continue
+                                    target_p = p
+                                    break
+                            if target_p is None:
+                                target_p = paragraphs_here[-1]
+
+                            target_p = _rewrite_paragraph_with_segments(
+                                target_p, segments, justify_both=justify_both
+                            )
+                            for p in paragraphs_here:
+                                if p is target_p:
+                                    continue
+                                par = p.getparent()
+                                if par is not None:
+                                    par.remove(p)
+                            for wt in direct_tc.iter(qn("w:t")):
+                                tx = (wt.text or "").strip().lower()
+                                if tx and _paragraph_has_placeholder(tx):
+                                    wt.text = ""
+                            return
+
                         if psychoped_sdt:
                             fk = (field_key or "").strip()
                             PSYCHOPED_LONG_TEXT_KEYS = frozenset(
