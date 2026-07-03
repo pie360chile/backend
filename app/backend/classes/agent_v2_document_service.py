@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 import uuid
 from pathlib import Path
 from typing import Any
@@ -18,7 +19,14 @@ from app.backend.db.models.pie_core import (
     StudentPersonalInfoModel,
 )
 from app.backend.utils import agent_v2_storage as storage
+from app.backend.utils.agent_v2_familia_fill import fill_familia_template, validate_docx
 from app.backend.utils.agent_v2_template_inspector import fields_from_json
+
+_FAMILIA_DOCUMENT_ID = 7
+_WORD_PLACEHOLDERS = (
+    "Haz clic o pulse aquí para escribir texto.",
+    "Click or tap here to enter text.",
+)
 
 
 def _student_context(db: Session, student_id: int) -> dict[str, Any]:
@@ -69,11 +77,27 @@ def generate_and_save_document(
     output_path = output_dir / filename
 
     if ext == "docx":
-        result = DocumentsClass.fill_docx_form(
-            str(template_abs),
-            replacements,
-            str(output_path),
-        )
+        if int(template.document_id) == _FAMILIA_DOCUMENT_ID:
+            result = fill_familia_template(
+                template_abs,
+                output_path,
+                replacements,
+                student_context=student_ctx,
+            )
+        else:
+            shutil.copy2(template_abs, output_path)
+            result = DocumentsClass.fill_docx_form(
+                str(output_path),
+                replacements,
+                str(output_path),
+                remove_literal_strings=list(_WORD_PLACEHOLDERS),
+                preserve_empty_content_controls=True,
+            )
+            if result.get("status") != "error" and not validate_docx(output_path):
+                result = {
+                    "status": "error",
+                    "message": "El Word generado quedó corrupto. Revise la plantilla.",
+                }
         if result.get("status") == "error":
             return result
     elif ext == "pdf":

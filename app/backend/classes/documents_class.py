@@ -9934,12 +9934,14 @@ class DocumentsClass:
         output_path: str,
         remove_literal_strings: Optional[List[str]] = None,
         content_control_tag_aliases: Optional[Dict[str, str]] = None,
+        preserve_empty_content_controls: bool = False,
     ) -> Dict[str, Any]:
         """
         Rellena un formulario DOCX reemplazando etiquetas/placeholders.
         Soporta: {etiqueta}, [etiqueta], <<etiqueta>>, {{etiqueta}}, CONTENT CONTROLS por tag.
         Si remove_literal_strings está definido, se eliminan esas cadenas del texto (ej. placeholder "Haz clic o pulse aquí...").
         content_control_tag_aliases: mapa etiqueta XML normalizada -> clave existente en replacements (p. ej. doc 27 en español).
+        preserve_empty_content_controls: si True, no desenvuelve SDT vacíos (evita romper plantillas ministeriales).
         """
         try:
             doc = Document(template_path)
@@ -10390,9 +10392,13 @@ class DocumentsClass:
                             if _set_checkbox_checked(sdt, sdtPr, is_checked):
                                 continue
 
-                            # Campos de texto: si valor vacío, desenvolver el control para que no salga formulario editable
+                            # Campos de texto: si valor vacío, desenvolver el control (salvo plantillas ministeriales)
                             sdtContent = sdt.find(qn("w:sdtContent"))
-                            if sdtContent is not None and not val_stripped:
+                            if (
+                                sdtContent is not None
+                                and not val_stripped
+                                and not preserve_empty_content_controls
+                            ):
                                 for wt in sdtContent.iter(qn("w:t")):
                                     wt.text = ""
                                 parent = sdt.getparent()

@@ -511,6 +511,9 @@ def apply_familia_arial_10_font(docx_path: Path) -> None:
                 walk(hf._element)
 
     doc.save(str(docx_path))
+
+
+def build_familia_identification_replacements(context: dict[str, Any]) -> dict[str, str]:
     """Rellena solo los content controls de identificación (tags exactos de la plantilla)."""
     student_full = str(context.get("student_full_name") or "").strip()
     student_social = str(context.get("student_social_name") or "").strip()

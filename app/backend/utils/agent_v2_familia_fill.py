@@ -1,0 +1,212 @@
+"""Relleno seguro de plantilla Informe Familia para Agent v2."""
+
+from __future__ import annotations
+
+import logging
+import re
+import shutil
+import unicodedata
+import zipfile
+from pathlib import Path
+from typing import Any
+
+from app.backend.classes.documents_class import DocumentsClass
+
+logger = logging.getLogger(__name__)
+
+_WORD_PLACEHOLDERS = (
+    "Haz clic o pulse aquí para escribir texto.",
+    "Click or tap here to enter text.",
+)
+
+# Etiqueta normalizada del control → clave en replacements
+FAMILIA_CONTENT_CONTROL_ALIASES: dict[str, str] = {
+    "full_name": "student_full_name",
+    "student_name": "student_full_name",
+    "nombre": "student_full_name",
+    "identification_number": "student_identification_number",
+    "student_rut": "student_identification_number",
+    "rut": "student_identification_number",
+    "ipe": "student_identification_number",
+    "birth_date": "student_birth_date",
+    "student_born_date": "student_birth_date",
+    "age": "student_age",
+    "course": "student_course",
+    "school": "student_school",
+    "professional_name": "professional_full_name",
+    "person_name": "person_full_name",
+    "receiver_full_name": "person_full_name",
+}
+
+
+def _normalize_key(key: str) -> str:
+    t = (key or "").strip().lower()
+    t = unicodedata.normalize("NFKD", t)
+    t = "".join(c for c in t if unicodedata.category(c) != "Mn")
+    t = re.sub(r"[^a-z0-9]+", "_", t)
+    return re.sub(r"_+", "_", t).strip("_")
+
+
+def merge_familia_replacements(
+    llm_fields: dict[str, str],
+    student_ctx: dict[str, Any],
+) -> dict[str, str]:
+    """Combina campos del LLM con datos del estudiante en PIE360."""
+    merged: dict[str, str] = {}
+
+    for key, value in llm_fields.items():
+        if value is not None and str(value).strip():
+            merged[key] = str(value).strip()
+
+    full_name = (student_ctx.get("student_fullname") or "").strip()
+    rut = (student_ctx.get("identification_number") or "").strip()
+
+    defaults: dict[str, str] = {}
+    if full_name:
+        defaults.update(
+            {
+                "student_full_name": full_name,
+                "full_name": full_name,
+                "student_name": full_name,
+            }
+        )
+    if rut:
+        defaults.update(
+            {
+                "student_identification_number": rut,
+                "identification_number": rut,
+                "student_rut": rut,
+                "rut": rut,
+            }
+        )
+
+    for key, value in defaults.items():
+        merged.setdefault(key, value)
+
+    return merged
+
+
+def validate_docx(path: Path) -> bool:
+    try:
+        if not path.is_file() or path.stat().st_size < 100:
+            return False
+        with zipfile.ZipFile(path, "r") as zf:
+            if zf.testzip() is not None:
+                return False
+            return "[Content_Types].xml" in zf.namelist()
+    except Exception:
+        return False
+
+
+def _fill_tabla_ministerial(output_path: Path, replacements: dict[str, str]) -> dict[str, Any]:
+    from docx import Document
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    from app.backend.utils.familia_report_tabla_fill import FAMILIA_TABLA_SLOTS, _fill_tabla_slot_rows
+
+    doc = Document(str(output_path))
+    filled = _fill_tabla_slot_rows(doc, FAMILIA_TABLA_SLOTS, replacements, qn, OxmlElement)
+    doc.save(str(output_path))
+    return {"status": "success", "filled_keys": filled}
+
+
+def fill_familia_template(
+    template_path: Path,
+    output_path: Path,
+    replacements: dict[str, str],
+    student_context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """
+    Copia la plantilla subida por el agente y la rellena sin romper controles Word.
+    """
+    if not template_path.is_file():
+        return {"status": "error", "message": "Plantilla no encontrada."}
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(template_path, output_path)
+
+    merged = merge_familia_replacements(replacements, student_context or {})
+
+    try:
+        from app.backend.utils.familia_report_formtext import (
+            docx_has_legacy_formtext,
+            fill_familia_formtext_fields,
+        )
+        from app.backend.utils.familia_report_tabla_fill import (
+            FAMILIA_TABLA_SLOTS,
+            _fill_tabla_slot_rows,
+            docx_is_familia_ministerial_tabla,
+        )
+    except ImportError:
+        docx_has_legacy_formtext = None  # type: ignore
+        fill_familia_formtext_fields = None  # type: ignore
+        docx_is_familia_ministerial_tabla = None  # type: ignore
+        fill_familia_tabla_fields = None  # type: ignore
+
+    result: dict[str, Any]
+
+    if docx_has_legacy_formtext and docx_has_legacy_formtext(output_path):
+        result = fill_familia_formtext_fields(template_path, merged, output_path)
+    elif docx_is_familia_ministerial_tabla and docx_is_familia_ministerial_tabla(output_path):
+        result = _fill_tabla_ministerial(output_path, merged)
+    else:
+        cc_aliases = dict(FAMILIA_CONTENT_CONTROL_ALIASES)
+        for key in merged:
+            cc_aliases.setdefault(_normalize_key(key), key)
+
+        result = DocumentsClass.fill_docx_form(
+            str(output_path),
+            merged,
+            str(output_path),
+            remove_literal_strings=list(_WORD_PLACEHOLDERS),
+            content_control_tag_aliases=cc_aliases,
+            preserve_empty_content_controls=True,
+        )
+
+    if result.get("status") == "error":
+        return result
+
+    _apply_familia_postprocess(output_path, student_context)
+
+    if not validate_docx(output_path):
+        return {
+            "status": "error",
+            "message": "El Word generado quedó corrupto. Revise la plantilla subida.",
+        }
+
+    return {
+        "status": "success",
+        "message": "Documento DOCX rellenado correctamente",
+        "file_path": str(output_path),
+        "filename": output_path.name,
+    }
+
+
+def _apply_familia_postprocess(
+    output_path: Path,
+    student_context: dict[str, Any] | None,
+) -> None:
+    try:
+        from app.backend.utils.familia_report_prefill import (
+            apply_familia_arial_10_font,
+            compact_familia_narrative_spacing,
+            fix_familia_motivo_evaluacion_row,
+        )
+    except ImportError:
+        return
+
+    try:
+        compact_familia_narrative_spacing(output_path)
+    except Exception as exc:
+        logger.warning("compact_familia_narrative_spacing: %s", exc)
+
+    try:
+        fix_familia_motivo_evaluacion_row(output_path, student_context or {})
+    except Exception as exc:
+        logger.warning("fix_familia_motivo_evaluacion_row: %s", exc)
+
+    try:
+        apply_familia_arial_10_font(output_path)
+    except Exception as exc:
+        logger.warning("apply_familia_arial_10_font: %s", exc)
