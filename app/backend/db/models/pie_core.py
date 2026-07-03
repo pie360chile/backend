@@ -2053,3 +2053,16 @@ class AlertModel(Base):
     added_date = Column(DateTime, nullable=True)
     updated_date = Column(DateTime, nullable=True)
 
+
+class SchoolsSettingModel(Base):
+    """Configuración por colegio (Google Drive API, etc.). Una fila por school_id."""
+
+    __tablename__ = "schools_settings"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    school_id = Column(Integer, nullable=False, unique=True)
+    google_drive_root_folder_id = Column(String(255), nullable=True)
+    google_service_account_json = Column(Text, nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+

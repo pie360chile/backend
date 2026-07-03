@@ -4,7 +4,27 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import List
+
+
+def backend_env_path() -> Path:
+    """Ruta absoluta a backend/.env (independiente del cwd al arrancar uvicorn)."""
+    return Path(__file__).resolve().parents[3] / ".env"
+
+
+def load_backend_env() -> None:
+    """Carga backend/.env con override para que reinicios reflejen cambios del archivo."""
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        return
+    env_file = backend_env_path()
+    if env_file.is_file():
+        load_dotenv(env_file, override=True)
+
+
+load_backend_env()
 
 
 def _split_origins(raw: str | None) -> List[str]:
@@ -15,6 +35,8 @@ def _split_origins(raw: str | None) -> List[str]:
 
 _DEFAULT_CORS_RAW = ",".join(
     [
+        "http://localhost:3002",
+        "http://127.0.0.1:3002",
         "http://localhost:3001",
         "http://127.0.0.1:3001",
         "http://localhost:3000",
@@ -29,6 +51,8 @@ _DEFAULT_CORS_RAW = ",".join(
 
 # Si CORS_ORIGINS incluye "*", se agregan estos orígenes de desarrollo local.
 _DEV_CORS_ORIGINS = (
+    "http://localhost:3002",
+    "http://127.0.0.1:3002",
     "http://localhost:3001",
     "http://127.0.0.1:3001",
     "http://localhost:3000",
@@ -105,12 +129,22 @@ class Settings:
             "https://pie360backend.cl/api",
         )
     )
+    google_drive_credentials_path: str = field(
+        default_factory=lambda: os.getenv("GOOGLE_DRIVE_CREDENTIALS_PATH", "")
+    )
+    google_drive_root_folder_id: str = field(
+        default_factory=lambda: os.getenv("GOOGLE_DRIVE_ROOT_FOLDER_ID", "")
+    )
+    openai_api_key: str = field(default_factory=lambda: os.getenv("OPENAI_API_KEY", ""))
+    agent_v2_model: str = field(default_factory=lambda: os.getenv("AGENT_V2_MODEL", "gpt-5.5"))
 
 
 settings = Settings()
 
 
 def apply_settings_to_process_env() -> None:
-    """Compatibilidad con código que lee os.environ['SECRET_KEY'] directamente."""
+    """Compatibilidad con código que lee os.environ directamente."""
     os.environ.setdefault("SECRET_KEY", settings.secret_key)
     os.environ.setdefault("ALGORITHM", settings.algorithm)
+    if settings.openai_api_key:
+        os.environ["OPENAI_API_KEY"] = settings.openai_api_key

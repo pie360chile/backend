@@ -1,0 +1,285 @@
+"""Chat Agent v2: prompt desde BD + OpenAI + generación Word/PDF + guardado en folders."""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Iterator
+from typing import Any
+
+from sqlalchemy.orm import Session
+
+from app.backend.classes.agent_v2_document_service import (
+    build_fields_prompt,
+    generate_and_save_document,
+)
+from app.backend.core.config import settings
+from app.backend.db.models.agent_v2 import AgentV2Model
+from app.backend.db.models.agent_v2_documents import AgentV2DocumentTemplateModel
+from app.backend.services import agent_v2_openai
+from app.backend.services.agent_v2_openai import openai_api_key_configured
+from app.backend.utils import agent_v2_storage as storage
+from app.backend.utils.agent_v2_file_context import build_agent_files_context
+from app.backend.utils.agent_v2_prompt_sanitize import (
+    CHAT_OUTPUT_OVERRIDE,
+    sanitize_role_instructions_for_chat,
+)
+from app.backend.utils.agent_v2_template_inspector import fields_from_json
+
+
+def _sse(event: dict[str, Any]) -> dict[str, Any]:
+    return event
+
+
+class AgentV2ChatClass:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+
+    def _get_agent(self, agent_id: str) -> AgentV2Model | None:
+        return self.db.query(AgentV2Model).filter(AgentV2Model.id == agent_id).first()
+
+    def _get_template(self, agent_id: str, document_id: int) -> AgentV2DocumentTemplateModel | None:
+        return (
+            self.db.query(AgentV2DocumentTemplateModel)
+            .filter(
+                AgentV2DocumentTemplateModel.agent_id == agent_id,
+                AgentV2DocumentTemplateModel.document_id == document_id,
+            )
+            .first()
+        )
+
+    def _list_templates_summary(self, agent_id: str) -> list[dict[str, Any]]:
+        rows = (
+            self.db.query(AgentV2DocumentTemplateModel)
+            .filter(AgentV2DocumentTemplateModel.agent_id == agent_id)
+            .order_by(AgentV2DocumentTemplateModel.document_name.asc())
+            .all()
+        )
+        return [
+            {
+                "documentId": row.document_id,
+                "documentName": row.document_name,
+                "formatType": row.format_type,
+                "fieldCount": len(fields_from_json(row.detected_fields)),
+            }
+            for row in rows
+        ]
+
+    def _build_system_prompt(
+        self,
+        agent: AgentV2Model,
+        document_id: int | None,
+        files_context: str = "",
+        files_included: int = 0,
+    ) -> str:
+        templates = self._list_templates_summary(agent.id)
+        templates_text = (
+            json.dumps(templates, ensure_ascii=False, indent=2)
+            if templates
+            else "[]"
+        )
+        doc_hint = ""
+        if document_id is not None:
+            template = self._get_template(agent.id, document_id)
+            if template:
+                doc_hint = (
+                    f"\n\nDocumento activo: {template.document_name} (id {document_id}), "
+                    f"formato {template.format_type.upper()}.\n"
+                    f"Campos de la plantilla:\n{build_fields_prompt(template)}"
+                )
+            else:
+                doc_hint = (
+                    f"\n\nDocumento solicitado (id {document_id}) sin plantilla configurada "
+                    "para este agente."
+                )
+
+        file_count = storage.count_files(agent.name)
+        files_block = ""
+        if files_context:
+            files_block = f"\n\n{files_context}\n"
+        elif files_included == 0 and file_count > 0:
+            files_block = (
+                "\n\nNota: hay archivos en Files pero no se pudo extraer texto "
+                "(formatos no soportados o vacíos). Formatos soportados: .txt, .md, "
+                ".docx, .pdf, .json, .csv.\n"
+            )
+
+        role_text = sanitize_role_instructions_for_chat(agent.role_instructions)
+
+        return (
+            f"Eres el agente «{agent.name}» de PIE360.\n\n"
+            f"{role_text}\n\n"
+            f"{CHAT_OUTPUT_OVERRIDE}\n\n"
+            f"Archivos en Files del agente: {file_count} "
+            f"({files_included} incluidos en este contexto).\n"
+            f"{files_block}"
+            f"Plantillas de documentos configuradas:\n{templates_text}"
+            f"{doc_hint}\n\n"
+            "Responde en español. Si las instrucciones indican usar archivos subidos, "
+            "basa tu respuesta solo en el contenido de ARCHIVOS DE CONTEXTO arriba. "
+            "No inventes datos que no estén en el mensaje ni en esos archivos."
+        )
+
+    def _build_messages(
+        self,
+        agent: AgentV2Model,
+        message: str,
+        history: list[dict[str, str]] | None,
+        document_id: int | None,
+        files_context: str = "",
+        files_included: int = 0,
+    ) -> list[dict[str, str]]:
+        messages: list[dict[str, str]] = [
+            {
+                "role": "system",
+                "content": self._build_system_prompt(
+                    agent, document_id, files_context, files_included
+                ),
+            },
+        ]
+        for item in history or []:
+            role = item.get("role", "user")
+            content = (item.get("content") or "").strip()
+            if role in {"user", "assistant"} and content:
+                messages.append({"role": role, "content": content})
+        messages.append({"role": "user", "content": message.strip()})
+        return messages
+
+    def _extract_replacements(
+        self,
+        agent: AgentV2Model,
+        template: AgentV2DocumentTemplateModel,
+        user_message: str,
+        assistant_reply: str,
+        files_context: str = "",
+    ) -> dict[str, str]:
+        fields = fields_from_json(template.detected_fields)
+        if not fields:
+            return {}
+
+        files_section = f"\n\nArchivos de contexto (Files):\n{files_context}" if files_context else ""
+        role_text = sanitize_role_instructions_for_chat(agent.role_instructions)
+        prompt = (
+            "Devuelve SOLO un objeto JSON donde cada clave es exactamente el nombre del campo "
+            "y el valor es el texto a insertar en la plantilla.\n"
+            f"Campos requeridos:\n{build_fields_prompt(template)}\n\n"
+            f"Instrucciones del agente:\n{role_text}\n\n"
+            f"{CHAT_OUTPUT_OVERRIDE}\n"
+            f"{files_section}\n\n"
+            f"Mensaje del usuario:\n{user_message}\n\n"
+            f"Respuesta del asistente:\n{assistant_reply}\n\n"
+            "Usa solo información presente en los archivos de contexto y el mensaje. "
+            "Si no hay información para un campo, usa cadena vacía."
+        )
+        raw = agent_v2_openai.json_chat_completion(
+            [
+                {"role": "system", "content": "Eres un extractor de datos para formularios PIE360."},
+                {"role": "user", "content": prompt},
+            ]
+        )
+        replacements: dict[str, str] = {}
+        for field in fields:
+            value = raw.get(field)
+            if value is None:
+                for key, val in raw.items():
+                    if key.strip().lower() == field.strip().lower():
+                        value = val
+                        break
+            replacements[field] = str(value) if value is not None else ""
+        return replacements
+
+    def stream_chat(
+        self,
+        agent_id: str,
+        message: str,
+        student_id: int | None = None,
+        document_id: int | None = None,
+        history: list[dict[str, str]] | None = None,
+    ) -> Iterator[dict[str, Any]]:
+        if not openai_api_key_configured():
+            yield _sse(
+                {
+                    "type": "error",
+                    "message": "OPENAI_API_KEY no está configurada en el backend.",
+                }
+            )
+            return
+
+        agent = self._get_agent(agent_id)
+        if not agent:
+            yield _sse({"type": "error", "message": "Agente no encontrado."})
+            return
+
+        file_count = storage.count_files(agent.name)
+        if file_count > 0:
+            yield _sse({"type": "step", "message": "Leyendo archivos de Files…"})
+
+        files_context, files_included = build_agent_files_context(agent.name)
+
+        yield _sse({"type": "step", "message": f"Consultando a {settings.agent_v2_model}…"})
+
+        messages = self._build_messages(
+            agent, message, history, document_id, files_context, files_included
+        )
+        full_reply = ""
+        try:
+            for delta in agent_v2_openai.stream_chat_completion(messages):
+                full_reply += delta
+                yield _sse({"type": "text_delta", "delta": delta})
+        except Exception as exc:
+            yield _sse({"type": "error", "message": str(exc)})
+            return
+
+        response_files: list[dict[str, Any]] = []
+        warning: str | None = None
+
+        if student_id and document_id:
+            template = self._get_template(agent_id, document_id)
+            if not template:
+                warning = (
+                    f"No hay plantilla configurada para el documento {document_id}. "
+                    "Configúrala en Documentos del agente."
+                )
+            else:
+                yield _sse(
+                    {
+                        "type": "step",
+                        "message": f"Generando {template.format_type.upper()}…",
+                    }
+                )
+                try:
+                    replacements = self._extract_replacements(
+                        agent, template, message, full_reply, files_context
+                    )
+                    gen = generate_and_save_document(
+                        self.db, template, student_id, replacements
+                    )
+                    if gen.get("status") == "error":
+                        warning = gen.get("message", "Error al generar el documento.")
+                    else:
+                        yield _sse(
+                            {
+                                "type": "step",
+                                "message": "Documento guardado en la base de datos.",
+                            }
+                        )
+                        response_files.append(
+                            {
+                                "id": gen.get("filename", ""),
+                                "name": gen.get("filename", ""),
+                                "documentId": gen.get("documentId"),
+                                "documentName": gen.get("documentName"),
+                            }
+                        )
+                except Exception as exc:
+                    warning = f"No se pudo generar el documento: {exc}"
+
+        yield _sse(
+            {
+                "type": "done",
+                "data": {
+                    "reply": full_reply,
+                    "responseFiles": response_files,
+                    "warning": warning,
+                },
+            }
+        )

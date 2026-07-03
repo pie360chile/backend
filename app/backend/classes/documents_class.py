@@ -9,6 +9,7 @@ import fitz  # PyMuPDF
 from docx import Document
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from datetime import datetime, date
 from app.backend.db.models import DocumentModel, BirthCertificateDocumentModel, HealthEvaluationModel, FolderModel
 
@@ -23,6 +24,12 @@ except ImportError:
     NumberObject = None
     BooleanObject = None
     TextStringObject = None
+
+
+def _document_not_deleted_filter():
+    """Activo si deleted_date es NULL o cadena vacía (legado en BD)."""
+    return or_(DocumentModel.deleted_date.is_(None), DocumentModel.deleted_date == "")
+
 
 # ReportLab imports (opcional, solo si está instalado)
 try:
@@ -1000,7 +1007,7 @@ class DocumentsClass:
         Solo devuelve documentos que no tienen deleted_date (no eliminados).
         """
         try:
-            query = self.db.query(DocumentModel).filter(DocumentModel.deleted_date.is_(None))
+            query = self.db.query(DocumentModel).filter(_document_not_deleted_filter())
 
             if document_type_id is not None:
                 query = query.filter(DocumentModel.document_type_id == document_type_id)

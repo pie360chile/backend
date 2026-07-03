@@ -1,7 +1,7 @@
 try:
-    from dotenv import load_dotenv
+    from app.backend.core.config import load_backend_env
 
-    load_dotenv()
+    load_backend_env()
 except ImportError:
     pass
 

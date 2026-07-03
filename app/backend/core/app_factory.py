@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request, status
@@ -11,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.backend.api.router import register_routers
 from app.backend.core.mcp_integration import combined_app_lifespan, mount_workspace_mcp
-from app.backend.core.config import apply_settings_to_process_env, resolve_cors_origins, settings
+from app.backend.core.config import apply_settings_to_process_env, backend_env_path, resolve_cors_origins, settings
 from app.backend.core.cors_utils import cors_headers_for_origin, is_origin_allowed
 
 
@@ -89,6 +90,18 @@ def register_middleware(app: FastAPI) -> None:
 
 def create_app() -> FastAPI:
     apply_settings_to_process_env()
+    key = settings.openai_api_key
+    if key:
+        logging.getLogger(__name__).info(
+            "OpenAI configurada (modelo=%s, key=…%s)",
+            settings.agent_v2_model,
+            key[-4:],
+        )
+    else:
+        logging.getLogger(__name__).warning(
+            "OPENAI_API_KEY no configurada en %s",
+            backend_env_path(),
+        )
 
     app = FastAPI(
         root_path=settings.api_root_path,
