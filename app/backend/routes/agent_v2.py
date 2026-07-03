@@ -75,6 +75,7 @@ def chat_agent_v2(
             agent_id,
             body.message,
             student_id=body.student_id,
+            student_rut=body.student_rut,
             document_id=body.document_id,
             history=history,
         ):

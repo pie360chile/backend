@@ -23,6 +23,12 @@ from app.backend.utils.agent_v2_prompt_sanitize import (
     CHAT_OUTPUT_OVERRIDE,
     sanitize_role_instructions_for_chat,
 )
+from app.backend.utils.agent_v2_chat_context import (
+    infer_document_id,
+    resolve_student_id,
+    student_identification_hint,
+    wants_document_generation,
+)
 from app.backend.utils.agent_v2_template_inspector import fields_from_json
 
 
@@ -70,6 +76,8 @@ class AgentV2ChatClass:
         document_id: int | None,
         files_context: str = "",
         files_included: int = 0,
+        student_hint: str = "",
+        pending_rut: bool = False,
     ) -> str:
         templates = self._list_templates_summary(agent.id)
         templates_text = (
@@ -104,6 +112,15 @@ class AgentV2ChatClass:
             )
 
         role_text = sanitize_role_instructions_for_chat(agent.role_instructions)
+        student_block = ""
+        if student_hint:
+            student_block = f"\n\n{student_hint}\n"
+        elif pending_rut:
+            student_block = (
+                "\n\nEl estudiante aún no está identificado en PIE360. "
+                "Debes pedir el RUT o IPE para ubicarlo en la plataforma antes de "
+                "indicar que el documento Word fue generado.\n"
+            )
 
         return (
             f"Eres el agente «{agent.name}» de PIE360.\n\n"
@@ -113,7 +130,8 @@ class AgentV2ChatClass:
             f"({files_included} incluidos en este contexto).\n"
             f"{files_block}"
             f"Plantillas de documentos configuradas:\n{templates_text}"
-            f"{doc_hint}\n\n"
+            f"{doc_hint}"
+            f"{student_block}\n\n"
             "Responde en español. Si las instrucciones indican usar archivos subidos, "
             "basa tu respuesta solo en el contenido de ARCHIVOS DE CONTEXTO arriba. "
             "No inventes datos que no estén en el mensaje ni en esos archivos."
@@ -127,12 +145,19 @@ class AgentV2ChatClass:
         document_id: int | None,
         files_context: str = "",
         files_included: int = 0,
+        student_hint: str = "",
+        pending_rut: bool = False,
     ) -> list[dict[str, str]]:
         messages: list[dict[str, str]] = [
             {
                 "role": "system",
                 "content": self._build_system_prompt(
-                    agent, document_id, files_context, files_included
+                    agent,
+                    document_id,
+                    files_context,
+                    files_included,
+                    student_hint,
+                    pending_rut,
                 ),
             },
         ]
@@ -192,6 +217,7 @@ class AgentV2ChatClass:
         agent_id: str,
         message: str,
         student_id: int | None = None,
+        student_rut: str | None = None,
         document_id: int | None = None,
         history: list[dict[str, str]] | None = None,
     ) -> Iterator[dict[str, Any]]:
@@ -215,10 +241,37 @@ class AgentV2ChatClass:
 
         files_context, files_included = build_agent_files_context(agent.name)
 
+        resolved_student_id, rut_used, student_issue = resolve_student_id(
+            self.db,
+            student_id=student_id,
+            student_rut=student_rut,
+            message=message,
+            history=history,
+        )
+        resolved_document_id = document_id or infer_document_id(
+            self.db, agent_id, message, history
+        )
+        should_generate = bool(
+            resolved_document_id and wants_document_generation(message, history)
+        )
+        student_hint = ""
+        pending_rut = False
+        if resolved_student_id:
+            student_hint = student_identification_hint(self.db, resolved_student_id)
+        elif should_generate and student_issue == "needs_rut":
+            pending_rut = True
+
         yield _sse({"type": "step", "message": f"Consultando a {settings.agent_v2_model}…"})
 
         messages = self._build_messages(
-            agent, message, history, document_id, files_context, files_included
+            agent,
+            message,
+            history,
+            resolved_document_id,
+            files_context,
+            files_included,
+            student_hint,
+            pending_rut,
         )
         full_reply = ""
         try:
@@ -232,11 +285,23 @@ class AgentV2ChatClass:
         response_files: list[dict[str, Any]] = []
         warning: str | None = None
 
-        if student_id and document_id:
-            template = self._get_template(agent_id, document_id)
+        if should_generate and student_issue == "not_found":
+            warning = (
+                f"No encontré un estudiante con RUT/IPE {rut_used} en la plataforma. "
+                "Verifica el dato e inténtalo de nuevo."
+            )
+        elif should_generate and student_issue == "needs_rut":
+            warning = None
+        elif should_generate and not resolved_document_id:
+            warning = (
+                "No pude determinar qué documento generar. Configura plantillas en "
+                "Documentos del agente o indica el tipo de informe."
+            )
+        elif resolved_student_id and resolved_document_id and should_generate:
+            template = self._get_template(agent_id, resolved_document_id)
             if not template:
                 warning = (
-                    f"No hay plantilla configurada para el documento {document_id}. "
+                    f"No hay plantilla configurada para el documento {resolved_document_id}. "
                     "Configúrala en Documentos del agente."
                 )
             else:
@@ -251,7 +316,7 @@ class AgentV2ChatClass:
                         agent, template, message, full_reply, files_context
                     )
                     gen = generate_and_save_document(
-                        self.db, template, student_id, replacements
+                        self.db, template, resolved_student_id, replacements
                     )
                     if gen.get("status") == "error":
                         warning = gen.get("message", "Error al generar el documento.")
@@ -259,15 +324,16 @@ class AgentV2ChatClass:
                         yield _sse(
                             {
                                 "type": "step",
-                                "message": "Documento guardado en la base de datos.",
+                                "message": "Documento listo para descargar.",
                             }
                         )
+                        doc_label = gen.get("documentName") or "Archivo generado"
                         response_files.append(
                             {
                                 "id": gen.get("filename", ""),
                                 "name": gen.get("filename", ""),
                                 "documentId": gen.get("documentId"),
-                                "documentName": gen.get("documentName"),
+                                "documentName": doc_label,
                                 "downloadUrl": f"/files/system/students/{gen.get('filename', '')}",
                             }
                         )

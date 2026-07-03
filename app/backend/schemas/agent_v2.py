@@ -31,5 +31,6 @@ class AgentV2ChatHistoryMessage(BaseModel):
 class AgentV2ChatRequest(BaseModel):
     message: str = Field(..., min_length=1)
     student_id: int | None = None
+    student_rut: str | None = Field(default=None, description="RUT/IPE para ubicar al estudiante")
     document_id: int | None = None
     history: list[AgentV2ChatHistoryMessage] = Field(default_factory=list)
