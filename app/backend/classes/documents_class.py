@@ -10168,21 +10168,26 @@ class DocumentsClass:
                             *,
                             justify_both: bool = False,
                         ) -> Any:
-                            """Devuelve un w:p nuevo con el texto; reemplaza el párrafo en la celda."""
-                            new_p = OxmlElement("w:p")
-                            ppr = OxmlElement("w:pPr")
-                            if justify_both:
-                                _ppr_set_justify_both(ppr)
-                            else:
-                                _ppr_set_jc_val(ppr, "left")
-                            new_p.append(ppr)
-                            first_seg = True
-                            for seg in segs:
-                                if not first_seg:
-                                    rb = OxmlElement("w:r")
-                                    rb.append(OxmlElement("w:br"))
-                                    new_p.append(rb)
-                                first_seg = False
+                            """Reemplaza el párrafo; con justificado, un w:p por bloque (sin w:br)."""
+                            parent = p_el.getparent()
+                            if parent is None:
+                                return p_el
+
+                            non_empty = [seg for seg in segs if (seg or "").strip()]
+                            if not non_empty:
+                                non_empty = [""]
+
+                            idx = parent.index(p_el)
+                            parent.remove(p_el)
+                            last_p = None
+                            for offset, seg in enumerate(non_empty):
+                                new_p = OxmlElement("w:p")
+                                ppr = OxmlElement("w:pPr")
+                                if justify_both:
+                                    _ppr_set_justify_both(ppr)
+                                else:
+                                    _ppr_set_jc_val(ppr, "left")
+                                new_p.append(ppr)
                                 r = OxmlElement("w:r")
                                 t = OxmlElement("w:t")
                                 if seg:
@@ -10190,10 +10195,9 @@ class DocumentsClass:
                                     t.set(qn("xml:space"), "preserve")
                                 r.append(t)
                                 new_p.append(r)
-                            parent = p_el.getparent()
-                            if parent is not None:
-                                parent.replace(p_el, new_p)
-                            return new_p
+                                parent.insert(idx + offset, new_p)
+                                last_p = new_p
+                            return last_p or p_el
 
                         # Plantillas ministeriales: w:sdtContent → w:tc (celda anidada). No quitar w:tc.
                         direct_tc = sdt_content_el.find(qn("w:tc"))

@@ -45,6 +45,13 @@ _NARRATIVE_KEYS = (
     "home_support",
     "school_family_agreements",
     "agreements_commitments",
+    "agreements",
+    "pedagogical_field_1",
+    "pedagogical_field_2",
+    "social_field_1",
+    "social_field_2",
+    "collaborative_work",
+    "supports",
     "strengths_1",
     "support_needs_1",
     "strengths_2",
@@ -63,6 +70,7 @@ def _normalize_cc_tag(tag: str) -> str:
 
 
 _NARRATIVE_TAG_NORMS = frozenset(_normalize_cc_tag(k) for k in _NARRATIVE_KEYS)
+_CHECKBOX_SDT_TAGS = frozenset({"evaluation", "reevaluation"})
 
 
 def _paragraph_visible_text(p_el: Any, qn: Any) -> str:
@@ -211,10 +219,14 @@ def _reformat_narrative_paragraph_container(container_el: Any, qn: Any, OxmlElem
         if any(r.find(qn("w:br")) is not None for r in p.findall(qn("w:r"))):
             segments.extend(_split_paragraph_segments(p, qn))
         else:
-            for block in re.split(r"\n\s*\n", raw):
-                block = block.strip()
-                if block:
-                    segments.append(block)
+            lines = [ln.strip() for ln in raw.split("\n") if ln.strip()]
+            if len(lines) > 1:
+                segments.extend(lines)
+            else:
+                for block in re.split(r"\n\s*\n", raw):
+                    block = block.strip()
+                    if block:
+                        segments.append(block)
 
     for p in container_el.iter(qn("w:p")):
         ppr = p.find(qn("w:pPr"))
@@ -266,17 +278,27 @@ def compact_familia_narrative_spacing(docx_path: Path) -> None:
 
     doc = Document(str(docx_path))
 
+    def _sdt_content_has_soft_breaks(sdt_content_el: Any) -> bool:
+        for p in sdt_content_el.iter(qn("w:p")):
+            if any(r.find(qn("w:br")) is not None for r in p.findall(qn("w:r"))):
+                return True
+        return False
+
     def walk_sdts(parent: Any) -> None:
         for sdt in parent.iter(qn("w:sdt")):
             tag_el = sdt.find(".//" + qn("w:tag"))
             if tag_el is None:
                 continue
-            tag_n = _normalize_cc_tag(tag_el.get(qn("w:val")) or "")
-            if tag_n not in _NARRATIVE_TAG_NORMS:
+            tag_val = tag_el.get(qn("w:val")) or ""
+            if tag_val in _CHECKBOX_SDT_TAGS:
                 continue
+            tag_n = _normalize_cc_tag(tag_val)
             sdt_content = sdt.find(qn("w:sdtContent"))
-            if sdt_content is not None:
-                _compact_sdt_content_spacing(sdt_content, qn, OxmlElement)
+            if sdt_content is None:
+                continue
+            if tag_n not in _NARRATIVE_TAG_NORMS and not _sdt_content_has_soft_breaks(sdt_content):
+                continue
+            _compact_sdt_content_spacing(sdt_content, qn, OxmlElement)
 
     walk_sdts(doc.element.body)
     for section in doc.sections:
@@ -449,7 +471,6 @@ def fix_familia_motivo_evaluacion_row(
 
 FAMILIA_ANSWER_FONT = "Arial"
 FAMILIA_ANSWER_SIZE_HALF_PT = "20"  # Word usa half-points → 10 pt
-_CHECKBOX_SDT_TAGS = frozenset({"evaluation", "reevaluation"})
 
 
 def _apply_arial_10_to_run(r: Any, qn: Any, OxmlElement: Any) -> None:

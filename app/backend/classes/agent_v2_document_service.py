@@ -20,6 +20,10 @@ from app.backend.db.models.pie_core import (
 )
 from app.backend.utils import agent_v2_storage as storage
 from app.backend.utils.agent_v2_familia_fill import fill_familia_template, validate_docx
+from app.backend.utils.agent_v2_family_report_store import (
+    link_folder_to_family_report,
+    persist_family_report_from_agent,
+)
 from app.backend.utils.agent_v2_template_inspector import fields_from_json
 
 _FAMILIA_DOCUMENT_ID = 7
@@ -132,6 +136,26 @@ def generate_and_save_document(
     if isinstance(folder_result, dict) and folder_result.get("status") == "error":
         return folder_result
 
+    family_report_id: int | None = None
+    if int(template.document_id) == _FAMILIA_DOCUMENT_ID:
+        fr_result = persist_family_report_from_agent(
+            db,
+            student_id,
+            replacements,
+            student_context=student_ctx,
+        )
+        if fr_result.get("status") == "error":
+            return {
+                "status": "error",
+                "message": (
+                    "El Word se generó pero no se pudo guardar el formulario en la ficha "
+                    f"del estudiante: {fr_result.get('message', 'error desconocido')}"
+                ),
+                "filename": filename,
+            }
+        family_report_id = fr_result.get("id")
+        link_folder_to_family_report(db, folder_result.get("id"), family_report_id)
+
     return {
         "status": "success",
         "message": "Documento generado y guardado.",
@@ -140,6 +164,7 @@ def generate_and_save_document(
         "documentName": template.document_name,
         "formatType": template.format_type,
         "studentId": student_id,
+        "familyReportId": family_report_id,
     }
 
 
