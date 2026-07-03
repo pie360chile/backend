@@ -21,6 +21,7 @@ from app.backend.utils import agent_v2_storage as storage
 from app.backend.utils.agent_v2_file_context import build_agent_files_context
 from app.backend.utils.agent_v2_prompt_sanitize import (
     CHAT_OUTPUT_OVERRIDE,
+    DOCUMENT_FIELD_EXTRACTION_GUIDE,
     sanitize_role_instructions_for_chat,
 )
 from app.backend.utils.agent_v2_chat_context import (
@@ -188,16 +189,24 @@ class AgentV2ChatClass:
             "y el valor es el texto a insertar en la plantilla.\n"
             f"Campos requeridos:\n{build_fields_prompt(template)}\n\n"
             f"Instrucciones del agente:\n{role_text}\n\n"
-            f"{CHAT_OUTPUT_OVERRIDE}\n"
+            f"{DOCUMENT_FIELD_EXTRACTION_GUIDE}\n"
             f"{files_section}\n\n"
             f"Mensaje del usuario:\n{user_message}\n\n"
-            f"Respuesta del asistente:\n{assistant_reply}\n\n"
-            "Usa solo información presente en los archivos de contexto y el mensaje. "
+            f"Respuesta del asistente (puede ser breve; no limites el Word a esto):\n{assistant_reply}\n\n"
+            "Prioriza archivos de contexto y las normas del agente. "
+            "Expande los campos narrativos con redacción completa. "
             "Si no hay información para un campo, usa cadena vacía."
         )
         raw = agent_v2_openai.json_chat_completion(
             [
-                {"role": "system", "content": "Eres un extractor de datos para formularios PIE360."},
+                {
+                    "role": "system",
+                    "content": (
+                        "Eres un redactor-extractor para formularios PIE360. "
+                        "Rellenas cada campo del JSON con el texto final del informe, "
+                        "desarrollado y listo para imprimir en Word."
+                    ),
+                },
                 {"role": "user", "content": prompt},
             ]
         )

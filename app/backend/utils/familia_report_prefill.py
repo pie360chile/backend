@@ -525,6 +525,56 @@ def apply_familia_arial_10_font(docx_path: Path) -> None:
     doc.save(str(docx_path))
 
 
+def apply_familia_justify_sdt_paragraphs(docx_path: Path) -> None:
+    """Justifica (w:jc both) todos los párrafos con respuesta dentro de content controls."""
+    from docx import Document
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    doc = Document(str(docx_path))
+
+    def _paragraph_has_answer_text(p_el: Any) -> bool:
+        text = _paragraph_visible_text(p_el, qn).strip()
+        if not text:
+            return False
+        if _paragraph_has_placeholder(text):
+            return False
+        if _is_label_paragraph(text):
+            return False
+        return True
+
+    def walk(parent: Any) -> None:
+        for sdt in parent.iter(qn("w:sdt")):
+            tag_el = sdt.find(".//" + qn("w:tag"))
+            tag_val = tag_el.get(qn("w:val")) if tag_el is not None else None
+            if tag_val in _CHECKBOX_SDT_TAGS:
+                continue
+            sdt_content = sdt.find(qn("w:sdtContent"))
+            if sdt_content is None:
+                continue
+            for p in sdt_content.iter(qn("w:p")):
+                if not _paragraph_has_answer_text(p):
+                    continue
+                ppr = p.find(qn("w:pPr"))
+                if ppr is None:
+                    ppr = OxmlElement("w:pPr")
+                    p.insert(0, ppr)
+                _ppr_set_justify(ppr, qn, OxmlElement)
+
+    walk(doc.element.body)
+    for section in doc.sections:
+        for hf in (
+            section.header,
+            section.footer,
+            section.first_page_header,
+            section.first_page_footer,
+        ):
+            if hf is not None and hf._element is not None:
+                walk(hf._element)
+
+    doc.save(str(docx_path))
+
+
 def build_familia_identification_replacements(context: dict[str, Any]) -> dict[str, str]:
     """Rellena solo los content controls de identificación (tags exactos de la plantilla)."""
     student_full = str(context.get("student_full_name") or "").strip()

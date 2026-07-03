@@ -10198,35 +10198,8 @@ class DocumentsClass:
                         # Plantillas ministeriales: w:sdtContent → w:tc (celda anidada). No quitar w:tc.
                         direct_tc = sdt_content_el.find(qn("w:tc"))
                         if direct_tc is not None:
-                            fk = (field_key or "").strip()
-                            long_text_keys = frozenset(
-                                {
-                                    "cognitive_analysis",
-                                    "personal_analysis",
-                                    "motor_analysis",
-                                    "conclusion",
-                                    "cognitive_synthesis",
-                                    "personal_synthesis",
-                                    "motor_synthesis",
-                                    "suggestions_to_school",
-                                    "suggestions_to_classroom_team",
-                                    "suggestions_to_family",
-                                    "suggestions_to_student",
-                                    "other_suggestions",
-                                    "instruments_applied",
-                                    "applied_instruments",
-                                    "school_history_background",
-                                    "diagnostic",
-                                    "pedagogical_field_1",
-                                    "pedagogical_field_2",
-                                    "social_field_1",
-                                    "social_field_2",
-                                    "collaborative_work",
-                                    "supports",
-                                    "agreements",
-                                }
-                            )
-                            justify_both = fk in long_text_keys
+                            # Informe Familia: la plantilla ministerial usa párrafos justificados (w:jc both).
+                            justify_both = True
                             paragraphs_here = list(direct_tc.findall(qn("w:p")))
                             if not paragraphs_here:
                                 new_p = OxmlElement("w:p")
@@ -10373,11 +10346,7 @@ class DocumentsClass:
                             if old_ppr is not None:
                                 target_p.remove(old_ppr)
                             ppr = OxmlElement("w:pPr")
-                            # Largos (p. ej. con tabla dentro del SDT): justificado. Identificación arriba: izquierda.
-                            if fk in PSYCHOPED_LONG_TEXT_KEYS:
-                                _ppr_set_justify_both(ppr)
-                            else:
-                                _ppr_set_jc_val(ppr, "left")
+                            _ppr_set_justify_both(ppr)
                             target_p.insert(0, ppr)
                             for c in list(target_p):
                                 if c.tag == qn("w:pPr") or str(c.tag).endswith("}pPr"):

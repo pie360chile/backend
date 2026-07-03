@@ -71,3 +71,32 @@ Identificación del estudiante:
 Descarga:
 - Cuando el backend genere el archivo, el chat mostrará el botón «Descargar archivo generado» debajo de tu mensaje.
 """.strip()
+
+
+DOCUMENT_FIELD_EXTRACTION_GUIDE = """
+## Relleno del documento Word/PDF (extractor — prioridad máxima)
+
+Genera el texto COMPLETO que se imprimirá en cada campo de la plantilla.
+NO resumas. NO uses frases telegráficas. NO te quedes con el resumen breve del chat.
+
+Fuentes (en este orden):
+1. Archivos de contexto (Files) — fuente principal y obligatoria cuando existan
+2. Mensaje del usuario
+3. Respuesta del asistente — solo orientación; si es breve, expande con los archivos
+
+Campos narrativos (p. ej. diagnostic, applied_instruments, pedagogical_field_1,
+pedagogical_field_2, social_field_1, social_field_2, collaborative_work, supports,
+agreements y campos equivalentes de otros informes):
+- Redacta párrafos completos, claros y profesionales según las Normas de redacción del agente.
+- Desarrolla fortalezas, necesidades, antecedentes, apoyos y acuerdos con detalle basado en evidencia.
+- Cuando haya información en los archivos, escribe al menos 3–8 oraciones por campo narrativo.
+- No dejes un campo narrativo en una sola frase corta si los antecedentes lo permiten.
+
+Campos de identificación (nombre, RUT/IPE, curso, establecimiento, edad, fecha de nacimiento, etc.):
+- Solo el dato puntual, sin párrafos extensos.
+
+Formato:
+- Español formal de informes psicopedagógicos ministeriales chilenos.
+- Fechas en dd/mm/aaaa cuando corresponda.
+- Si no hay datos verificables para un campo, usa cadena vacía.
+""".strip()

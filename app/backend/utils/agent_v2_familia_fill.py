@@ -190,6 +190,7 @@ def _apply_familia_postprocess(
     try:
         from app.backend.utils.familia_report_prefill import (
             apply_familia_arial_10_font,
+            apply_familia_justify_sdt_paragraphs,
             compact_familia_narrative_spacing,
             fix_familia_motivo_evaluacion_row,
         )
@@ -210,3 +211,8 @@ def _apply_familia_postprocess(
         apply_familia_arial_10_font(output_path)
     except Exception as exc:
         logger.warning("apply_familia_arial_10_font: %s", exc)
+
+    try:
+        apply_familia_justify_sdt_paragraphs(output_path)
+    except Exception as exc:
+        logger.warning("apply_familia_justify_sdt_paragraphs: %s", exc)
