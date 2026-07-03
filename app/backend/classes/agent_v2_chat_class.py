@@ -268,6 +268,7 @@ class AgentV2ChatClass:
                                 "name": gen.get("filename", ""),
                                 "documentId": gen.get("documentId"),
                                 "documentName": gen.get("documentName"),
+                                "downloadUrl": f"/files/system/students/{gen.get('filename', '')}",
                             }
                         )
                 except Exception as exc:

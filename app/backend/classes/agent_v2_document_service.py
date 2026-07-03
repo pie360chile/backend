@@ -60,7 +60,7 @@ def generate_and_save_document(
         return {"status": "error", "message": "Plantilla no encontrada en disco."}
 
     student_ctx = _student_context(db, student_id)
-    output_dir = Path("files/system/students")
+    output_dir = Path(settings.files_dir) / "system" / "students"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     safe_student = (student_ctx.get("student_fullname") or "estudiante").replace(" ", "_")
