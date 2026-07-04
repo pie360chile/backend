@@ -25,6 +25,24 @@ def _pick_text(replacements: dict[str, str], *keys: str) -> str:
     return ""
 
 
+def _normalize_evaluation_type(
+    replacements: dict[str, str],
+    student_context: dict[str, Any] | None = None,
+) -> str | None:
+    """MySQL ENUM('admission','revaluation') no acepta cadena vacía."""
+    raw = _pick_text(replacements, "evaluation_type")
+    if not raw and student_context:
+        raw = str(student_context.get("evaluation_type") or "").strip()
+    if not raw:
+        return "admission"
+    norm = raw.strip().lower()
+    if norm in ("revaluation", "reevaluación", "reevaluacion", "reeval", "2"):
+        return "revaluation"
+    if norm in ("admission", "admisión", "admision", "ingreso", "1"):
+        return "admission"
+    return "admission"
+
+
 def _parse_born_date_iso(value: str | None) -> str | None:
     if not value or not str(value).strip():
         return None
@@ -111,7 +129,7 @@ def build_family_report_store_payload(
         "receiver_presence_of": _pick_text(
             replacements, "receiver_presence_of", "person_presence"
         ),
-        "evaluation_type": _pick_text(replacements, "evaluation_type"),
+        "evaluation_type": _normalize_evaluation_type(replacements, ctx),
         "evaluation_date": _parse_born_date_iso(_pick_text(replacements, "evaluation_date")),
         "applied_instruments": _pick_text(replacements, "applied_instruments"),
         "diagnosis": _pick_text(replacements, "diagnosis", "diagnostic"),

@@ -18,6 +18,14 @@ def _parse_date(value) -> Optional[date]:
     return None
 
 
+def _enum_or_none(value) -> Optional[str]:
+    """MySQL ENUM rechaza '' — usar NULL cuando no hay valor."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
 class FamilyReportClass:
     def __init__(self, db: Session):
         self.db = db
@@ -154,9 +162,9 @@ class FamilyReportClass:
                 receiver_email=data.get("receiver_email"),
                 receiver_relationship=data.get("receiver_relationship"),
                 receiver_presence_of=data.get("receiver_presence_of"),
-                guardian_type=data.get("guardian_type"),
-                has_power_of_attorney=data.get("has_power_of_attorney"),
-                evaluation_type=data.get("evaluation_type"),
+                guardian_type=_enum_or_none(data.get("guardian_type")),
+                has_power_of_attorney=_enum_or_none(data.get("has_power_of_attorney")),
+                evaluation_type=_enum_or_none(data.get("evaluation_type")),
                 evaluation_date=_parse_date(data.get("evaluation_date")),
                 applied_instruments=data.get("applied_instruments"),
                 diagnosis=data.get("diagnosis"),
