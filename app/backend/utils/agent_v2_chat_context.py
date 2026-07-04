@@ -22,17 +22,71 @@ _RUT_RE = re.compile(
 )
 
 _GENERATION_HINTS = (
-    "genera",
-    "generar",
-    "elabora",
-    "elaborar",
-    "redacta",
-    "redactar",
+    "genera el informe",
+    "generar el informe",
+    "genera el documento",
+    "generar el documento",
+    "genera el word",
+    "generar el word",
+    "genera el docx",
+    "generar el docx",
+    "genera un informe",
+    "generar un informe",
+    "genera un documento",
+    "generar un documento",
+    "elabora el informe",
+    "elaborar el informe",
+    "elabora el documento",
+    "elaborar el documento",
+    "redacta el informe",
+    "redactar el informe",
+    "redacta el documento",
+    "redactar el documento",
     "crea el informe",
     "crear informe",
-    "informe para",
-    "informe de",
-    "informe a la",
+    "crear el informe",
+    "exporta el informe",
+    "exportar el informe",
+    "exporta el documento",
+    "exportar el documento",
+    "necesito el informe",
+    "quiero el informe",
+    "entrega el informe",
+    "entregar el informe",
+    "haz el informe",
+    "hacer el informe",
+    "prepara el informe",
+    "preparar el informe",
+    "genera de nuevo",
+    "generar de nuevo",
+    "vuelve a generar",
+    "regenera el informe",
+    "regenerar el informe",
+)
+
+# Imperativo al inicio del mensaje actual (p. ej. «genera informe familia isabella»)
+_GENERATION_START_RE = re.compile(
+    r"^\s*(genera|generar|elabora|elaborar|redacta|redactar|crea|crear|exporta|exportar|regenera|regenerar)\b",
+    re.IGNORECASE,
+)
+
+_SHORT_NON_GENERATION = frozenset(
+    {
+        "ok",
+        "okay",
+        "gracias",
+        "thanks",
+        "sí",
+        "si",
+        "no",
+        "hola",
+        "bueno",
+        "perfecto",
+        "listo",
+        "entendido",
+        "de acuerdo",
+        "vale",
+    }
 )
 
 _FAMILY_HINTS = (
@@ -85,8 +139,23 @@ def conversation_blob(message: str, history: list[dict[str, str]] | None = None)
 
 
 def wants_document_generation(message: str, history: list[dict[str, str]] | None = None) -> bool:
-    blob = conversation_blob(message, history).lower()
-    return any(hint in blob for hint in _GENERATION_HINTS)
+    """
+    True solo si el mensaje ACTUAL del usuario pide generar el Word.
+    No usa historial: evita regenerar en cada turno tras un «genera el informe» previo
+    o por palabras del asistente («informe», «genera», etc.) en mensajes anteriores.
+    """
+    del history  # compatibilidad API; la intención se evalúa solo en el turno actual
+    text = (message or "").strip()
+    if not text:
+        return False
+    low = text.lower()
+    if low in _SHORT_NON_GENERATION:
+        return False
+    if any(hint in low for hint in _GENERATION_HINTS):
+        return True
+    if _GENERATION_START_RE.match(text):
+        return True
+    return False
 
 
 def lookup_student_id_by_rut(db: Session, rut: str) -> int | None:
