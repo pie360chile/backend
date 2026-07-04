@@ -533,7 +533,7 @@ def apply_familia_checkbox_states(
             sdt_pr = sdt.find(qn("w:sdtPr"))
             tag_el = sdt_pr.find(qn("w:tag")) if sdt_pr is not None else None
             tag_val = tag_el.get(qn("w:val")) if tag_el is not None else None
-            if not _is_familia_checkbox_tag(tag_val) and not _sdt_has_checkbox(sdt_pr):
+            if not _is_familia_checkbox_tag(tag_val):
                 continue
             checked = _familia_checkbox_should_check(tag_val, ctx)
             _set_sdt_checkbox_mark(sdt, qn, OxmlElement, checked)
@@ -553,27 +553,37 @@ def apply_familia_checkbox_states(
 
 
 def _set_sdt_checkbox_mark(sdt: Any, qn: Any, OxmlElement: Any, checked: bool) -> None:
-    """Marca checkbox: vacío = ☐; marcado = ☒ (x dentro del recuadro)."""
+    """
+    Marca checkbox sin duplicar cuadros.
+    - w14:checkbox → solo atributo checked; texto vacío (Word dibuja el recuadro).
+    - SDT sin w14 → ☐ vacío / ☒ marcado en w:t.
+    """
     sdt_pr = sdt.find(qn("w:sdtPr"))
+    w14_checkbox = None
     if sdt_pr is not None:
-        checkbox = None
         for child in sdt_pr:
             if child.tag.endswith("}checkbox"):
-                checkbox = child
+                w14_checkbox = child
                 break
-        if checkbox is not None:
-            check_el = None
-            for child in checkbox:
-                if child.tag.endswith("}checked"):
-                    check_el = child
-                    break
-            val_str = "1" if checked else "0"
-            if check_el is not None:
-                check_el.set(W14_CHECKED_ATTR, val_str)
-            else:
-                check_el = OxmlElement("w14:checked")
-                check_el.set(W14_CHECKED_ATTR, val_str)
-                checkbox.append(check_el)
+
+    if w14_checkbox is not None:
+        check_el = None
+        for child in w14_checkbox:
+            if child.tag.endswith("}checked"):
+                check_el = child
+                break
+        val_str = "1" if checked else "0"
+        if check_el is not None:
+            check_el.set(W14_CHECKED_ATTR, val_str)
+        else:
+            check_el = OxmlElement("w14:checked")
+            check_el.set(W14_CHECKED_ATTR, val_str)
+            w14_checkbox.append(check_el)
+        sdt_content = sdt.find(qn("w:sdtContent"))
+        if sdt_content is not None:
+            for wt in sdt_content.iter(qn("w:t")):
+                wt.text = ""
+        return
 
     sdt_content = sdt.find(qn("w:sdtContent"))
     if sdt_content is None:
@@ -599,20 +609,34 @@ def _set_sdt_checkbox_mark(sdt: Any, qn: Any, OxmlElement: Any, checked: bool) -
 
 
 def ensure_familia_checkbox_boxes_visible(docx_path: Path) -> None:
-    """Garantiza ☐ visible en checkboxes vacíos (SDT y celdas de opciones)."""
+    """Corrige solo SDT de checkbox sin w14: restaura ☐ o convierte x suelta → ☒."""
     from docx import Document
-    from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
 
     doc = Document(str(docx_path))
     changed = False
+
+    def _has_w14(sdt_pr: Any) -> bool:
+        if sdt_pr is None:
+            return False
+        return any(child.tag.endswith("}checkbox") for child in sdt_pr)
 
     def _ensure_sdt(sdt: Any) -> None:
         nonlocal changed
         sdt_pr = sdt.find(qn("w:sdtPr"))
         tag_el = sdt_pr.find(qn("w:tag")) if sdt_pr is not None else None
         tag_val = tag_el.get(qn("w:val")) if tag_el is not None else None
-        if not is_familia_checkbox_tag_norm(tag_val) and not _sdt_has_checkbox(sdt_pr):
+        if not is_familia_checkbox_tag_norm(tag_val):
+            return
+        if _has_w14(sdt_pr):
+            sdt_content = sdt.find(qn("w:sdtContent"))
+            if sdt_content is None:
+                return
+            visible = "".join((t.text or "") for t in sdt_content.iter(qn("w:t"))).strip()
+            if visible:
+                for wt in sdt_content.iter(qn("w:t")):
+                    wt.text = ""
+                changed = True
             return
         sdt_content = sdt.find(qn("w:sdtContent"))
         if sdt_content is None:
@@ -630,50 +654,9 @@ def ensure_familia_checkbox_boxes_visible(docx_path: Path) -> None:
         if wt_list:
             wt_list[0].text = FAMILIA_CHECKBOX_UNCHECKED
             changed = True
-            return
-        for p_el in sdt_content.iter(qn("w:p")):
-            w_r = p_el.find(qn("w:r"))
-            if w_r is None:
-                w_r = OxmlElement("w:r")
-                p_el.append(w_r)
-            wt = w_r.find(qn("w:t"))
-            if wt is None:
-                wt = OxmlElement("w:t")
-                w_r.append(wt)
-            wt.text = FAMILIA_CHECKBOX_UNCHECKED
-            changed = True
-            break
 
     for sdt in doc.element.body.iter(qn("w:sdt")):
         _ensure_sdt(sdt)
-
-    option_markers = (
-        "Evaluación de Ingreso",
-        "Reevaluación fin año",
-        "Apoderado/a titular",
-        "Apoderado/a suplente",
-    )
-    for tbl in doc.element.body.iter(qn("w:tbl")):
-        for tc in tbl.iter(qn("w:tc")):
-            cell_text = "".join((t.text or "") for t in tc.iter(qn("w:t")))
-            if "☐" in cell_text or "□" in cell_text:
-                continue
-            if not any(m in cell_text for m in option_markers):
-                continue
-            for p_el in tc.iter(qn("w:p")):
-                p_text = _paragraph_visible_text(p_el, qn).strip()
-                if not p_text or p_text[0] in ("☐", "□", "☒", "☑", "x", "X"):
-                    continue
-                if not any(m in p_text for m in option_markers):
-                    continue
-                for r in p_el.findall(qn("w:r")):
-                    wt = r.find(qn("w:t"))
-                    if wt is None or not (wt.text or "").strip():
-                        continue
-                    wt.text = f"☐ {(wt.text or '').lstrip()}"
-                    changed = True
-                    break
-                break
 
     if changed:
         doc.save(str(docx_path))

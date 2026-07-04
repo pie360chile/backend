@@ -10026,7 +10026,7 @@ class DocumentsClass:
                                 f'<w14:checked xmlns:w14="{W14_NS}" w14:val="{val_str}"/>'
                             )
                             checkbox.append(check_el)
-                        # Actualizar también el texto visible en sdtContent (Word lo usa para mostrar)
+                        # w14 dibuja el recuadro; en informe familia no duplicar ☐/☒ en w:t
                         symbol = (
                             (
                                 "\u2612"
@@ -10035,7 +10035,7 @@ class DocumentsClass:
                             )
                             if checked
                             else (
-                                CHK_SYMBOL_UNCHECKED
+                                ""
                                 if content_control_tag_aliases
                                 else ("" if checkbox_unchecked_blank else CHK_SYMBOL_UNCHECKED)
                             )
@@ -10468,6 +10468,14 @@ class DocumentsClass:
                             new_p.append(r_text)
                             sdt_content_el.append(new_p)
 
+                    def _sdt_pr_has_w14_checkbox(sdtPr) -> bool:
+                        if sdtPr is None:
+                            return False
+                        return any(
+                            child.tag == f"{{{W14_NS}}}checkbox" or child.tag.endswith("}checkbox")
+                            for child in sdtPr
+                        )
+
                     def process_sdt_body(parent):
                         for sdt in parent.iter(qn("w:sdt")):
                             sdtPr = sdt.find(qn("w:sdtPr"))
@@ -10560,9 +10568,13 @@ class DocumentsClass:
                                     if sdtContent is not None:
                                         wt_list = list(sdtContent.iter(qn("w:t")))
                                         if wt_list:
-                                            wt_list[0].text = CHK_SYMBOL_UNCHECKED
-                                            for wt in wt_list[1:]:
-                                                wt.text = ""
+                                            if _sdt_pr_has_w14_checkbox(sdtPr):
+                                                for wt in wt_list:
+                                                    wt.text = ""
+                                            else:
+                                                wt_list[0].text = CHK_SYMBOL_UNCHECKED
+                                                for wt in wt_list[1:]:
+                                                    wt.text = ""
                                 continue
 
                             # Informe familia: texto vacío → solo quitar «Haz clic…», conservar cuadro SDT
@@ -10626,9 +10638,13 @@ class DocumentsClass:
                                 ):
                                     wt_list = list(sdtContent.iter(qn("w:t")))
                                     if wt_list:
-                                        wt_list[0].text = CHK_SYMBOL_UNCHECKED
-                                        for wt in wt_list[1:]:
-                                            wt.text = ""
+                                        if _sdt_pr_has_w14_checkbox(sdtPr):
+                                            for wt in wt_list:
+                                                wt.text = ""
+                                        else:
+                                            wt_list[0].text = CHK_SYMBOL_UNCHECKED
+                                            for wt in wt_list[1:]:
+                                                wt.text = ""
                                     continue
                                 for wt in sdtContent.iter(qn("w:t")):
                                     wt.text = ""
