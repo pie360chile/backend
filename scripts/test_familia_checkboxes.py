@@ -24,6 +24,21 @@ from app.backend.utils.familia_report_prefill import (
 )
 
 
+def _add_sdt_w14(paragraph, tag: str, checked: bool = False) -> None:
+    val = "1" if checked else "0"
+    sdt = parse_xml(
+        '<w:sdt xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+        'xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml">'
+        f"<w:sdtPr>"
+        f'<w:tag w:val="{tag}"/>'
+        f'<w14:checkbox><w14:checked w14:val="{val}"/></w14:checkbox>'
+        f"</w:sdtPr>"
+        f"<w:sdtContent><w:p><w:r><w:t></w:t></w:r></w:p>"
+        f"</w:sdtContent></w:sdt>"
+    )
+    paragraph._p.addnext(sdt)
+
+
 def _add_sdt(paragraph, tag: str, text: str = "☐") -> None:
     sdt = parse_xml(
         f'<w:sdt xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
@@ -48,6 +63,10 @@ def _build_fixture(path: Path) -> None:
     table.cell(1, 0).text = "Evaluación de Ingreso"
     p1 = table.cell(1, 1).paragraphs[0]
     _add_sdt(p1, "evaluation", "☐")
+    p1b = table.cell(1, 1).add_paragraph()
+    _add_sdt_w14(p1b, "reevaluation")
+    p1c = table.cell(1, 1).add_paragraph()
+    _add_sdt_w14(p1c, "primary")
     doc.add_paragraph("Campo narrativo")
     p2 = doc.paragraphs[-1]
     sdt2 = OxmlElement("w:sdt")
@@ -77,6 +96,21 @@ def main() -> int:
 
     before = _count_symbol(template, FAMILIA_CHECKBOX_UNCHECKED)
     assert before >= 2, f"fixture debe tener ☐, tiene {before}"
+
+    # w14 con w:t vacío debe recuperar ☐ tras postproceso
+    w14_only = tmp / "w14.docx"
+    doc_w14 = Document()
+    pw = doc_w14.add_paragraph()
+    _add_sdt_w14(pw, "substitute")
+    doc_w14.save(str(w14_only))
+    apply_familia_checkbox_states(w14_only, {})
+    ensure_familia_checkbox_boxes_visible(w14_only)
+    w14_count = _count_symbol(w14_only, FAMILIA_CHECKBOX_UNCHECKED)
+    print(f"checkbox_empty w14_vacio={w14_count}")
+    if w14_count < 1:
+        print("FALLO: w14 vacio sin cuadro visible")
+        shutil.rmtree(tmp, ignore_errors=True)
+        return 1
 
     result = fill_familia_template(
         template,
