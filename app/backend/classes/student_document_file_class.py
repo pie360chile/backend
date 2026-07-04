@@ -8,6 +8,7 @@ from app.backend.db.models import (
     HealthEvaluationModel,
     EvaluaResultReportModel,
 )
+from app.backend.classes.documents_class import _document_not_deleted_filter
 
 
 def _folder_period_str(period_year: Optional[Union[int, str]]) -> Optional[str]:
@@ -419,7 +420,7 @@ class FolderClass:
                     # Obtener el document_name desde la tabla documents (solo no eliminados)
                     doc_info = self.db.query(DocumentModel).filter(
                         DocumentModel.id == document_id,
-                        DocumentModel.deleted_date.is_(None)
+                        _document_not_deleted_filter(),
                     ).first()
                     document_name = doc_info.document if doc_info else "Certificado de Nacimiento"
 
@@ -479,7 +480,7 @@ class FolderClass:
                         # Obtener el document_name desde la tabla documents (solo no eliminados)
                         doc_info = self.db.query(DocumentModel).filter(
                             DocumentModel.id == document_id,
-                            DocumentModel.deleted_date.is_(None)
+                            _document_not_deleted_filter(),
                         ).first()
                         document_name = doc_info.document if doc_info else "Evaluación de Salud"
                         
@@ -547,7 +548,7 @@ class FolderClass:
 
                     doc_info = self.db.query(DocumentModel).filter(
                         DocumentModel.id == document_id,
-                        DocumentModel.deleted_date.is_(None),
+                        _document_not_deleted_filter(),
                     ).first()
                     document_name = doc_info.document if doc_info else "Informes Resultado Prueba Evalua"
                     if folder_record:
@@ -593,7 +594,7 @@ class FolderClass:
                     ).filter(
                         FolderModel.student_id == student_id,
                         FolderModel.document_id == document_id,
-                        DocumentModel.deleted_date.is_(None),  # Solo documentos no eliminados
+                        _document_not_deleted_filter(),
                         FolderModel.file.isnot(None),  # Solo documentos con archivo
                     )
                     if py is not None:
