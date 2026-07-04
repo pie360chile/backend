@@ -156,6 +156,21 @@ def _set_cell_plain_text(
     return True
 
 
+def _clear_cell_placeholder_text(tc_el: Any, qn: Any) -> bool:
+    from app.backend.utils.familia_report_prefill import _paragraph_has_placeholder
+
+    changed = False
+    for p_el in tc_el.findall(qn("w:p")):
+        full = _paragraph_text(p_el, qn).strip()
+        if not full or not _paragraph_has_placeholder(full):
+            continue
+        if _is_label_like(full):
+            continue
+        _clear_paragraph_runs(p_el, qn)
+        changed = True
+    return changed
+
+
 def _is_label_like(text: str) -> bool:
     letters = [c for c in text if c.isalpha()]
     if len(letters) < 6:
@@ -182,10 +197,12 @@ def _fill_tabla_slot_rows(
         if tc_el is None:
             continue
         value = _resolve_replacement(key, replacements)
-        if not value:
-            continue
-        if _set_cell_plain_text(tc_el, value, qn, OxmlElement, mode=mode):
-            filled_keys.append(key)
+        if value:
+            if _set_cell_plain_text(tc_el, value, qn, OxmlElement, mode=mode):
+                filled_keys.append(key)
+        else:
+            if _clear_cell_placeholder_text(tc_el, qn):
+                filled_keys.append(key)
     return filled_keys
 
 

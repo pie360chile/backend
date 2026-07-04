@@ -127,6 +127,56 @@ def _paragraph_has_placeholder(text: str) -> bool:
     )
 
 
+_WORD_PLACEHOLDER_LITERALS = (
+    "Haz clic o pulse aquí para escribir texto.",
+    "Haz clic o pulse aquí para escribir texto",
+    "Click or tap here to enter text.",
+    "Click or tap here to enter text",
+)
+
+
+def _sweep_placeholder_wt(wt: Any) -> bool:
+    """Vacía nodos w:t que solo contienen el texto de ayuda de Word."""
+    text = wt.text or ""
+    if not text.strip():
+        return False
+    if _paragraph_has_placeholder(text):
+        wt.text = ""
+        return True
+    cleaned = text
+    for lit in _WORD_PLACEHOLDER_LITERALS:
+        if lit in cleaned:
+            cleaned = cleaned.replace(lit, "")
+    cleaned = cleaned.strip()
+    if cleaned != text.strip():
+        wt.text = cleaned
+        return True
+    return False
+
+
+def clear_word_form_placeholders(docx_path: Path) -> None:
+    """Quita «Haz clic o pulse aquí…» dejando la celda vacía cuando no hay dato."""
+    from docx import Document
+    from docx.oxml.ns import qn
+
+    doc = Document(str(docx_path))
+    roots: list[Any] = [doc.element.body]
+    for section in doc.sections:
+        for hf in (section.header, section.footer, section.first_page_header, section.first_page_footer):
+            if hf is not None and hasattr(hf, "_element"):
+                roots.append(hf._element)
+
+    changed = 0
+    for root in roots:
+        for wt in root.iter(qn("w:t")):
+            if _sweep_placeholder_wt(wt):
+                changed += 1
+
+    if changed:
+        doc.save(str(docx_path))
+        logger.debug("clear_word_form_placeholders: %d nodos en %s", changed, docx_path.name)
+
+
 def _ppr_set_justify(ppr: Any, qn: Any, OxmlElement: Any) -> None:
     """Justificado estándar (w:jc both). La última línea de cada w:p queda a la izquierda."""
     for jc in list(ppr.findall(qn("w:jc"))):

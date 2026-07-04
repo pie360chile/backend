@@ -10476,6 +10476,23 @@ class DocumentsClass:
                                 if mapped and mapped in replacements:
                                     rkey = mapped
                             if rkey is None:
+                                sdtContent = sdt.find(qn("w:sdtContent"))
+                                if sdtContent is not None:
+                                    for wt in sdtContent.iter(qn("w:t")):
+                                        tx = (wt.text or "").strip()
+                                        if tx and any(
+                                            ph in tx.lower()
+                                            for ph in (
+                                                "haz clic",
+                                                "pulse aqu",
+                                                "escribir texto",
+                                                "click here",
+                                                "tap here",
+                                                "click or tap",
+                                                "clic aqu",
+                                            )
+                                        ):
+                                            wt.text = ""
                                 continue
                             raw_val = str(replacements.get(rkey, "") or "")
                             raw_val = raw_val.replace("\r\n", "\n").replace("\r", "\n")

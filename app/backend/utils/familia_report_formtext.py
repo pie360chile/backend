@@ -249,9 +249,6 @@ def fill_familia_formtext_fields(
             continue
 
         value = _resolve_replacement(key, replacements)
-        if not value:
-            continue
-
         count = _fill_cell_formtext_element(tc_el, value, qn, OxmlElement)
         if count:
             filled_keys.append(key)

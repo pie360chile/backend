@@ -11,6 +11,10 @@ from pathlib import Path
 from typing import Any
 
 from app.backend.classes.documents_class import DocumentsClass
+from app.backend.utils.familia_report_prefill import (
+    FAMILIA_IDENTIFICATION_SDT_TAGS,
+    _NARRATIVE_KEYS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +90,79 @@ def merge_familia_replacements(
     return merged
 
 
+def _all_familia_field_keys() -> set[str]:
+    """Claves conocidas del informe familia (vacías si el LLM no las entrega)."""
+    keys: set[str] = set(FAMILIA_IDENTIFICATION_SDT_TAGS)
+    keys.update(_NARRATIVE_KEYS)
+    keys.update(FAMILIA_CONTENT_CONTROL_ALIASES.keys())
+    keys.update(FAMILIA_CONTENT_CONTROL_ALIASES.values())
+    keys.update(
+        {
+            "student_social_name",
+            "professional_social_name",
+            "professional_phone",
+            "professional_email",
+            "professional_role",
+            "professional_delivered_date_inform",
+            "report_delivery_date",
+            "receiver_full_name",
+            "receiver_social_name",
+            "receiver_identification_number",
+            "receiver_phone",
+            "receiver_email",
+            "receiver_relationship",
+            "receiver_presence_of",
+            "person_social_name",
+            "person_phone",
+            "person_email",
+            "person_relation_student",
+            "person_presence",
+            "person_presence_of",
+            "full_name",
+            "identification_number",
+            "born_date",
+            "birth_date",
+            "age",
+            "course",
+            "school",
+            "evaluation_date",
+            "evaluation_date_1",
+            "evaluation_date_2",
+            "evaluation_date_3",
+            "evaluation_date_4",
+            "evaluation_date_5",
+            "evaluation_type",
+        }
+    )
+    try:
+        from app.backend.utils.familia_report_tabla_fill import FAMILIA_TABLA_SLOTS
+
+        for *_, key, _mode in FAMILIA_TABLA_SLOTS:
+            keys.add(key)
+    except ImportError:
+        pass
+    try:
+        from app.backend.utils.familia_report_formtext import FAMILIA_FORMTEXT_SLOTS, _KEY_ALIASES
+
+        for *_, key in FAMILIA_FORMTEXT_SLOTS:
+            keys.add(key)
+        for key, aliases in _KEY_ALIASES.items():
+            keys.add(key)
+            keys.update(aliases)
+    except ImportError:
+        pass
+    return keys
+
+
+def ensure_familia_replacement_defaults(merged: dict[str, str]) -> dict[str, str]:
+    """Asegura clave → '' para que campos sin dato no conserven el placeholder de Word."""
+    out = dict(merged)
+    for key in _all_familia_field_keys():
+        if key not in out:
+            out[key] = ""
+    return out
+
+
 def validate_docx(path: Path) -> bool:
     try:
         if not path.is_file() or path.stat().st_size < 100:
@@ -126,7 +203,9 @@ def fill_familia_template(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(template_path, output_path)
 
-    merged = merge_familia_replacements(replacements, student_context or {})
+    merged = ensure_familia_replacement_defaults(
+        merge_familia_replacements(replacements, student_context or {})
+    )
 
     try:
         from app.backend.utils.familia_report_formtext import (
@@ -191,6 +270,7 @@ def _apply_familia_postprocess(
         from app.backend.utils.familia_report_prefill import (
             apply_familia_arial_10_font,
             apply_familia_justify_sdt_paragraphs,
+            clear_word_form_placeholders,
             compact_familia_narrative_spacing,
             fix_familia_motivo_evaluacion_row,
         )
@@ -216,3 +296,8 @@ def _apply_familia_postprocess(
         apply_familia_justify_sdt_paragraphs(output_path)
     except Exception as exc:
         logger.warning("apply_familia_justify_sdt_paragraphs: %s", exc)
+
+    try:
+        clear_word_form_placeholders(output_path)
+    except Exception as exc:
+        logger.warning("clear_word_form_placeholders: %s", exc)
