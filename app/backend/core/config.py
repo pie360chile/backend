@@ -45,6 +45,8 @@ _DEFAULT_CORS_RAW = ",".join(
         "http://127.0.0.1:5173",
         "https://agent-8ceae.web.app",
         "https://agent-8ceae.firebaseapp.com",
+        "https://pie-360-chile.web.app",
+        "https://pie-360-chile.firebaseapp.com",
         "https://newerp-ghdegyc9cpcpc6gq.eastus-01.azurewebsites.net",
     ]
 )
