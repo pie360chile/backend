@@ -13,10 +13,11 @@ from app.backend.classes.documents_class import DocumentsClass
 from app.backend.classes.student_document_file_class import FolderClass
 from app.backend.core.config import settings
 from app.backend.db.models.agent_v2_documents import AgentV2DocumentTemplateModel
-from app.backend.db.models.pie_core import (
-    StudentAcademicInfoModel,
-    StudentModel,
-    StudentPersonalInfoModel,
+from app.backend.utils.agent_v2_familia_pie360 import (
+    FAMILIA_DOCUMENT_ID,
+    build_familia_pie360_context,
+    is_familia_document,
+    merge_pie360_fallback_into_replacements,
 )
 from app.backend.utils import agent_v2_storage as storage
 from app.backend.utils.agent_v2_familia_fill import fill_familia_template, validate_docx
@@ -26,14 +27,26 @@ from app.backend.utils.agent_v2_family_report_store import (
 )
 from app.backend.utils.agent_v2_template_inspector import fields_from_json
 
-_FAMILIA_DOCUMENT_ID = 7
+_FAMILIA_DOCUMENT_ID = FAMILIA_DOCUMENT_ID
 _WORD_PLACEHOLDERS = (
     "Haz clic o pulse aquí para escribir texto.",
     "Click or tap here to enter text.",
 )
 
 
-def _student_context(db: Session, student_id: int) -> dict[str, Any]:
+def _student_context(db: Session, student_id: int, document_id: int | None = None) -> dict[str, Any]:
+    if is_familia_document(document_id):
+        return build_familia_pie360_context(db, student_id)
+    return _basic_student_context(db, student_id)
+
+
+def _basic_student_context(db: Session, student_id: int) -> dict[str, Any]:
+    from app.backend.db.models.pie_core import (
+        StudentAcademicInfoModel,
+        StudentModel,
+        StudentPersonalInfoModel,
+    )
+
     student = db.query(StudentModel).filter(StudentModel.id == student_id).first()
     personal = (
         db.query(StudentPersonalInfoModel)
@@ -71,7 +84,9 @@ def generate_and_save_document(
     if not template_abs.is_file():
         return {"status": "error", "message": "Plantilla no encontrada en disco."}
 
-    student_ctx = _student_context(db, student_id)
+    student_ctx = _student_context(db, student_id, int(template.document_id))
+    if is_familia_document(int(template.document_id)):
+        replacements = merge_pie360_fallback_into_replacements(replacements, student_ctx)
     output_dir = Path(settings.files_dir) / "system" / "students"
     output_dir.mkdir(parents=True, exist_ok=True)
 

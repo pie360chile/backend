@@ -15,6 +15,7 @@ from app.backend.classes.agent_v2_document_service import (
 from app.backend.core.config import settings
 from app.backend.db.models.agent_v2 import AgentV2Model
 from app.backend.db.models.agent_v2_documents import AgentV2DocumentTemplateModel
+from app.backend.db.models.pie_core import StudentPersonalInfoModel
 from app.backend.services import agent_v2_openai
 from app.backend.services.agent_v2_openai import openai_api_key_configured
 from app.backend.utils import agent_v2_storage as storage
@@ -22,6 +23,7 @@ from app.backend.utils.agent_v2_file_context import build_agent_files_context
 from app.backend.utils.agent_v2_prompt_sanitize import (
     CHAT_OUTPUT_OVERRIDE,
     DOCUMENT_FIELD_EXTRACTION_GUIDE,
+    extract_priority_directives_from_prompt,
     sanitize_role_instructions_for_chat,
 )
 from app.backend.utils.agent_v2_chat_context import (
@@ -109,10 +111,11 @@ class AgentV2ChatClass:
             files_block = (
                 "\n\nNota: hay archivos en Files pero no se pudo extraer texto "
                 "(formatos no soportados o vacíos). Formatos soportados: .txt, .md, "
-                ".docx, .pdf, .json, .csv.\n"
+                ".docx, .pdf, .json, .csv, .xls, .xlsx.\n"
             )
 
         role_text = sanitize_role_instructions_for_chat(agent.role_instructions)
+        priority_directives = extract_priority_directives_from_prompt(agent.role_instructions)
         student_block = ""
         if student_hint:
             student_block = f"\n\n{student_hint}\n"
@@ -123,19 +126,26 @@ class AgentV2ChatClass:
                 "indicar que el documento Word fue generado.\n"
             )
 
+        priority_block = ""
+        if priority_directives:
+            priority_block = f"\n\n{priority_directives}\n"
+
         return (
             f"Eres el agente «{agent.name}» de PIE360.\n\n"
+            f"## Instrucciones del agente (configuradas por el usuario — prioridad en fuentes y redacción)\n"
             f"{role_text}\n\n"
-            f"{CHAT_OUTPUT_OVERRIDE}\n\n"
+            f"{CHAT_OUTPUT_OVERRIDE}\n"
             f"Archivos en Files del agente: {file_count} "
             f"({files_included} incluidos en este contexto).\n"
             f"{files_block}"
+            f"{priority_block}"
             f"Plantillas de documentos configuradas:\n{templates_text}"
             f"{doc_hint}"
             f"{student_block}\n\n"
-            "Responde en español. Si las instrucciones indican usar archivos subidos, "
-            "basa tu respuesta solo en el contenido de ARCHIVOS DE CONTEXTO arriba. "
-            "No inventes datos que no estén en el mensaje ni en esos archivos."
+            "Responde en español. Las instrucciones del agente sobre archivos, fuentes y redacción "
+            "tienen prioridad sobre la brevedad del chat. "
+            "Usa ARCHIVOS DE CONTEXTO, DATOS EXTRAÍDOS DE EXCEL y la ficha del estudiante. "
+            "No inventes datos que no estén en esas fuentes ni en el mensaje del usuario."
         )
 
     def _build_messages(
@@ -184,16 +194,22 @@ class AgentV2ChatClass:
 
         files_section = f"\n\nArchivos de contexto (Files):\n{files_context}" if files_context else ""
         role_text = sanitize_role_instructions_for_chat(agent.role_instructions)
+        priority_directives = extract_priority_directives_from_prompt(agent.role_instructions)
         prompt = (
             "Devuelve SOLO un objeto JSON donde cada clave es exactamente el nombre del campo "
             "y el valor es el texto a insertar en la plantilla.\n"
             f"Campos requeridos:\n{build_fields_prompt(template)}\n\n"
-            f"Instrucciones del agente:\n{role_text}\n\n"
+            f"## Instrucciones del agente (prioridad en fuentes y redacción)\n{role_text}\n\n"
+        )
+        if priority_directives:
+            prompt += f"{priority_directives}\n\n"
+        prompt += (
             f"{DOCUMENT_FIELD_EXTRACTION_GUIDE}\n"
             f"{files_section}\n\n"
             f"Mensaje del usuario:\n{user_message}\n\n"
             f"Respuesta del asistente (puede ser breve; no limites el Word a esto):\n{assistant_reply}\n\n"
-            "Prioriza archivos de contexto y las normas del agente. "
+            "Obedece las directrices del agente sobre archivos y fuentes. "
+            "Prioriza archivos de contexto, Excel extraído y ficha PIE360. "
             "Expande los campos narrativos con redacción completa. "
             "Si no hay información para un campo, usa cadena vacía."
         )
@@ -248,8 +264,6 @@ class AgentV2ChatClass:
         if file_count > 0:
             yield _sse({"type": "step", "message": "Leyendo archivos de Files…"})
 
-        files_context, files_included = build_agent_files_context(agent.name)
-
         resolved_student_id, rut_used, student_issue = resolve_student_id(
             self.db,
             student_id=student_id,
@@ -257,6 +271,22 @@ class AgentV2ChatClass:
             message=message,
             history=history,
         )
+
+        rut_for_excel = rut_used
+        if not rut_for_excel and resolved_student_id:
+            personal = (
+                self.db.query(StudentPersonalInfoModel)
+                .filter(StudentPersonalInfoModel.student_id == resolved_student_id)
+                .first()
+            )
+            if personal and (personal.identification_number or "").strip():
+                rut_for_excel = (personal.identification_number or "").strip()
+
+        files_context, files_included = build_agent_files_context(
+            agent.name,
+            student_rut=rut_for_excel,
+        )
+
         resolved_document_id = document_id or infer_document_id(
             self.db, agent_id, message, history
         )
@@ -266,7 +296,11 @@ class AgentV2ChatClass:
         student_hint = ""
         pending_rut = False
         if resolved_student_id:
-            student_hint = student_identification_hint(self.db, resolved_student_id)
+            student_hint = student_identification_hint(
+                self.db,
+                resolved_student_id,
+                resolved_document_id,
+            )
         elif should_generate and student_issue == "needs_rut":
             pending_rut = True
 

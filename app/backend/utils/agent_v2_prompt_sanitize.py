@@ -4,12 +4,39 @@ from __future__ import annotations
 
 import re
 
-# Secciones del prompt que no aplican: la salida la maneja PIE360 (plantilla + BD).
+# Solo se omiten secciones de ENTREGA (Word/Drive); no las de fuentes ni archivos.
 _OMIT_SECTION_KEYWORDS = (
     "salida esperada",
     "guardado de informes",
     "confirmación de guardado",
     "confirmacion de guardado",
+)
+
+# Líneas del prompt del usuario que deben repetirse con prioridad (fuentes/archivos).
+_PRIORITY_LINE_MARKERS = (
+    "reporte_interactivo",
+    "reporte interactivo",
+    ".xls",
+    ".xlsx",
+    "excel",
+    "files",
+    "archivo",
+    "archivos",
+    "fuente",
+    "fuentes",
+    "apoderado",
+    "nomina",
+    "nómina",
+    "profesional",
+    "normativa",
+    "decreto",
+    "glosario",
+    "antecedentes",
+    "informe psicoped",
+    "prioriz",
+    "obligatori",
+    "debes ",
+    "debe ",
 )
 
 _SECTION_HEADER = re.compile(r"^##\s+(.+)$", re.MULTILINE)
@@ -46,30 +73,69 @@ def sanitize_role_instructions_for_chat(text: str) -> str:
     return "\n\n".join(parts).strip()
 
 
-CHAT_OUTPUT_OVERRIDE = """
-## Salida real en PIE360 Agent v2 (prioridad máxima — reemplaza «Salida esperada»)
+def extract_priority_directives_from_prompt(text: str) -> str:
+    """
+    Extrae del prompt del creador las reglas operativas (archivos, fuentes, apoderado, etc.)
+    para reforzarlas después del contexto de Files.
+    """
+    raw = (text or "").strip()
+    if not raw:
+        return ""
 
-Ignora instrucciones sobre:
+    seen: set[str] = set()
+    bullets: list[str] = []
+
+    for line in raw.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        low = stripped.lower()
+        if not any(marker in low for marker in _PRIORITY_LINE_MARKERS):
+            continue
+        cleaned = re.sub(r"^[-*•]\s+", "", stripped)
+        if len(cleaned) < 12:
+            continue
+        key = cleaned.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        bullets.append(cleaned)
+
+    if not bullets:
+        return ""
+
+    return (
+        "## Directrices del creador del agente (OBLIGATORIAS — prevalecen sobre brevedad del chat)\n"
+        + "\n".join(f"- {b}" for b in bullets[:40])
+    )
+
+
+CHAT_OUTPUT_OVERRIDE = """
+## Formato de entrega en PIE360 (solo esto reemplaza «Salida esperada»)
+
+Estas reglas aplican únicamente a CÓMO se entrega el resultado, no a qué archivos consultar
+ni a cómo redactar según las instrucciones del agente.
+
+Ignora instrucciones del prompt sobre:
 - presentar informes largos en el chat como entrega final;
 - generar archivos .docx/.pdf descargables manualmente;
 - crear ZIP o paquetes comprimidos;
 - subir a Google Drive o usar herramientas MCP de guardado;
 - confirmaciones de guardado con rutas de Drive.
 
-La salida del sistema SIEMPRE es:
-1. Usar los archivos de Files y el mensaje del usuario como fuente.
+La entrega técnica SIEMPRE es:
+1. Consultar las fuentes indicadas en las instrucciones del agente y en ARCHIVOS DE CONTEXTO.
 2. Producir el contenido para rellenar la plantilla del documento PIE360 activo.
-3. El backend completa la plantilla Word o PDF y guarda el archivo en la base de datos del estudiante (tabla folders).
+3. El backend completa la plantilla Word o PDF y guarda el archivo en la base de datos del estudiante.
 
-En el chat responde de forma breve: resumen de lo analizado, datos usados o faltantes.
-No entregues el informe completo en texto si corresponde generar documento.
+En el chat: resumen breve de lo analizado, archivos usados y datos faltantes.
+No pegues el informe completo en el chat si corresponde generar documento Word.
 
 Identificación del estudiante:
-- Si aún no hay estudiante identificado en el sistema para esta conversación, pide el RUT o IPE para ubicarlo en PIE360 antes de afirmar que el Word fue generado.
-- No digas «informe generado» ni «listo para descargar» si faltan RUT/IPE y el usuario no ha sido identificado en la plataforma.
+- Si aún no hay estudiante identificado, pide el RUT o IPE antes de afirmar que el Word fue generado.
 
 Descarga:
-- Cuando el backend genere el archivo, el chat mostrará el botón «Descargar archivo generado» debajo de tu mensaje.
+- Cuando el backend genere el archivo, el chat mostrará el botón «Descargar archivo generado».
 """.strip()
 
 
@@ -100,9 +166,10 @@ Checkboxes (apoderado titular/suplente, poder simple sí/no, evaluación ingreso
 - Si no hay información verificable, deja el checkbox SIN marcar (cadena vacía o false; no uses «x», «1» ni «sí» por defecto).
 
 Datos del apoderado / receptor y del profesional que entrega el informe:
-- Búscalos en TODOS los archivos del índice de Files (incluidos Excel .xls/.xlsx como reportes interactivos).
-- Si el prompt del agente indica un archivo concreto (p. ej. REPORTE_INTERACTIVO*.xls), priorízalo para apoderado y contacto.
-- Si tras revisar los archivos incluidos en contexto no hay dato verificable, deja el campo vacío (no inventes).
+- Obedece las directrices del creador del agente sobre qué archivo usar (p. ej. REPORTE_INTERACTIVO*.xls).
+- Búscalos en ARCHIVOS DE CONTEXTO, DATOS EXTRAÍDOS DE EXCEL y datos de ficha PIE360 del estudiante.
+- Si el prompt del agente indica un archivo concreto, priorízalo para apoderado y contacto.
+- Si tras revisar esas fuentes no hay dato verificable, deja el campo vacío (no inventes).
 
 Formato:
 - Español formal de informes psicopedagógicos ministeriales chilenos.

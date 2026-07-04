@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from app.backend.classes.documents_class import DocumentsClass
+from app.backend.utils.agent_v2_familia_pie360 import merge_pie360_fallback_into_replacements
 from app.backend.utils.familia_report_prefill import (
     FAMILIA_IDENTIFICATION_SDT_TAGS,
     _NARRATIVE_KEYS,
@@ -87,7 +88,7 @@ def merge_familia_replacements(
     for key, value in defaults.items():
         merged.setdefault(key, value)
 
-    return merged
+    return merge_pie360_fallback_into_replacements(merged, student_ctx)
 
 
 def _all_familia_field_keys() -> set[str]:
@@ -246,7 +247,7 @@ def fill_familia_template(
             str(output_path),
             remove_literal_strings=list(_WORD_PLACEHOLDERS),
             content_control_tag_aliases=cc_aliases,
-            preserve_empty_content_controls=False,
+            preserve_empty_content_controls=True,
             checkbox_unchecked_blank=True,
         )
 

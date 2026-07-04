@@ -9,6 +9,12 @@ from sqlalchemy.orm import Session
 
 from app.backend.db.models.agent_v2_documents import AgentV2DocumentTemplateModel
 from app.backend.db.models.pie_core import StudentPersonalInfoModel
+from app.backend.utils.agent_v2_familia_pie360 import (
+    FAMILIA_DOCUMENT_ID,
+    build_familia_pie360_context,
+    familia_pie360_hint_lines,
+    is_familia_document,
+)
 
 _RUT_RE = re.compile(
     r"\b(\d{1,2}[.\s]?\d{3}[.\s]?\d{3}[-\s]?[\dkK]|\d{7,8}[-\s]?[\dkK])\b",
@@ -145,7 +151,7 @@ def infer_document_id(
     if any(h in blob for h in _FAMILY_HINTS) or ("familia" in blob and "informe" in blob):
         for row in rows:
             name = (row.document_name or "").lower()
-            if "familia" in name or int(row.document_id) == 7:
+            if "familia" in name or int(row.document_id) == FAMILIA_DOCUMENT_ID:
                 return int(row.document_id)
     if any(h in blob for h in _PSICOPED_HINTS):
         for row in rows:
@@ -158,7 +164,11 @@ def infer_document_id(
     return None
 
 
-def student_identification_hint(db: Session, student_id: int) -> str:
+def student_identification_hint(
+    db: Session,
+    student_id: int,
+    document_id: int | None = None,
+) -> str:
     personal = (
         db.query(StudentPersonalInfoModel)
         .filter(StudentPersonalInfoModel.student_id == student_id)
@@ -174,4 +184,13 @@ def student_identification_hint(db: Session, student_id: int) -> str:
     parts = [f"Estudiante en PIE360: {full or f'id {student_id}'}"]
     if rut:
         parts.append(f"RUT/IPE: {rut}")
+
+    if is_familia_document(document_id):
+        pie = build_familia_pie360_context(db, student_id)
+        parts.extend(familia_pie360_hint_lines(pie))
+        parts.append(
+            "Para Informe a la Familia: si Files/Excel no traen apoderado o profesional, "
+            "usa estos datos de ficha PIE360 como respaldo."
+        )
+
     return ". ".join(parts) + "."

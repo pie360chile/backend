@@ -10552,6 +10552,27 @@ class DocumentsClass:
                                             wt.text = ""
                                 continue
 
+                            # Informe familia: texto vacío → solo quitar «Haz clic…», conservar cuadro SDT
+                            if content_control_tag_aliases and not val_stripped:
+                                sdtContent = sdt.find(qn("w:sdtContent"))
+                                if sdtContent is not None:
+                                    for wt in sdtContent.iter(qn("w:t")):
+                                        low = (wt.text or "").lower()
+                                        if any(
+                                            ph in low
+                                            for ph in (
+                                                "haz clic",
+                                                "pulse aqu",
+                                                "escribir texto",
+                                                "click here",
+                                                "tap here",
+                                                "click or tap",
+                                                "clic aqu",
+                                            )
+                                        ):
+                                            wt.text = ""
+                                continue
+
                             is_checked = bool(
                                 val_stripped and val_stripped.lower() not in ("0", "false", "no", "off")
                             )
