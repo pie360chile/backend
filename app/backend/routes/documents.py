@@ -4152,15 +4152,20 @@ async def generate_document(
             if result.get("status") != "error":
                 from app.backend.utils.familia_report_prefill import (
                     apply_familia_arial_10_font,
+                    apply_familia_checkbox_states,
                     compact_familia_narrative_spacing,
                     fix_familia_motivo_evaluacion_row,
                 )
 
+                checkbox_ctx = {
+                    "evaluation_type": fr_data.get("evaluation_type"),
+                    "guardian_type": fr_data.get("guardian_type"),
+                    "has_power_of_attorney": fr_data.get("has_power_of_attorney"),
+                }
+                apply_familia_checkbox_states(Path(result["file_path"]), checkbox_ctx)
                 fix_familia_motivo_evaluacion_row(
                     Path(result["file_path"]),
-                    {
-                        "evaluation_type": fr_data.get("evaluation_type"),
-                    },
+                    checkbox_ctx,
                 )
                 compact_familia_narrative_spacing(Path(result["file_path"]))
                 apply_familia_arial_10_font(Path(result["file_path"]))

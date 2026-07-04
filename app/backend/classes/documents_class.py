@@ -9935,6 +9935,7 @@ class DocumentsClass:
         remove_literal_strings: Optional[List[str]] = None,
         content_control_tag_aliases: Optional[Dict[str, str]] = None,
         preserve_empty_content_controls: bool = False,
+        checkbox_unchecked_blank: bool = False,
     ) -> Dict[str, Any]:
         """
         Rellena un formulario DOCX reemplazando etiquetas/placeholders.
@@ -10026,7 +10027,11 @@ class DocumentsClass:
                             )
                             checkbox.append(check_el)
                         # Actualizar también el texto visible en sdtContent (Word lo usa para mostrar)
-                        symbol = CHK_SYMBOL_CHECKED if checked else CHK_SYMBOL_UNCHECKED
+                        symbol = (
+                            CHK_SYMBOL_CHECKED
+                            if checked
+                            else ("" if checkbox_unchecked_blank else CHK_SYMBOL_UNCHECKED)
+                        )
                         sdtContent = sdt.find(qn("w:sdtContent"))
                         if sdtContent is not None:
                             wt_list = list(sdtContent.iter(qn("w:t")))
@@ -10476,27 +10481,77 @@ class DocumentsClass:
                                 if mapped and mapped in replacements:
                                     rkey = mapped
                             if rkey is None:
-                                sdtContent = sdt.find(qn("w:sdtContent"))
-                                if sdtContent is not None:
-                                    for wt in sdtContent.iter(qn("w:t")):
-                                        tx = (wt.text or "").strip()
-                                        if tx and any(
-                                            ph in tx.lower()
-                                            for ph in (
-                                                "haz clic",
-                                                "pulse aqu",
-                                                "escribir texto",
-                                                "click here",
-                                                "tap here",
-                                                "click or tap",
-                                                "clic aqu",
-                                            )
-                                        ):
-                                            wt.text = ""
+                                checkbox_el = None
+                                for child in sdtPr:
+                                    if child.tag == f"{{{W14_NS}}}checkbox" or child.tag.endswith("}checkbox"):
+                                        checkbox_el = child
+                                        break
+                                if checkbox_el is not None:
+                                    _set_checkbox_checked(sdt, sdtPr, False)
+                                else:
+                                    sdtContent = sdt.find(qn("w:sdtContent"))
+                                    if sdtContent is not None:
+                                        for wt in sdtContent.iter(qn("w:t")):
+                                            tx = (wt.text or "").strip()
+                                            if tx and any(
+                                                ph in tx.lower()
+                                                for ph in (
+                                                    "haz clic",
+                                                    "pulse aqu",
+                                                    "escribir texto",
+                                                    "click here",
+                                                    "tap here",
+                                                    "click or tap",
+                                                    "clic aqu",
+                                                )
+                                            ):
+                                                wt.text = ""
                                 continue
                             raw_val = str(replacements.get(rkey, "") or "")
                             raw_val = raw_val.replace("\r\n", "\n").replace("\r", "\n")
                             val_stripped = raw_val.strip()
+
+                            # Informe familia: checkboxes solo en postprocess (no insertar texto del LLM)
+                            _familia_cb_tags = frozenset(
+                                {
+                                    "evaluation",
+                                    "reevaluation",
+                                    "primary",
+                                    "substitute",
+                                    "yes",
+                                    "no",
+                                    "titular",
+                                    "suplente",
+                                    "ingreso",
+                                    "admission",
+                                    "revaluation",
+                                    "reevaluacion",
+                                }
+                            )
+                            if content_control_tag_aliases and (
+                                tag_n in _familia_cb_tags
+                                or "apoderado" in tag_n
+                                or "guardian" in tag_n
+                                or "poder" in tag_n
+                            ):
+                                cb_val = val_stripped.lower()
+                                is_cb_checked = cb_val in (
+                                    "1",
+                                    "true",
+                                    "yes",
+                                    "si",
+                                    "sí",
+                                    "on",
+                                    "x",
+                                    "checked",
+                                )
+                                if not _set_checkbox_checked(sdt, sdtPr, is_cb_checked):
+                                    sdtContent = sdt.find(qn("w:sdtContent"))
+                                    if sdtContent is not None:
+                                        for wt in sdtContent.iter(qn("w:t")):
+                                            wt.text = ""
+                                continue
+
                             is_checked = bool(
                                 val_stripped and val_stripped.lower() not in ("0", "false", "no", "off")
                             )
@@ -10512,6 +10567,32 @@ class DocumentsClass:
                                 and not val_stripped
                                 and not preserve_empty_content_controls
                             ):
+                                # Informe familia: checkboxes SDT sin w14 — no desenvolver (rompe el diseño)
+                                _familia_cb_tags = frozenset(
+                                    {
+                                        "evaluation",
+                                        "reevaluation",
+                                        "primary",
+                                        "substitute",
+                                        "yes",
+                                        "no",
+                                        "titular",
+                                        "suplente",
+                                        "ingreso",
+                                        "admission",
+                                        "revaluation",
+                                        "reevaluacion",
+                                    }
+                                )
+                                if content_control_tag_aliases and (
+                                    tag_n in _familia_cb_tags
+                                    or "apoderado" in tag_n
+                                    or "guardian" in tag_n
+                                    or "poder" in tag_n
+                                ):
+                                    for wt in sdtContent.iter(qn("w:t")):
+                                        wt.text = ""
+                                    continue
                                 for wt in sdtContent.iter(qn("w:t")):
                                     wt.text = ""
                                 parent = sdt.getparent()

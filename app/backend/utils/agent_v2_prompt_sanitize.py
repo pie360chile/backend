@@ -95,6 +95,15 @@ agreements y campos equivalentes de otros informes):
 Campos de identificación (nombre, RUT/IPE, curso, establecimiento, edad, fecha de nacimiento, etc.):
 - Solo el dato puntual, sin párrafos extensos.
 
+Checkboxes (apoderado titular/suplente, poder simple sí/no, evaluación ingreso/reevaluación):
+- Marca solo si hay dato explícito en archivos o mensaje (guardian_type, has_power_of_attorney, evaluation_type).
+- Si no hay información verificable, deja el checkbox SIN marcar (cadena vacía o false; no uses «x», «1» ni «sí» por defecto).
+
+Datos del apoderado / receptor y del profesional que entrega el informe:
+- Búscalos en TODOS los archivos del índice de Files (incluidos Excel .xls/.xlsx como reportes interactivos).
+- Si el prompt del agente indica un archivo concreto (p. ej. REPORTE_INTERACTIVO*.xls), priorízalo para apoderado y contacto.
+- Si tras revisar los archivos incluidos en contexto no hay dato verificable, deja el campo vacío (no inventes).
+
 Formato:
 - Español formal de informes psicopedagógicos ministeriales chilenos.
 - Fechas en dd/mm/aaaa cuando corresponda.

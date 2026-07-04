@@ -72,6 +72,41 @@ def _normalize_cc_tag(tag: str) -> str:
 _NARRATIVE_TAG_NORMS = frozenset(_normalize_cc_tag(k) for k in _NARRATIVE_KEYS)
 _CHECKBOX_SDT_TAGS = frozenset({"evaluation", "reevaluation"})
 
+# Tags w:tag de checkboxes en plantilla familia (normalizados)
+_EVALUATION_CHECK_TAGS = frozenset(
+    {_normalize_cc_tag(t) for t in ("evaluation", "ingreso", "admission", "evaluacion_ingreso")}
+)
+_REEVALUATION_CHECK_TAGS = frozenset(
+    {
+        _normalize_cc_tag(t)
+        for t in ("reevaluation", "reevaluacion", "reevaluación", "revaluation", "evaluacion_reevaluacion")
+    }
+)
+_GUARDIAN_PRIMARY_TAGS = frozenset(
+    {
+        _normalize_cc_tag(t)
+        for t in ("primary", "titular", "guardian_primary", "apoderado_titular", "apoderado_a_titular")
+    }
+)
+_GUARDIAN_SUBSTITUTE_TAGS = frozenset(
+    {
+        _normalize_cc_tag(t)
+        for t in ("substitute", "suplente", "guardian_substitute", "apoderado_suplente", "apoderado_a_suplente")
+    }
+)
+_POWER_YES_TAGS = frozenset(
+    {
+        _normalize_cc_tag(t)
+        for t in ("yes", "si", "sí", "power_yes", "poder_si", "has_power_yes", "has_power_of_attorney_yes")
+    }
+)
+_POWER_NO_TAGS = frozenset(
+    {
+        _normalize_cc_tag(t)
+        for t in ("no", "power_no", "poder_no", "has_power_no", "has_power_of_attorney_no")
+    }
+)
+
 
 def _paragraph_visible_text(p_el: Any, qn: Any) -> str:
     return "".join((t.text or "") for t in p_el.iter(qn("w:t")))
@@ -369,11 +404,116 @@ W14_CHECKED_ATTR = f"{{{W14_NS}}}val"
 
 
 def _evaluation_type_flags(context: dict[str, Any] | None) -> tuple[bool, bool]:
-    """Devuelve (ingreso_marcado, reevaluacion_marcada)."""
-    eval_type = str((context or {}).get("evaluation_type") or "").strip().lower()
-    if eval_type in ("revaluation", "reevaluación", "reevaluacion", "2"):
+    """Devuelve (ingreso_marcado, reevaluacion_marcada). Sin dato → ninguno marcado."""
+    ctx = context or {}
+    eval_type = str(ctx.get("evaluation_type") or "").strip().lower()
+    if not eval_type:
+        if _truthy_checkbox_value(str(ctx.get("reevaluation") or "")):
+            return False, True
+        if _truthy_checkbox_value(str(ctx.get("evaluation") or "")):
+            return True, False
+        return False, False
+    if eval_type in ("revaluation", "reevaluación", "reevaluacion", "reeval", "2"):
         return False, True
-    return True, False
+    if eval_type in ("admission", "admisión", "admision", "ingreso", "1"):
+        return True, False
+    return False, False
+
+
+def _truthy_checkbox_value(raw: str) -> bool:
+    v = (raw or "").strip().lower()
+    return v in ("1", "true", "yes", "si", "sí", "on", "x")
+
+
+def _familia_checkbox_should_check(tag: str | None, context: dict[str, Any]) -> bool:
+    """True solo si hay dato explícito que corresponda a este checkbox."""
+    if not tag:
+        return False
+    tag_n = _normalize_cc_tag(tag)
+    ctx = context or {}
+
+    is_admission, is_reeval = _evaluation_type_flags(ctx)
+    if tag_n in _EVALUATION_CHECK_TAGS:
+        return is_admission
+    if tag_n in _REEVALUATION_CHECK_TAGS:
+        return is_reeval
+
+    guardian_type = str(ctx.get("guardian_type") or "").strip().lower()
+    if tag_n in _GUARDIAN_PRIMARY_TAGS:
+        return guardian_type in ("primary", "titular", "1")
+    if tag_n in _GUARDIAN_SUBSTITUTE_TAGS:
+        return guardian_type in ("substitute", "suplente", "2")
+
+    poa = str(ctx.get("has_power_of_attorney") or "").strip().lower()
+    if tag_n in _POWER_YES_TAGS:
+        return poa in ("yes", "si", "sí", "1", "true")
+    if tag_n in _POWER_NO_TAGS:
+        return poa in ("no", "0", "false")
+
+    for key in (tag, tag_n):
+        if key in ctx:
+            return _truthy_checkbox_value(str(ctx.get(key) or ""))
+    return False
+
+
+def _sdt_has_checkbox(sdt_pr: Any) -> bool:
+    if sdt_pr is None:
+        return False
+    for child in sdt_pr:
+        if child.tag.endswith("}checkbox"):
+            return True
+    return False
+
+
+def _is_familia_checkbox_tag(tag: str | None) -> bool:
+    if not tag:
+        return False
+    tag_n = _normalize_cc_tag(tag)
+    return tag_n in (
+        _EVALUATION_CHECK_TAGS
+        | _REEVALUATION_CHECK_TAGS
+        | _GUARDIAN_PRIMARY_TAGS
+        | _GUARDIAN_SUBSTITUTE_TAGS
+        | _POWER_YES_TAGS
+        | _POWER_NO_TAGS
+        | _CHECKBOX_SDT_TAGS
+    )
+
+
+def apply_familia_checkbox_states(
+    docx_path: Path,
+    context: dict[str, Any] | None = None,
+) -> None:
+    """Deja en blanco los checkboxes sin dato; marca solo los que correspondan."""
+    from docx import Document
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    doc = Document(str(docx_path))
+    ctx = context or {}
+
+    def walk(parent: Any) -> None:
+        for sdt in parent.iter(qn("w:sdt")):
+            sdt_pr = sdt.find(qn("w:sdtPr"))
+            tag_el = sdt_pr.find(qn("w:tag")) if sdt_pr is not None else None
+            tag_val = tag_el.get(qn("w:val")) if tag_el is not None else None
+            if not _is_familia_checkbox_tag(tag_val) and not _sdt_has_checkbox(sdt_pr):
+                continue
+            checked = _familia_checkbox_should_check(tag_val, ctx)
+            _set_sdt_checkbox_mark(sdt, qn, OxmlElement, checked)
+
+    walk(doc.element.body)
+    for section in doc.sections:
+        for hf in (
+            section.header,
+            section.footer,
+            section.first_page_header,
+            section.first_page_footer,
+        ):
+            if hf is not None and hf._element is not None:
+                walk(hf._element)
+
+    doc.save(str(docx_path))
 
 
 def _set_sdt_checkbox_mark(sdt: Any, qn: Any, OxmlElement: Any, checked: bool) -> None:
@@ -446,77 +586,10 @@ def fix_familia_motivo_evaluacion_row(
         fix_familia_motivo_evaluacion_formtext(docx_path, student_context)
         return
 
-    from copy import deepcopy
-
-    from docx import Document
-    from docx.oxml import OxmlElement
-    from docx.oxml.ns import qn
-
-    doc = Document(str(docx_path))
-    if len(doc.tables) < 4 or len(doc.tables[3].rows) < 2:
-        return
-
-    is_admission, is_reeval = _evaluation_type_flags(student_context)
-    cell = doc.tables[3].rows[1].cells[0]
-    if not cell.paragraphs:
-        return
-
-    p = cell.paragraphs[0]._element
-    p_pr = p.find(qn("w:pPr"))
-
-    eval_sdt = reeval_sdt = None
-    bold_r_pr = None
-    for child in p:
-        if child.tag.endswith("}r"):
-            if bold_r_pr is None:
-                found = child.find(qn("w:rPr"))
-                if found is not None:
-                    bold_r_pr = deepcopy(found)
-        if child.tag.endswith("}sdt"):
-            tag_el = child.find(".//" + qn("w:tag"))
-            tag_val = tag_el.get(qn("w:val")) if tag_el is not None else None
-            if tag_val == "evaluation":
-                eval_sdt = child
-            elif tag_val == "reevaluation":
-                reeval_sdt = child
-
-    for child in list(p):
-        if child is not p_pr:
-            p.remove(child)
-
-    def add_run(text: str) -> None:
-        r = OxmlElement("w:r")
-        if bold_r_pr is not None:
-            r.append(deepcopy(bold_r_pr))
-        t = OxmlElement("w:t")
-        t.text = text
-        if text.startswith(" ") or text.endswith(" "):
-            t.set(qn("xml:space"), "preserve")
-        r.append(t)
-        p.append(r)
-
-    add_run("MOTIVO DE LA EVALUACIÓN")
-    add_run("                                                      ")
-    add_run("Evaluación:")
-    add_run(" ")
-
-    if eval_sdt is not None:
-        _set_sdt_checkbox_mark(eval_sdt, qn, OxmlElement, is_admission)
-        p.append(eval_sdt)
-    elif is_admission:
-        add_run("x")
-
-    add_run("de Ingreso   ")
-
-    if reeval_sdt is not None:
-        _set_sdt_checkbox_mark(reeval_sdt, qn, OxmlElement, is_reeval)
-        p.append(reeval_sdt)
-    elif is_reeval:
-        add_run("x")
-
-    add_run(" Reevaluación")
-
-    doc.save(str(docx_path))
+    # Plantilla con SDT (content controls): NO rearmar el párrafo — duplica texto
+    # («Evaluación: xde Ingreso…») y rompe el diseño. Los checkboxes se ajustan en
+    # apply_familia_checkbox_states() sin tocar etiquetas ni saltos de la plantilla.
+    return
 
 
 FAMILIA_ANSWER_FONT = "Arial"
@@ -885,6 +958,12 @@ def postprocess_saved_familia_docx(
         logger.info("Espaciado narrativo compactado en %s", path.name)
     except Exception as exc:
         logger.warning("Compactación de espaciado falló en %s: %s", path.name, exc)
+
+    try:
+        apply_familia_checkbox_states(path, student_context)
+        logger.info("Checkboxes familia ajustados en %s", path.name)
+    except Exception as exc:
+        logger.warning("Checkboxes familia fallaron en %s: %s", path.name, exc)
 
     try:
         fix_familia_motivo_evaluacion_row(path, student_context)

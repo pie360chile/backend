@@ -132,6 +132,12 @@ def _all_familia_field_keys() -> set[str]:
             "evaluation_date_4",
             "evaluation_date_5",
             "evaluation_type",
+            "guardian_type",
+            "has_power_of_attorney",
+            "evaluation",
+            "reevaluation",
+            "primary",
+            "substitute",
         }
     )
     try:
@@ -241,12 +247,13 @@ def fill_familia_template(
             remove_literal_strings=list(_WORD_PLACEHOLDERS),
             content_control_tag_aliases=cc_aliases,
             preserve_empty_content_controls=False,
+            checkbox_unchecked_blank=True,
         )
 
     if result.get("status") == "error":
         return result
 
-    _apply_familia_postprocess(output_path, student_context)
+    _apply_familia_postprocess(output_path, student_context, merged)
 
     if not validate_docx(output_path):
         return {
@@ -265,11 +272,17 @@ def fill_familia_template(
 def _apply_familia_postprocess(
     output_path: Path,
     student_context: dict[str, Any] | None,
+    replacements: dict[str, str] | None = None,
 ) -> None:
+    checkbox_ctx: dict[str, Any] = dict(student_context or {})
+    if replacements:
+        checkbox_ctx.update(replacements)
+
     try:
         from app.backend.utils.familia_report_prefill import (
             apply_familia_arial_10_font,
             apply_familia_justify_sdt_paragraphs,
+            apply_familia_checkbox_states,
             clear_word_form_placeholders,
             compact_familia_narrative_spacing,
             fix_familia_motivo_evaluacion_row,
@@ -283,7 +296,17 @@ def _apply_familia_postprocess(
         logger.warning("compact_familia_narrative_spacing: %s", exc)
 
     try:
-        fix_familia_motivo_evaluacion_row(output_path, student_context or {})
+        apply_familia_checkbox_states(output_path, checkbox_ctx)
+    except Exception as exc:
+        logger.warning("apply_familia_checkbox_states: %s", exc)
+
+    # Solo plantillas FORMTEXT / tabla ministerial (no SDT Word)
+    try:
+        from app.backend.utils.familia_report_formtext import docx_has_legacy_formtext
+        from app.backend.utils.familia_report_tabla_fill import docx_is_familia_ministerial_tabla
+
+        if docx_is_familia_ministerial_tabla(output_path) or docx_has_legacy_formtext(output_path):
+            fix_familia_motivo_evaluacion_row(output_path, checkbox_ctx)
     except Exception as exc:
         logger.warning("fix_familia_motivo_evaluacion_row: %s", exc)
 
