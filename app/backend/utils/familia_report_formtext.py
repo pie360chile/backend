@@ -267,7 +267,10 @@ def fix_familia_motivo_evaluacion_formtext(
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
 
-    from app.backend.utils.familia_report_prefill import _evaluation_type_flags
+    from app.backend.utils.familia_report_prefill import (
+        FAMILIA_CHECKBOX_CHECKED_MARK,
+        _evaluation_type_flags,
+    )
 
     doc = Document(str(docx_path))
     if len(doc.tables) < 4 or len(doc.tables[3].rows) < 2:
@@ -289,9 +292,14 @@ def fix_familia_motivo_evaluacion_formtext(
         for wt in p_el.iter(qn("w:t")):
             parts.append(wt.text or "")
         raw = "".join(parts).strip()
-        if raw.startswith("x ") or raw.startswith("x\n"):
+        if raw.startswith(FAMILIA_CHECKBOX_CHECKED_MARK) or raw.startswith("☒"):
             return
-        new_text = f"x {raw}".strip() if raw else "x"
+        if "☐" in raw:
+            new_text = raw.replace("☐", FAMILIA_CHECKBOX_CHECKED_MARK, 1)
+        elif raw.startswith("x ") or raw.startswith("x\n"):
+            new_text = raw.replace("x", FAMILIA_CHECKBOX_CHECKED_MARK, 1)
+        else:
+            new_text = f"{FAMILIA_CHECKBOX_CHECKED_MARK} {raw}".strip() if raw else FAMILIA_CHECKBOX_CHECKED_MARK
         for wt in list(p_el.iter(qn("w:t"))):
             parent = wt.getparent()
             if parent is not None:

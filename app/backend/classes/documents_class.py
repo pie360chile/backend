@@ -10028,7 +10028,11 @@ class DocumentsClass:
                             checkbox.append(check_el)
                         # Actualizar también el texto visible en sdtContent (Word lo usa para mostrar)
                         symbol = (
-                            CHK_SYMBOL_CHECKED
+                            (
+                                "\u2612"
+                                if content_control_tag_aliases
+                                else CHK_SYMBOL_CHECKED
+                            )
                             if checked
                             else (
                                 CHK_SYMBOL_UNCHECKED
@@ -10547,6 +10551,8 @@ class DocumentsClass:
                                     "sí",
                                     "on",
                                     "x",
+                                    "☒",
+                                    "☑",
                                     "checked",
                                 )
                                 if not _set_checkbox_checked(sdt, sdtPr, is_cb_checked):

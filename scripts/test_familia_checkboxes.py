@@ -17,6 +17,7 @@ if str(ROOT) not in sys.path:
 
 from app.backend.utils.agent_v2_familia_fill import fill_familia_template
 from app.backend.utils.familia_report_prefill import (
+    FAMILIA_CHECKBOX_CHECKED_MARK,
     FAMILIA_CHECKBOX_UNCHECKED,
     apply_familia_checkbox_states,
     ensure_familia_checkbox_boxes_visible,
@@ -82,8 +83,8 @@ def main() -> int:
         output,
         {
             "diagnostic": "Diagnóstico de prueba con texto suficiente.",
-            "evaluation_type": "",
-            "evaluation": "",
+            "evaluation_type": "admission",
+            "evaluation": "1",
             "reevaluation": "",
             "primary": "",
             "substitute": "",
@@ -95,10 +96,16 @@ def main() -> int:
     assert result.get("status") == "success", result
 
     after = _count_symbol(output, FAMILIA_CHECKBOX_UNCHECKED)
+    checked = _count_symbol(output, FAMILIA_CHECKBOX_CHECKED_MARK)
     print(f"checkbox_empty antes={before} despues={after}")
+    print(f"checkbox_checked simbolo={checked}")
 
-    if after < before:
-        print("FALLO: desaparecieron checkboxes vacíos")
+    if after < 1:
+        print("FALLO: desaparecieron checkboxes vacios")
+        shutil.rmtree(tmp, ignore_errors=True)
+        return 1
+    if checked < 1:
+        print("FALLO: ingreso marcado sin simbolo dentro del recuadro")
         shutil.rmtree(tmp, ignore_errors=True)
         return 1
 

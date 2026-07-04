@@ -215,7 +215,10 @@ def fix_familia_motivo_evaluacion_tabla(
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
 
-    from app.backend.utils.familia_report_prefill import _evaluation_type_flags
+    from app.backend.utils.familia_report_prefill import (
+        FAMILIA_CHECKBOX_CHECKED_MARK,
+        _evaluation_type_flags,
+    )
 
     doc = Document(str(docx_path))
     is_admission, is_reeval = _evaluation_type_flags(student_context)
@@ -231,10 +234,10 @@ def fix_familia_motivo_evaluacion_tabla(
         if not wt.text:
             continue
         if "☐" in wt.text:
-            wt.text = wt.text.replace("☐", "x", 1)
+            wt.text = wt.text.replace("☐", FAMILIA_CHECKBOX_CHECKED_MARK, 1)
             doc.save(str(docx_path))
             return
-        if wt.text.strip() in ("x", "X"):
+        if wt.text.strip() in ("x", "X", FAMILIA_CHECKBOX_CHECKED_MARK):
             return
 
     doc.save(str(docx_path))

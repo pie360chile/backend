@@ -108,7 +108,7 @@ _POWER_NO_TAGS = frozenset(
 )
 
 FAMILIA_CHECKBOX_UNCHECKED = "\u2610"  # ☐
-FAMILIA_CHECKBOX_CHECKED_MARK = "x"
+FAMILIA_CHECKBOX_CHECKED_MARK = "\u2612"  # ☒ (x dentro del recuadro)
 
 
 def all_familia_checkbox_tag_norms() -> frozenset[str]:
@@ -458,7 +458,7 @@ def _evaluation_type_flags(context: dict[str, Any] | None) -> tuple[bool, bool]:
 
 def _truthy_checkbox_value(raw: str) -> bool:
     v = (raw or "").strip().lower()
-    return v in ("1", "true", "yes", "si", "sí", "on", "x")
+    return v in ("1", "true", "yes", "si", "sí", "on", "x", "☒", "☑")
 
 
 def _familia_checkbox_should_check(tag: str | None, context: dict[str, Any]) -> bool:
@@ -553,7 +553,7 @@ def apply_familia_checkbox_states(
 
 
 def _set_sdt_checkbox_mark(sdt: Any, qn: Any, OxmlElement: Any, checked: bool) -> None:
-    """Marca checkbox: vacío = ☐; marcado = x (como plantilla ministerial)."""
+    """Marca checkbox: vacío = ☐; marcado = ☒ (x dentro del recuadro)."""
     sdt_pr = sdt.find(qn("w:sdtPr"))
     if sdt_pr is not None:
         checkbox = None
@@ -618,7 +618,13 @@ def ensure_familia_checkbox_boxes_visible(docx_path: Path) -> None:
         if sdt_content is None:
             return
         visible = "".join((t.text or "") for t in sdt_content.iter(qn("w:t"))).strip()
-        if visible != "":
+        if visible in ("x", "X"):
+            wt_list = list(sdt_content.iter(qn("w:t")))
+            if wt_list:
+                wt_list[0].text = FAMILIA_CHECKBOX_CHECKED_MARK
+                changed = True
+            return
+        if visible not in ("", FAMILIA_CHECKBOX_UNCHECKED, "□"):
             return
         wt_list = list(sdt_content.iter(qn("w:t")))
         if wt_list:
@@ -656,7 +662,7 @@ def ensure_familia_checkbox_boxes_visible(docx_path: Path) -> None:
                 continue
             for p_el in tc.iter(qn("w:p")):
                 p_text = _paragraph_visible_text(p_el, qn).strip()
-                if not p_text or p_text[0] in ("☐", "□", "x", "X"):
+                if not p_text or p_text[0] in ("☐", "□", "☒", "☑", "x", "X"):
                     continue
                 if not any(m in p_text for m in option_markers):
                     continue
