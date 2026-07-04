@@ -286,6 +286,7 @@ def _apply_familia_postprocess(
             apply_familia_checkbox_states,
             clear_word_form_placeholders,
             compact_familia_narrative_spacing,
+            ensure_familia_checkbox_boxes_visible,
             fix_familia_motivo_evaluacion_row,
         )
     except ImportError:
@@ -325,3 +326,8 @@ def _apply_familia_postprocess(
         clear_word_form_placeholders(output_path)
     except Exception as exc:
         logger.warning("clear_word_form_placeholders: %s", exc)
+
+    try:
+        ensure_familia_checkbox_boxes_visible(output_path)
+    except Exception as exc:
+        logger.warning("ensure_familia_checkbox_boxes_visible: %s", exc)

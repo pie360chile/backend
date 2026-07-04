@@ -10030,7 +10030,11 @@ class DocumentsClass:
                         symbol = (
                             CHK_SYMBOL_CHECKED
                             if checked
-                            else ("" if checkbox_unchecked_blank else CHK_SYMBOL_UNCHECKED)
+                            else (
+                                CHK_SYMBOL_UNCHECKED
+                                if content_control_tag_aliases
+                                else ("" if checkbox_unchecked_blank else CHK_SYMBOL_UNCHECKED)
+                            )
                         )
                         sdtContent = sdt.find(qn("w:sdtContent"))
                         if sdtContent is not None:
@@ -10548,8 +10552,11 @@ class DocumentsClass:
                                 if not _set_checkbox_checked(sdt, sdtPr, is_cb_checked):
                                     sdtContent = sdt.find(qn("w:sdtContent"))
                                     if sdtContent is not None:
-                                        for wt in sdtContent.iter(qn("w:t")):
-                                            wt.text = ""
+                                        wt_list = list(sdtContent.iter(qn("w:t")))
+                                        if wt_list:
+                                            wt_list[0].text = CHK_SYMBOL_UNCHECKED
+                                            for wt in wt_list[1:]:
+                                                wt.text = ""
                                 continue
 
                             # Informe familia: texto vacío → solo quitar «Haz clic…», conservar cuadro SDT
@@ -10611,8 +10618,11 @@ class DocumentsClass:
                                     or "guardian" in tag_n
                                     or "poder" in tag_n
                                 ):
-                                    for wt in sdtContent.iter(qn("w:t")):
-                                        wt.text = ""
+                                    wt_list = list(sdtContent.iter(qn("w:t")))
+                                    if wt_list:
+                                        wt_list[0].text = CHK_SYMBOL_UNCHECKED
+                                        for wt in wt_list[1:]:
+                                            wt.text = ""
                                     continue
                                 for wt in sdtContent.iter(qn("w:t")):
                                     wt.text = ""

@@ -107,6 +107,42 @@ _POWER_NO_TAGS = frozenset(
     }
 )
 
+FAMILIA_CHECKBOX_UNCHECKED = "\u2610"  # ☐
+FAMILIA_CHECKBOX_CHECKED_MARK = "x"
+
+
+def all_familia_checkbox_tag_norms() -> frozenset[str]:
+    return (
+        _EVALUATION_CHECK_TAGS
+        | _REEVALUATION_CHECK_TAGS
+        | _GUARDIAN_PRIMARY_TAGS
+        | _GUARDIAN_SUBSTITUTE_TAGS
+        | _POWER_YES_TAGS
+        | _POWER_NO_TAGS
+        | {_normalize_cc_tag(t) for t in _CHECKBOX_SDT_TAGS}
+    )
+
+
+def is_familia_checkbox_tag_norm(tag: str | None) -> bool:
+    if not tag:
+        return False
+    tag_n = _normalize_cc_tag(tag)
+    if tag_n in all_familia_checkbox_tag_norms():
+        return True
+    low = tag_n
+    return "apoderado" in low or "guardian" in low or "poder" in low
+
+
+def _sdt_checkbox_unchecked_display(sdt: Any, qn: Any) -> str:
+    """Símbolo vacío del checkbox: conserva ☐/□ de la plantilla."""
+    for wt in sdt.iter(qn("w:t")):
+        text = wt.text or ""
+        if "☐" in text:
+            return "☐"
+        if "□" in text:
+            return "□"
+    return FAMILIA_CHECKBOX_UNCHECKED
+
 
 def _paragraph_visible_text(p_el: Any, qn: Any) -> str:
     return "".join((t.text or "") for t in p_el.iter(qn("w:t")))
@@ -375,7 +411,7 @@ def compact_familia_narrative_spacing(docx_path: Path) -> None:
             if tag_el is None:
                 continue
             tag_val = tag_el.get(qn("w:val")) or ""
-            if tag_val in _CHECKBOX_SDT_TAGS:
+            if is_familia_checkbox_tag_norm(tag_val):
                 continue
             tag_n = _normalize_cc_tag(tag_val)
             sdt_content = sdt.find(qn("w:sdtContent"))
@@ -517,7 +553,7 @@ def apply_familia_checkbox_states(
 
 
 def _set_sdt_checkbox_mark(sdt: Any, qn: Any, OxmlElement: Any, checked: bool) -> None:
-    """Marca checkbox con 'x' sin cuadro (☐/☑)."""
+    """Marca checkbox: vacío = ☐; marcado = x (como plantilla ministerial)."""
     sdt_pr = sdt.find(qn("w:sdtPr"))
     if sdt_pr is not None:
         checkbox = None
@@ -542,8 +578,8 @@ def _set_sdt_checkbox_mark(sdt: Any, qn: Any, OxmlElement: Any, checked: bool) -
     sdt_content = sdt.find(qn("w:sdtContent"))
     if sdt_content is None:
         return
+    mark = FAMILIA_CHECKBOX_CHECKED_MARK if checked else _sdt_checkbox_unchecked_display(sdt, qn)
     wt_list = list(sdt_content.iter(qn("w:t")))
-    mark = "x" if checked else ""
     if wt_list:
         wt_list[0].text = mark
         for wt in wt_list[1:]:
@@ -560,6 +596,81 @@ def _set_sdt_checkbox_mark(sdt: Any, qn: Any, OxmlElement: Any, checked: bool) -
                 w_r.append(wt)
             wt.text = mark
             break
+
+
+def ensure_familia_checkbox_boxes_visible(docx_path: Path) -> None:
+    """Garantiza ☐ visible en checkboxes vacíos (SDT y celdas de opciones)."""
+    from docx import Document
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    doc = Document(str(docx_path))
+    changed = False
+
+    def _ensure_sdt(sdt: Any) -> None:
+        nonlocal changed
+        sdt_pr = sdt.find(qn("w:sdtPr"))
+        tag_el = sdt_pr.find(qn("w:tag")) if sdt_pr is not None else None
+        tag_val = tag_el.get(qn("w:val")) if tag_el is not None else None
+        if not is_familia_checkbox_tag_norm(tag_val) and not _sdt_has_checkbox(sdt_pr):
+            return
+        sdt_content = sdt.find(qn("w:sdtContent"))
+        if sdt_content is None:
+            return
+        visible = "".join((t.text or "") for t in sdt_content.iter(qn("w:t"))).strip()
+        if visible != "":
+            return
+        wt_list = list(sdt_content.iter(qn("w:t")))
+        if wt_list:
+            wt_list[0].text = FAMILIA_CHECKBOX_UNCHECKED
+            changed = True
+            return
+        for p_el in sdt_content.iter(qn("w:p")):
+            w_r = p_el.find(qn("w:r"))
+            if w_r is None:
+                w_r = OxmlElement("w:r")
+                p_el.append(w_r)
+            wt = w_r.find(qn("w:t"))
+            if wt is None:
+                wt = OxmlElement("w:t")
+                w_r.append(wt)
+            wt.text = FAMILIA_CHECKBOX_UNCHECKED
+            changed = True
+            break
+
+    for sdt in doc.element.body.iter(qn("w:sdt")):
+        _ensure_sdt(sdt)
+
+    option_markers = (
+        "Evaluación de Ingreso",
+        "Reevaluación fin año",
+        "Apoderado/a titular",
+        "Apoderado/a suplente",
+    )
+    for tbl in doc.element.body.iter(qn("w:tbl")):
+        for tc in tbl.iter(qn("w:tc")):
+            cell_text = "".join((t.text or "") for t in tc.iter(qn("w:t")))
+            if "☐" in cell_text or "□" in cell_text:
+                continue
+            if not any(m in cell_text for m in option_markers):
+                continue
+            for p_el in tc.iter(qn("w:p")):
+                p_text = _paragraph_visible_text(p_el, qn).strip()
+                if not p_text or p_text[0] in ("☐", "□", "x", "X"):
+                    continue
+                if not any(m in p_text for m in option_markers):
+                    continue
+                for r in p_el.findall(qn("w:r")):
+                    wt = r.find(qn("w:t"))
+                    if wt is None or not (wt.text or "").strip():
+                        continue
+                    wt.text = f"☐ {(wt.text or '').lstrip()}"
+                    changed = True
+                    break
+                break
+
+    if changed:
+        doc.save(str(docx_path))
 
 
 def fix_familia_motivo_evaluacion_row(
@@ -644,14 +755,11 @@ def apply_familia_arial_10_font(docx_path: Path) -> None:
         for sdt in parent.iter(qn("w:sdt")):
             tag_el = sdt.find(".//" + qn("w:tag"))
             tag_val = tag_el.get(qn("w:val")) if tag_el is not None else None
+            if is_familia_checkbox_tag_norm(tag_val):
+                continue
             for r in sdt.iter(qn("w:r")):
                 wt = r.find(qn("w:t"))
                 if wt is None or not (wt.text or "").strip():
-                    continue
-                if tag_val in _CHECKBOX_SDT_TAGS and (wt.text or "").strip() in ("", "x", "X"):
-                    _apply_arial_10_to_run(r, qn, OxmlElement)
-                    continue
-                if tag_val in _CHECKBOX_SDT_TAGS:
                     continue
                 _apply_arial_10_to_run(r, qn, OxmlElement)
 
@@ -691,7 +799,7 @@ def apply_familia_justify_sdt_paragraphs(docx_path: Path) -> None:
         for sdt in parent.iter(qn("w:sdt")):
             tag_el = sdt.find(".//" + qn("w:tag"))
             tag_val = tag_el.get(qn("w:val")) if tag_el is not None else None
-            if tag_val in _CHECKBOX_SDT_TAGS:
+            if is_familia_checkbox_tag_norm(tag_val):
                 continue
             sdt_content = sdt.find(qn("w:sdtContent"))
             if sdt_content is None:
