@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from app.backend.utils import agent_v2_storage as storage
+from app.backend.utils import agents_storage as storage
 
 # Límites para no saturar el contexto del modelo
 MAX_FILES = 25

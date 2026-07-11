@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from app.backend.utils.agent_v2_familia_fill import fill_familia_template
+from app.backend.utils.agents_familia_fill import fill_familia_template
 from app.backend.utils.familia_report_prefill import (
     FAMILIA_CHECKBOX_CHECKED_MARK,
     FAMILIA_CHECKBOX_UNCHECKED,

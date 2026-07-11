@@ -138,7 +138,7 @@ from app.backend.routes.users import users
 from app.backend.routes.videos import videos
 from app.backend.routes.events import events
 from app.backend.routes.workspace_agent import workspace_agent
-from app.backend.routes.agent_v2 import agent_v2
+from app.backend.routes.agents import agents
 
 
 def register_routers(app: FastAPI) -> None:
@@ -236,7 +236,7 @@ def register_routers(app: FastAPI) -> None:
         fur_forms,
         psychomotor_evaluation_reports,
         workspace_agent,
-        agent_v2,
+        agents,
         pedagogical_evaluation_classroom_first_grade,
         pedagogical_evaluation_classroom_second_grade,
         pedagogical_evaluation_classroom_third_grade,
@@ -259,4 +259,4 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(individual_curriculum_adaptation_plans, prefix="/api")
     app.include_router(document_evalua_result_reports, prefix="/api")
     app.include_router(workspace_agent, prefix="/api")
-    app.include_router(agent_v2, prefix="/api")
+    app.include_router(agents, prefix="/api")

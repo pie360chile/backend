@@ -1,4 +1,4 @@
-"""Inspección de campos en plantillas Word/PDF para Agent v2."""
+"""Inspect fields in Word/PDF templates for Agents."""
 
 from __future__ import annotations
 
@@ -124,14 +124,14 @@ def detect_pdf_fields(path: Path) -> list[str]:
 
 def inspect_template_fields(path: Path, format_type: str) -> dict[str, Any]:
     if not path.exists():
-        raise ValueError("Plantilla no encontrada.")
+        raise ValueError("Template not found.")
     fmt = format_type.lower()
     if fmt == "docx":
         fields = detect_docx_fields(path)
     elif fmt == "pdf":
         fields = detect_pdf_fields(path)
     else:
-        raise ValueError("Formato no soportado. Use .docx o .pdf.")
+        raise ValueError("Unsupported format. Use .docx or .pdf.")
     return {
         "formatType": fmt,
         "fields": fields,

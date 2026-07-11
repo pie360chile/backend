@@ -1,4 +1,4 @@
-"""CRUD de agentes configurables (PIE360 Agent v2)."""
+"""Configurable agents CRUD (PIE360 Agents)."""
 
 from __future__ import annotations
 
@@ -9,10 +9,10 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.backend.classes.documents_class import DocumentsClass
-from app.backend.db.models.agent_v2 import AgentV2Model
-from app.backend.db.models.agent_v2_documents import AgentV2DocumentTemplateModel
-from app.backend.utils import agent_v2_storage as storage
-from app.backend.utils.agent_v2_template_inspector import (
+from app.backend.db.models.agent import AgentModel
+from app.backend.db.models.agents_documents import AgentDocumentTemplateModel
+from app.backend.utils import agents_storage as storage
+from app.backend.utils.agents_template_inspector import (
     fields_from_json,
     fields_to_json,
     inspect_template_fields,
@@ -20,15 +20,15 @@ from app.backend.utils.agent_v2_template_inspector import (
 
 
 SECTION_LABELS = {
-    1: "Transversales",
-    2: "Evaluación",
-    3: "Apoyo",
-    4: "Otros",
+    1: "Cross-cutting",
+    2: "Evaluation",
+    3: "Support",
+    4: "Other",
 }
 
 
-def _maybe_refresh_template_fields(db: Session, row: AgentV2DocumentTemplateModel) -> None:
-    """Re-inspecciona plantillas guardadas sin campos (p. ej. solo content controls)."""
+def _maybe_refresh_template_fields(db: Session, row: AgentDocumentTemplateModel) -> None:
+    """Re-inspect saved templates that have no detected fields (e.g. content controls only)."""
     if fields_from_json(row.detected_fields):
         return
     if not row.template_path:
@@ -49,7 +49,7 @@ def _maybe_refresh_template_fields(db: Session, row: AgentV2DocumentTemplateMode
     db.refresh(row)
 
 
-def _serialize_template(row: AgentV2DocumentTemplateModel) -> dict[str, Any]:
+def _serialize_template(row: AgentDocumentTemplateModel) -> dict[str, Any]:
     fields = fields_from_json(row.detected_fields)
     return {
         "id": row.id,
@@ -62,11 +62,11 @@ def _serialize_template(row: AgentV2DocumentTemplateModel) -> dict[str, Any]:
     }
 
 
-def _serialize(agent: AgentV2Model, db: Session) -> dict[str, Any]:
+def _serialize(agent: AgentModel, db: Session) -> dict[str, Any]:
     updated = agent.updated_at or agent.created_at
     templates = (
-        db.query(AgentV2DocumentTemplateModel)
-        .filter(AgentV2DocumentTemplateModel.agent_id == agent.id)
+        db.query(AgentDocumentTemplateModel)
+        .filter(AgentDocumentTemplateModel.agent_id == agent.id)
         .count()
     )
     return {
@@ -79,21 +79,21 @@ def _serialize(agent: AgentV2Model, db: Session) -> dict[str, Any]:
     }
 
 
-class AgentV2Class:
+class AgentsClass:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def _get_agent(self, agent_id: str) -> AgentV2Model | None:
+    def _get_agent(self, agent_id: str) -> AgentModel | None:
         return (
-            self.db.query(AgentV2Model)
-            .filter(AgentV2Model.id == agent_id)
+            self.db.query(AgentModel)
+            .filter(AgentModel.id == agent_id)
             .first()
         )
 
     def list_agents(self) -> dict[str, Any]:
         rows = (
-            self.db.query(AgentV2Model)
-            .order_by(AgentV2Model.updated_at.desc())
+            self.db.query(AgentModel)
+            .order_by(AgentModel.updated_at.desc())
             .all()
         )
         return {"status": "success", "data": [_serialize(row, self.db) for row in rows]}
@@ -101,27 +101,27 @@ class AgentV2Class:
     def get_agent(self, agent_id: str) -> dict[str, Any]:
         agent = self._get_agent(agent_id)
         if not agent:
-            return {"status": "error", "message": "Agente no encontrado.", "http_status": 404}
+            return {"status": "error", "message": "Agent not found.", "http_status": 404}
         return {"status": "success", "data": _serialize(agent, self.db)}
 
     def update_agent(self, agent_id: str, name: str, role_instructions: str) -> dict[str, Any]:
         agent = self._get_agent(agent_id)
         if not agent:
-            return {"status": "error", "message": "Agente no encontrado.", "http_status": 404}
+            return {"status": "error", "message": "Agent not found.", "http_status": 404}
 
         clean_name = name.strip()
         if not clean_name:
-            return {"status": "error", "message": "El nombre es obligatorio.", "http_status": 400}
+            return {"status": "error", "message": "Name is required.", "http_status": 400}
 
         duplicate = (
-            self.db.query(AgentV2Model)
-            .filter(AgentV2Model.name == clean_name, AgentV2Model.id != agent_id)
+            self.db.query(AgentModel)
+            .filter(AgentModel.name == clean_name, AgentModel.id != agent_id)
             .first()
         )
         if duplicate:
             return {
                 "status": "error",
-                "message": "Ya existe un agente con ese nombre.",
+                "message": "An agent with that name already exists.",
                 "http_status": 409,
             }
 
@@ -138,27 +138,27 @@ class AgentV2Class:
             except ValueError:
                 pass
 
-        return {"status": "success", "message": "Agente guardado.", "data": _serialize(agent, self.db)}
+        return {"status": "success", "message": "Agent saved.", "data": _serialize(agent, self.db)}
 
     def create_agent(self, name: str, role_instructions: str) -> dict[str, Any]:
         clean_name = name.strip()
         if not clean_name:
-            return {"status": "error", "message": "El nombre es obligatorio.", "http_status": 400}
+            return {"status": "error", "message": "Name is required.", "http_status": 400}
 
         existing = (
-            self.db.query(AgentV2Model)
-            .filter(AgentV2Model.name == clean_name)
+            self.db.query(AgentModel)
+            .filter(AgentModel.name == clean_name)
             .first()
         )
         if existing:
             return {
                 "status": "error",
-                "message": "Ya existe un agente con ese nombre.",
+                "message": "An agent with that name already exists.",
                 "http_status": 409,
             }
 
         now = datetime.now(timezone.utc).replace(tzinfo=None)
-        agent = AgentV2Model(
+        agent = AgentModel(
             id=uuid.uuid4().hex,
             name=clean_name,
             role_instructions=role_instructions.strip(),
@@ -169,7 +169,7 @@ class AgentV2Class:
         self.db.commit()
         self.db.refresh(agent)
         storage.agent_folder(agent.name)
-        return {"status": "success", "message": "Agente creado.", "data": _serialize(agent, self.db)}
+        return {"status": "success", "message": "Agent created.", "data": _serialize(agent, self.db)}
 
     def list_catalog_documents(self) -> dict[str, Any]:
         docs_class = DocumentsClass(self.db)
@@ -201,11 +201,11 @@ class AgentV2Class:
     def list_document_templates(self, agent_id: str) -> dict[str, Any]:
         agent = self._get_agent(agent_id)
         if not agent:
-            return {"status": "error", "message": "Agente no encontrado.", "http_status": 404}
+            return {"status": "error", "message": "Agent not found.", "http_status": 404}
         rows = (
-            self.db.query(AgentV2DocumentTemplateModel)
-            .filter(AgentV2DocumentTemplateModel.agent_id == agent_id)
-            .order_by(AgentV2DocumentTemplateModel.document_name.asc())
+            self.db.query(AgentDocumentTemplateModel)
+            .filter(AgentDocumentTemplateModel.agent_id == agent_id)
+            .order_by(AgentDocumentTemplateModel.document_name.asc())
             .all()
         )
         for row in rows:
@@ -222,7 +222,7 @@ class AgentV2Class:
     ) -> dict[str, Any]:
         agent = self._get_agent(agent_id)
         if not agent:
-            return {"status": "error", "message": "Agente no encontrado.", "http_status": 404}
+            return {"status": "error", "message": "Agent not found.", "http_status": 404}
 
         lower = (filename or "").lower()
         if lower.endswith(".docx"):
@@ -232,7 +232,7 @@ class AgentV2Class:
         else:
             return {
                 "status": "error",
-                "message": "Solo se permiten plantillas .docx o .pdf.",
+                "message": "Only .docx or .pdf templates are allowed.",
                 "http_status": 400,
             }
 
@@ -245,10 +245,10 @@ class AgentV2Class:
 
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         row = (
-            self.db.query(AgentV2DocumentTemplateModel)
+            self.db.query(AgentDocumentTemplateModel)
             .filter(
-                AgentV2DocumentTemplateModel.agent_id == agent_id,
-                AgentV2DocumentTemplateModel.document_id == document_id,
+                AgentDocumentTemplateModel.agent_id == agent_id,
+                AgentDocumentTemplateModel.document_id == document_id,
             )
             .first()
         )
@@ -259,10 +259,10 @@ class AgentV2Class:
             row.detected_fields = fields_to_json(inspection.get("fields", []))
             row.updated_at = now
         else:
-            row = AgentV2DocumentTemplateModel(
+            row = AgentDocumentTemplateModel(
                 agent_id=agent_id,
                 document_id=document_id,
-                document_name=document_name.strip() or f"Documento {document_id}",
+                document_name=document_name.strip() or f"Document {document_id}",
                 format_type=format_type,
                 template_path=saved["relativePath"],
                 detected_fields=fields_to_json(inspection.get("fields", [])),
@@ -276,24 +276,24 @@ class AgentV2Class:
         self.db.refresh(row)
         payload = _serialize_template(row)
         payload["inspection"] = inspection
-        return {"status": "success", "message": "Plantilla guardada.", "data": payload}
+        return {"status": "success", "message": "Template saved.", "data": payload}
 
     def delete_agent(self, agent_id: str) -> dict[str, Any]:
         agent = self._get_agent(agent_id)
         if not agent:
-            return {"status": "error", "message": "Agente no encontrado.", "http_status": 404}
-        self.db.query(AgentV2DocumentTemplateModel).filter(
-            AgentV2DocumentTemplateModel.agent_id == agent_id
+            return {"status": "error", "message": "Agent not found.", "http_status": 404}
+        self.db.query(AgentDocumentTemplateModel).filter(
+            AgentDocumentTemplateModel.agent_id == agent_id
         ).delete()
         storage.delete_agent_folder(agent.name)
         self.db.delete(agent)
         self.db.commit()
-        return {"status": "success", "message": "Agente eliminado."}
+        return {"status": "success", "message": "Agent deleted."}
 
     def list_files(self, agent_id: str, path: str = "") -> dict[str, Any]:
         agent = self._get_agent(agent_id)
         if not agent:
-            return {"status": "error", "message": "Agente no encontrado.", "http_status": 404}
+            return {"status": "error", "message": "Agent not found.", "http_status": 404}
         try:
             data = storage.list_entries(agent.name, path)
         except ValueError as exc:
@@ -303,13 +303,13 @@ class AgentV2Class:
     def create_folder(self, agent_id: str, folder_name: str, parent_path: str = "") -> dict[str, Any]:
         agent = self._get_agent(agent_id)
         if not agent:
-            return {"status": "error", "message": "Agente no encontrado.", "http_status": 404}
+            return {"status": "error", "message": "Agent not found.", "http_status": 404}
         rel = f"{parent_path}/{folder_name}".strip("/") if parent_path else folder_name.strip()
         try:
             storage.create_folder(agent.name, rel)
         except ValueError as exc:
             return {"status": "error", "message": str(exc), "http_status": 400}
-        return {"status": "success", "message": "Carpeta creada.", "data": {"path": rel, "type": "folder"}}
+        return {"status": "success", "message": "Folder created.", "data": {"path": rel, "type": "folder"}}
 
     def upload_files(
         self,
@@ -318,9 +318,9 @@ class AgentV2Class:
     ) -> dict[str, Any]:
         agent = self._get_agent(agent_id)
         if not agent:
-            return {"status": "error", "message": "Agente no encontrado.", "http_status": 404}
+            return {"status": "error", "message": "Agent not found.", "http_status": 404}
         if not files:
-            return {"status": "error", "message": "No hay archivos para subir.", "http_status": 400}
+            return {"status": "error", "message": "No files to upload.", "http_status": 400}
 
         saved: list[dict[str, Any]] = []
         try:
@@ -333,18 +333,18 @@ class AgentV2Class:
         self.db.commit()
         return {
             "status": "success",
-            "message": f"{len(saved)} archivo(s) subido(s).",
+            "message": f"{len(saved)} file(s) uploaded.",
             "data": {"uploaded": saved, "totalFiles": storage.count_files(agent.name)},
         }
 
     def delete_file(self, agent_id: str, path: str) -> dict[str, Any]:
         agent = self._get_agent(agent_id)
         if not agent:
-            return {"status": "error", "message": "Agente no encontrado.", "http_status": 404}
+            return {"status": "error", "message": "Agent not found.", "http_status": 404}
         try:
             storage.delete_entry(agent.name, path)
         except ValueError as exc:
             return {"status": "error", "message": str(exc), "http_status": 400}
         agent.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         self.db.commit()
-        return {"status": "success", "message": "Eliminado."}
+        return {"status": "success", "message": "Deleted."}

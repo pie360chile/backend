@@ -138,7 +138,10 @@ class Settings:
         default_factory=lambda: os.getenv("GOOGLE_DRIVE_ROOT_FOLDER_ID", "")
     )
     openai_api_key: str = field(default_factory=lambda: os.getenv("OPENAI_API_KEY", ""))
-    agent_v2_model: str = field(default_factory=lambda: os.getenv("AGENT_V2_MODEL", "gpt-5.5"))
+    agents_model: str = field(
+        default_factory=lambda: os.getenv("AGENTS_MODEL")
+        or os.getenv("AGENT_V2_MODEL", "gpt-5.5")
+    )
 
 
 settings = Settings()

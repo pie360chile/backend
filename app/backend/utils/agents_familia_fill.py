@@ -1,4 +1,4 @@
-"""Relleno seguro de plantilla Informe Familia para Agent v2."""
+"""Safe fill of Family Report template for Agents."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from app.backend.classes.documents_class import DocumentsClass
-from app.backend.utils.agent_v2_familia_pie360 import merge_pie360_fallback_into_replacements
+from app.backend.utils.agents_familia_pie360 import merge_pie360_fallback_into_replacements
 from app.backend.utils.familia_report_prefill import (
     FAMILIA_IDENTIFICATION_SDT_TAGS,
     _NARRATIVE_KEYS,
@@ -202,10 +202,10 @@ def fill_familia_template(
     student_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
-    Copia la plantilla subida por el agente y la rellena sin romper controles Word.
+    Copy the agent-uploaded template and fill it without breaking Word controls.
     """
     if not template_path.is_file():
-        return {"status": "error", "message": "Plantilla no encontrada."}
+        return {"status": "error", "message": "Template not found."}
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(template_path, output_path)
@@ -259,7 +259,7 @@ def fill_familia_template(
     if not validate_docx(output_path):
         return {
             "status": "error",
-            "message": "El Word generado quedó corrupto. Revise la plantilla subida.",
+            "message": "The generated Word file is corrupt. Check the uploaded template.",
         }
 
     return {

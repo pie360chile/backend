@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 
 
-class AgentV2CreateRequest(BaseModel):
+class AgentCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255, description="Nombre del agente")
     role_instructions: str = Field(
         ...,
@@ -10,12 +10,12 @@ class AgentV2CreateRequest(BaseModel):
     )
 
 
-class AgentV2CreateFolderRequest(BaseModel):
+class AgentCreateFolderRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     parent_path: str = Field(default="")
 
 
-class AgentV2Item(BaseModel):
+class AgentItem(BaseModel):
     id: str
     name: str
     roleInstructions: str
@@ -23,14 +23,14 @@ class AgentV2Item(BaseModel):
     fileCount: int | None = None
 
 
-class AgentV2ChatHistoryMessage(BaseModel):
+class AgentChatHistoryMessage(BaseModel):
     role: str = Field(..., pattern="^(user|assistant|system)$")
     content: str = Field(..., min_length=1)
 
 
-class AgentV2ChatRequest(BaseModel):
+class AgentChatRequest(BaseModel):
     message: str = Field(..., min_length=1)
     student_id: int | None = None
     student_rut: str | None = Field(default=None, description="RUT/IPE para ubicar al estudiante")
     document_id: int | None = None
-    history: list[AgentV2ChatHistoryMessage] = Field(default_factory=list)
+    history: list[AgentChatHistoryMessage] = Field(default_factory=list)

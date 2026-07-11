@@ -1,4 +1,4 @@
-"""Generación de documentos Agent v2: plantilla Word/PDF → archivo → tabla folders."""
+"""Agents document generation: Word/PDF template → file → folders table."""
 
 from __future__ import annotations
 
@@ -12,20 +12,20 @@ from sqlalchemy.orm import Session
 from app.backend.classes.documents_class import DocumentsClass
 from app.backend.classes.student_document_file_class import FolderClass
 from app.backend.core.config import settings
-from app.backend.db.models.agent_v2_documents import AgentV2DocumentTemplateModel
-from app.backend.utils.agent_v2_familia_pie360 import (
+from app.backend.db.models.agents_documents import AgentDocumentTemplateModel
+from app.backend.utils.agents_familia_pie360 import (
     FAMILIA_DOCUMENT_ID,
     build_familia_pie360_context,
     is_familia_document,
     merge_pie360_fallback_into_replacements,
 )
-from app.backend.utils import agent_v2_storage as storage
-from app.backend.utils.agent_v2_familia_fill import fill_familia_template, validate_docx
-from app.backend.utils.agent_v2_family_report_store import (
+from app.backend.utils import agents_storage as storage
+from app.backend.utils.agents_familia_fill import fill_familia_template, validate_docx
+from app.backend.utils.agents_family_report_store import (
     link_folder_to_family_report,
     persist_family_report_from_agent,
 )
-from app.backend.utils.agent_v2_template_inspector import fields_from_json
+from app.backend.utils.agents_template_inspector import fields_from_json
 
 _FAMILIA_DOCUMENT_ID = FAMILIA_DOCUMENT_ID
 _WORD_PLACEHOLDERS = (
@@ -76,13 +76,13 @@ def _basic_student_context(db: Session, student_id: int) -> dict[str, Any]:
 
 def generate_and_save_document(
     db: Session,
-    template: AgentV2DocumentTemplateModel,
+    template: AgentDocumentTemplateModel,
     student_id: int,
     replacements: dict[str, str],
 ) -> dict[str, Any]:
     template_abs = (storage.files_dir() / template.template_path).resolve()
     if not template_abs.is_file():
-        return {"status": "error", "message": "Plantilla no encontrada en disco."}
+        return {"status": "error", "message": "Template not found on disk."}
 
     student_ctx = _student_context(db, student_id, int(template.document_id))
     if is_familia_document(int(template.document_id)):
@@ -115,7 +115,7 @@ def generate_and_save_document(
             if result.get("status") != "error" and not validate_docx(output_path):
                 result = {
                     "status": "error",
-                    "message": "El Word generado quedó corrupto. Revise la plantilla.",
+                    "message": "The generated Word file is corrupt. Check the template.",
                 }
         if result.get("status") == "error":
             return result
@@ -138,7 +138,7 @@ def generate_and_save_document(
             return result
         filename = result.get("filename") or filename
     else:
-        return {"status": "error", "message": f"Formato no soportado: {ext}"}
+        return {"status": "error", "message": f"Unsupported format: {ext}"}
 
     folder_result = FolderClass(db).store(
         student_id=student_id,
@@ -163,8 +163,8 @@ def generate_and_save_document(
             return {
                 "status": "error",
                 "message": (
-                    "El Word se generó pero no se pudo guardar el formulario en la ficha "
-                    f"del estudiante: {fr_result.get('message', 'error desconocido')}"
+                    "The Word file was generated but the form could not be saved to the "
+                    f"student record: {fr_result.get('message', 'unknown error')}"
                 ),
                 "filename": filename,
             }
@@ -173,7 +173,7 @@ def generate_and_save_document(
 
     return {
         "status": "success",
-        "message": "Documento generado y guardado.",
+        "message": "Document generated and saved.",
         "filename": filename,
         "documentId": template.document_id,
         "documentName": template.document_name,
@@ -183,7 +183,7 @@ def generate_and_save_document(
     }
 
 
-def build_fields_prompt(template: AgentV2DocumentTemplateModel) -> str:
+def build_fields_prompt(template: AgentDocumentTemplateModel) -> str:
     fields = fields_from_json(template.detected_fields)
     if not fields:
         return "No hay campos detectados en la plantilla."

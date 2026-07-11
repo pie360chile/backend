@@ -1,4 +1,4 @@
-"""Persist Agent v2 familia field text into family_reports (ficha admin)."""
+"""Persist Agents familia field text into family_reports (ficha admin)."""
 
 from __future__ import annotations
 
@@ -182,7 +182,7 @@ def persist_family_report_from_agent(
     replacements: dict[str, str],
     student_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Guarda una fila en family_reports con el texto redactado por Agent v2."""
+    """Guarda una fila en family_reports con el texto redactado por Agents."""
     payload = build_family_report_store_payload(student_id, replacements, student_context)
     result = FamilyReportClass(db).store(payload)
     if result.get("status") == "error":

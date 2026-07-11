@@ -5,8 +5,8 @@ from sqlalchemy import Column, DateTime, Integer, String, Text, UniqueConstraint
 from app.backend.db.database import Base
 
 
-class AgentV2DocumentTemplateModel(Base):
-    __tablename__ = "agent_v2_document_templates"
+class AgentDocumentTemplateModel(Base):
+    __tablename__ = "agents_document_templates"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     agent_id = Column(String(64), nullable=False, index=True)
@@ -19,5 +19,5 @@ class AgentV2DocumentTemplateModel(Base):
     updated_at = Column(DateTime(), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     __table_args__ = (
-        UniqueConstraint("agent_id", "document_id", name="uq_agent_v2_document_template"),
+        UniqueConstraint("agent_id", "document_id", name="uq_agents_document_template"),
     )

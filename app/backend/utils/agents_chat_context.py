@@ -1,4 +1,4 @@
-"""Resolución de estudiante/documento para generación en chat Agent v2."""
+"""Resolución de estudiante/documento para generación en chat Agents."""
 
 from __future__ import annotations
 
@@ -7,9 +7,9 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.backend.db.models.agent_v2_documents import AgentV2DocumentTemplateModel
+from app.backend.db.models.agents_documents import AgentDocumentTemplateModel
 from app.backend.db.models.pie_core import StudentPersonalInfoModel
-from app.backend.utils.agent_v2_familia_pie360 import (
+from app.backend.utils.agents_familia_pie360 import (
     FAMILIA_DOCUMENT_ID,
     build_familia_pie360_context,
     familia_pie360_hint_lines,
@@ -34,6 +34,14 @@ _GENERATION_HINTS = (
     "generar un informe",
     "genera un documento",
     "generar un documento",
+    "realiza el informe",
+    "realizar el informe",
+    "realiza el documento",
+    "realizar el documento",
+    "realiza un informe",
+    "realizar un informe",
+    "realiza un documento",
+    "realizar un documento",
     "elabora el informe",
     "elaborar el informe",
     "elabora el documento",
@@ -42,31 +50,81 @@ _GENERATION_HINTS = (
     "redactar el informe",
     "redacta el documento",
     "redactar el documento",
+    "escribe el informe",
+    "escribir el informe",
+    "escribe el documento",
+    "escribir el documento",
     "crea el informe",
     "crear informe",
     "crear el informe",
+    "completa el informe",
+    "completar el informe",
+    "completa el documento",
+    "completar el documento",
+    "finaliza el informe",
+    "finalizar el informe",
+    "emite el informe",
+    "emitir el informe",
+    "confecciona el informe",
+    "confeccionar el informe",
+    "arma el informe",
+    "armar el informe",
+    "produce el informe",
+    "producir el informe",
     "exporta el informe",
     "exportar el informe",
     "exporta el documento",
     "exportar el documento",
+    "descarga el informe",
+    "descargar el informe",
+    "descarga el documento",
+    "descargar el documento",
     "necesito el informe",
+    "necesito el documento",
     "quiero el informe",
+    "quiero el documento",
     "entrega el informe",
     "entregar el informe",
     "haz el informe",
     "hacer el informe",
+    "haz el documento",
+    "hacer el documento",
     "prepara el informe",
     "preparar el informe",
+    "prepara el documento",
+    "preparar el documento",
+    "deja listo el informe",
+    "dejar listo el informe",
     "genera de nuevo",
     "generar de nuevo",
+    "realiza de nuevo",
+    "realizar de nuevo",
     "vuelve a generar",
+    "vuelve a realizar",
     "regenera el informe",
     "regenerar el informe",
 )
 
-# Imperativo al inicio del mensaje actual (p. ej. «genera informe familia isabella»)
+# Verbo de acción + informe/documento en cualquier parte del mensaje
+_GENERATION_PHRASE_RE = re.compile(
+    r"\b("
+    r"genera(r)?|realiza(r)?|elabora(r)?|redacta(r)?|escribe(r)?|crea(r)?|"
+    r"completa(r)?|finaliza(r)?|emite(r)?|confecciona(r)?|arma(r)?|produce(r)?|"
+    r"exporta(r)?|descarga(r)?|prepara(r)?|regenera(r)?|"
+    r"haz|hacer|entrega(r)?"
+    r")\s+(el\s+|un\s+|la\s+)?(informe|documento|word|docx)\b",
+    re.IGNORECASE,
+)
+
+# Imperativo al inicio del mensaje (p. ej. «realiza informe familia isabella»)
 _GENERATION_START_RE = re.compile(
-    r"^\s*(genera|generar|elabora|elaborar|redacta|redactar|crea|crear|exporta|exportar|regenera|regenerar)\b",
+    r"^\s*("
+    r"genera|generar|realiza|realizar|elabora|elaborar|redacta|redactar|"
+    r"escribe|escribir|crea|crear|completa|completar|finaliza|finalizar|"
+    r"emite|emitir|confecciona|confeccionar|arma|armar|produce|producir|"
+    r"exporta|exportar|descarga|descargar|prepara|preparar|"
+    r"regenera|regenerar|haz|hacer|entrega|entregar"
+    r")\b",
     re.IGNORECASE,
 )
 
@@ -153,6 +211,8 @@ def wants_document_generation(message: str, history: list[dict[str, str]] | None
         return False
     if any(hint in low for hint in _GENERATION_HINTS):
         return True
+    if _GENERATION_PHRASE_RE.search(text):
+        return True
     if _GENERATION_START_RE.match(text):
         return True
     return False
@@ -206,9 +266,9 @@ def infer_document_id(
     history: list[dict[str, str]] | None,
 ) -> int | None:
     rows = (
-        db.query(AgentV2DocumentTemplateModel)
-        .filter(AgentV2DocumentTemplateModel.agent_id == agent_id)
-        .order_by(AgentV2DocumentTemplateModel.document_name.asc())
+        db.query(AgentDocumentTemplateModel)
+        .filter(AgentDocumentTemplateModel.agent_id == agent_id)
+        .order_by(AgentDocumentTemplateModel.document_name.asc())
         .all()
     )
     if not rows:

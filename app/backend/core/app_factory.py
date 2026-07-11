@@ -94,7 +94,7 @@ def create_app() -> FastAPI:
     if key:
         logging.getLogger(__name__).info(
             "OpenAI configurada (modelo=%s, key=…%s)",
-            settings.agent_v2_model,
+            settings.agents_model,
             key[-4:],
         )
     else:

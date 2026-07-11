@@ -1,4 +1,4 @@
-"""Chat Agent v2: prompt desde BD + OpenAI + generación Word/PDF + guardado en folders."""
+"""Agents chat: prompt from DB + OpenAI + Word/PDF generation + save to folders."""
 
 from __future__ import annotations
 
@@ -8,59 +8,97 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.backend.classes.agent_v2_document_service import (
+from app.backend.classes.agents_document_service import (
     build_fields_prompt,
     generate_and_save_document,
 )
+from app.backend.classes.agents_usage_class import AgentsUsageClass
 from app.backend.core.config import settings
-from app.backend.db.models.agent_v2 import AgentV2Model
-from app.backend.db.models.agent_v2_documents import AgentV2DocumentTemplateModel
+from app.backend.db.models.agent import AgentModel
+from app.backend.db.models.agents_documents import AgentDocumentTemplateModel
 from app.backend.db.models.pie_core import StudentPersonalInfoModel
-from app.backend.services import agent_v2_openai
-from app.backend.services.agent_v2_openai import openai_api_key_configured
-from app.backend.utils import agent_v2_storage as storage
-from app.backend.utils.agent_v2_file_context import build_agent_files_context
-from app.backend.utils.agent_v2_prompt_sanitize import (
+from app.backend.services import agents_openai
+from app.backend.services.agents_openai import OpenAIUsage, openai_api_key_configured
+from app.backend.utils import agents_storage as storage
+from app.backend.utils.agents_file_context import build_agent_files_context
+from app.backend.utils.agents_prompt_sanitize import (
     CHAT_OUTPUT_OVERRIDE,
     DOCUMENT_FIELD_EXTRACTION_GUIDE,
     extract_priority_directives_from_prompt,
     sanitize_role_instructions_for_chat,
 )
-from app.backend.utils.agent_v2_chat_context import (
+from app.backend.utils.agents_chat_context import (
     infer_document_id,
     resolve_student_id,
     student_identification_hint,
     wants_document_generation,
 )
-from app.backend.utils.agent_v2_template_inspector import fields_from_json
+from app.backend.utils.agents_template_inspector import fields_from_json
 
 
 def _sse(event: dict[str, Any]) -> dict[str, Any]:
     return event
 
 
-class AgentV2ChatClass:
-    def __init__(self, db: Session) -> None:
+class AgentsChatClass:
+    def __init__(
+        self,
+        db: Session,
+        *,
+        customer_id: int | None = None,
+        school_id: int | None = None,
+        user_id: int | None = None,
+    ) -> None:
         self.db = db
+        self.customer_id = customer_id
+        self.school_id = school_id
+        self.user_id = user_id
+        self._usage = AgentsUsageClass(db)
 
-    def _get_agent(self, agent_id: str) -> AgentV2Model | None:
-        return self.db.query(AgentV2Model).filter(AgentV2Model.id == agent_id).first()
+    def _record_usage(
+        self,
+        *,
+        agent_id: str,
+        request_kind: str,
+        usage: OpenAIUsage | None,
+    ) -> None:
+        if not usage or not self.customer_id:
+            return
+        try:
+            self._usage.record(
+                customer_id=self.customer_id,
+                school_id=self.school_id,
+                user_id=self.user_id,
+                agent_id=agent_id,
+                request_kind=request_kind,
+                model=usage.model,
+                prompt_tokens=usage.prompt_tokens,
+                completion_tokens=usage.completion_tokens,
+                total_tokens=usage.total_tokens,
+            )
+        except Exception:
+            # Do not interrupt chat if usage metrics fail.
+            self.db.rollback()
 
-    def _get_template(self, agent_id: str, document_id: int) -> AgentV2DocumentTemplateModel | None:
+
+    def _get_agent(self, agent_id: str) -> AgentModel | None:
+        return self.db.query(AgentModel).filter(AgentModel.id == agent_id).first()
+
+    def _get_template(self, agent_id: str, document_id: int) -> AgentDocumentTemplateModel | None:
         return (
-            self.db.query(AgentV2DocumentTemplateModel)
+            self.db.query(AgentDocumentTemplateModel)
             .filter(
-                AgentV2DocumentTemplateModel.agent_id == agent_id,
-                AgentV2DocumentTemplateModel.document_id == document_id,
+                AgentDocumentTemplateModel.agent_id == agent_id,
+                AgentDocumentTemplateModel.document_id == document_id,
             )
             .first()
         )
 
     def _list_templates_summary(self, agent_id: str) -> list[dict[str, Any]]:
         rows = (
-            self.db.query(AgentV2DocumentTemplateModel)
-            .filter(AgentV2DocumentTemplateModel.agent_id == agent_id)
-            .order_by(AgentV2DocumentTemplateModel.document_name.asc())
+            self.db.query(AgentDocumentTemplateModel)
+            .filter(AgentDocumentTemplateModel.agent_id == agent_id)
+            .order_by(AgentDocumentTemplateModel.document_name.asc())
             .all()
         )
         return [
@@ -75,7 +113,7 @@ class AgentV2ChatClass:
 
     def _build_system_prompt(
         self,
-        agent: AgentV2Model,
+        agent: AgentModel,
         document_id: int | None,
         files_context: str = "",
         files_included: int = 0,
@@ -150,7 +188,7 @@ class AgentV2ChatClass:
 
     def _build_messages(
         self,
-        agent: AgentV2Model,
+        agent: AgentModel,
         message: str,
         history: list[dict[str, str]] | None,
         document_id: int | None,
@@ -182,8 +220,8 @@ class AgentV2ChatClass:
 
     def _extract_replacements(
         self,
-        agent: AgentV2Model,
-        template: AgentV2DocumentTemplateModel,
+        agent: AgentModel,
+        template: AgentDocumentTemplateModel,
         user_message: str,
         assistant_reply: str,
         files_context: str = "",
@@ -213,7 +251,7 @@ class AgentV2ChatClass:
             "Expande los campos narrativos con redacción completa. "
             "Si no hay información para un campo, usa cadena vacía."
         )
-        raw = agent_v2_openai.json_chat_completion(
+        raw, usage = agents_openai.json_chat_completion(
             [
                 {
                     "role": "system",
@@ -225,6 +263,11 @@ class AgentV2ChatClass:
                 },
                 {"role": "user", "content": prompt},
             ]
+        )
+        self._record_usage(
+            agent_id=agent.id,
+            request_kind="json_extract",
+            usage=usage,
         )
         replacements: dict[str, str] = {}
         for field in fields:
@@ -250,19 +293,19 @@ class AgentV2ChatClass:
             yield _sse(
                 {
                     "type": "error",
-                    "message": "OPENAI_API_KEY no está configurada en el backend.",
+                    "message": "OPENAI_API_KEY is not configured on the backend.",
                 }
             )
             return
 
         agent = self._get_agent(agent_id)
         if not agent:
-            yield _sse({"type": "error", "message": "Agente no encontrado."})
+            yield _sse({"type": "error", "message": "Agent not found."})
             return
 
         file_count = storage.count_files(agent.name)
         if file_count > 0:
-            yield _sse({"type": "step", "message": "Leyendo archivos de Files…"})
+            yield _sse({"type": "step", "message": "Reading Files…"})
 
         resolved_student_id, rut_used, student_issue = resolve_student_id(
             self.db,
@@ -304,7 +347,7 @@ class AgentV2ChatClass:
         elif should_generate and student_issue == "needs_rut":
             pending_rut = True
 
-        yield _sse({"type": "step", "message": f"Consultando a {settings.agent_v2_model}…"})
+        yield _sse({"type": "step", "message": f"Consulting {settings.agents_model}…"})
 
         messages = self._build_messages(
             agent,
@@ -317,41 +360,49 @@ class AgentV2ChatClass:
             pending_rut,
         )
         full_reply = ""
+        usage_out: list[OpenAIUsage] = []
         try:
-            for delta in agent_v2_openai.stream_chat_completion(messages):
+            for delta in agents_openai.stream_chat_completion(messages, usage_out=usage_out):
                 full_reply += delta
                 yield _sse({"type": "text_delta", "delta": delta})
         except Exception as exc:
             yield _sse({"type": "error", "message": str(exc)})
             return
 
+        if usage_out:
+            self._record_usage(
+                agent_id=agent_id,
+                request_kind="chat",
+                usage=usage_out[0],
+            )
+
         response_files: list[dict[str, Any]] = []
         warning: str | None = None
 
         if should_generate and student_issue == "not_found":
             warning = (
-                f"No encontré un estudiante con RUT/IPE {rut_used} en la plataforma. "
-                "Verifica el dato e inténtalo de nuevo."
+                f"No student found with RUT/IPE {rut_used} on the platform. "
+                "Check the value and try again."
             )
         elif should_generate and student_issue == "needs_rut":
             warning = None
         elif should_generate and not resolved_document_id:
             warning = (
-                "No pude determinar qué documento generar. Configura plantillas en "
-                "Documentos del agente o indica el tipo de informe."
+                "Could not determine which document to generate. Configure templates in "
+                "Agent Documents or specify the report type."
             )
         elif resolved_student_id and resolved_document_id and should_generate:
             template = self._get_template(agent_id, resolved_document_id)
             if not template:
                 warning = (
-                    f"No hay plantilla configurada para el documento {resolved_document_id}. "
-                    "Configúrala en Documentos del agente."
+                    f"No template configured for document {resolved_document_id}. "
+                    "Configure it in Agent Documents."
                 )
             else:
                 yield _sse(
                     {
                         "type": "step",
-                        "message": f"Generando {template.format_type.upper()}…",
+                        "message": f"Generating {template.format_type.upper()}…",
                     }
                 )
                 try:
@@ -362,15 +413,15 @@ class AgentV2ChatClass:
                         self.db, template, resolved_student_id, replacements
                     )
                     if gen.get("status") == "error":
-                        warning = gen.get("message", "Error al generar el documento.")
+                        warning = gen.get("message", "Failed to generate the document.")
                     else:
                         yield _sse(
                             {
                                 "type": "step",
-                                "message": "Documento listo para descargar.",
+                                "message": "Document ready to download.",
                             }
                         )
-                        doc_label = gen.get("documentName") or "Archivo generado"
+                        doc_label = gen.get("documentName") or "Generated file"
                         response_files.append(
                             {
                                 "id": gen.get("filename", ""),
@@ -381,7 +432,7 @@ class AgentV2ChatClass:
                             }
                         )
                 except Exception as exc:
-                    warning = f"No se pudo generar el documento: {exc}"
+                    warning = f"Could not generate the document: {exc}"
 
         yield _sse(
             {

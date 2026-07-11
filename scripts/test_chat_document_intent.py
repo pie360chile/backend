@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from app.backend.utils.agent_v2_chat_context import wants_document_generation
+from app.backend.utils.agents_chat_context import wants_document_generation
 
 HISTORY_WITH_GENERATE = [
     {"role": "user", "content": "genera el informe de familia para isabella"},
@@ -25,6 +25,11 @@ def main() -> int:
         ("genera el informe de familia", True),
         ("Generar el documento por favor", True),
         ("genera informe isabella", True),
+        ("realiza el informe de familia", True),
+        ("realizar el informe para isabella", True),
+        ("elabora el documento por favor", True),
+        ("completa el informe", True),
+        ("prepara el word", True),
         ("gracias", False),
         ("ok", False),
         ("¿qué datos faltan del apoderado?", False),
