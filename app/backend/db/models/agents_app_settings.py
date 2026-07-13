@@ -1,8 +1,8 @@
-"""Ajustes globales de Agentes (modelo / agente por defecto para la web)."""
+"""Ajustes globales de Agentes (modelo / API key LLM)."""
 
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Integer, String
+from sqlalchemy import Column, DateTime, Integer, String, Text
 
 from app.backend.db.database import Base
 
@@ -12,5 +12,6 @@ class AgentsAppSettingModel(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=False)
     default_agent_id = Column(String(64), nullable=True)
+    llm_api_key = Column(Text, nullable=True)
     created_at = Column(DateTime(), nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime(), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)

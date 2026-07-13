@@ -155,6 +155,14 @@ class Settings:
             os.getenv("AGENTS_RATE_TOKENS_PER_DAY_CUSTOMER", "2000000") or "2000000"
         )
     )
+    agents_llm_api_key: str = field(
+        default_factory=lambda: os.getenv("AGENTS_LLM_API_KEY", "")
+    )
+    agents_llm_api_base: str = field(
+        default_factory=lambda: os.getenv(
+            "AGENTS_LLM_API_BASE", "https://api.deepseek.com"
+        )
+    )
 
 
 settings = Settings()

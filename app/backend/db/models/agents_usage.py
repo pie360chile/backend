@@ -1,12 +1,12 @@
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Integer, Numeric, String, UniqueConstraint
+from sqlalchemy import Column, DateTime, Integer, Numeric, String, Text, UniqueConstraint
 
 from app.backend.db.database import Base
 
 
 class AgentsTokenUsageModel(Base):
-    """Consumo de tokens OpenAI por cliente (customer_id)."""
+    """Consumo de tokens LLM por consulta (por cliente)."""
 
     __tablename__ = "agents_token_usage"
 
@@ -21,6 +21,8 @@ class AgentsTokenUsageModel(Base):
     completion_tokens = Column(Integer, nullable=False, default=0)
     total_tokens = Column(Integer, nullable=False, default=0)
     estimated_cost_usd = Column(Numeric(12, 6), nullable=False, default=0)
+    input_text = Column(Text, nullable=True)
+    output_text = Column(Text, nullable=True)
     created_at = Column(DateTime(), nullable=False, default=datetime.utcnow)
 
 

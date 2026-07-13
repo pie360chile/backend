@@ -35,10 +35,16 @@ CREATE_SETTINGS_SQL = """
 CREATE TABLE IF NOT EXISTS agents_app_settings (
   id INT NOT NULL,
   default_agent_id VARCHAR(64) NULL,
+  llm_api_key TEXT NULL,
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL,
   PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+"""
+
+ALTER_SETTINGS_LLM_KEY_SQL = """
+ALTER TABLE agents_app_settings
+  ADD COLUMN llm_api_key TEXT NULL
 """
 
 
@@ -48,12 +54,21 @@ def main() -> None:
         print("ok: agents_openai_models table")
         conn.execute(text(CREATE_SETTINGS_SQL))
         print("ok: agents_app_settings table")
+        cols = {
+            c["name"]
+            for c in inspect(engine).get_columns("agents_app_settings")
+        }
+        if "llm_api_key" not in cols:
+            conn.execute(text(ALTER_SETTINGS_LLM_KEY_SQL))
+            print("ok: added agents_app_settings.llm_api_key")
+        else:
+            print("ok: agents_app_settings.llm_api_key already exists")
 
     db = SessionLocal()
     try:
         svc = AgentsLlmModelsClass(db)
         svc.ensure_seeded()
-        svc.force_select_deepseek()
+        svc.force_select_default_model()
         data = svc.get_settings()
         print(
             f"ok: models={len(data['models'])}; "

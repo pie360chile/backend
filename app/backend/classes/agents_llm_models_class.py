@@ -12,25 +12,19 @@ from app.backend.db.models.agent import AgentModel
 from app.backend.db.models.agents_app_settings import AgentsAppSettingModel
 from app.backend.db.models.agents_openai_models import AgentsOpenAIModel
 
-# Precios públicos aprox. (USD / 1M tokens). model_code = id API donde aplique.
+# Catálogo: un solo modelo activo para todos los agentes.
+_DEFAULT_MODEL_CODE = "deepseek-chat"
+_DEFAULT_MODEL_NAME = "DeepSeek-V3.2"
+
 _SEED_MODELS: list[dict[str, Any]] = [
     {
-        "model_code": "deepseek-chat",
-        "display_name": "DeepSeek-V3.2",
+        "model_code": _DEFAULT_MODEL_CODE,
+        "display_name": _DEFAULT_MODEL_NAME,
         "input_per_1m_usd": Decimal("0.280000"),
         "output_per_1m_usd": Decimal("0.420000"),
         "cached_input_per_1m_usd": Decimal("0.028000"),
         "sort_order": 10,
         "is_selected": True,
-    },
-    {
-        "model_code": "deepseek-reasoner",
-        "display_name": "DeepSeek Reasoner",
-        "input_per_1m_usd": Decimal("0.550000"),
-        "output_per_1m_usd": Decimal("2.190000"),
-        "cached_input_per_1m_usd": None,
-        "sort_order": 20,
-        "is_selected": False,
     },
 ]
 
@@ -89,49 +83,52 @@ class AgentsLlmModelsClass:
                 row.updated_at = now
 
         self.db.flush()
-        selected_rows = (
+        # Solo el modelo por defecto activo y seleccionado; el resto queda inactivo.
+        default_row = (
             self.db.query(AgentsOpenAIModel)
-            .filter(AgentsOpenAIModel.is_selected.is_(True), AgentsOpenAIModel.is_active.is_(True))
-            .all()
-        )
-        deepseek = (
-            self.db.query(AgentsOpenAIModel)
-            .filter(AgentsOpenAIModel.model_code == "deepseek-chat")
+            .filter(AgentsOpenAIModel.model_code == _DEFAULT_MODEL_CODE)
             .first()
         )
-        if deepseek and (not selected_rows or len(selected_rows) > 1):
-            for m in self.db.query(AgentsOpenAIModel).all():
-                m.is_selected = m.id == deepseek.id
-                m.updated_at = now
+        for m in self.db.query(AgentsOpenAIModel).all():
+            is_default = default_row is not None and m.id == default_row.id
+            m.is_active = is_default
+            m.is_selected = is_default
+            if is_default:
+                m.display_name = _DEFAULT_MODEL_NAME
+            m.updated_at = now
 
         self._ensure_app_settings_row()
         self.db.commit()
 
-    def force_select_deepseek(self) -> None:
-        """Usado por la migración: deja DeepSeek-V3.2 como modelo global."""
+    def force_select_default_model(self) -> None:
+        """Usado por la migración: deja el modelo por defecto como único global."""
         self.ensure_seeded()
-        now = _now()
-        deepseek = (
-            self.db.query(AgentsOpenAIModel)
-            .filter(AgentsOpenAIModel.model_code == "deepseek-chat")
-            .first()
-        )
-        if not deepseek:
-            return
-        for m in self.db.query(AgentsOpenAIModel).all():
-            m.is_selected = m.id == deepseek.id
-            m.updated_at = now
-        self.db.commit()
 
     def _ensure_app_settings_row(self) -> AgentsAppSettingModel:
         row = self.db.query(AgentsAppSettingModel).filter(AgentsAppSettingModel.id == 1).first()
         if row:
             return row
         now = _now()
-        row = AgentsAppSettingModel(id=1, default_agent_id=None, created_at=now, updated_at=now)
+        row = AgentsAppSettingModel(
+            id=1,
+            default_agent_id=None,
+            llm_api_key=None,
+            created_at=now,
+            updated_at=now,
+        )
         self.db.add(row)
         self.db.flush()
         return row
+
+    def get_llm_api_key(self) -> str:
+        """Clave LLM: primero BD (Configuraciones), luego .env."""
+        app = self._ensure_app_settings_row()
+        key = (app.llm_api_key or "").strip()
+        if key:
+            return key
+        from app.backend.core.config import settings
+
+        return (settings.agents_llm_api_key or "").strip()
 
     def get_selected_model_code(self) -> str:
         self.ensure_seeded()
@@ -142,7 +139,7 @@ class AgentsLlmModelsClass:
         )
         if row:
             return row.model_code
-        return "deepseek-chat"
+        return _DEFAULT_MODEL_CODE
 
     def get_settings(self, *, customer_id: int | None = None) -> dict[str, Any]:
         self.ensure_seeded()
@@ -152,16 +149,18 @@ class AgentsLlmModelsClass:
             .order_by(AgentsOpenAIModel.sort_order.asc(), AgentsOpenAIModel.id.asc())
             .all()
         )
-        selected = next((m.model_code for m in models if m.is_selected), None) or "deepseek-chat"
+        selected = next((m.model_code for m in models if m.is_selected), None) or _DEFAULT_MODEL_CODE
         app = self._ensure_app_settings_row()
-        # Agente por defecto es global: listar todos (opcionalmente filtrados por cliente en UI).
         agents_q = self.db.query(AgentModel)
         if customer_id is not None:
             agents_q = agents_q.filter(AgentModel.customer_id == customer_id)
         agents = agents_q.order_by(AgentModel.name.asc()).all()
+        stored_key = (app.llm_api_key or "").strip()
         return {
             "selected_model_code": selected,
             "default_agent_id": app.default_agent_id,
+            "has_llm_api_key": bool(stored_key),
+            "llm_api_key_hint": (f"••••{stored_key[-4:]}" if len(stored_key) >= 4 else None),
             "models": [_serialize_model(m) for m in models],
             "agents": [
                 {
@@ -180,6 +179,8 @@ class AgentsLlmModelsClass:
         selected_model_name: str | None = None,
         default_agent_id: str | None = None,
         clear_default_agent: bool = False,
+        llm_api_key: str | None = None,
+        clear_llm_api_key: bool = False,
     ) -> dict[str, Any]:
         self.ensure_seeded()
         now = _now()
@@ -232,6 +233,15 @@ class AgentsLlmModelsClass:
                     return {"status": "error", "message": f"Agente no encontrado: {aid}"}
                 app.default_agent_id = aid
             app.updated_at = now
+
+        if clear_llm_api_key:
+            app.llm_api_key = None
+            app.updated_at = now
+        elif llm_api_key is not None:
+            key = llm_api_key.strip()
+            if key:
+                app.llm_api_key = key
+                app.updated_at = now
 
         self.db.commit()
         return {

@@ -43,11 +43,11 @@ class AgentChatRequest(BaseModel):
 class AgentsSettingsUpdateRequest(BaseModel):
     selected_model_code: str | None = Field(
         default=None,
-        description="Código del modelo LLM global (ej. deepseek-chat).",
+        description="Código del modelo LLM global.",
     )
     selected_model_name: str | None = Field(
         default=None,
-        description="Nombre visible del modelo (ej. DeepSeek-V3.2).",
+        description="Nombre visible del modelo.",
     )
     default_agent_id: str | None = Field(
         default=None,
@@ -56,4 +56,12 @@ class AgentsSettingsUpdateRequest(BaseModel):
     clear_default_agent: bool = Field(
         default=False,
         description="Si true, limpia el agente por defecto.",
+    )
+    llm_api_key: str | None = Field(
+        default=None,
+        description="API key del proveedor LLM. Si no se envía, no se modifica.",
+    )
+    clear_llm_api_key: bool = Field(
+        default=False,
+        description="Si true, elimina la API key guardada.",
     )

@@ -95,6 +95,42 @@ def get_agents_settings(
     return api_response(data=data)
 
 
+@agents.get("/reports")
+def agents_usage_reports(
+    customer_id: int | None = Query(None),
+    day: str | None = Query(None, description="YYYY-MM-DD"),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    session_user: UserModel = Depends(get_current_active_user),
+):
+    if int(getattr(session_user, "rol_id", 0) or 0) != 1:
+        return api_error(
+            status_code=status.HTTP_403_FORBIDDEN,
+            message="Only the superadministrator can view Agents reports.",
+        )
+    from datetime import date as date_cls
+
+    from app.backend.classes.agents_usage_class import AgentsUsageClass
+
+    parsed_day = None
+    if day:
+        try:
+            parsed_day = date_cls.fromisoformat(day.strip())
+        except ValueError:
+            return api_error(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                message="Formato de día inválido. Usa YYYY-MM-DD.",
+            )
+    result = AgentsUsageClass(db).list_report(
+        customer_id=customer_id,
+        day=parsed_day,
+        page=page,
+        per_page=per_page,
+    )
+    return api_response(data=result.get("data"))
+
+
 @agents.put("/settings")
 def update_agents_settings(
     payload: AgentsSettingsUpdateRequest,
@@ -111,6 +147,8 @@ def update_agents_settings(
         selected_model_name=payload.selected_model_name,
         default_agent_id=payload.default_agent_id,
         clear_default_agent=payload.clear_default_agent,
+        llm_api_key=payload.llm_api_key,
+        clear_llm_api_key=payload.clear_llm_api_key,
     )
     if result.get("status") == "error":
         return api_error(
