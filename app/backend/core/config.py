@@ -137,10 +137,23 @@ class Settings:
     google_drive_root_folder_id: str = field(
         default_factory=lambda: os.getenv("GOOGLE_DRIVE_ROOT_FOLDER_ID", "")
     )
-    openai_api_key: str = field(default_factory=lambda: os.getenv("OPENAI_API_KEY", ""))
-    agents_model: str = field(
-        default_factory=lambda: os.getenv("AGENTS_MODEL")
-        or os.getenv("AGENT_V2_MODEL", "gpt-5.5")
+    agents_rate_requests_per_min_user: int = field(
+        default_factory=lambda: int(os.getenv("AGENTS_RATE_REQUESTS_PER_MIN_USER", "10") or "10")
+    )
+    agents_rate_requests_per_min_customer: int = field(
+        default_factory=lambda: int(
+            os.getenv("AGENTS_RATE_REQUESTS_PER_MIN_CUSTOMER", "30") or "30"
+        )
+    )
+    agents_rate_tokens_per_day_user: int = field(
+        default_factory=lambda: int(
+            os.getenv("AGENTS_RATE_TOKENS_PER_DAY_USER", "200000") or "200000"
+        )
+    )
+    agents_rate_tokens_per_day_customer: int = field(
+        default_factory=lambda: int(
+            os.getenv("AGENTS_RATE_TOKENS_PER_DAY_CUSTOMER", "2000000") or "2000000"
+        )
     )
 
 
@@ -151,5 +164,3 @@ def apply_settings_to_process_env() -> None:
     """Compatibilidad con código que lee os.environ directamente."""
     os.environ.setdefault("SECRET_KEY", settings.secret_key)
     os.environ.setdefault("ALGORITHM", settings.algorithm)
-    if settings.openai_api_key:
-        os.environ["OPENAI_API_KEY"] = settings.openai_api_key

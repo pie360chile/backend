@@ -123,6 +123,7 @@ class UpdateSettings(BaseModel):
     company_phone: Optional[str] = None
     company_whatsapp: Optional[str] = None
 
+
 # Teaching schemas
 
 class TeachingList(BaseModel):

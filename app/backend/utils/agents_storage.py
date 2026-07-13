@@ -1,4 +1,4 @@
-"""Agents file storage: {FILES_DIR}/agents/{agent_name}/"""
+"""Agents file storage: {FILES_DIR}/agents/c{customer_id}/{agent_name}/"""
 
 from __future__ import annotations
 
@@ -41,16 +41,27 @@ def agents_root() -> Path:
     return root
 
 
-def agent_folder(agent_name: str) -> Path:
-    folder = (agents_root() / _safe_segment(agent_name)).resolve()
-    if not str(folder).startswith(str(agents_root())):
-        raise ValueError("Agent path not allowed.")
+def agent_folder(agent_name: str, customer_id: int | None = None) -> Path:
+    root = agents_root()
+    name = _safe_segment(agent_name)
+    if customer_id:
+        base = (root / f"c{int(customer_id)}").resolve()
+        base.mkdir(parents=True, exist_ok=True)
+        folder = (base / name).resolve()
+        if not str(folder).startswith(str(base)):
+            raise ValueError("Agent path not allowed.")
+    else:
+        folder = (root / name).resolve()
+        if not str(folder).startswith(str(root)):
+            raise ValueError("Agent path not allowed.")
     folder.mkdir(parents=True, exist_ok=True)
     return folder
 
 
-def resolve_target(agent_name: str, relative_path: str = "") -> Path:
-    folder = agent_folder(agent_name)
+def resolve_target(
+    agent_name: str, relative_path: str = "", customer_id: int | None = None
+) -> Path:
+    folder = agent_folder(agent_name, customer_id)
     rel = _safe_relative_path(relative_path)
     target = (folder / rel).resolve() if rel else folder
     if not str(target).startswith(str(folder)):
@@ -58,19 +69,26 @@ def resolve_target(agent_name: str, relative_path: str = "") -> Path:
     return target
 
 
-def create_folder(agent_name: str, relative_path: str) -> dict[str, Any]:
-    target = resolve_target(agent_name, relative_path)
+def create_folder(
+    agent_name: str, relative_path: str, customer_id: int | None = None
+) -> dict[str, Any]:
+    target = resolve_target(agent_name, relative_path, customer_id)
     target.mkdir(parents=True, exist_ok=True)
     return {"ok": True, "path": relative_path or "", "type": "folder"}
 
 
-def save_file(agent_name: str, relative_path: str, data: bytes) -> dict[str, Any]:
+def save_file(
+    agent_name: str,
+    relative_path: str,
+    data: bytes,
+    customer_id: int | None = None,
+) -> dict[str, Any]:
     if not data:
         raise ValueError("File is empty.")
     rel = _safe_relative_path(relative_path)
     if not rel:
         raise ValueError("relative_path is required.")
-    target = resolve_target(agent_name, rel)
+    target = resolve_target(agent_name, rel, customer_id)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(data)
     return {
@@ -83,8 +101,8 @@ def save_file(agent_name: str, relative_path: str, data: bytes) -> dict[str, Any
     }
 
 
-def count_files(agent_name: str) -> int:
-    folder = agent_folder(agent_name)
+def count_files(agent_name: str, customer_id: int | None = None) -> int:
+    folder = agent_folder(agent_name, customer_id)
     if not folder.exists():
         return 0
     total = 0
@@ -94,8 +112,10 @@ def count_files(agent_name: str) -> int:
     return total
 
 
-def list_entries(agent_name: str, relative_path: str = "") -> dict[str, Any]:
-    current = resolve_target(agent_name, relative_path)
+def list_entries(
+    agent_name: str, relative_path: str = "", customer_id: int | None = None
+) -> dict[str, Any]:
+    current = resolve_target(agent_name, relative_path, customer_id)
     if not current.exists():
         current.mkdir(parents=True, exist_ok=True)
 
@@ -127,16 +147,18 @@ def list_entries(agent_name: str, relative_path: str = "") -> dict[str, Any]:
     return {
         "path": rel,
         "entries": entries,
-        "totalFiles": count_files(agent_name),
+        "totalFiles": count_files(agent_name, customer_id),
     }
 
 
-def delete_entry(agent_name: str, relative_path: str) -> dict[str, Any]:
+def delete_entry(
+    agent_name: str, relative_path: str, customer_id: int | None = None
+) -> dict[str, Any]:
     rel = _safe_relative_path(relative_path)
     if not rel:
         raise ValueError("Cannot delete the agent root.")
-    target = resolve_target(agent_name, rel)
-    folder = agent_folder(agent_name)
+    target = resolve_target(agent_name, rel, customer_id)
+    folder = agent_folder(agent_name, customer_id)
     if not str(target).startswith(str(folder)) or target == folder:
         raise ValueError("Path not allowed.")
     if not target.exists():
@@ -148,9 +170,11 @@ def delete_entry(agent_name: str, relative_path: str) -> dict[str, Any]:
     return {"ok": True, "path": rel}
 
 
-def rename_agent_folder(old_name: str, new_name: str) -> None:
-    old_folder = agent_folder(old_name)
-    new_folder = agent_folder(new_name)
+def rename_agent_folder(
+    old_name: str, new_name: str, customer_id: int | None = None
+) -> None:
+    old_folder = agent_folder(old_name, customer_id)
+    new_folder = agent_folder(new_name, customer_id)
     if old_folder == new_folder:
         return
     if new_folder.exists() and any(new_folder.iterdir()):
@@ -161,14 +185,16 @@ def rename_agent_folder(old_name: str, new_name: str) -> None:
         old_folder.rename(new_folder)
 
 
-def delete_agent_folder(agent_name: str) -> None:
-    folder = agent_folder(agent_name)
+def delete_agent_folder(agent_name: str, customer_id: int | None = None) -> None:
+    folder = agent_folder(agent_name, customer_id)
     if folder.exists():
         shutil.rmtree(folder, ignore_errors=True)
 
 
-def document_template_dir(agent_name: str, document_id: int) -> Path:
-    folder = resolve_target(agent_name, f"documentos/{document_id}")
+def document_template_dir(
+    agent_name: str, document_id: int, customer_id: int | None = None
+) -> Path:
+    folder = resolve_target(agent_name, f"documentos/{document_id}", customer_id)
     folder.mkdir(parents=True, exist_ok=True)
     return folder
 
@@ -178,16 +204,17 @@ def save_document_template(
     document_id: int,
     data: bytes,
     format_type: str,
+    customer_id: int | None = None,
 ) -> dict[str, Any]:
     if not data:
         raise ValueError("File is empty.")
     fmt = format_type.lower()
     if fmt not in {"docx", "pdf"}:
         raise ValueError("Unsupported format. Use .docx or .pdf.")
-    folder = document_template_dir(agent_name, document_id)
+    folder = document_template_dir(agent_name, document_id, customer_id)
     filename = f"formato.{fmt}"
     target = (folder / filename).resolve()
-    if not str(target).startswith(str(agent_folder(agent_name))):
+    if not str(target).startswith(str(agent_folder(agent_name, customer_id))):
         raise ValueError("Path not allowed.")
     target.write_bytes(data)
     rel = str(target.relative_to(files_dir())).replace("\\", "/")

@@ -20,6 +20,7 @@ class CustomerModel(Base):
     company_name = Column(String(255))
     phone = Column(String(255))
     email = Column(String(255))
+    openai_api_key = Column(String(512), nullable=True)
     license_time = Column(Date)
     added_date = Column(DateTime())
     updated_date = Column(DateTime())

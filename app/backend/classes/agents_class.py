@@ -1,4 +1,4 @@
-"""Configurable agents CRUD (PIE360 Agents)."""
+"""Configurable agents CRUD (PIE360 Agents) — scoped per customer_id."""
 
 from __future__ import annotations
 
@@ -20,11 +20,29 @@ from app.backend.utils.agents_template_inspector import (
 
 
 SECTION_LABELS = {
-    1: "Cross-cutting",
-    2: "Evaluation",
-    3: "Support",
-    4: "Other",
+    1: "Transversales",
+    2: "Evaluación",
+    3: "Apoyo",
+    4: "Otros",
 }
+
+# Preferred display order for evaluation reports (career then specialty list).
+EVALUATION_DOC_ORDER = [
+    "Informe Fonoaudiológico - Evaluación Informal",
+    "Informe Fonoaudiológico - IDTEL",
+    "Informe Fonoaudiológico - PEFE",
+    "Informe Fonoaudiológico - STSG, TECAL y TEPROSIF",
+    "Informe kinesiológico - Evaluación informal",
+    "Informe Kinesiológica - Vitor Da Fonseca",
+    "Informe de conducta adaptativa – ABAS II",
+    "Informe de conducta adaptativa – ICAP",
+    "Informe Psicológico – WAIS IV",
+    "Informe Psicológico – WISC V",
+    "Test de Conners (para docentes abreviada)",
+    "Informe Terapia Ocupacional - Evaluación Informal",
+    "Informe Terapia Ocupacional - Perfil Sensorial",
+    "Informe Terapia Ocupacional - SPM-2",
+]
 
 
 def _maybe_refresh_template_fields(db: Session, row: AgentDocumentTemplateModel) -> None:
@@ -62,6 +80,10 @@ def _serialize_template(row: AgentDocumentTemplateModel) -> dict[str, Any]:
     }
 
 
+def _cid(agent: AgentModel) -> int | None:
+    return int(agent.customer_id) if agent.customer_id is not None else None
+
+
 def _serialize(agent: AgentModel, db: Session) -> dict[str, Any]:
     updated = agent.updated_at or agent.created_at
     templates = (
@@ -71,10 +93,11 @@ def _serialize(agent: AgentModel, db: Session) -> dict[str, Any]:
     )
     return {
         "id": agent.id,
+        "customerId": _cid(agent),
         "name": agent.name,
         "roleInstructions": agent.role_instructions,
         "updatedAt": updated.isoformat() if updated else None,
-        "fileCount": storage.count_files(agent.name),
+        "fileCount": storage.count_files(agent.name, _cid(agent)),
         "documentTemplateCount": templates,
     }
 
@@ -83,29 +106,33 @@ class AgentsClass:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def _get_agent(self, agent_id: str) -> AgentModel | None:
-        return (
-            self.db.query(AgentModel)
-            .filter(AgentModel.id == agent_id)
-            .first()
-        )
+    def _get_agent(
+        self, agent_id: str, customer_id: int | None = None
+    ) -> AgentModel | None:
+        q = self.db.query(AgentModel).filter(AgentModel.id == agent_id)
+        if customer_id is not None:
+            q = q.filter(AgentModel.customer_id == int(customer_id))
+        return q.first()
 
-    def list_agents(self) -> dict[str, Any]:
+    def list_agents(self, customer_id: int) -> dict[str, Any]:
         rows = (
             self.db.query(AgentModel)
+            .filter(AgentModel.customer_id == int(customer_id))
             .order_by(AgentModel.updated_at.desc())
             .all()
         )
         return {"status": "success", "data": [_serialize(row, self.db) for row in rows]}
 
-    def get_agent(self, agent_id: str) -> dict[str, Any]:
-        agent = self._get_agent(agent_id)
+    def get_agent(self, agent_id: str, customer_id: int) -> dict[str, Any]:
+        agent = self._get_agent(agent_id, customer_id)
         if not agent:
             return {"status": "error", "message": "Agent not found.", "http_status": 404}
         return {"status": "success", "data": _serialize(agent, self.db)}
 
-    def update_agent(self, agent_id: str, name: str, role_instructions: str) -> dict[str, Any]:
-        agent = self._get_agent(agent_id)
+    def update_agent(
+        self, agent_id: str, customer_id: int, name: str, role_instructions: str
+    ) -> dict[str, Any]:
+        agent = self._get_agent(agent_id, customer_id)
         if not agent:
             return {"status": "error", "message": "Agent not found.", "http_status": 404}
 
@@ -115,13 +142,17 @@ class AgentsClass:
 
         duplicate = (
             self.db.query(AgentModel)
-            .filter(AgentModel.name == clean_name, AgentModel.id != agent_id)
+            .filter(
+                AgentModel.customer_id == int(customer_id),
+                AgentModel.name == clean_name,
+                AgentModel.id != agent_id,
+            )
             .first()
         )
         if duplicate:
             return {
                 "status": "error",
-                "message": "An agent with that name already exists.",
+                "message": "An agent with that name already exists for this client.",
                 "http_status": 409,
             }
 
@@ -134,32 +165,38 @@ class AgentsClass:
 
         if old_name != clean_name:
             try:
-                storage.rename_agent_folder(old_name, clean_name)
+                storage.rename_agent_folder(old_name, clean_name, int(customer_id))
             except ValueError:
                 pass
 
         return {"status": "success", "message": "Agent saved.", "data": _serialize(agent, self.db)}
 
-    def create_agent(self, name: str, role_instructions: str) -> dict[str, Any]:
+    def create_agent(
+        self, customer_id: int, name: str, role_instructions: str
+    ) -> dict[str, Any]:
         clean_name = name.strip()
         if not clean_name:
             return {"status": "error", "message": "Name is required.", "http_status": 400}
 
         existing = (
             self.db.query(AgentModel)
-            .filter(AgentModel.name == clean_name)
+            .filter(
+                AgentModel.customer_id == int(customer_id),
+                AgentModel.name == clean_name,
+            )
             .first()
         )
         if existing:
             return {
                 "status": "error",
-                "message": "An agent with that name already exists.",
+                "message": "An agent with that name already exists for this client.",
                 "http_status": 409,
             }
 
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         agent = AgentModel(
             id=uuid.uuid4().hex,
+            customer_id=int(customer_id),
             name=clean_name,
             role_instructions=role_instructions.strip(),
             created_at=now,
@@ -168,13 +205,14 @@ class AgentsClass:
         self.db.add(agent)
         self.db.commit()
         self.db.refresh(agent)
-        storage.agent_folder(agent.name)
+        storage.agent_folder(agent.name, int(customer_id))
         return {"status": "success", "message": "Agent created.", "data": _serialize(agent, self.db)}
 
     def list_catalog_documents(self) -> dict[str, Any]:
         docs_class = DocumentsClass(self.db)
         sections: list[dict[str, Any]] = []
         seen: set[int] = set()
+        order_index = {name: i for i, name in enumerate(EVALUATION_DOC_ORDER)}
         for section_id, label in SECTION_LABELS.items():
             result = docs_class.get_all(section_id, None)
             if isinstance(result, dict) and result.get("status") == "error":
@@ -190,16 +228,30 @@ class AgentsClass:
                         "id": doc_id,
                         "name": row.get("document") or "",
                         "sectionId": row.get("document_type_id") or section_id,
-                        "sectionLabel": SECTION_LABELS.get(row.get("document_type_id") or section_id, label),
+                        "sectionLabel": SECTION_LABELS.get(
+                            row.get("document_type_id") or section_id, label
+                        ),
                         "careerTypeId": row.get("career_type_id"),
                     }
                 )
+            if section_id == 2:
+                items.sort(
+                    key=lambda d: (
+                        order_index.get(d["name"], 10_000),
+                        (d.get("careerTypeId") is None, d.get("careerTypeId") or 0),
+                        d["name"].lower(),
+                    )
+                )
+            else:
+                items.sort(key=lambda d: d["name"].lower())
             if items:
-                sections.append({"sectionId": section_id, "sectionLabel": label, "documents": items})
+                sections.append(
+                    {"sectionId": section_id, "sectionLabel": label, "documents": items}
+                )
         return {"status": "success", "data": sections}
 
-    def list_document_templates(self, agent_id: str) -> dict[str, Any]:
-        agent = self._get_agent(agent_id)
+    def list_document_templates(self, agent_id: str, customer_id: int) -> dict[str, Any]:
+        agent = self._get_agent(agent_id, customer_id)
         if not agent:
             return {"status": "error", "message": "Agent not found.", "http_status": 404}
         rows = (
@@ -215,12 +267,13 @@ class AgentsClass:
     def save_document_template(
         self,
         agent_id: str,
+        customer_id: int,
         document_id: int,
         document_name: str,
         data: bytes,
         filename: str,
     ) -> dict[str, Any]:
-        agent = self._get_agent(agent_id)
+        agent = self._get_agent(agent_id, customer_id)
         if not agent:
             return {"status": "error", "message": "Agent not found.", "http_status": 404}
 
@@ -237,7 +290,9 @@ class AgentsClass:
             }
 
         try:
-            saved = storage.save_document_template(agent.name, document_id, data, format_type)
+            saved = storage.save_document_template(
+                agent.name, document_id, data, format_type, int(customer_id)
+            )
             absolute = (storage.files_dir() / saved["relativePath"]).resolve()
             inspection = inspect_template_fields(absolute, format_type)
         except ValueError as exc:
@@ -278,35 +333,37 @@ class AgentsClass:
         payload["inspection"] = inspection
         return {"status": "success", "message": "Template saved.", "data": payload}
 
-    def delete_agent(self, agent_id: str) -> dict[str, Any]:
-        agent = self._get_agent(agent_id)
+    def delete_agent(self, agent_id: str, customer_id: int) -> dict[str, Any]:
+        agent = self._get_agent(agent_id, customer_id)
         if not agent:
             return {"status": "error", "message": "Agent not found.", "http_status": 404}
         self.db.query(AgentDocumentTemplateModel).filter(
             AgentDocumentTemplateModel.agent_id == agent_id
         ).delete()
-        storage.delete_agent_folder(agent.name)
+        storage.delete_agent_folder(agent.name, int(customer_id))
         self.db.delete(agent)
         self.db.commit()
         return {"status": "success", "message": "Agent deleted."}
 
-    def list_files(self, agent_id: str, path: str = "") -> dict[str, Any]:
-        agent = self._get_agent(agent_id)
+    def list_files(self, agent_id: str, customer_id: int, path: str = "") -> dict[str, Any]:
+        agent = self._get_agent(agent_id, customer_id)
         if not agent:
             return {"status": "error", "message": "Agent not found.", "http_status": 404}
         try:
-            data = storage.list_entries(agent.name, path)
+            data = storage.list_entries(agent.name, path, int(customer_id))
         except ValueError as exc:
             return {"status": "error", "message": str(exc), "http_status": 400}
         return {"status": "success", "data": data}
 
-    def create_folder(self, agent_id: str, folder_name: str, parent_path: str = "") -> dict[str, Any]:
-        agent = self._get_agent(agent_id)
+    def create_folder(
+        self, agent_id: str, customer_id: int, folder_name: str, parent_path: str = ""
+    ) -> dict[str, Any]:
+        agent = self._get_agent(agent_id, customer_id)
         if not agent:
             return {"status": "error", "message": "Agent not found.", "http_status": 404}
         rel = f"{parent_path}/{folder_name}".strip("/") if parent_path else folder_name.strip()
         try:
-            storage.create_folder(agent.name, rel)
+            storage.create_folder(agent.name, rel, int(customer_id))
         except ValueError as exc:
             return {"status": "error", "message": str(exc), "http_status": 400}
         return {"status": "success", "message": "Folder created.", "data": {"path": rel, "type": "folder"}}
@@ -314,9 +371,10 @@ class AgentsClass:
     def upload_files(
         self,
         agent_id: str,
+        customer_id: int,
         files: list[tuple[str, bytes]],
     ) -> dict[str, Any]:
-        agent = self._get_agent(agent_id)
+        agent = self._get_agent(agent_id, customer_id)
         if not agent:
             return {"status": "error", "message": "Agent not found.", "http_status": 404}
         if not files:
@@ -325,7 +383,9 @@ class AgentsClass:
         saved: list[dict[str, Any]] = []
         try:
             for relative_path, data in files:
-                saved.append(storage.save_file(agent.name, relative_path, data))
+                saved.append(
+                    storage.save_file(agent.name, relative_path, data, int(customer_id))
+                )
         except ValueError as exc:
             return {"status": "error", "message": str(exc), "http_status": 400}
 
@@ -334,15 +394,18 @@ class AgentsClass:
         return {
             "status": "success",
             "message": f"{len(saved)} file(s) uploaded.",
-            "data": {"uploaded": saved, "totalFiles": storage.count_files(agent.name)},
+            "data": {
+                "uploaded": saved,
+                "totalFiles": storage.count_files(agent.name, int(customer_id)),
+            },
         }
 
-    def delete_file(self, agent_id: str, path: str) -> dict[str, Any]:
-        agent = self._get_agent(agent_id)
+    def delete_file(self, agent_id: str, customer_id: int, path: str) -> dict[str, Any]:
+        agent = self._get_agent(agent_id, customer_id)
         if not agent:
             return {"status": "error", "message": "Agent not found.", "http_status": 404}
         try:
-            storage.delete_entry(agent.name, path)
+            storage.delete_entry(agent.name, path, int(customer_id))
         except ValueError as exc:
             return {"status": "error", "message": str(exc), "http_status": 400}
         agent.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)

@@ -209,6 +209,9 @@ class CustomerClass:
                 return {"status": "error", "message": "No data found"}
 
             for key, value in customer_inputs.items():
+                if key == "openai_api_key":
+                    # Columna legacy: no se actualiza desde la API (OpenAI removido de Agentes).
+                    continue
                 if value is not None:
                     setattr(existing_customer, key, value)
 

@@ -60,22 +60,22 @@ def _context_file_sort_key(path: Path) -> tuple[int, str]:
     return (2, rel)
 
 
-def list_all_context_file_paths(agent_name: str) -> list[Path]:
-    root = storage.agent_folder(agent_name)
+def list_all_context_file_paths(agent_name: str, customer_id: int | None = None) -> list[Path]:
+    root = storage.agent_folder(agent_name, customer_id)
     if not root.exists():
         return []
     files = [p for p in root.rglob("*") if _is_context_file(p, root)]
     return sorted(files, key=_context_file_sort_key)
 
 
-def list_context_file_paths(agent_name: str) -> list[Path]:
-    return list_all_context_file_paths(agent_name)[:MAX_FILES]
+def list_context_file_paths(agent_name: str, customer_id: int | None = None) -> list[Path]:
+    return list_all_context_file_paths(agent_name, customer_id)[:MAX_FILES]
 
 
-def list_spreadsheet_paths(agent_name: str) -> list[Path]:
+def list_spreadsheet_paths(agent_name: str, customer_id: int | None = None) -> list[Path]:
     return [
         p
-        for p in list_all_context_file_paths(agent_name)
+        for p in list_all_context_file_paths(agent_name, customer_id)
         if p.suffix.lower() in _SPREADSHEET_EXTENSIONS
     ]
 
@@ -173,7 +173,7 @@ def _cell_matches_rut(cell_value: str, target_rut: str) -> bool:
     return False
 
 
-def extract_spreadsheet_hint_for_rut(agent_name: str, student_rut: str) -> tuple[str, list[str]]:
+def extract_spreadsheet_hint_for_rut(agent_name: str, student_rut: str, customer_id: int | None = None) -> tuple[str, list[str]]:
     """
     Busca el RUT del estudiante en TODOS los Excel de Files (sin límite de 25 archivos).
     Devuelve (bloque de texto para el prompt, rutas de archivos donde hubo coincidencia).
@@ -182,8 +182,8 @@ def extract_spreadsheet_hint_for_rut(agent_name: str, student_rut: str) -> tuple
     if len(target) < 8:
         return "", []
 
-    root = storage.agent_folder(agent_name)
-    paths = list_spreadsheet_paths(agent_name)
+    root = storage.agent_folder(agent_name, customer_id)
+    paths = list_spreadsheet_paths(agent_name, customer_id)
     if not paths:
         return "", []
 
@@ -277,19 +277,20 @@ def extract_file_text(path: Path) -> str:
 def build_agent_files_context(
     agent_name: str,
     student_rut: str | None = None,
+    customer_id: int | None = None,
 ) -> tuple[str, int]:
     """
     Devuelve (bloque de texto para el prompt, cantidad de archivos incluidos).
     Solo archivos subidos en Files; excluye plantillas en documentos/.
     """
-    root = storage.agent_folder(agent_name)
-    paths = list_context_file_paths(agent_name)
-    all_paths = list_all_context_file_paths(agent_name)
+    root = storage.agent_folder(agent_name, customer_id)
+    paths = list_context_file_paths(agent_name, customer_id)
+    all_paths = list_all_context_file_paths(agent_name, customer_id)
     spreadsheet_paths = [p for p in all_paths if p.suffix.lower() in _SPREADSHEET_EXTENSIONS]
 
     rut_block = ""
     if student_rut and student_rut.strip():
-        rut_block, _matched = extract_spreadsheet_hint_for_rut(agent_name, student_rut)
+        rut_block, _matched = extract_spreadsheet_hint_for_rut(agent_name, student_rut, customer_id)
 
     if not paths and not rut_block:
         return "", 0
