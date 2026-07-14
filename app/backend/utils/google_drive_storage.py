@@ -111,11 +111,49 @@ def _ensure_folder_with_status(
     return _ensure_folder(config, parent_id, name), True
 
 
+def _list_child_folders(config: DriveSchoolConfig, parent_id: str) -> list[dict[str, str]]:
+    service = _service_for_config(config)
+    folders: list[dict[str, str]] = []
+    page_token: str | None = None
+    query = (
+        f"'{parent_id}' in parents and "
+        f"mimeType = '{_FOLDER_MIME}' and trashed = false"
+    )
+    while True:
+        result = (
+            service.files()
+            .list(
+                q=query,
+                spaces="drive",
+                fields="nextPageToken, files(id,name)",
+                pageSize=100,
+                pageToken=page_token,
+            )
+            .execute()
+        )
+        for f in result.get("files") or []:
+            fid = str(f.get("id") or "")
+            name = str(f.get("name") or "")
+            if fid and name:
+                folders.append({"id": fid, "name": name})
+        page_token = result.get("nextPageToken")
+        if not page_token:
+            break
+    return folders
+
+
+def _trash_folder(config: DriveSchoolConfig, folder_id: str) -> None:
+    service = _service_for_config(config)
+    service.files().update(fileId=folder_id, body={"trashed": True}).execute()
+
+
 def sync_customer_agent_folders(db) -> dict[str, Any]:
     """
     Bajo la carpeta raíz de Agentes (agents_app_settings):
       {customer_id}/{agent_name}/
-    Crea solo si no existe. Un folder por cada agente con customer_id.
+    - Crea carpetas faltantes
+    - Elimina (a la papelera) carpetas de agentes que ya no existen en BD
+    - Elimina carpetas de cliente numéricas sin agentes
     """
     from app.backend.db.models.agent import AgentModel
     from app.backend.utils.school_drive_config import load_agents_global_drive_config
@@ -131,19 +169,6 @@ def sync_customer_agent_folders(db) -> dict[str, Any]:
         .order_by(AgentModel.customer_id.asc(), AgentModel.name.asc())
         .all()
     )
-    if not agents:
-        return {
-            "ok": True,
-            "message": "No hay agentes con cliente para sincronizar.",
-            "customers": [],
-            "summary": {
-                "customers_touched": 0,
-                "customer_folders_created": 0,
-                "customer_folders_existing": 0,
-                "agent_folders_created": 0,
-                "agent_folders_existing": 0,
-            },
-        }
 
     by_customer: dict[int, list[Any]] = {}
     for agent in agents:
@@ -156,10 +181,29 @@ def sync_customer_agent_folders(db) -> dict[str, Any]:
         "customers_touched": 0,
         "customer_folders_created": 0,
         "customer_folders_existing": 0,
+        "customer_folders_deleted": 0,
         "agent_folders_created": 0,
         "agent_folders_existing": 0,
+        "agent_folders_deleted": 0,
     }
 
+    expected_customer_ids = {str(cid) for cid in by_customer.keys()}
+
+    # 1) Limpiar carpetas de cliente huérfanas bajo la raíz (solo nombres numéricos).
+    for child in _list_child_folders(config, root_id):
+        name = child["name"]
+        if not name.isdigit():
+            continue
+        if name in expected_customer_ids:
+            continue
+        try:
+            _trash_folder(config, child["id"])
+            summary["customer_folders_deleted"] += 1
+        except Exception:
+            # No abortar el sync completo por un borrado fallido.
+            continue
+
+    # 2) Crear / sincronizar por cada cliente con agentes.
     for cid, agent_rows in by_customer.items():
         summary["customers_touched"] += 1
         customer_folder_id, customer_created = _ensure_folder_with_status(
@@ -169,6 +213,24 @@ def sync_customer_agent_folders(db) -> dict[str, Any]:
             summary["customer_folders_created"] += 1
         else:
             summary["customer_folders_existing"] += 1
+
+        expected_names = {
+            ((agent.name or "").strip() or f"agent-{agent.id}") for agent in agent_rows
+        }
+
+        # Borrar carpetas de agente que ya no están en BD.
+        deleted_agents: list[dict[str, Any]] = []
+        for child in _list_child_folders(config, customer_folder_id):
+            if child["name"] in expected_names:
+                continue
+            try:
+                _trash_folder(config, child["id"])
+                summary["agent_folders_deleted"] += 1
+                deleted_agents.append(
+                    {"name": child["name"], "folder_id": child["id"], "deleted": True}
+                )
+            except Exception:
+                continue
 
         agent_items: list[dict[str, Any]] = []
         for agent in agent_rows:
@@ -195,14 +257,17 @@ def sync_customer_agent_folders(db) -> dict[str, Any]:
                 "folder_id": customer_folder_id,
                 "created": customer_created,
                 "agents": agent_items,
+                "deleted_agents": deleted_agents,
             }
         )
 
     return {
         "ok": True,
         "message": (
-            f"Sincronizado: {summary['agent_folders_created']} carpetas de agente creadas, "
-            f"{summary['agent_folders_existing']} ya existían."
+            f"Sincronizado: +{summary['agent_folders_created']} creadas, "
+            f"{summary['agent_folders_existing']} existentes, "
+            f"-{summary['agent_folders_deleted']} agentes eliminados, "
+            f"-{summary['customer_folders_deleted']} clientes sin agentes eliminados."
         ),
         "root_folder_id": root_id,
         "customers": customers_out,

@@ -12,5 +12,6 @@ class AgentModel(Base):
     customer_id = Column(Integer, nullable=True, index=True)
     name = Column(String(255), nullable=False)
     role_instructions = Column(Text, nullable=False)
+    workspace_trigger_url = Column(Text, nullable=True)
     created_at = Column(DateTime(), nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime(), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)

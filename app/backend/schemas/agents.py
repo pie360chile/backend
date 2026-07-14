@@ -8,6 +8,10 @@ class AgentCreateRequest(BaseModel):
         min_length=1,
         description="Prompt con instrucciones de comportamiento del agente",
     )
+    workspace_trigger_url: str | None = Field(
+        default=None,
+        description="URL trigger Workspace ChatGPT de este agente (única por agente).",
+    )
     customer_id: int | None = Field(
         default=None,
         description="Cliente dueño del agente (solo superadmin puede elegir otro).",

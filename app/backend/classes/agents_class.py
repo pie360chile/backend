@@ -96,6 +96,7 @@ def _serialize(agent: AgentModel, db: Session) -> dict[str, Any]:
         "customerId": _cid(agent),
         "name": agent.name,
         "roleInstructions": agent.role_instructions,
+        "workspaceTriggerUrl": (getattr(agent, "workspace_trigger_url", None) or None),
         "updatedAt": updated.isoformat() if updated else None,
         "fileCount": storage.count_files(agent.name, _cid(agent)),
         "documentTemplateCount": templates,
@@ -130,7 +131,12 @@ class AgentsClass:
         return {"status": "success", "data": _serialize(agent, self.db)}
 
     def update_agent(
-        self, agent_id: str, customer_id: int, name: str, role_instructions: str
+        self,
+        agent_id: str,
+        customer_id: int,
+        name: str,
+        role_instructions: str,
+        workspace_trigger_url: str | None = None,
     ) -> dict[str, Any]:
         agent = self._get_agent(agent_id, customer_id)
         if not agent:
@@ -159,6 +165,9 @@ class AgentsClass:
         old_name = agent.name
         agent.name = clean_name
         agent.role_instructions = role_instructions.strip()
+        if workspace_trigger_url is not None:
+            url = workspace_trigger_url.strip()
+            agent.workspace_trigger_url = url or None
         agent.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         self.db.commit()
         self.db.refresh(agent)
@@ -172,7 +181,11 @@ class AgentsClass:
         return {"status": "success", "message": "Agent saved.", "data": _serialize(agent, self.db)}
 
     def create_agent(
-        self, customer_id: int, name: str, role_instructions: str
+        self,
+        customer_id: int,
+        name: str,
+        role_instructions: str,
+        workspace_trigger_url: str | None = None,
     ) -> dict[str, Any]:
         clean_name = name.strip()
         if not clean_name:
@@ -194,11 +207,13 @@ class AgentsClass:
             }
 
         now = datetime.now(timezone.utc).replace(tzinfo=None)
+        url = (workspace_trigger_url or "").strip() or None
         agent = AgentModel(
             id=uuid.uuid4().hex,
             customer_id=int(customer_id),
             name=clean_name,
             role_instructions=role_instructions.strip(),
+            workspace_trigger_url=url,
             created_at=now,
             updated_at=now,
         )
