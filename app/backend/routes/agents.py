@@ -1,6 +1,6 @@
 import json
 
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Header, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -8,10 +8,12 @@ from app.backend.auth.auth_user import get_current_active_user
 from app.backend.classes.agents_chat_class import AgentsChatClass
 from app.backend.classes.agents_class import AgentsClass
 from app.backend.classes.agents_llm_models_class import AgentsLlmModelsClass
+from app.backend.classes.agents_mcp_class import AgentsMcpClass
 from app.backend.classes.agents_rate_limit_class import (
     AgentsRateLimitClass,
     can_use_agents_chat,
 )
+from app.backend.core.config import settings
 from app.backend.core.responses import api_error, api_response
 from app.backend.db.database import get_db
 from app.backend.db.models import UserModel
@@ -19,6 +21,7 @@ from app.backend.schemas.agents import (
     AgentChatRequest,
     AgentCreateFolderRequest,
     AgentCreateRequest,
+    AgentsMcpStoreDataRequest,
     AgentsSettingsUpdateRequest,
 )
 
@@ -64,6 +67,51 @@ def _forbid_agents_access(session_user: UserModel, db: Session):
         status_code=status.HTTP_403_FORBIDDEN,
         message="No tienes permiso para usar Agents. Solo superadmin, coordinador o evaluador.",
     )
+
+
+def _mcp_secret_ok(
+    authorization: str | None = None,
+    x_mcp_secret: str | None = None,
+) -> bool:
+    expected = (settings.mcp_secret or "").strip()
+    if not expected:
+        return True
+    if x_mcp_secret and x_mcp_secret.strip() == expected:
+        return True
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization[7:].strip()
+        if token == expected:
+            return True
+    return False
+
+
+@agents.post("/mcp/store_data")
+def mcp_store_data_rest(
+    body: AgentsMcpStoreDataRequest,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(default=None),
+    x_mcp_secret: str | None = Header(default=None, alias="X-MCP-Secret"),
+):
+    """REST gemelo de la tool MCP store_data (Bearer MCP_SECRET o X-MCP-Secret)."""
+    if not _mcp_secret_ok(authorization, x_mcp_secret):
+        return api_error(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            message="MCP secret inválido.",
+        )
+    result = AgentsMcpClass(db).store_data(
+        agent_id=body.agent_id,
+        customer_id=body.customer_id,
+        student_id=body.student_id,
+        document_id=body.document_id,
+        fields=body.fields,
+        meta=body.meta,
+    )
+    if result.get("status") == "error":
+        return api_error(
+            status_code=result.get("http_status", status.HTTP_400_BAD_REQUEST),
+            message=result.get("message") or "Error",
+        )
+    return api_response(message=result.get("message"), data=result.get("data"))
 
 
 @agents.get("/documents/catalog")
@@ -371,6 +419,68 @@ def chat_agent(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@agents.get("/{agent_id}/mcp/saves/pending")
+def list_pending_mcp_saves(
+    agent_id: str,
+    student_id: int | None = Query(None),
+    document_id: int | None = Query(None),
+    since: str | None = Query(
+        None, description="ISO datetime; solo saves creados desde entonces"
+    ),
+    customer_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+    session_user: UserModel = Depends(get_current_active_user),
+):
+    denied = _forbid_agents_access(session_user, db)
+    if denied:
+        return denied
+    cid, err = _resolve_customer_id(session_user, customer_id)
+    if err or not cid:
+        return api_error(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            message=err or "customer_id is required",
+        )
+    result = AgentsMcpClass(db).list_pending(
+        agent_id=agent_id,
+        customer_id=int(cid),
+        student_id=student_id,
+        document_id=document_id,
+        since=since,
+    )
+    return api_response(data=result.get("data", []))
+
+
+@agents.post("/{agent_id}/mcp/saves/{save_id}/generate")
+def generate_mcp_save(
+    agent_id: str,
+    save_id: int,
+    customer_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+    session_user: UserModel = Depends(get_current_active_user),
+):
+    denied = _forbid_agents_access(session_user, db)
+    if denied:
+        return denied
+    cid, err = _resolve_customer_id(session_user, customer_id)
+    if err or not cid:
+        return api_error(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            message=err or "customer_id is required",
+        )
+    result = AgentsMcpClass(db).generate_save(
+        agent_id=agent_id,
+        customer_id=int(cid),
+        save_id=int(save_id),
+    )
+    if result.get("status") == "error":
+        return api_error(
+            status_code=result.get("http_status", status.HTTP_400_BAD_REQUEST),
+            message=result.get("message") or "Error",
+            data=result.get("data"),
+        )
+    return api_response(message=result.get("message"), data=result.get("data"))
 
 
 @agents.get("/{agent_id}/files")

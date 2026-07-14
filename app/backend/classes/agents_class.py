@@ -404,6 +404,32 @@ class AgentsClass:
         except ValueError as exc:
             return {"status": "error", "message": str(exc), "http_status": 400}
 
+        drive_uploads: list[dict[str, Any]] = []
+        drive_errors: list[str] = []
+        try:
+            from app.backend.utils import google_drive_storage as drive_storage
+            from app.backend.utils.school_drive_config import load_agents_global_drive_config
+
+            load_agents_global_drive_config(self.db)
+            for relative_path, data in files:
+                try:
+                    drive_uploads.append(
+                        drive_storage.upload_to_agent_folder(
+                            db=self.db,
+                            customer_id=int(customer_id),
+                            agent_name=agent.name,
+                            relative_path=relative_path,
+                            data=data,
+                        )
+                    )
+                except Exception as exc:
+                    drive_errors.append(f"{relative_path}: {exc}")
+        except ValueError:
+            # Drive de Agentes no configurado: solo disco local.
+            pass
+        except Exception as exc:
+            drive_errors.append(str(exc))
+
         agent.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         self.db.commit()
         return {
@@ -412,6 +438,8 @@ class AgentsClass:
             "data": {
                 "uploaded": saved,
                 "totalFiles": storage.count_files(agent.name, int(customer_id)),
+                "driveUploads": drive_uploads,
+                "driveErrors": drive_errors,
             },
         }
 

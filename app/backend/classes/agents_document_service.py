@@ -171,10 +171,14 @@ def generate_and_save_document(
         family_report_id = fr_result.get("id")
         link_folder_to_family_report(db, folder_result.get("id"), family_report_id)
 
+    folder_id = folder_result.get("id") if isinstance(folder_result, dict) else None
+    download_url = f"/files/system/students/{filename}" if filename else None
     return {
         "status": "success",
         "message": "Document generated and saved.",
         "filename": filename,
+        "downloadUrl": download_url,
+        "folderId": folder_id,
         "documentId": template.document_id,
         "documentName": template.document_name,
         "formatType": template.format_type,

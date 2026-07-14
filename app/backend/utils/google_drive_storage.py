@@ -378,6 +378,75 @@ def upload_bytes(
     }
 
 
+def upload_to_agent_folder(
+    *,
+    db: Any,
+    customer_id: int,
+    agent_name: str,
+    relative_path: str,
+    data: bytes,
+    mime_type: str | None = None,
+) -> dict[str, Any]:
+    """Sube un archivo a Drive Agentes: {root}/{customer_id}/{agent_name}/[parent…]/file."""
+    from app.backend.utils.school_drive_config import load_agents_global_drive_config
+
+    if not data:
+        raise ValueError("El archivo está vacío.")
+    if int(customer_id) < 1:
+        raise ValueError("customer_id inválido.")
+
+    config = load_agents_global_drive_config(db)
+    root_id = config.root_folder_id.strip()
+    agent_label = (agent_name or "").strip() or f"agent-{customer_id}"
+
+    customer_folder_id = _ensure_folder(config, root_id, str(int(customer_id)))
+    agent_folder_id = _ensure_folder(config, customer_folder_id, agent_label)
+
+    posix = Path(relative_path).as_posix().strip("/")
+    parts = [p for p in posix.split("/") if p and p not in (".", "..")]
+    if not parts:
+        raise ValueError("Ruta de archivo inválida.")
+
+    parent_id = agent_folder_id
+    for segment in parts[:-1]:
+        parent_id = _ensure_folder(config, parent_id, segment)
+    name = _safe_filename(parts[-1])
+
+    service = _service_for_config(config)
+    try:
+        from googleapiclient.http import MediaIoBaseUpload
+
+        media = MediaIoBaseUpload(
+            io.BytesIO(data),
+            mimetype=mime_type or "application/octet-stream",
+            resumable=False,
+        )
+    except ImportError as exc:
+        raise ValueError("googleapiclient no está instalado.") from exc
+
+    body = {"name": name, "parents": [parent_id]}
+    created = (
+        service.files()
+        .create(body=body, media_body=media, fields="id,name,mimeType,size,webViewLink")
+        .execute()
+    )
+    logical = f"{int(customer_id)}/{agent_label}/{'/'.join(parts[:-1] + [name])}".replace(
+        "//", "/"
+    )
+    return {
+        "ok": True,
+        "file_id": created.get("id"),
+        "filename": created.get("name") or name,
+        "mime_type": created.get("mimeType"),
+        "size_bytes": int(created.get("size") or len(data)),
+        "web_view_link": created.get("webViewLink"),
+        "drive_path": logical,
+        "customer_id": int(customer_id),
+        "agent_name": agent_label,
+        "drive_config_source": config.source,
+    }
+
+
 def list_folder_files(
     *,
     config: DriveSchoolConfig,

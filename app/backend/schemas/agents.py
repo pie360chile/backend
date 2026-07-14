@@ -81,3 +81,12 @@ class AgentsSettingsUpdateRequest(BaseModel):
         default=False,
         description="Si true, elimina root folder id y JSON de service account.",
     )
+
+
+class AgentsMcpStoreDataRequest(BaseModel):
+    agent_id: str = Field(..., min_length=1)
+    customer_id: int = Field(..., ge=1)
+    student_id: int = Field(..., ge=1)
+    document_id: int = Field(..., ge=1)
+    fields: dict = Field(..., description="Mapa nombre_campo → valor")
+    meta: dict | None = Field(default=None)

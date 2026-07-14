@@ -9,8 +9,11 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.backend.classes.agents_class import AgentsClass
+from app.backend.classes.agents_mcp_class import AgentsMcpClass
 from app.backend.classes.agents_usage_class import AgentsUsageClass
 from app.backend.classes.workspace_agent_class import WorkspaceAgentClass
+from app.backend.core.config import settings
+from app.backend.db.models.agent import AgentModel
 
 
 def _extract_workspace_reply(body: Any) -> str:
@@ -71,9 +74,22 @@ def _extract_workspace_reply(body: Any) -> str:
     return dumped.strip()
 
 
+def _drive_path_block(*, customer_id: int, agent_name: str) -> str:
+    name = (agent_name or "").strip() or "agente"
+    path = f"{int(customer_id)}/{name}/"
+    return (
+        "Google Drive del agente:\n"
+        f"- Ruta bajo la carpeta raíz de Agentes: {path}\n"
+        "- Usa esos archivos cuando necesites plantillas, anexos o contexto del agente.\n"
+        "- No uses el Drive de colegios (school_id/año/…)."
+    )
+
+
 def _build_workspace_input(
     *,
-    role_instructions: str,
+    db: Session,
+    agent: AgentModel,
+    customer_id: int,
     message: str,
     history: list[dict[str, str]] | None,
     student_id: int | None,
@@ -81,9 +97,22 @@ def _build_workspace_input(
     document_id: int | None,
 ) -> str:
     parts: list[str] = []
-    instructions = (role_instructions or "").strip()
+    instructions = (agent.role_instructions or "").strip()
     if instructions:
         parts.append("Instrucciones del agente:\n" + instructions)
+
+    mcp_base = (settings.api_public_base or "").rstrip("/")
+    mcp_url = f"{mcp_base}/mcp" if mcp_base else "/api/mcp"
+    mcp_block = AgentsMcpClass(db).build_store_data_prompt_block(
+        agent=agent,
+        customer_id=int(customer_id),
+        document_id=document_id,
+        student_id=student_id,
+        student_rut=student_rut,
+        mcp_url=mcp_url,
+    )
+    parts.append(mcp_block)
+    parts.append(_drive_path_block(customer_id=int(customer_id), agent_name=agent.name or ""))
 
     hist_lines: list[str] = []
     for item in history or []:
@@ -165,7 +194,9 @@ class AgentsChatClass:
         yield {"type": "step", "message": "Consultando Workspace ChatGPT…"}
 
         user_input = _build_workspace_input(
-            role_instructions=agent_row.role_instructions or "",
+            db=self.db,
+            agent=agent_row,
+            customer_id=int(self.customer_id),
             message=text,
             history=history,
             student_id=student_id,
