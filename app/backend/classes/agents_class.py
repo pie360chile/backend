@@ -406,11 +406,13 @@ class AgentsClass:
 
         drive_uploads: list[dict[str, Any]] = []
         drive_errors: list[str] = []
+        drive_configured = False
         try:
             from app.backend.utils import google_drive_storage as drive_storage
             from app.backend.utils.school_drive_config import load_agents_global_drive_config
 
             load_agents_global_drive_config(self.db)
+            drive_configured = True
             for relative_path, data in files:
                 try:
                     drive_uploads.append(
@@ -432,14 +434,32 @@ class AgentsClass:
 
         agent.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         self.db.commit()
+
+        message = f"{len(saved)} file(s) uploaded."
+        if drive_configured and drive_errors and not drive_uploads:
+            message = (
+                f"{len(saved)} archivo(s) en servidor local, pero ninguno llegó a Google Drive. "
+                f"{drive_errors[0]}"
+            )
+        elif drive_configured and drive_errors:
+            message = (
+                f"{len(saved)} archivo(s) locales; Drive: {len(drive_uploads)} ok, "
+                f"{len(drive_errors)} con error. {drive_errors[0]}"
+            )
+        elif drive_configured and drive_uploads:
+            message = (
+                f"{len(saved)} archivo(s) subidos (local + Drive: {len(drive_uploads)})."
+            )
+
         return {
             "status": "success",
-            "message": f"{len(saved)} file(s) uploaded.",
+            "message": message,
             "data": {
                 "uploaded": saved,
                 "totalFiles": storage.count_files(agent.name, int(customer_id)),
                 "driveUploads": drive_uploads,
                 "driveErrors": drive_errors,
+                "driveConfigured": drive_configured,
             },
         }
 
@@ -451,6 +471,42 @@ class AgentsClass:
             storage.delete_entry(agent.name, path, int(customer_id))
         except ValueError as exc:
             return {"status": "error", "message": str(exc), "http_status": 400}
+
+        drive_result: dict[str, Any] | None = None
+        drive_error: str | None = None
+        try:
+            from app.backend.utils import google_drive_storage as drive_storage
+            from app.backend.utils.school_drive_config import load_agents_global_drive_config
+
+            load_agents_global_drive_config(self.db)
+            drive_result = drive_storage.delete_from_agent_folder(
+                db=self.db,
+                customer_id=int(customer_id),
+                agent_name=agent.name,
+                relative_path=path,
+            )
+        except ValueError:
+            # Drive no configurado: solo borrado local.
+            pass
+        except Exception as exc:
+            drive_error = str(exc)
+
         agent.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         self.db.commit()
-        return {"status": "success", "message": "Deleted."}
+
+        message = "Deleted."
+        if drive_error:
+            message = f"Eliminado en local; Drive falló: {drive_error}"
+        elif drive_result and not drive_result.get("skipped"):
+            message = "Eliminado en local y en Google Drive."
+        elif drive_result and drive_result.get("skipped"):
+            message = "Eliminado en local (no estaba en Drive o ya no existía)."
+
+        return {
+            "status": "success",
+            "message": message,
+            "data": {
+                "drive": drive_result,
+                "driveError": drive_error,
+            },
+        }

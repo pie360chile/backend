@@ -80,7 +80,14 @@ def _find_child_folder(config: DriveSchoolConfig, parent_id: str, name: str) -> 
     )
     result = (
         service.files()
-        .list(q=query, spaces="drive", fields="files(id,name)", pageSize=1)
+        .list(
+            q=query,
+            spaces="drive",
+            fields="files(id,name)",
+            pageSize=1,
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
+        )
         .execute()
     )
     files = result.get("files") or []
@@ -97,7 +104,11 @@ def _ensure_folder(config: DriveSchoolConfig, parent_id: str, name: str) -> str:
         "mimeType": _FOLDER_MIME,
         "parents": [parent_id],
     }
-    created = service.files().create(body=meta, fields="id").execute()
+    created = (
+        service.files()
+        .create(body=meta, fields="id", supportsAllDrives=True)
+        .execute()
+    )
     return created["id"]
 
 
@@ -128,6 +139,8 @@ def _list_child_folders(config: DriveSchoolConfig, parent_id: str) -> list[dict[
                 fields="nextPageToken, files(id,name)",
                 pageSize=100,
                 pageToken=page_token,
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True,
             )
             .execute()
         )
@@ -144,8 +157,135 @@ def _list_child_folders(config: DriveSchoolConfig, parent_id: str) -> list[dict[
 
 def _trash_folder(config: DriveSchoolConfig, folder_id: str) -> None:
     service = _service_for_config(config)
-    service.files().update(fileId=folder_id, body={"trashed": True}).execute()
+    service.files().update(
+        fileId=folder_id,
+        body={"trashed": True},
+        supportsAllDrives=True,
+    ).execute()
 
+
+def _find_child_by_name(
+    config: DriveSchoolConfig, parent_id: str, name: str
+) -> dict[str, str] | None:
+    """Busca archivo o carpeta por nombre exacto bajo parent_id."""
+    service = _service_for_config(config)
+    safe_name = name.replace("'", "\\'")
+    query = (
+        f"'{parent_id}' in parents and "
+        f"name = '{safe_name}' and trashed = false"
+    )
+    result = (
+        service.files()
+        .list(
+            q=query,
+            spaces="drive",
+            fields="files(id,name,mimeType)",
+            pageSize=5,
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
+        )
+        .execute()
+    )
+    files = result.get("files") or []
+    if not files:
+        return None
+    # Preferir carpeta si hay colisión nombre archivo/carpeta
+    for f in files:
+        if f.get("mimeType") == _FOLDER_MIME:
+            return {
+                "id": str(f["id"]),
+                "name": str(f.get("name") or name),
+                "mimeType": _FOLDER_MIME,
+            }
+    f = files[0]
+    return {
+        "id": str(f["id"]),
+        "name": str(f.get("name") or name),
+        "mimeType": str(f.get("mimeType") or ""),
+    }
+
+
+def delete_from_agent_folder(
+    *,
+    db: Any,
+    customer_id: int,
+    agent_name: str,
+    relative_path: str,
+) -> dict[str, Any]:
+    """Elimina (papelera) archivo o carpeta en Drive: {root}/{customer_id}/{agent_name}/{path}."""
+    from app.backend.utils.school_drive_config import load_agents_global_drive_config
+
+    if int(customer_id) < 1:
+        raise ValueError("customer_id inválido.")
+    posix = Path(relative_path).as_posix().strip("/")
+    parts = [p for p in posix.split("/") if p and p not in (".", "..")]
+    if not parts:
+        raise ValueError("No se puede eliminar la carpeta raíz del agente en Drive.")
+
+    config = load_agents_global_drive_config(db)
+    root_id = config.root_folder_id.strip()
+    agent_label = (agent_name or "").strip() or f"agent-{customer_id}"
+
+    customer_folder_id = _find_child_folder(config, root_id, str(int(customer_id)))
+    if not customer_folder_id:
+        return {
+            "ok": True,
+            "skipped": True,
+            "message": "Carpeta de cliente no existe en Drive.",
+        }
+    agent_folder_id = _find_child_folder(config, customer_folder_id, agent_label)
+    if not agent_folder_id:
+        return {
+            "ok": True,
+            "skipped": True,
+            "message": "Carpeta del agente no existe en Drive.",
+        }
+
+    parent_id = agent_folder_id
+    for segment in parts[:-1]:
+        found = _find_child_folder(config, parent_id, segment)
+        if not found:
+            return {
+                "ok": True,
+                "skipped": True,
+                "message": f"Ruta no encontrada en Drive: {posix}",
+            }
+        parent_id = found
+
+    target = _find_child_by_name(config, parent_id, parts[-1])
+    if not target:
+        return {
+            "ok": True,
+            "skipped": True,
+            "message": f"Elemento no encontrado en Drive: {posix}",
+        }
+
+    try:
+        _trash_folder(config, target["id"])
+    except Exception as exc:
+        raise ValueError(_drive_api_error_message(exc)) from exc
+
+    return {
+        "ok": True,
+        "skipped": False,
+        "file_id": target["id"],
+        "name": target["name"],
+        "mime_type": target["mimeType"],
+        "drive_path": f"{int(customer_id)}/{agent_label}/{posix}",
+    }
+
+
+def _drive_api_error_message(exc: BaseException) -> str:
+    text = str(exc)
+    lower = text.lower()
+    if "storagequotaexceeded" in lower or "storage quota" in lower:
+        return (
+            "La cuenta de servicio no tiene cuota en My Drive. "
+            "Usa una Shared Drive (unidad compartida), agrega la cuenta de servicio "
+            "como miembro con permiso de administrador de contenido, y pon el ID "
+            "de una carpeta dentro de esa Shared Drive como carpeta raíz de Agentes."
+        )
+    return text
 
 def sync_customer_agent_folders(db) -> dict[str, Any]:
     """
@@ -356,7 +496,12 @@ def upload_bytes(
     body = {"name": name, "parents": [folder_id]}
     created = (
         service.files()
-        .create(body=body, media_body=media, fields="id,name,mimeType,size,webViewLink")
+        .create(
+            body=body,
+            media_body=media,
+            fields="id,name,mimeType,size,webViewLink",
+            supportsAllDrives=True,
+        )
         .execute()
     )
     y = _normalize_year(year)
@@ -399,37 +544,48 @@ def upload_to_agent_folder(
     root_id = config.root_folder_id.strip()
     agent_label = (agent_name or "").strip() or f"agent-{customer_id}"
 
-    customer_folder_id = _ensure_folder(config, root_id, str(int(customer_id)))
-    agent_folder_id = _ensure_folder(config, customer_folder_id, agent_label)
-
-    posix = Path(relative_path).as_posix().strip("/")
-    parts = [p for p in posix.split("/") if p and p not in (".", "..")]
-    if not parts:
-        raise ValueError("Ruta de archivo inválida.")
-
-    parent_id = agent_folder_id
-    for segment in parts[:-1]:
-        parent_id = _ensure_folder(config, parent_id, segment)
-    name = _safe_filename(parts[-1])
-
-    service = _service_for_config(config)
     try:
-        from googleapiclient.http import MediaIoBaseUpload
+        customer_folder_id = _ensure_folder(config, root_id, str(int(customer_id)))
+        agent_folder_id = _ensure_folder(config, customer_folder_id, agent_label)
 
+        posix = Path(relative_path).as_posix().strip("/")
+        parts = [p for p in posix.split("/") if p and p not in (".", "..")]
+        if not parts:
+            raise ValueError("Ruta de archivo inválida.")
+
+        parent_id = agent_folder_id
+        for segment in parts[:-1]:
+            parent_id = _ensure_folder(config, parent_id, segment)
+        name = _safe_filename(parts[-1])
+
+        service = _service_for_config(config)
+        try:
+            from googleapiclient.http import MediaIoBaseUpload
+        except ImportError as exc:
+            raise ValueError("googleapiclient no está instalado.") from exc
+
+        # Archivos grandes: upload resumable (evita timeouts y límites multipart).
+        resumable = len(data) >= 5 * 1024 * 1024
         media = MediaIoBaseUpload(
             io.BytesIO(data),
             mimetype=mime_type or "application/octet-stream",
-            resumable=False,
+            resumable=resumable,
         )
-    except ImportError as exc:
-        raise ValueError("googleapiclient no está instalado.") from exc
 
-    body = {"name": name, "parents": [parent_id]}
-    created = (
-        service.files()
-        .create(body=body, media_body=media, fields="id,name,mimeType,size,webViewLink")
-        .execute()
-    )
+        body = {"name": name, "parents": [parent_id]}
+        created = (
+            service.files()
+            .create(
+                body=body,
+                media_body=media,
+                fields="id,name,mimeType,size,webViewLink",
+                supportsAllDrives=True,
+            )
+            .execute()
+        )
+    except Exception as exc:
+        raise ValueError(_drive_api_error_message(exc)) from exc
+
     logical = f"{int(customer_id)}/{agent_label}/{'/'.join(parts[:-1] + [name])}".replace(
         "//", "/"
     )
@@ -474,6 +630,8 @@ def list_folder_files(
             fields="files(id,name,mimeType,size,webViewLink,createdTime,modifiedTime)",
             pageSize=min(max(page_size, 1), 100),
             orderBy="modifiedTime desc",
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
         )
         .execute()
     )
