@@ -230,7 +230,12 @@ def create_agent(
             status_code=status.HTTP_400_BAD_REQUEST,
             message=err or "customer_id is required",
         )
-    result = AgentsClass(db).create_agent(cid, body.name, body.role_instructions)
+    result = AgentsClass(db).create_agent(
+        cid,
+        body.name,
+        body.role_instructions,
+        workspace_trigger_url=body.workspace_trigger_url,
+    )
     if result.get("status") == "error":
         return api_error(
             status_code=result.get("http_status", status.HTTP_400_BAD_REQUEST),
@@ -544,7 +549,13 @@ def update_agent(
             status_code=status.HTTP_400_BAD_REQUEST,
             message=err or "customer_id is required",
         )
-    result = AgentsClass(db).update_agent(agent_id, cid, body.name, body.role_instructions)
+    result = AgentsClass(db).update_agent(
+        agent_id,
+        cid,
+        body.name,
+        body.role_instructions,
+        workspace_trigger_url=body.workspace_trigger_url,
+    )
     if result.get("status") == "error":
         return api_error(
             status_code=result.get("http_status", status.HTTP_400_BAD_REQUEST),

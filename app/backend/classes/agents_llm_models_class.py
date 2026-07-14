@@ -178,6 +178,7 @@ class AgentsLlmModelsClass:
             "default_agent_id": app.default_agent_id,
             "has_llm_api_key": bool(stored_key),
             "llm_api_key_hint": (f"****{stored_key[-4:]}" if len(stored_key) >= 4 else None),
+            "llm_api_key_value": stored_key or None,
             "workspace_agent_id": agent_id or None,
             "workspace_trigger_url": trigger_url or None,
             "provider": "workspace-chatgpt",

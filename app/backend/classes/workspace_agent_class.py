@@ -24,7 +24,10 @@ class WorkspaceAgentClass:
     def __init__(self, db: Session | None = None) -> None:
         self.db = db
 
-    def _trigger_url(self) -> str:
+    def _trigger_url(self, override_url: str | None = None) -> str:
+        custom = (override_url or "").strip()
+        if custom:
+            return custom.rstrip("/")
         base = settings.workspace_agent_api_base.rstrip("/")
         agent_id = settings.workspace_agent_id.strip()
         return f"{base}/{agent_id}/trigger"
@@ -41,7 +44,9 @@ class WorkspaceAgentClass:
                 pass
         return (settings.agent_access_token or "").strip()
 
-    def trigger_chat(self, user_input: str) -> dict[str, Any]:
+    def trigger_chat(
+        self, user_input: str, *, trigger_url: str | None = None
+    ) -> dict[str, Any]:
         token = self._resolve_access_token()
         if not token:
             return {
@@ -53,9 +58,20 @@ class WorkspaceAgentClass:
                 "http_status": 500,
             }
 
+        url = self._trigger_url(trigger_url)
+        if not url:
+            return {
+                "status": "error",
+                "message": (
+                    "Falta la URL del endpoint Workspace de este agente. "
+                    "Configúrala en el detalle del agente."
+                ),
+                "http_status": 400,
+            }
+
         try:
             response = requests.post(
-                self._trigger_url(),
+                url,
                 headers={
                     "Authorization": f"Bearer {token}",
                     "Content-Type": "application/json",

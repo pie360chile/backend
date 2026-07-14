@@ -173,7 +173,21 @@ class AgentsChatClass:
             document_id=document_id,
         )
 
-        result = WorkspaceAgentClass(self.db).trigger_chat(user_input)
+        trigger_url = (getattr(agent_row, "workspace_trigger_url", None) or "").strip()
+        if not trigger_url:
+            yield {
+                "type": "error",
+                "message": (
+                    "Este agente no tiene URL de endpoint Workspace. "
+                    "Edita el agente y pega la URL del trigger."
+                ),
+                "code": "missing_workspace_trigger_url",
+            }
+            return
+
+        result = WorkspaceAgentClass(self.db).trigger_chat(
+            user_input, trigger_url=trigger_url
+        )
         if result.get("status") == "error":
             yield {
                 "type": "error",
