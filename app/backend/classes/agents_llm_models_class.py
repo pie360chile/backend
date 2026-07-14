@@ -162,9 +162,7 @@ class AgentsLlmModelsClass:
         env_sa = _service_account_info_from_env_file()
         creds_ok = bool(sa_raw) or bool(env_sa)
         creds_hint = None
-        if env_sa and env_sa.get("client_email"):
-            creds_hint = str(env_sa.get("client_email"))
-        elif sa_raw:
+        if sa_raw:
             try:
                 import json
 
@@ -172,6 +170,8 @@ class AgentsLlmModelsClass:
                 creds_hint = email or "Credenciales en BD"
             except Exception:
                 creds_hint = "Credenciales en BD"
+        elif env_sa and env_sa.get("client_email"):
+            creds_hint = str(env_sa.get("client_email"))
         root_id = (getattr(app, "google_drive_root_folder_id", None) or "").strip() or None
         return {
             "selected_model_code": "workspace-chatgpt",
@@ -185,6 +185,7 @@ class AgentsLlmModelsClass:
             "google_drive_root_folder_id": root_id,
             "has_google_drive_credentials": creds_ok,
             "google_drive_credentials_hint": creds_hint,
+            "google_service_account_json_value": sa_raw or None,
             "models": [_serialize_model(m) for m in models],
             "agents": [
                 {
