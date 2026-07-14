@@ -29,12 +29,27 @@ class WorkspaceAgentClass:
         agent_id = settings.workspace_agent_id.strip()
         return f"{base}/{agent_id}/trigger"
 
+    def _resolve_access_token(self) -> str:
+        if self.db is not None:
+            try:
+                from app.backend.classes.agents_llm_models_class import AgentsLlmModelsClass
+
+                key = AgentsLlmModelsClass(self.db).get_workspace_access_token()
+                if key:
+                    return key
+            except Exception:
+                pass
+        return (settings.agent_access_token or "").strip()
+
     def trigger_chat(self, user_input: str) -> dict[str, Any]:
-        token = settings.agent_access_token
+        token = self._resolve_access_token()
         if not token:
             return {
                 "status": "error",
-                "message": "AGENT_ACCESS_TOKEN no está configurado en el servidor.",
+                "message": (
+                    "Falta el token de Workspace ChatGPT. "
+                    "Configúralo en Agentes → Configuraciones."
+                ),
                 "http_status": 500,
             }
 
@@ -46,7 +61,7 @@ class WorkspaceAgentClass:
                     "Content-Type": "application/json",
                 },
                 json={"input": user_input},
-                timeout=60,
+                timeout=180,
             )
         except requests.RequestException as exc:
             return {
@@ -62,9 +77,20 @@ class WorkspaceAgentClass:
             body = {"raw": response.text or ""}
 
         if not response.ok:
+            detail = ""
+            if isinstance(body, dict):
+                detail = str(
+                    body.get("error")
+                    or body.get("message")
+                    or body.get("detail")
+                    or ""
+                )
             return {
                 "status": "error",
-                "message": f"Workspace Agent devolvió HTTP {response.status_code}",
+                "message": (
+                    f"Workspace Agent devolvió HTTP {response.status_code}"
+                    + (f": {detail}" if detail else "")
+                ),
                 "http_status": 502,
                 "data": {"status_code": response.status_code, "body": body},
             }

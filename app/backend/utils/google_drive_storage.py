@@ -101,6 +101,115 @@ def _ensure_folder(config: DriveSchoolConfig, parent_id: str, name: str) -> str:
     return created["id"]
 
 
+def _ensure_folder_with_status(
+    config: DriveSchoolConfig, parent_id: str, name: str
+) -> tuple[str, bool]:
+    """Devuelve (folder_id, created). created=False si ya existía."""
+    existing = _find_child_folder(config, parent_id, name)
+    if existing:
+        return existing, False
+    return _ensure_folder(config, parent_id, name), True
+
+
+def sync_customer_agent_folders(db) -> dict[str, Any]:
+    """
+    Bajo la carpeta raíz de Agentes (agents_app_settings):
+      {customer_id}/{agent_name}/
+    Crea solo si no existe. Un folder por cada agente con customer_id.
+    """
+    from app.backend.db.models.agent import AgentModel
+    from app.backend.utils.school_drive_config import load_agents_global_drive_config
+
+    try:
+        config = load_agents_global_drive_config(db)
+    except ValueError as exc:
+        return {"ok": False, "message": str(exc), "customers": [], "summary": {}}
+
+    agents = (
+        db.query(AgentModel)
+        .filter(AgentModel.customer_id.isnot(None))
+        .order_by(AgentModel.customer_id.asc(), AgentModel.name.asc())
+        .all()
+    )
+    if not agents:
+        return {
+            "ok": True,
+            "message": "No hay agentes con cliente para sincronizar.",
+            "customers": [],
+            "summary": {
+                "customers_touched": 0,
+                "customer_folders_created": 0,
+                "customer_folders_existing": 0,
+                "agent_folders_created": 0,
+                "agent_folders_existing": 0,
+            },
+        }
+
+    by_customer: dict[int, list[Any]] = {}
+    for agent in agents:
+        cid = int(agent.customer_id)
+        by_customer.setdefault(cid, []).append(agent)
+
+    root_id = config.root_folder_id
+    customers_out: list[dict[str, Any]] = []
+    summary = {
+        "customers_touched": 0,
+        "customer_folders_created": 0,
+        "customer_folders_existing": 0,
+        "agent_folders_created": 0,
+        "agent_folders_existing": 0,
+    }
+
+    for cid, agent_rows in by_customer.items():
+        summary["customers_touched"] += 1
+        customer_folder_id, customer_created = _ensure_folder_with_status(
+            config, root_id, str(cid)
+        )
+        if customer_created:
+            summary["customer_folders_created"] += 1
+        else:
+            summary["customer_folders_existing"] += 1
+
+        agent_items: list[dict[str, Any]] = []
+        for agent in agent_rows:
+            name = (agent.name or "").strip() or f"agent-{agent.id}"
+            folder_id, created = _ensure_folder_with_status(
+                config, customer_folder_id, name
+            )
+            if created:
+                summary["agent_folders_created"] += 1
+            else:
+                summary["agent_folders_existing"] += 1
+            agent_items.append(
+                {
+                    "agent_id": agent.id,
+                    "name": name,
+                    "folder_id": folder_id,
+                    "created": created,
+                }
+            )
+
+        customers_out.append(
+            {
+                "customer_id": cid,
+                "folder_id": customer_folder_id,
+                "created": customer_created,
+                "agents": agent_items,
+            }
+        )
+
+    return {
+        "ok": True,
+        "message": (
+            f"Sincronizado: {summary['agent_folders_created']} carpetas de agente creadas, "
+            f"{summary['agent_folders_existing']} ya existían."
+        ),
+        "root_folder_id": root_id,
+        "customers": customers_out,
+        "summary": summary,
+    }
+
+
 def resolve_target_folder(
     *,
     config: DriveSchoolConfig,

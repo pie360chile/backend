@@ -120,47 +120,70 @@ class AgentsLlmModelsClass:
         self.db.flush()
         return row
 
-    def get_llm_api_key(self) -> str:
-        """Clave LLM: primero BD (Configuraciones), luego .env."""
+    def get_workspace_access_token(self) -> str:
+        """Token Workspace ChatGPT: primero BD (Configuraciones), luego AGENT_ACCESS_TOKEN."""
         app = self._ensure_app_settings_row()
         key = (app.llm_api_key or "").strip()
         if key:
             return key
         from app.backend.core.config import settings
 
-        return (settings.agents_llm_api_key or "").strip()
+        return (settings.agent_access_token or "").strip()
+
+    def get_llm_api_key(self) -> str:
+        """Compat: misma clave usada ahora como token Workspace."""
+        return self.get_workspace_access_token()
 
     def get_selected_model_code(self) -> str:
-        self.ensure_seeded()
-        row = (
-            self.db.query(AgentsOpenAIModel)
-            .filter(AgentsOpenAIModel.is_selected.is_(True), AgentsOpenAIModel.is_active.is_(True))
-            .first()
-        )
-        if row:
-            return row.model_code
-        return _DEFAULT_MODEL_CODE
+        return "workspace-chatgpt"
 
     def get_settings(self, *, customer_id: int | None = None) -> dict[str, Any]:
         self.ensure_seeded()
+        from app.backend.core.config import settings
+
         models = (
             self.db.query(AgentsOpenAIModel)
             .filter(AgentsOpenAIModel.is_active.is_(True))
             .order_by(AgentsOpenAIModel.sort_order.asc(), AgentsOpenAIModel.id.asc())
             .all()
         )
-        selected = next((m.model_code for m in models if m.is_selected), None) or _DEFAULT_MODEL_CODE
         app = self._ensure_app_settings_row()
         agents_q = self.db.query(AgentModel)
         if customer_id is not None:
             agents_q = agents_q.filter(AgentModel.customer_id == customer_id)
         agents = agents_q.order_by(AgentModel.name.asc()).all()
         stored_key = (app.llm_api_key or "").strip()
+        base = (settings.workspace_agent_api_base or "").rstrip("/")
+        agent_id = (settings.workspace_agent_id or "").strip()
+        trigger_url = f"{base}/{agent_id}/trigger" if base and agent_id else ""
+        sa_raw = (getattr(app, "google_service_account_json", None) or "").strip()
+        from app.backend.utils.school_drive_config import _service_account_info_from_env_file
+
+        env_sa = _service_account_info_from_env_file()
+        creds_ok = bool(sa_raw) or bool(env_sa)
+        creds_hint = None
+        if env_sa and env_sa.get("client_email"):
+            creds_hint = str(env_sa.get("client_email"))
+        elif sa_raw:
+            try:
+                import json
+
+                email = str(json.loads(sa_raw).get("client_email") or "").strip()
+                creds_hint = email or "Credenciales en BD"
+            except Exception:
+                creds_hint = "Credenciales en BD"
+        root_id = (getattr(app, "google_drive_root_folder_id", None) or "").strip() or None
         return {
-            "selected_model_code": selected,
+            "selected_model_code": "workspace-chatgpt",
             "default_agent_id": app.default_agent_id,
-            "has_llm_api_key": bool(stored_key),
+            "has_llm_api_key": bool(stored_key) or bool((settings.agent_access_token or "").strip()),
             "llm_api_key_hint": (f"••••{stored_key[-4:]}" if len(stored_key) >= 4 else None),
+            "workspace_agent_id": agent_id or None,
+            "workspace_trigger_url": trigger_url or None,
+            "provider": "workspace-chatgpt",
+            "google_drive_root_folder_id": root_id,
+            "has_google_drive_credentials": creds_ok,
+            "google_drive_credentials_hint": creds_hint,
             "models": [_serialize_model(m) for m in models],
             "agents": [
                 {
@@ -181,6 +204,9 @@ class AgentsLlmModelsClass:
         clear_default_agent: bool = False,
         llm_api_key: str | None = None,
         clear_llm_api_key: bool = False,
+        google_drive_root_folder_id: str | None = None,
+        google_service_account_json: str | None = None,
+        clear_google_drive: bool = False,
     ) -> dict[str, Any]:
         self.ensure_seeded()
         now = _now()
@@ -242,6 +268,27 @@ class AgentsLlmModelsClass:
             if key:
                 app.llm_api_key = key
                 app.updated_at = now
+
+        if clear_google_drive:
+            app.google_drive_root_folder_id = None
+            app.google_service_account_json = None
+            app.updated_at = now
+        else:
+            if google_drive_root_folder_id is not None:
+                root = google_drive_root_folder_id.strip()
+                app.google_drive_root_folder_id = root or None
+                app.updated_at = now
+            if google_service_account_json is not None:
+                raw = google_service_account_json.strip()
+                if raw:
+                    try:
+                        from app.backend.utils.school_drive_config import _parse_service_account_json
+
+                        _parse_service_account_json(raw)
+                    except ValueError as exc:
+                        return {"status": "error", "message": str(exc)}
+                    app.google_service_account_json = raw
+                    app.updated_at = now
 
         self.db.commit()
         return {

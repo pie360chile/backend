@@ -149,6 +149,9 @@ def update_agents_settings(
         clear_default_agent=payload.clear_default_agent,
         llm_api_key=payload.llm_api_key,
         clear_llm_api_key=payload.clear_llm_api_key,
+        google_drive_root_folder_id=payload.google_drive_root_folder_id,
+        google_service_account_json=payload.google_service_account_json,
+        clear_google_drive=payload.clear_google_drive,
     )
     if result.get("status") == "error":
         return api_error(
@@ -157,6 +160,35 @@ def update_agents_settings(
         )
     data = AgentsLlmModelsClass(db).get_settings(customer_id=None)
     return api_response(message=result.get("message"), data=data)
+
+
+@agents.post("/settings/sync-drive-folders")
+def sync_agents_drive_folders(
+    db: Session = Depends(get_db),
+    session_user: UserModel = Depends(get_current_active_user),
+):
+    """Crea en Drive {customer_id}/{agent_name}/ bajo la raíz de Agentes (si no existen)."""
+    if int(getattr(session_user, "rol_id", 0) or 0) != 1:
+        return api_error(
+            status_code=status.HTTP_403_FORBIDDEN,
+            message="Only the superadministrator can manage Agents settings.",
+        )
+    from app.backend.utils import google_drive_storage as drive_storage
+
+    try:
+        result = drive_storage.sync_customer_agent_folders(db)
+    except Exception as exc:
+        return api_error(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            message=f"Error al sincronizar carpetas en Google Drive: {exc}",
+        )
+    if not result.get("ok"):
+        return api_error(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            message=result.get("message") or "No se pudo sincronizar Drive.",
+            data=result,
+        )
+    return api_response(message=result.get("message"), data=result)
 
 
 @agents.get("")

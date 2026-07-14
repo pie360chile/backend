@@ -59,9 +59,21 @@ class AgentsSettingsUpdateRequest(BaseModel):
     )
     llm_api_key: str | None = Field(
         default=None,
-        description="API key del proveedor LLM. Si no se envía, no se modifica.",
+        description="Token de Workspace ChatGPT. Si no se envía, no se modifica.",
     )
     clear_llm_api_key: bool = Field(
         default=False,
-        description="Si true, elimina la API key guardada.",
+        description="Si true, elimina el token de Workspace guardado.",
+    )
+    google_drive_root_folder_id: str | None = Field(
+        default=None,
+        description="ID de la carpeta raíz en Google Drive. Vacío no modifica si no se envía clear.",
+    )
+    google_service_account_json: str | None = Field(
+        default=None,
+        description="JSON completo de la cuenta de servicio de Google. Si no se envía, no se modifica.",
+    )
+    clear_google_drive: bool = Field(
+        default=False,
+        description="Si true, elimina root folder id y JSON de service account.",
     )

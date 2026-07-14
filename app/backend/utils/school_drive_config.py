@@ -18,7 +18,7 @@ class DriveSchoolConfig:
     school_id: int
     root_folder_id: str
     service_account_info: dict[str, Any]
-    source: str  # "db" | "env"
+    source: str  # "db" | "agents_settings" | "env"
 
     @property
     def cache_key(self) -> str:
@@ -42,16 +42,23 @@ def _parse_service_account_json(raw: str) -> dict[str, Any]:
     return data
 
 
-def _load_from_env(school_id: int) -> DriveSchoolConfig | None:
-    root = (settings.google_drive_root_folder_id or "").strip()
+def _service_account_info_from_env_file() -> dict[str, Any] | None:
     cred_path = (settings.google_drive_credentials_path or "").strip()
-    if not root or not cred_path:
+    if not cred_path:
         return None
     path = Path(cred_path).expanduser().resolve()
     if not path.is_file():
         return None
     info = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(info, dict):
+        return None
+    return info
+
+
+def _load_from_env(school_id: int) -> DriveSchoolConfig | None:
+    root = (settings.google_drive_root_folder_id or "").strip()
+    info = _service_account_info_from_env_file()
+    if not root or not info:
         return None
     return DriveSchoolConfig(
         school_id=school_id,
@@ -61,7 +68,48 @@ def _load_from_env(school_id: int) -> DriveSchoolConfig | None:
     )
 
 
+def _load_from_agents_settings(db: Session, school_id: int) -> DriveSchoolConfig | None:
+    from app.backend.db.models.agents_app_settings import AgentsAppSettingModel
+
+    row = db.query(AgentsAppSettingModel).filter(AgentsAppSettingModel.id == 1).first()
+    if not row:
+        return None
+    root = (row.google_drive_root_folder_id or "").strip()
+    if not root:
+        return None
+
+    # Prefer JSON legado en BD; si no, archivo de credenciales en el servidor (.env).
+    sa_json = (row.google_service_account_json or "").strip()
+    if sa_json:
+        info = _parse_service_account_json(sa_json)
+        source = "agents_settings"
+    else:
+        info = _service_account_info_from_env_file()
+        if not info:
+            return None
+        source = "agents_settings+env_file"
+
+    return DriveSchoolConfig(
+        school_id=school_id,
+        root_folder_id=root,
+        service_account_info=info,
+        source=source,
+    )
+
+
+def load_agents_global_drive_config(db: Session) -> DriveSchoolConfig:
+    """Drive exclusivo de Agentes (carpetas cliente/agente). No afecta colegios."""
+    cfg = _load_from_agents_settings(db, school_id=0)
+    if cfg:
+        return cfg
+    raise ValueError(
+        "Google Drive de Agentes incompleto. Guarda el ID de carpeta raíz y el "
+        "JSON de la cuenta de servicio en Agentes → Configuraciones."
+    )
+
+
 def load_drive_config(db: Session | None, school_id: int) -> DriveSchoolConfig:
+    """Drive por colegio (schools_settings / .env). No usa la config de Agentes."""
     if school_id < 1:
         raise ValueError("school_id inválido.")
 
@@ -88,8 +136,8 @@ def load_drive_config(db: Session | None, school_id: int) -> DriveSchoolConfig:
 
     raise ValueError(
         f"Google Drive no configurado para el colegio {school_id}. "
-        "Agrega una fila en schools_settings con google_drive_root_folder_id "
-        "y google_service_account_json."
+        "Agrega google_drive_root_folder_id y google_service_account_json en schools_settings, "
+        "o GOOGLE_DRIVE_* en el .env."
     )
 
 
