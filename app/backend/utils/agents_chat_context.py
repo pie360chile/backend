@@ -296,7 +296,7 @@ def lookup_student_id_by_name(
     customer_id: int | None = None,
     school_id: int | None = None,
 ) -> int | None:
-    """Busca estudiante por nombre/apellido. Solo si hay match único claro."""
+    """Busca estudiante por nombre/apellido. Solo si hay un match claramente mejor."""
     tokens = extract_name_tokens_from_text(name_text)
     if len(tokens) < 2:
         return None
@@ -311,25 +311,43 @@ def lookup_student_id_by_name(
             SchoolModel.customer_id == int(customer_id)
         )
 
-    matches: list[int] = []
+    scored: list[tuple[int, int]] = []
     for personal, _student in q.all():
-        blob = _fold_name(
-            " ".join(
-                p
-                for p in (
-                    personal.names,
-                    personal.father_lastname,
-                    personal.mother_lastname,
-                    personal.social_name,
-                )
-                if p
-            )
-        )
-        if all(t in blob for t in tokens):
-            matches.append(int(personal.student_id))
-            if len(matches) > 1:
-                return None
-    return matches[0] if len(matches) == 1 else None
+        names = _fold_name(personal.names or "")
+        father = _fold_name(personal.father_lastname or "")
+        mother = _fold_name(personal.mother_lastname or "")
+        social = _fold_name(personal.social_name or "")
+        blob = f"{names} {father} {mother} {social}".strip()
+        if not all(t in blob for t in tokens):
+            continue
+
+        name_parts = names.split()
+        father_parts = father.split()
+        mother_parts = mother.split()
+        score = 0
+        for t in tokens:
+            if t in father_parts:
+                score += 10
+            elif t in mother_parts:
+                score += 8
+            elif name_parts and name_parts[0] == t:
+                score += 6
+            elif t in name_parts:
+                score += 3
+            elif t in social.split():
+                score += 2
+            else:
+                score += 1
+        scored.append((score, int(personal.student_id)))
+
+    if not scored:
+        return None
+    scored.sort(key=lambda x: (-x[0], x[1]))
+    best_score, best_id = scored[0]
+    # Empate en el mejor puntaje → ambiguo.
+    if len(scored) > 1 and scored[1][0] == best_score:
+        return None
+    return best_id
 
 
 def resolve_student_id(

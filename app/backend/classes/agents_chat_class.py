@@ -259,7 +259,7 @@ class AgentsChatClass:
         if want_doc or fields:
             if student_issue == "needs_rut" and not resolved_student_id:
                 warning = (
-                    "Para generar el documento indica el RUT del estudiante "
+                    "Para generar el documento indica el nombre o RUT del estudiante "
                     "o ábrelo desde la ficha (student_id en la URL)."
                 )
             elif student_issue == "not_found":
