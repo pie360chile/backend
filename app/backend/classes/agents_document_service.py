@@ -73,24 +73,88 @@ def _basic_student_context(db: Session, student_id: int) -> dict[str, Any]:
     }
 
 
+def _resolve_template_absolute(template: AgentDocumentTemplateModel) -> Path | None:
+    """Resuelve la plantilla en disco; prueba rutas alternativas si la registrada falló."""
+    rel = (template.template_path or "").replace("\\", "/").lstrip("/")
+    ext = (template.format_type or "docx").lower()
+    if ext not in {"docx", "pdf"}:
+        ext = "docx"
+    doc_id = int(template.document_id)
+
+    roots = [storage.files_dir()]
+    try:
+        alt = Path(settings.files_dir)
+        if alt.resolve() != storage.files_dir():
+            roots.append(alt)
+    except Exception:
+        pass
+
+    candidates: list[Path] = []
+    for root in roots:
+        if rel:
+            candidates.append(root / rel)
+        parts = [p for p in rel.split("/") if p]
+        # agents / c{N} / AgentName / documentos / {id} / formato.ext
+        if len(parts) >= 3:
+            agent_root = root / parts[0] / parts[1] / parts[2]
+            candidates.append(agent_root / "documentos" / str(doc_id) / f"formato.{ext}")
+
+    agents_root = storage.files_dir() / "agents"
+    if agents_root.is_dir():
+        for customer_dir in agents_root.iterdir():
+            if not customer_dir.is_dir():
+                continue
+            for agent_dir in customer_dir.iterdir():
+                if not agent_dir.is_dir():
+                    continue
+                hit = agent_dir / "documentos" / str(doc_id) / f"formato.{ext}"
+                if hit.is_file():
+                    candidates.append(hit)
+
+    seen: set[str] = set()
+    for cand in candidates:
+        try:
+            key = str(cand).lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            if cand.is_file():
+                return cand.resolve()
+        except Exception:
+            continue
+    return None
+
+
 def generate_and_save_document(
     db: Session,
     template: AgentDocumentTemplateModel,
     student_id: int,
     replacements: dict[str, str],
 ) -> dict[str, Any]:
-    template_abs = (storage.files_dir() / template.template_path).resolve()
-    if not template_abs.is_file():
+    expected = (storage.files_dir() / (template.template_path or "").replace("\\", "/").lstrip("/"))
+    template_abs = _resolve_template_absolute(template)
+    if template_abs is None:
         return {
             "status": "error",
             "message": (
                 f"No se encontró la plantilla en el servidor "
                 f"({template.document_name}, document_id={template.document_id}). "
+                f"Ruta esperada: {expected}. "
                 "Ve a Agente → Documentos, selecciona ese documento y vuelve a subir "
-                "el modelo (.docx o .pdf)."
+                "el modelo (.docx o .pdf). Si ya la subiste, abre un chat nuevo e inténtalo otra vez."
             ),
             "http_status": 404,
         }
+
+    # Si se encontró por fallback, alinea template_path para próximos usos.
+    try:
+        rel_ok = str(template_abs.relative_to(storage.files_dir())).replace("\\", "/")
+        if rel_ok and rel_ok != (template.template_path or "").replace("\\", "/"):
+            template.template_path = rel_ok
+            db.add(template)
+            db.commit()
+    except Exception:
+        pass
 
     student_ctx = _student_context(db, student_id, int(template.document_id))
     if is_familia_document(int(template.document_id)):
