@@ -14,12 +14,12 @@ from app.backend.utils import agents_storage as storage
 
 DERIVED_DIR_NAME = "_derived"
 PREVIEW_CHARS = 400
-# Presupuesto de contexto de archivos en el chat (~2–3k tokens).
-CHAT_BUDGET_CHARS = 10_000
+# Presupuesto de contexto de archivos en el chat (~3–4k tokens).
+CHAT_BUDGET_CHARS = 14_000
 CHAT_INDEX_MAX_FILES = 80
 CHUNK_SIZE = 900
 CHUNK_OVERLAP = 100
-MAX_CHUNKS_RETURNED = 12
+MAX_CHUNKS_RETURNED = 16
 
 _STOPWORDS = {
     "a",
@@ -207,15 +207,20 @@ def retrieve_relevant_chunks(
     *,
     query: str = "",
     student_rut: str | None = None,
+    student_name: str | None = None,
     customer_id: int | None = None,
     budget_chars: int = CHAT_BUDGET_CHARS,
 ) -> dict[str, Any]:
-    """Índice corto + top chunks por overlap de keywords / RUT (sin embeddings)."""
+    """Índice corto + top chunks por overlap de keywords / RUT / nombre (sin embeddings)."""
     metas = list_derived_metas(agent_name, customer_id)
     ok_metas = [m for m in metas if m.get("ok")]
     index_paths = [str(m.get("path") or "") for m in ok_metas[:CHAT_INDEX_MAX_FILES]]
 
     query_tokens = _tokenize(query)
+    name_tokens = _tokenize(student_name or "")
+    # Nombres propios suelen ser señal fuerte; no depender solo del mensaje del usuario.
+    query_tokens |= name_tokens
+
     rut_norm = file_ctx._normalize_rut(student_rut or "")
     if len(rut_norm) >= 8:
         query_tokens.add(rut_norm.lower())
@@ -225,8 +230,22 @@ def retrieve_relevant_chunks(
     scored: list[tuple[float, str, str]] = []
     root = derived_root(agent_name, customer_id)
 
+    _GENERIC_PATH_MARKERS = (
+        "ejemplo_",
+        "ejemplo-",
+        "formato_",
+        "formato-",
+        "glosario",
+        "decreto",
+        "orientaciones",
+        "cartilla",
+        "normativa",
+        "base_institucional",
+    )
+
     for meta in ok_metas:
         rel = str(meta.get("path") or "")
+        rel_l = rel.lower()
         txt_path = (root / f"{rel}.txt").resolve()
         if not txt_path.is_file():
             continue
@@ -236,10 +255,23 @@ def retrieve_relevant_chunks(
             continue
 
         file_bonus = 0.0
+        path_tokens = _tokenize(rel.replace("/", " ").replace("_", " ").replace("-", " "))
+        if name_tokens and (name_tokens & path_tokens):
+            # p.ej. 2__E_ISABELLA_DIAZ.docx
+            file_bonus += 120.0
+        if name_tokens:
+            text_l = text.lower()
+            hits = sum(1 for t in name_tokens if t in text_l)
+            if hits:
+                file_bonus += 40.0 + (10.0 * hits)
         if rut_norm and rut_norm in file_ctx._normalize_rut(text):
-            file_bonus = 50.0
-        elif any(marker in rel.lower() for marker in file_ctx._INTERACTIVE_REPORT_MARKERS):
-            file_bonus = 5.0
+            file_bonus += 80.0
+        elif any(marker in rel_l for marker in file_ctx._INTERACTIVE_REPORT_MARKERS):
+            file_bonus += 5.0
+
+        if any(marker in rel_l for marker in _GENERIC_PATH_MARKERS):
+            # Bajar prioridad de plantillas/ejemplos cuando hay estudiante concreto.
+            file_bonus -= 25.0 if (name_tokens or rut_norm) else 0.0
 
         for chunk in _chunk_text(text):
             chunk_tokens = _tokenize(chunk)
@@ -250,7 +282,13 @@ def retrieve_relevant_chunks(
                 score = float(overlap) + file_bonus
                 if rut_norm and rut_norm in file_ctx._normalize_rut(chunk):
                     score += 30.0
-            if score <= 0 and query_tokens:
+                if name_tokens and (name_tokens & chunk_tokens):
+                    score += 20.0
+            # Con estudiante identificado, no descartar chunks del archivo del estudiante
+            # aunque el mensaje sea genérico («genera el informe»).
+            if score <= 0 and query_tokens and file_bonus < 50:
+                continue
+            if score <= 0:
                 continue
             scored.append((score, rel, chunk))
 
@@ -284,6 +322,8 @@ def retrieve_relevant_chunks(
         f"Índice ({len(ok_metas)} con texto): {index_line}\n"
         f"Trozos incluidos: {used_chunks} (~{used} caracteres).\n"
         "Usa SOLO estos datos como fuente documental; no inventes contenido de archivos no listados.\n"
+        "Si hay un archivo del estudiante (nombre/RUT en el nombre o en el texto), "
+        "prioridad absoluta para los campos narrativos del informe.\n"
     )
     body = (
         ("\n\n---\n\n".join(sections))
@@ -304,6 +344,7 @@ def build_selective_files_context(
     *,
     query: str = "",
     student_rut: str | None = None,
+    student_name: str | None = None,
     customer_id: int | None = None,
 ) -> tuple[str, int]:
     """(texto para prompt, n archivos indexados)."""
@@ -322,6 +363,7 @@ def build_selective_files_context(
         agent_name,
         query=query,
         student_rut=student_rut,
+        student_name=student_name,
         customer_id=customer_id,
         budget_chars=remaining,
     )

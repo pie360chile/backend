@@ -74,10 +74,34 @@ def _build_system_prompt(
     try:
         from app.backend.utils import agents_derived_storage as derived
 
+        student_name = None
+        if student_id:
+            try:
+                from app.backend.db.models.pie_core import StudentPersonalInfoModel
+
+                spi = (
+                    db.query(StudentPersonalInfoModel)
+                    .filter(StudentPersonalInfoModel.student_id == int(student_id))
+                    .first()
+                )
+                if spi:
+                    student_name = " ".join(
+                        p
+                        for p in (
+                            getattr(spi, "names", None),
+                            getattr(spi, "father_lastname", None),
+                            getattr(spi, "mother_lastname", None),
+                        )
+                        if p
+                    ).strip() or None
+            except Exception:
+                student_name = None
+
         files_block, _n = derived.build_selective_files_context(
             agent.name or "",
             query=message or "",
             student_rut=student_rut,
+            student_name=student_name,
             customer_id=int(customer_id),
         )
         if files_block:
