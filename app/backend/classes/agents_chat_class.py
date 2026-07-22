@@ -18,6 +18,7 @@ from app.backend.utils.agents_chat_context import (
     resolve_student_id,
     student_identification_hint,
     wants_document_generation,
+    build_ask_rut_reply,
 )
 from app.backend.utils.agents_llm_client import (
     estimate_tokens_from_text,
@@ -213,6 +214,34 @@ class AgentsChatClass:
         )
         effective_rut = (student_rut or rut_used or "").strip() or None
 
+        # Sin RUT/ficha: pedir RUT antes de llamar al LLM / generar documento.
+        want_doc_early = wants_document_generation(text, history)
+        if (
+            want_doc_early
+            and not resolved_student_id
+            and student_issue in {"needs_rut", "not_found"}
+        ):
+            if student_issue == "not_found":
+                ask = (
+                    f"No encontré un estudiante con RUT **{rut_used}**. "
+                    "Verifica el número (con dígito verificador) e inténtalo de nuevo, "
+                    "o abre el chat desde la ficha del estudiante."
+                )
+            else:
+                ask = build_ask_rut_reply(text)
+            yield {"type": "text_delta", "delta": ask}
+            yield {
+                "type": "done",
+                "data": {
+                    "reply": ask,
+                    "usage": None,
+                    "model": None,
+                    "responseFiles": [],
+                    "warning": None,
+                },
+            }
+            return
+
         llm = AgentsLlmModelsClass(self.db)
         model_code = llm.get_selected_model_code()
         yield {"type": "step", "message": f"Consultando DeepSeek ({model_code})…"}
@@ -258,12 +287,14 @@ class AgentsChatClass:
 
         if want_doc or fields:
             if student_issue == "needs_rut" and not resolved_student_id:
-                warning = (
-                    "Para generar el documento indica el nombre o RUT del estudiante "
-                    "o ábrelo desde la ficha (student_id en la URL)."
-                )
+                visible_reply = build_ask_rut_reply(text)
+                warning = None
             elif student_issue == "not_found":
-                warning = f"No encontré estudiante con RUT {rut_used}."
+                visible_reply = (
+                    f"No encontré un estudiante con RUT **{rut_used}**. "
+                    "Verifica el número e inténtalo de nuevo."
+                )
+                warning = None
             elif not resolved_student_id:
                 warning = "Falta student_id para generar el documento."
             elif not resolved_document_id:

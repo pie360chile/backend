@@ -362,40 +362,39 @@ def resolve_student_id(
 ) -> tuple[int | None, str | None, str | None]:
     """
     Returns (student_id, rut_used, issue).
+    Identificación firme: solo student_id (ficha) o RUT (no por nombre).
     issue: None | 'needs_rut' | 'not_found'
     """
+    del customer_id, school_id
     if student_id:
         return student_id, None, None
 
     rut_raw = extract_rut_from_conversation(message, history, student_rut)
-    if rut_raw:
-        found = lookup_student_id_by_rut(db, rut_raw)
-        if found is None:
-            return None, rut_raw, "not_found"
-        return found, rut_raw, None
+    if not rut_raw:
+        return None, None, "needs_rut"
 
-    name_hit = lookup_student_id_by_name(
-        db,
-        message,
-        customer_id=customer_id,
-        school_id=school_id,
+    found = lookup_student_id_by_rut(db, rut_raw)
+    if found is None:
+        return None, rut_raw, "not_found"
+    return found, rut_raw, None
+
+
+def build_ask_rut_reply(message: str) -> str:
+    """Pide el RUT antes de generar el documento."""
+    tokens = extract_name_tokens_from_text(message or "")
+    name_bit = ""
+    if tokens:
+        pretty = " ".join(t.capitalize() for t in tokens)
+        name_bit = f" (mencionaste a {pretty})"
+
+    return (
+        f"Para identificar bien al estudiante{name_bit} y generar el Informe a la Familia "
+        "con todos los datos correctos, indícame el **RUT** con dígito verificador "
+        "(por ejemplo `12.345.678-9`).\n\n"
+        "Cuando lo envíes, continúo con la redacción detallada y la generación del documento. "
+        "También puedes abrir el chat desde la ficha del estudiante."
     )
-    if name_hit:
-        return name_hit, None, None
 
-    for item in reversed(history or []):
-        if item.get("role") != "user":
-            continue
-        name_hit = lookup_student_id_by_name(
-            db,
-            item.get("content") or "",
-            customer_id=customer_id,
-            school_id=school_id,
-        )
-        if name_hit:
-            return name_hit, None, None
-
-    return None, None, "needs_rut"
 
 def infer_document_id(
     db: Session,
