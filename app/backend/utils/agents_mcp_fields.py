@@ -73,3 +73,125 @@ def strip_fields_json_from_reply(reply: str) -> str:
         if start >= 0 and _try_parse_fields(cleaned[start:]):
             cleaned = cleaned[:start].rstrip()
     return cleaned.strip() or (reply or "").strip()
+
+
+# Campos de identificación / cabecera (no cuentan como contenido del informe).
+_IDENTIFICATION_FIELD_HINTS = frozenset(
+    {
+        "full_name",
+        "student_full_name",
+        "student_name",
+        "identification_number",
+        "student_identification_number",
+        "student_rut",
+        "rut",
+        "ipe",
+        "born_date",
+        "birth_date",
+        "student_birth_date",
+        "student_born_date",
+        "age",
+        "student_age",
+        "course",
+        "student_course",
+        "school",
+        "student_school",
+        "professional_name",
+        "professional_full_name",
+        "professional_identification_number",
+        "professional_job_position",
+        "professional_phone_email",
+        "professional_phone",
+        "professional_email",
+        "professional_role",
+        "professional_delivered_date_inform",
+        "person_name",
+        "person_full_name",
+        "receiver_full_name",
+        "person_identification_number",
+        "person_relation_student",
+        "person_presence",
+        "receiver_relationship",
+        "receiver_presence_of",
+        "person_phone",
+        "receiver_phone",
+        "person_email",
+        "receiver_email",
+        "evaluation_type",
+        "evaluation_date",
+        "evaluation_date_1",
+        "evaluation_date_2",
+        "evaluation_date_3",
+        "evaluation_date_4",
+        "evaluation_date_5",
+        "evaluation_date_6",
+    }
+)
+
+
+def _is_identification_field(key: str) -> bool:
+    k = (key or "").strip().lower()
+    if k in _IDENTIFICATION_FIELD_HINTS:
+        return True
+    if k.startswith("evaluation_date"):
+        return True
+    if any(
+        token in k
+        for token in (
+            "full_name",
+            "identification",
+            "_rut",
+            "born_date",
+            "birth_date",
+            "phone",
+            "email",
+            "course",
+            "school",
+            "professional_",
+            "person_",
+            "receiver_",
+        )
+    ) and not any(
+        token in k
+        for token in (
+            "strength",
+            "support",
+            "diagnos",
+            "instrument",
+            "reason",
+            "agreement",
+            "collaborative",
+            "home_",
+            "pedagogical",
+            "social",
+            "health",
+            "observation",
+            "progress",
+            "synthesis",
+        )
+    ):
+        return True
+    return False
+
+
+def narrative_fields_filled(fields: dict[str, Any] | None) -> tuple[int, int]:
+    """
+    Cuenta (rellenos, totales) de campos que NO son solo identificación.
+    Si no hay campos narrativos en el payload, totales=0.
+    """
+    if not fields:
+        return 0, 0
+    narrative_keys = [k for k in fields.keys() if not _is_identification_field(str(k))]
+    if not narrative_keys:
+        return 0, 0
+    filled = sum(1 for k in narrative_keys if str(fields.get(k) or "").strip())
+    return filled, len(narrative_keys)
+
+
+def is_content_too_thin(fields: dict[str, Any] | None) -> bool:
+    """True si solo hay datos personales / fechas o casi ningún texto narrativo."""
+    filled, total = narrative_fields_filled(fields)
+    if total == 0:
+        # Solo keys de identificación en el JSON
+        return True
+    return filled == 0 or (filled / total) < 0.25

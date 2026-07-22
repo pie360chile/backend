@@ -26,6 +26,7 @@ from app.backend.utils.agents_llm_client import (
 )
 from app.backend.utils.agents_mcp_fields import (
     extract_fields_from_reply,
+    is_content_too_thin,
     strip_fields_json_from_reply,
 )
 
@@ -265,7 +266,14 @@ class AgentsChatClass:
                         data = created.get("data") or {}
                         response_files = list(data.get("responseFiles") or [])
                         visible_reply = strip_fields_json_from_reply(reply_text)
-                        if data.get("formFilled"):
+                        if is_content_too_thin(fields):
+                            warning = (
+                                "El documento se generó, pero el contenido del informe quedó "
+                                "casi vacío (solo datos personales/identificación). "
+                                "Pide de nuevo: «completa todos los campos narrativos del "
+                                "informe con los archivos del agente y genera el documento»."
+                            )
+                        elif data.get("formFilled"):
                             visible_reply = (
                                 visible_reply.rstrip()
                                 + "\n\nDocumento generado y datos del formulario guardados "

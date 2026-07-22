@@ -81,7 +81,16 @@ def generate_and_save_document(
 ) -> dict[str, Any]:
     template_abs = (storage.files_dir() / template.template_path).resolve()
     if not template_abs.is_file():
-        return {"status": "error", "message": "Template not found on disk."}
+        return {
+            "status": "error",
+            "message": (
+                f"No se encontró la plantilla en el servidor "
+                f"({template.document_name}, document_id={template.document_id}). "
+                "Ve a Agente → Documentos, selecciona ese documento y vuelve a subir "
+                "el modelo (.docx o .pdf)."
+            ),
+            "http_status": 404,
+        }
 
     student_ctx = _student_context(db, student_id, int(template.document_id))
     if is_familia_document(int(template.document_id)):
