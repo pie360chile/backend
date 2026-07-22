@@ -234,6 +234,104 @@ def lookup_student_id_by_rut(db: Session, rut: str) -> int | None:
     return None
 
 
+_NAME_NOISE = {
+    "haz",
+    "hacer",
+    "genera",
+    "generar",
+    "completa",
+    "completar",
+    "informe",
+    "documento",
+    "familia",
+    "estudiante",
+    "alumna",
+    "alumno",
+    "de",
+    "del",
+    "la",
+    "el",
+    "los",
+    "las",
+    "un",
+    "una",
+    "por",
+    "favor",
+    "necesito",
+    "quiero",
+    "puedes",
+    "con",
+    "para",
+    "word",
+    "docx",
+    "pdf",
+}
+
+
+def _fold_name(value: str) -> str:
+    raw = (value or "").lower()
+    for src, dst in (
+        ("á", "a"),
+        ("é", "e"),
+        ("í", "i"),
+        ("ó", "o"),
+        ("ú", "u"),
+        ("ü", "u"),
+        ("ñ", "n"),
+    ):
+        raw = raw.replace(src, dst)
+    return re.sub(r"[^a-z0-9\s]", " ", raw)
+
+
+def extract_name_tokens_from_text(text: str) -> list[str]:
+    folded = _fold_name(text or "")
+    tokens = [t for t in folded.split() if len(t) >= 3 and t not in _NAME_NOISE]
+    return tokens[:6]
+
+
+def lookup_student_id_by_name(
+    db: Session,
+    name_text: str,
+    *,
+    customer_id: int | None = None,
+    school_id: int | None = None,
+) -> int | None:
+    """Busca estudiante por nombre/apellido. Solo si hay match único claro."""
+    tokens = extract_name_tokens_from_text(name_text)
+    if len(tokens) < 2:
+        return None
+
+    q = db.query(StudentPersonalInfoModel, StudentModel).join(
+        StudentModel, StudentModel.id == StudentPersonalInfoModel.student_id
+    )
+    if school_id:
+        q = q.filter(StudentModel.school_id == int(school_id))
+    elif customer_id:
+        q = q.join(SchoolModel, SchoolModel.id == StudentModel.school_id).filter(
+            SchoolModel.customer_id == int(customer_id)
+        )
+
+    matches: list[int] = []
+    for personal, _student in q.all():
+        blob = _fold_name(
+            " ".join(
+                p
+                for p in (
+                    personal.names,
+                    personal.father_lastname,
+                    personal.mother_lastname,
+                    personal.social_name,
+                )
+                if p
+            )
+        )
+        if all(t in blob for t in tokens):
+            matches.append(int(personal.student_id))
+            if len(matches) > 1:
+                return None
+    return matches[0] if len(matches) == 1 else None
+
+
 def resolve_student_id(
     db: Session,
     *,
@@ -241,6 +339,8 @@ def resolve_student_id(
     student_rut: str | None,
     message: str,
     history: list[dict[str, str]] | None,
+    customer_id: int | None = None,
+    school_id: int | None = None,
 ) -> tuple[int | None, str | None, str | None]:
     """
     Returns (student_id, rut_used, issue).
@@ -250,14 +350,34 @@ def resolve_student_id(
         return student_id, None, None
 
     rut_raw = extract_rut_from_conversation(message, history, student_rut)
-    if not rut_raw:
-        return None, None, "needs_rut"
+    if rut_raw:
+        found = lookup_student_id_by_rut(db, rut_raw)
+        if found is None:
+            return None, rut_raw, "not_found"
+        return found, rut_raw, None
 
-    found = lookup_student_id_by_rut(db, rut_raw)
-    if found is None:
-        return None, rut_raw, "not_found"
-    return found, rut_raw, None
+    name_hit = lookup_student_id_by_name(
+        db,
+        message,
+        customer_id=customer_id,
+        school_id=school_id,
+    )
+    if name_hit:
+        return name_hit, None, None
 
+    for item in reversed(history or []):
+        if item.get("role") != "user":
+            continue
+        name_hit = lookup_student_id_by_name(
+            db,
+            item.get("content") or "",
+            customer_id=customer_id,
+            school_id=school_id,
+        )
+        if name_hit:
+            return name_hit, None, None
+
+    return None, None, "needs_rut"
 
 def infer_document_id(
     db: Session,
