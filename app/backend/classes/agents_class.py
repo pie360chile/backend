@@ -473,19 +473,3 @@ class AgentsClass:
                 "totalFiles": storage.count_files(agent.name, int(customer_id)),
             },
         }
-        message = "Deleted."
-        if drive_error:
-            message = f"Eliminado en local; Drive falló: {drive_error}"
-        elif drive_result and not drive_result.get("skipped"):
-            message = "Eliminado en local y en Google Drive."
-        elif drive_result and drive_result.get("skipped"):
-            message = "Eliminado en local (no estaba en Drive o ya no existía)."
-
-        return {
-            "status": "success",
-            "message": message,
-            "data": {
-                "drive": drive_result,
-                "driveError": drive_error,
-            },
-        }
