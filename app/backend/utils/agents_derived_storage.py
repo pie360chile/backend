@@ -50,6 +50,38 @@ _STOPWORDS = {
     "for",
 }
 
+# Palabras del pedido de chat que no identifican al estudiante.
+_QUERY_NOISE = _STOPWORDS | {
+    "haz",
+    "hacer",
+    "genera",
+    "generar",
+    "completa",
+    "completar",
+    "rellena",
+    "rellenar",
+    "informe",
+    "informes",
+    "documento",
+    "documentos",
+    "familia",
+    "estudiante",
+    "alumna",
+    "alumno",
+    "word",
+    "docx",
+    "pdf",
+    "por",
+    "favor",
+    "necesito",
+    "quiero",
+    "puedes",
+    "con",
+    "todos",
+    "campos",
+    "narrativos",
+}
+
 
 def derived_root(agent_name: str, customer_id: int | None = None) -> Path:
     return storage.agent_folder(agent_name, customer_id) / DERIVED_DIR_NAME
@@ -218,8 +250,11 @@ def retrieve_relevant_chunks(
 
     query_tokens = _tokenize(query)
     name_tokens = _tokenize(student_name or "")
-    # Nombres propios suelen ser señal fuerte; no depender solo del mensaje del usuario.
+    # Nombre de ficha + posibles apellidos/nombres en el mensaje («isabella diaz»).
     query_tokens |= name_tokens
+    person_tokens = {
+        t for t in (name_tokens | query_tokens) if t not in _QUERY_NOISE and len(t) >= 3
+    }
 
     rut_norm = file_ctx._normalize_rut(student_rut or "")
     if len(rut_norm) >= 8:
@@ -256,12 +291,12 @@ def retrieve_relevant_chunks(
 
         file_bonus = 0.0
         path_tokens = _tokenize(rel.replace("/", " ").replace("_", " ").replace("-", " "))
-        if name_tokens and (name_tokens & path_tokens):
-            # p.ej. 2__E_ISABELLA_DIAZ.docx
+        if person_tokens and (person_tokens & path_tokens):
+            # p.ej. mensaje «isabella diaz» → 2__E_ISABELLA_DIAZ.docx
             file_bonus += 120.0
-        if name_tokens:
+        if person_tokens:
             text_l = text.lower()
-            hits = sum(1 for t in name_tokens if t in text_l)
+            hits = sum(1 for t in person_tokens if t in text_l)
             if hits:
                 file_bonus += 40.0 + (10.0 * hits)
         if rut_norm and rut_norm in file_ctx._normalize_rut(text):
@@ -270,8 +305,8 @@ def retrieve_relevant_chunks(
             file_bonus += 5.0
 
         if any(marker in rel_l for marker in _GENERIC_PATH_MARKERS):
-            # Bajar prioridad de plantillas/ejemplos cuando hay estudiante concreto.
-            file_bonus -= 25.0 if (name_tokens or rut_norm) else 0.0
+            # Bajar prioridad de plantillas/ejemplos cuando el pedido nombra a alguien.
+            file_bonus -= 25.0 if (person_tokens or rut_norm) else 0.0
 
         for chunk in _chunk_text(text):
             chunk_tokens = _tokenize(chunk)
@@ -282,7 +317,7 @@ def retrieve_relevant_chunks(
                 score = float(overlap) + file_bonus
                 if rut_norm and rut_norm in file_ctx._normalize_rut(chunk):
                     score += 30.0
-                if name_tokens and (name_tokens & chunk_tokens):
+                if person_tokens and (person_tokens & chunk_tokens):
                     score += 20.0
             # Con estudiante identificado, no descartar chunks del archivo del estudiante
             # aunque el mensaje sea genérico («genera el informe»).

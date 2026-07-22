@@ -189,9 +189,17 @@ def narrative_fields_filled(fields: dict[str, Any] | None) -> tuple[int, int]:
 
 
 def is_content_too_thin(fields: dict[str, Any] | None) -> bool:
-    """True si solo hay datos personales / fechas o casi ningún texto narrativo."""
+    """True si solo hay datos personales / fechas o el narrativo quedó demasiado corto."""
     filled, total = narrative_fields_filled(fields)
     if total == 0:
         # Solo keys de identificación en el JSON
         return True
-    return filled == 0 or (filled / total) < 0.25
+    if filled == 0 or (filled / total) < 0.25:
+        return True
+    narrative_keys = [k for k in fields.keys() if not _is_identification_field(str(k))]
+    texts = [str(fields.get(k) or "").strip() for k in narrative_keys if str(fields.get(k) or "").strip()]
+    if not texts:
+        return True
+    avg_len = sum(len(t) for t in texts) / len(texts)
+    # ~1 frase muy corta; el informe a la familia debe ir en párrafos.
+    return avg_len < 120

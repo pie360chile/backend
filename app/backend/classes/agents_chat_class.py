@@ -205,6 +205,8 @@ class AgentsChatClass:
             student_rut=student_rut,
             message=text,
             history=history,
+            customer_id=int(self.customer_id) if self.customer_id else None,
+            school_id=int(self.school_id) if self.school_id else None,
         )
         resolved_document_id = document_id or infer_document_id(
             self.db, agent_id, text, history
@@ -292,10 +294,11 @@ class AgentsChatClass:
                         visible_reply = strip_fields_json_from_reply(reply_text)
                         if is_content_too_thin(fields):
                             warning = (
-                                "El documento se generó, pero el contenido del informe quedó "
-                                "casi vacío (solo datos personales/identificación). "
-                                "Pide de nuevo: «completa todos los campos narrativos del "
-                                "informe con los archivos del agente y genera el documento»."
+                                "El documento se generó, pero el contenido narrativo quedó "
+                                "corto o incompleto. Pide de nuevo: «reescribe todos los "
+                                "campos narrativos con párrafos detallados (2 a 5 oraciones "
+                                "cada uno) usando el archivo de evaluación del estudiante "
+                                "y genera el documento»."
                             )
                         elif data.get("formFilled"):
                             visible_reply = (
