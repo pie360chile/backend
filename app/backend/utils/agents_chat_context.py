@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.backend.db.models.agents_documents import AgentDocumentTemplateModel
-from app.backend.db.models.pie_core import StudentPersonalInfoModel
+from app.backend.db.models.pie_core import SchoolModel, StudentModel, StudentPersonalInfoModel
 from app.backend.utils.agents_familia_pie360 import (
     FAMILIA_DOCUMENT_ID,
     build_familia_pie360_context,
