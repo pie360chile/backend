@@ -340,6 +340,14 @@ class AgentsChatClass:
                 except Exception as exc:
                     warning = f"Error al generar documento: {exc}"
 
+        # Nunca mostrar el JSON de fields en el chat (solo la redacción).
+        if fields or extract_fields_from_reply(visible_reply):
+            visible_reply = strip_fields_json_from_reply(visible_reply)
+        elif "```json" in (visible_reply or "").lower() or '{"fields"' in (
+            visible_reply or ""
+        ):
+            visible_reply = strip_fields_json_from_reply(visible_reply)
+
         done_data: dict[str, Any] = {
             "reply": visible_reply,
             "usage": usage,

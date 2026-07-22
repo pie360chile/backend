@@ -65,13 +65,32 @@ def _try_parse_fields(raw: str) -> dict[str, Any] | None:
 def strip_fields_json_from_reply(reply: str) -> str:
     """Quita el bloque JSON de campos para dejar la redacción legible en el chat."""
     text = reply or ""
-    cleaned = _FENCE_RE.sub("", text).strip()
-    # Si quedó un JSON suelto al final, recortar desde el último {
+    # Bloques ```json ... ``` completos
+    cleaned = _FENCE_RE.sub("", text)
+    # Fence incompleto al final (mientras stream-ea o sin cierre)
+    cleaned = re.sub(
+        r"```(?:json)?\s*\{[\s\S]*$",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    cleaned = cleaned.strip()
+    # JSON suelto con "fields" al final
     if cleaned.rstrip().endswith("}"):
-        # Solo si parsea como fields
         start = cleaned.rfind("{")
         if start >= 0 and _try_parse_fields(cleaned[start:]):
             cleaned = cleaned[:start].rstrip()
+    # Frases residuales que anuncian el JSON
+    cleaned = re.sub(
+        r"(?i)\n*(?:a continuación[,:]?\s*)?(?:el\s+)?bloque\s+json[^\n]*:?\s*$",
+        "",
+        cleaned,
+    ).strip()
+    cleaned = re.sub(
+        r"(?i)\n*(?:aquí\s+el\s+json|json\s+con\s+los\s+campos)[^\n]*:?\s*$",
+        "",
+        cleaned,
+    ).strip()
     return cleaned.strip() or (reply or "").strip()
 
 
