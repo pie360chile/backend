@@ -254,6 +254,134 @@ class AgentsMcpClass:
             },
         }
 
+    def search_agent_files(
+        self,
+        *,
+        agent_id: str,
+        customer_id: int,
+        query: str,
+        student_rut: str | None = None,
+    ) -> dict[str, Any]:
+        """Retrieval barato sobre textos derivados del agente (_derived/)."""
+        aid = (agent_id or "").strip()
+        if not aid:
+            return {"status": "error", "message": "agent_id es requerido.", "http_status": 400}
+        if int(customer_id) < 1:
+            return {"status": "error", "message": "customer_id inválido.", "http_status": 400}
+
+        agent = (
+            self.db.query(AgentModel)
+            .filter(
+                AgentModel.id == aid,
+                AgentModel.customer_id == int(customer_id),
+            )
+            .first()
+        )
+        if not agent:
+            return {"status": "error", "message": "Agente no encontrado.", "http_status": 404}
+
+        from app.backend.utils import agents_derived_storage as derived
+
+        text, file_count = derived.build_selective_files_context(
+            agent.name or "",
+            query=query or "",
+            student_rut=student_rut,
+            customer_id=int(customer_id),
+        )
+        return {
+            "status": "success",
+            "message": "Búsqueda en archivos del agente.",
+            "data": {
+                "agentId": agent.id,
+                "agentName": agent.name,
+                "fileCount": file_count,
+                "query": (query or "").strip(),
+                "studentRut": (student_rut or "").strip() or None,
+                "context": text,
+            },
+        }
+
+    def create_document(
+        self,
+        *,
+        agent_id: str,
+        customer_id: int,
+        student_id: int,
+        document_id: int,
+        fields: dict[str, Any],
+        meta: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """
+        Genera con la plantilla cargada en Documentos del agente.
+
+        Asociación obligatoria:
+        - document_id = tipo de documento PIE360 (catálogo)
+        - plantilla .docx/.pdf subida en Agente → Documentos para ese document_id
+        - al generar: rellena Word/PDF + guarda en carpeta del estudiante
+          + persiste el formulario asociado a ese tipo (ej. familia → family_reports)
+        """
+        aid = (agent_id or "").strip()
+        template = (
+            self.db.query(AgentDocumentTemplateModel)
+            .filter(
+                AgentDocumentTemplateModel.agent_id == aid,
+                AgentDocumentTemplateModel.document_id == int(document_id),
+            )
+            .first()
+        )
+        if not template:
+            return {
+                "status": "error",
+                "message": (
+                    f"No hay plantilla en Documentos del agente para document_id={int(document_id)}. "
+                    "Sube el modelo (.docx/.pdf) asociado a ese tipo de documento."
+                ),
+                "http_status": 404,
+            }
+
+        store = self.store_data(
+            agent_id=agent_id,
+            customer_id=customer_id,
+            student_id=student_id,
+            document_id=document_id,
+            fields=fields,
+            meta=meta,
+        )
+        if store.get("status") == "error":
+            return store
+        save_data = store.get("data") or {}
+        save_id = save_data.get("id")
+        if not save_id:
+            return {
+                "status": "error",
+                "message": "No se pudo crear el registro pending.",
+                "http_status": 500,
+            }
+        generated = self.generate_save(
+            agent_id=agent_id,
+            customer_id=customer_id,
+            save_id=int(save_id),
+        )
+        if generated.get("status") == "error":
+            return generated
+        data = generated.get("data") or {}
+        save = data.get("save") or {}
+        return {
+            "status": "success",
+            "message": (
+                f"Documento «{template.document_name}» (document_id={template.document_id}) "
+                "generado con su plantilla, guardado en el estudiante y formulario actualizado."
+            ),
+            "data": {
+                "save": save,
+                "responseFiles": data.get("responseFiles") or [],
+                "formFilled": bool(save.get("status") == "generated"),
+                "documentId": int(template.document_id),
+                "documentName": template.document_name,
+                "familyReportId": None,
+            },
+        }
+
     def build_store_data_prompt_block(
         self,
         *,
@@ -264,7 +392,7 @@ class AgentsMcpClass:
         student_rut: str | None = None,
         mcp_url: str,
     ) -> str:
-        """Instrucciones MCP + campos de plantilla para el trigger Workspace."""
+        """Instrucciones: plantilla Documentos ↔ document_id ↔ formulario."""
         q = self.db.query(AgentDocumentTemplateModel).filter(
             AgentDocumentTemplateModel.agent_id == agent.id
         )
@@ -279,48 +407,56 @@ class AgentsMcpClass:
             templates = q.order_by(AgentDocumentTemplateModel.document_name.asc()).all()
 
         lines: list[str] = [
-            "Herramienta MCP store_data:",
-            f"- URL MCP: {mcp_url}",
-            "- Tool: store_data",
-            "- Auth: parámetro secret = MCP_SECRET del connector (mismo secret que Authorization Bearer).",
-            "- Cuando tengas todos los campos del informe, llama store_data (no inventes IDs).",
-            "- Campos: agent_id, customer_id, student_id, document_id, fields (objeto nombre→valor), meta opcional.",
-            f"- agent_id fijo: {agent.id}",
-            f"- customer_id fijo: {int(customer_id)}",
+            "Documentos del agente (regla fija):",
+            "- Cada MODELO se carga en Agente → Documentos.",
+            "- Cada modelo está asociado a UN tipo de documento PIE360 (document_id)",
+            "  y a SU formulario (al generar se rellena ese formulario).",
+            "- create_document SIEMPRE usa la plantilla de ese document_id (no inventes otra).",
+            "",
+            "Flujo:",
+            "1) Lee tu ROL y los ARCHIVOS/JSON del agente.",
+            "2) Redacta la respuesta.",
+            "3) Si hay que generar el documento, al FINAL un bloque JSON con los campos",
+            "   de la plantilla de ese document_id:",
+            "```json",
+            '{"fields": {"nombre_campo": "texto completo", ...}}',
+            "```",
+            "   El servidor ejecuta create_document → Word/PDF con esa plantilla →",
+            "   carpeta del estudiante → formulario del tipo de documento → link en el chat.",
+            "",
+            f"IDs: agent_id={agent.id}, customer_id={int(customer_id)}",
+            f"MCP create_document URL: {mcp_url}",
         ]
         if student_id:
             lines.append(f"- student_id del contexto: {int(student_id)}")
         if student_rut:
             lines.append(f"- student_rut del contexto: {student_rut}")
         if document_id:
-            lines.append(f"- document_id prioritario: {int(document_id)}")
+            lines.append(
+                f"- document_id prioritario (tipo + formulario + plantilla): {int(document_id)}"
+            )
 
         lines.append("")
-        lines.append("Esquema fields según plantilla(s):")
+        lines.append("Plantillas configuradas (document_id → campos del formulario/plantilla):")
         if not templates:
-            lines.append("- (sin plantillas cargadas en el agente)")
+            lines.append(
+                "- (ninguna) Sube el modelo en Documentos del agente asociado al tipo de documento."
+            )
         else:
             for tpl in templates:
                 fields = fields_from_json(tpl.detected_fields)
                 lines.append(
-                    f"- document_id={tpl.document_id} ({tpl.document_name}, {tpl.format_type}):"
+                    f"- document_id={tpl.document_id} | «{tpl.document_name}» | {tpl.format_type}:"
                 )
                 if fields:
                     for field in fields:
                         lines.append(f"  · {field}")
                 else:
-                    lines.append("  · (sin campos detectados)")
+                    lines.append("  · (sin campos detectados en la plantilla)")
                 example_fields = {f: f"<{f}>" for f in (fields[:8] if fields else ["campo"])}
-                example = {
-                    "agent_id": agent.id,
-                    "customer_id": int(customer_id),
-                    "student_id": int(student_id or 0) or "<student_id>",
-                    "document_id": int(tpl.document_id),
-                    "fields": example_fields,
-                }
                 lines.append(
-                    "  Ejemplo JSON: "
-                    + json.dumps(example, ensure_ascii=False)
+                    "  Ejemplo: "
+                    + json.dumps({"fields": example_fields}, ensure_ascii=False)
                 )
 
         return "\n".join(lines)

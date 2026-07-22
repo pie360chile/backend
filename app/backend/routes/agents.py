@@ -21,6 +21,8 @@ from app.backend.schemas.agents import (
     AgentChatRequest,
     AgentCreateFolderRequest,
     AgentCreateRequest,
+    AgentsMcpCreateDocumentRequest,
+    AgentsMcpSearchFilesRequest,
     AgentsMcpStoreDataRequest,
     AgentsSettingsUpdateRequest,
 )
@@ -99,6 +101,62 @@ def mcp_store_data_rest(
             message="MCP secret inválido.",
         )
     result = AgentsMcpClass(db).store_data(
+        agent_id=body.agent_id,
+        customer_id=body.customer_id,
+        student_id=body.student_id,
+        document_id=body.document_id,
+        fields=body.fields,
+        meta=body.meta,
+    )
+    if result.get("status") == "error":
+        return api_error(
+            status_code=result.get("http_status", status.HTTP_400_BAD_REQUEST),
+            message=result.get("message") or "Error",
+        )
+    return api_response(message=result.get("message"), data=result.get("data"))
+
+
+@agents.post("/mcp/search_files")
+def mcp_search_files_rest(
+    body: AgentsMcpSearchFilesRequest,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(default=None),
+    x_mcp_secret: str | None = Header(default=None, alias="X-MCP-Secret"),
+):
+    """REST gemelo de la tool MCP search_agent_files."""
+    if not _mcp_secret_ok(authorization, x_mcp_secret):
+        return api_error(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            message="MCP secret inválido.",
+        )
+    result = AgentsMcpClass(db).search_agent_files(
+        agent_id=body.agent_id,
+        customer_id=body.customer_id,
+        query=body.query,
+        student_rut=body.student_rut,
+    )
+    if result.get("status") == "error":
+        return api_error(
+            status_code=result.get("http_status", status.HTTP_400_BAD_REQUEST),
+            message=result.get("message") or "Error",
+        )
+    return api_response(message=result.get("message"), data=result.get("data"))
+
+
+@agents.post("/mcp/create_document")
+def mcp_create_document_rest(
+    body: AgentsMcpCreateDocumentRequest,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(default=None),
+    x_mcp_secret: str | None = Header(default=None, alias="X-MCP-Secret"),
+):
+    """REST gemelo de create_document: genera Word, carpeta estudiante + ficha."""
+    if not _mcp_secret_ok(authorization, x_mcp_secret):
+        return api_error(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            message="MCP secret inválido.",
+        )
+    result = AgentsMcpClass(db).create_document(
         agent_id=body.agent_id,
         customer_id=body.customer_id,
         student_id=body.student_id,
@@ -216,6 +274,16 @@ def sync_agents_drive_folders(
     session_user: UserModel = Depends(get_current_active_user),
 ):
     """Crea en Drive {customer_id}/{agent_name}/ bajo la raíz de Agentes (si no existen)."""
+    from app.backend.utils.school_drive_config import (
+        GOOGLE_DRIVE_DISABLED_MESSAGE,
+        GOOGLE_DRIVE_ENABLED,
+    )
+
+    if not GOOGLE_DRIVE_ENABLED:
+        return api_error(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            message=GOOGLE_DRIVE_DISABLED_MESSAGE,
+        )
     if int(getattr(session_user, "rol_id", 0) or 0) != 1:
         return api_error(
             status_code=status.HTTP_403_FORBIDDEN,

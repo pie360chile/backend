@@ -497,6 +497,7 @@ class StoreCustomer(BaseModel):
     phone: Optional[str] = None
     email: Optional[str] = None
     license_time: Optional[date] = None
+    agents_budget_usd_max: Optional[float] = None
     password: Optional[str] = None
     rol_id: Optional[int] = None
     schools: Optional[List[str]] = None
@@ -504,6 +505,11 @@ class StoreCustomer(BaseModel):
     @field_validator("license_time", mode="before")
     @classmethod
     def _license_time_empty_to_none_store(cls, v: Any) -> Any:
+        return _empty_str_to_none(v)
+
+    @field_validator("agents_budget_usd_max", mode="before")
+    @classmethod
+    def _budget_empty_to_none_store(cls, v: Any) -> Any:
         return _empty_str_to_none(v)
 
 class UpdateCustomer(BaseModel):
@@ -520,11 +526,17 @@ class UpdateCustomer(BaseModel):
     phone: Optional[str] = None
     email: Optional[str] = None
     license_time: Optional[date] = None
+    agents_budget_usd_max: Optional[float] = None
     schools: Optional[List[str]] = None
 
     @field_validator("license_time", mode="before")
     @classmethod
     def _license_time_empty_to_none_update(cls, v: Any) -> Any:
+        return _empty_str_to_none(v)
+
+    @field_validator("agents_budget_usd_max", mode="before")
+    @classmethod
+    def _budget_empty_to_none_update(cls, v: Any) -> Any:
         return _empty_str_to_none(v)
 
 

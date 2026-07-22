@@ -43,7 +43,9 @@ def _is_context_file(path: Path, agent_root: Path) -> bool:
     if not path.is_file():
         return False
     rel = path.relative_to(agent_root).as_posix()
-    if rel.startswith("documentos/"):
+    if rel.startswith("documentos/") or rel.startswith("_derived/"):
+        return False
+    if any(part.startswith(".") for part in path.relative_to(agent_root).parts):
         return False
     ext = path.suffix.lower()
     return ext in _TEXT_EXTENSIONS or ext in _BINARY_EXTENSIONS or ext in _SPREADSHEET_EXTENSIONS

@@ -90,3 +90,19 @@ class AgentsMcpStoreDataRequest(BaseModel):
     document_id: int = Field(..., ge=1)
     fields: dict = Field(..., description="Mapa nombre_campo → valor")
     meta: dict | None = Field(default=None)
+
+
+class AgentsMcpSearchFilesRequest(BaseModel):
+    agent_id: str = Field(..., min_length=1)
+    customer_id: int = Field(..., ge=1)
+    query: str = Field(..., min_length=1, description="Keywords o pregunta")
+    student_rut: str | None = Field(default=None)
+
+
+class AgentsMcpCreateDocumentRequest(BaseModel):
+    agent_id: str = Field(..., min_length=1)
+    customer_id: int = Field(..., ge=1)
+    student_id: int = Field(..., ge=1)
+    document_id: int = Field(..., ge=1)
+    fields: dict = Field(..., description="Mapa nombre_campo → valor")
+    meta: dict | None = Field(default=None)

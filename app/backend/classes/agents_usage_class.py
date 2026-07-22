@@ -36,8 +36,8 @@ def _estimate_cost_usd(
         .filter(AgentsOpenAIModel.model_code == model_code)
         .first()
     )
-    in_price = Decimal(str(row.input_per_1m_usd)) if row else Decimal("0.28")
-    out_price = Decimal(str(row.output_per_1m_usd)) if row else Decimal("0.42")
+    in_price = Decimal(str(row.input_per_1m_usd)) if row else Decimal("0.435")
+    out_price = Decimal(str(row.output_per_1m_usd)) if row else Decimal("0.870")
     cost = (Decimal(prompt_tokens) / Decimal(1_000_000)) * in_price + (
         Decimal(completion_tokens) / Decimal(1_000_000)
     ) * out_price

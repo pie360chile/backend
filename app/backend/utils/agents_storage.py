@@ -101,14 +101,26 @@ def save_file(
     }
 
 
+def _is_hidden_entry(name: str) -> bool:
+    """Carpetas internas no visibles en Archivos (derivados RAG, etc.)."""
+    return name in {"_derived"} or name.startswith(".")
+
+
 def count_files(agent_name: str, customer_id: int | None = None) -> int:
     folder = agent_folder(agent_name, customer_id)
     if not folder.exists():
         return 0
     total = 0
     for item in folder.rglob("*"):
-        if item.is_file():
-            total += 1
+        if not item.is_file():
+            continue
+        try:
+            rel_parts = item.relative_to(folder).parts
+        except ValueError:
+            continue
+        if any(_is_hidden_entry(p) for p in rel_parts):
+            continue
+        total += 1
     return total
 
 
@@ -123,9 +135,16 @@ def list_entries(
     entries: list[dict[str, Any]] = []
 
     for item in sorted(current.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
+        if _is_hidden_entry(item.name):
+            continue
         entry_rel = f"{rel}/{item.name}".strip("/") if rel else item.name
         if item.is_dir():
-            file_count = sum(1 for f in item.rglob("*") if f.is_file())
+            file_count = sum(
+                1
+                for f in item.rglob("*")
+                if f.is_file()
+                and not any(_is_hidden_entry(p) for p in f.relative_to(item).parts)
+            )
             entries.append(
                 {
                     "name": item.name,

@@ -12,6 +12,17 @@ from sqlalchemy.orm import Session
 from app.backend.core.config import settings
 from app.backend.db.models import SchoolsSettingModel
 
+# Temporal: no usar Google Drive (solo disco local / formularios PIE360).
+GOOGLE_DRIVE_ENABLED = False
+GOOGLE_DRIVE_DISABLED_MESSAGE = (
+    "Google Drive está desactivado temporalmente. Los archivos se guardan solo en el servidor."
+)
+
+
+def assert_google_drive_enabled() -> None:
+    if not GOOGLE_DRIVE_ENABLED:
+        raise ValueError(GOOGLE_DRIVE_DISABLED_MESSAGE)
+
 
 @dataclass(frozen=True)
 class DriveSchoolConfig:
@@ -99,6 +110,7 @@ def _load_from_agents_settings(db: Session, school_id: int) -> DriveSchoolConfig
 
 def load_agents_global_drive_config(db: Session) -> DriveSchoolConfig:
     """Drive exclusivo de Agentes (carpetas cliente/agente). No afecta colegios."""
+    assert_google_drive_enabled()
     cfg = _load_from_agents_settings(db, school_id=0)
     if cfg:
         return cfg
@@ -110,6 +122,7 @@ def load_agents_global_drive_config(db: Session) -> DriveSchoolConfig:
 
 def load_drive_config(db: Session | None, school_id: int) -> DriveSchoolConfig:
     """Drive por colegio (schools_settings / .env). No usa la config de Agentes."""
+    assert_google_drive_enabled()
     if school_id < 1:
         raise ValueError("school_id inválido.")
 

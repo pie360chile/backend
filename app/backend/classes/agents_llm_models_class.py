@@ -12,19 +12,28 @@ from app.backend.db.models.agent import AgentModel
 from app.backend.db.models.agents_app_settings import AgentsAppSettingModel
 from app.backend.db.models.agents_openai_models import AgentsOpenAIModel
 
-# Catálogo: un solo modelo activo para todos los agentes.
-_DEFAULT_MODEL_CODE = "deepseek-chat"
-_DEFAULT_MODEL_NAME = "DeepSeek-V3.2"
+# DeepSeek V4 (última línea oficial; deepseek-chat/reasoner retirados 2026-07-24).
+_DEFAULT_MODEL_CODE = "deepseek-v4-pro"
+_DEFAULT_MODEL_NAME = "DeepSeek-V4-Pro"
 
 _SEED_MODELS: list[dict[str, Any]] = [
     {
-        "model_code": _DEFAULT_MODEL_CODE,
-        "display_name": _DEFAULT_MODEL_NAME,
-        "input_per_1m_usd": Decimal("0.280000"),
-        "output_per_1m_usd": Decimal("0.420000"),
-        "cached_input_per_1m_usd": Decimal("0.028000"),
+        "model_code": "deepseek-v4-pro",
+        "display_name": "DeepSeek-V4-Pro",
+        "input_per_1m_usd": Decimal("0.435000"),
+        "output_per_1m_usd": Decimal("0.870000"),
+        "cached_input_per_1m_usd": Decimal("0.003625"),
         "sort_order": 10,
         "is_selected": True,
+    },
+    {
+        "model_code": "deepseek-v4-flash",
+        "display_name": "DeepSeek-V4-Flash",
+        "input_per_1m_usd": Decimal("0.140000"),
+        "output_per_1m_usd": Decimal("0.280000"),
+        "cached_input_per_1m_usd": Decimal("0.002800"),
+        "sort_order": 20,
+        "is_selected": False,
     },
 ]
 
@@ -56,6 +65,8 @@ class AgentsLlmModelsClass:
     def ensure_seeded(self) -> None:
         now = _now()
         existing = {m.model_code: m for m in self.db.query(AgentsOpenAIModel).all()}
+        seed_codes = {spec["model_code"] for spec in _SEED_MODELS}
+
         for spec in _SEED_MODELS:
             row = existing.get(spec["model_code"])
             if row is None:
@@ -83,26 +94,56 @@ class AgentsLlmModelsClass:
                 row.updated_at = now
 
         self.db.flush()
-        # Solo el modelo por defecto activo y seleccionado; el resto queda inactivo.
-        default_row = (
+
+        # Desactiva legados (deepseek-chat, workspace-chatgpt, etc.).
+        for m in self.db.query(AgentsOpenAIModel).all():
+            if m.model_code not in seed_codes:
+                m.is_active = False
+                m.is_selected = False
+                m.updated_at = now
+
+        selected = (
             self.db.query(AgentsOpenAIModel)
-            .filter(AgentsOpenAIModel.model_code == _DEFAULT_MODEL_CODE)
+            .filter(
+                AgentsOpenAIModel.is_selected.is_(True),
+                AgentsOpenAIModel.is_active.is_(True),
+            )
             .first()
         )
-        for m in self.db.query(AgentsOpenAIModel).all():
-            is_default = default_row is not None and m.id == default_row.id
-            m.is_active = is_default
-            m.is_selected = is_default
-            if is_default:
-                m.display_name = _DEFAULT_MODEL_NAME
-            m.updated_at = now
+        if not selected:
+            default_row = (
+                self.db.query(AgentsOpenAIModel)
+                .filter(AgentsOpenAIModel.model_code == _DEFAULT_MODEL_CODE)
+                .first()
+            )
+            for m in self.db.query(AgentsOpenAIModel).all():
+                is_default = default_row is not None and m.id == default_row.id
+                m.is_selected = is_default
+                if is_default:
+                    m.is_active = True
+                    m.display_name = _DEFAULT_MODEL_NAME
+                m.updated_at = now
 
         self._ensure_app_settings_row()
         self.db.commit()
 
     def force_select_default_model(self) -> None:
-        """Usado por la migración: deja el modelo por defecto como único global."""
+        """Usado por la migración: deja DeepSeek-V4-Pro como modelo global."""
         self.ensure_seeded()
+        now = _now()
+        default_row = (
+            self.db.query(AgentsOpenAIModel)
+            .filter(AgentsOpenAIModel.model_code == _DEFAULT_MODEL_CODE)
+            .first()
+        )
+        if not default_row:
+            return
+        for m in self.db.query(AgentsOpenAIModel).all():
+            m.is_selected = m.id == default_row.id
+            if m.id == default_row.id:
+                m.is_active = True
+            m.updated_at = now
+        self.db.commit()
 
     def _ensure_app_settings_row(self) -> AgentsAppSettingModel:
         row = self.db.query(AgentsAppSettingModel).filter(AgentsAppSettingModel.id == 1).first()
@@ -121,21 +162,32 @@ class AgentsLlmModelsClass:
         return row
 
     def get_workspace_access_token(self) -> str:
-        """Token Workspace ChatGPT: primero BD (Configuraciones), luego AGENT_ACCESS_TOKEN."""
+        """Legado: ya no se usa el trigger Workspace; reutiliza la API key LLM si hace falta."""
+        return self.get_llm_api_key()
+
+    def get_llm_api_key(self) -> str:
+        """API key DeepSeek: primero BD (Configuraciones), luego AGENTS_LLM_API_KEY."""
         app = self._ensure_app_settings_row()
         key = (app.llm_api_key or "").strip()
         if key:
             return key
         from app.backend.core.config import settings
 
-        return (settings.agent_access_token or "").strip()
-
-    def get_llm_api_key(self) -> str:
-        """Compat: misma clave usada ahora como token Workspace."""
-        return self.get_workspace_access_token()
+        return (settings.agents_llm_api_key or "").strip()
 
     def get_selected_model_code(self) -> str:
-        return "workspace-chatgpt"
+        self.ensure_seeded()
+        row = (
+            self.db.query(AgentsOpenAIModel)
+            .filter(
+                AgentsOpenAIModel.is_selected.is_(True),
+                AgentsOpenAIModel.is_active.is_(True),
+            )
+            .first()
+        )
+        if row and (row.model_code or "").strip():
+            return row.model_code.strip()
+        return _DEFAULT_MODEL_CODE
 
     def get_settings(self, *, customer_id: int | None = None) -> dict[str, Any]:
         self.ensure_seeded()
@@ -173,15 +225,17 @@ class AgentsLlmModelsClass:
         elif env_sa and env_sa.get("client_email"):
             creds_hint = str(env_sa.get("client_email"))
         root_id = (getattr(app, "google_drive_root_folder_id", None) or "").strip() or None
+        selected = self.get_selected_model_code()
         return {
-            "selected_model_code": "workspace-chatgpt",
+            "selected_model_code": selected,
             "default_agent_id": app.default_agent_id,
-            "has_llm_api_key": bool(stored_key),
+            "has_llm_api_key": bool(stored_key) or bool((settings.agents_llm_api_key or "").strip()),
             "llm_api_key_hint": (f"****{stored_key[-4:]}" if len(stored_key) >= 4 else None),
             "llm_api_key_value": stored_key or None,
             "workspace_agent_id": agent_id or None,
             "workspace_trigger_url": trigger_url or None,
-            "provider": "workspace-chatgpt",
+            "provider": "deepseek",
+            "llm_api_base": (settings.agents_llm_api_base or "https://api.deepseek.com").rstrip("/"),
             "google_drive_root_folder_id": root_id,
             "has_google_drive_credentials": creds_ok,
             "google_drive_credentials_hint": creds_hint,

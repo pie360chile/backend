@@ -1,77 +1,33 @@
-"""Agents chat via Workspace ChatGPT (trigger API)."""
+"""Agents chat via DeepSeek (OpenAI-compatible streaming)."""
 
 from __future__ import annotations
 
-import json
 from collections.abc import Iterator
 from typing import Any
 
 from sqlalchemy.orm import Session
 
 from app.backend.classes.agents_class import AgentsClass
+from app.backend.classes.agents_llm_models_class import AgentsLlmModelsClass
 from app.backend.classes.agents_mcp_class import AgentsMcpClass
 from app.backend.classes.agents_usage_class import AgentsUsageClass
-from app.backend.classes.workspace_agent_class import WorkspaceAgentClass
 from app.backend.core.config import settings
 from app.backend.db.models.agent import AgentModel
-
-
-def _extract_workspace_reply(body: Any) -> str:
-    """Intenta sacar el texto útil de distintas formas de respuesta del trigger."""
-    if body is None:
-        return ""
-    if isinstance(body, str):
-        return body.strip()
-    if isinstance(body, list):
-        parts = [_extract_workspace_reply(item) for item in body]
-        return "\n".join(p for p in parts if p).strip()
-    if not isinstance(body, dict):
-        return str(body).strip()
-
-    for key in (
-        "output_text",
-        "output",
-        "text",
-        "message",
-        "content",
-        "reply",
-        "result",
-        "response",
-        "raw",
-    ):
-        if key not in body:
-            continue
-        value = body[key]
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-        if isinstance(value, (dict, list)):
-            nested = _extract_workspace_reply(value)
-            if nested:
-                return nested
-
-    # OpenAI-ish: choices[0].message.content
-    choices = body.get("choices")
-    if isinstance(choices, list) and choices:
-        first = choices[0]
-        if isinstance(first, dict):
-            msg = first.get("message")
-            if isinstance(msg, dict) and isinstance(msg.get("content"), str):
-                return msg["content"].strip()
-            if isinstance(first.get("text"), str):
-                return first["text"].strip()
-
-    # data / output nested
-    for key in ("data", "output"):
-        if key in body:
-            nested = _extract_workspace_reply(body[key])
-            if nested:
-                return nested
-
-    try:
-        dumped = json.dumps(body, ensure_ascii=False, indent=2)
-    except Exception:
-        dumped = str(body)
-    return dumped.strip()
+from app.backend.utils.agents_chat_context import (
+    infer_document_id,
+    resolve_student_id,
+    student_identification_hint,
+    wants_document_generation,
+)
+from app.backend.utils.agents_llm_client import (
+    estimate_tokens_from_text,
+    normalize_usage,
+    stream_chat_completion,
+)
+from app.backend.utils.agents_mcp_fields import (
+    extract_fields_from_reply,
+    strip_fields_json_from_reply,
+)
 
 
 def _drive_path_block(*, customer_id: int, agent_name: str) -> str:
@@ -85,46 +41,56 @@ def _drive_path_block(*, customer_id: int, agent_name: str) -> str:
     )
 
 
-def _build_workspace_input(
+def _build_system_prompt(
     *,
     db: Session,
     agent: AgentModel,
     customer_id: int,
-    message: str,
-    history: list[dict[str, str]] | None,
     student_id: int | None,
     student_rut: str | None,
     document_id: int | None,
+    message: str = "",
 ) -> str:
     parts: list[str] = []
     instructions = (agent.role_instructions or "").strip()
     if instructions:
-        parts.append("Instrucciones del agente:\n" + instructions)
+        parts.append(instructions)
 
     mcp_base = (settings.api_public_base or "").rstrip("/")
     mcp_url = f"{mcp_base}/mcp" if mcp_base else "/api/mcp"
-    mcp_block = AgentsMcpClass(db).build_store_data_prompt_block(
-        agent=agent,
-        customer_id=int(customer_id),
-        document_id=document_id,
-        student_id=student_id,
-        student_rut=student_rut,
-        mcp_url=mcp_url,
+    parts.append(
+        AgentsMcpClass(db).build_store_data_prompt_block(
+            agent=agent,
+            customer_id=int(customer_id),
+            document_id=document_id,
+            student_id=student_id,
+            student_rut=student_rut,
+            mcp_url=mcp_url,
+        )
     )
-    parts.append(mcp_block)
     parts.append(_drive_path_block(customer_id=int(customer_id), agent_name=agent.name or ""))
 
-    hist_lines: list[str] = []
-    for item in history or []:
-        role = (item.get("role") or "").strip()
-        content = (item.get("content") or "").strip()
-        if role in {"user", "assistant"} and content:
-            label = "Usuario" if role == "user" else "Asistente"
-            hist_lines.append(f"{label}: {content}")
-    if hist_lines:
-        # Limitar historial para no inflar el input del Workspace Agent.
-        clipped = hist_lines[-12:]
-        parts.append("Historial reciente:\n" + "\n".join(clipped))
+    try:
+        from app.backend.utils import agents_derived_storage as derived
+
+        files_block, _n = derived.build_selective_files_context(
+            agent.name or "",
+            query=message or "",
+            student_rut=student_rut,
+            customer_id=int(customer_id),
+        )
+        if files_block:
+            parts.append(files_block)
+    except Exception:
+        pass
+
+    if student_id:
+        try:
+            parts.append(
+                student_identification_hint(db, int(student_id), document_id)
+            )
+        except Exception:
+            pass
 
     extras: list[str] = []
     if student_id:
@@ -133,12 +99,30 @@ def _build_workspace_input(
         extras.append(f"student_rut={student_rut}")
     if document_id:
         extras.append(f"document_id={document_id}")
-
-    user_block = (message or "").strip()
     if extras:
-        user_block = f"{user_block}\n\n[Contexto PIE360: {', '.join(extras)}]"
-    parts.append("Mensaje actual del usuario:\n" + user_block)
+        parts.append("Contexto PIE360: " + ", ".join(extras))
+
     return "\n\n".join(parts).strip()
+
+
+def _build_messages(
+    *,
+    system_prompt: str,
+    message: str,
+    history: list[dict[str, str]] | None,
+) -> list[dict[str, str]]:
+    messages: list[dict[str, str]] = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+
+    for item in history or []:
+        role = (item.get("role") or "").strip()
+        content = (item.get("content") or "").strip()
+        if role in {"user", "assistant"} and content:
+            messages.append({"role": role, "content": content})
+
+    messages.append({"role": "user", "content": (message or "").strip()})
+    return messages
 
 
 class AgentsChatClass:
@@ -190,54 +174,130 @@ class AgentsChatClass:
             }
             return
 
-        model_code = "workspace-chatgpt"
-        yield {"type": "step", "message": "Consultando Workspace ChatGPT…"}
+        resolved_student_id, rut_used, student_issue = resolve_student_id(
+            self.db,
+            student_id=student_id,
+            student_rut=student_rut,
+            message=text,
+            history=history,
+        )
+        resolved_document_id = document_id or infer_document_id(
+            self.db, agent_id, text, history
+        )
+        effective_rut = (student_rut or rut_used or "").strip() or None
 
-        user_input = _build_workspace_input(
+        llm = AgentsLlmModelsClass(self.db)
+        model_code = llm.get_selected_model_code()
+        yield {"type": "step", "message": f"Consultando DeepSeek ({model_code})…"}
+
+        system_prompt = _build_system_prompt(
             db=self.db,
             agent=agent_row,
             customer_id=int(self.customer_id),
+            student_id=resolved_student_id,
+            student_rut=effective_rut,
+            document_id=resolved_document_id,
+            message=text,
+        )
+        messages = _build_messages(
+            system_prompt=system_prompt,
             message=text,
             history=history,
-            student_id=student_id,
-            student_rut=student_rut,
-            document_id=document_id,
         )
 
-        trigger_url = (getattr(agent_row, "workspace_trigger_url", None) or "").strip()
-        if not trigger_url:
-            yield {
-                "type": "error",
-                "message": (
-                    "Este agente no tiene URL de endpoint Workspace. "
-                    "Edita el agente y pega la URL del trigger."
-                ),
-                "code": "missing_workspace_trigger_url",
-            }
-            return
+        reply_text = ""
+        usage: dict[str, Any] | None = None
+        for event in stream_chat_completion(messages, model=model_code, db=self.db):
+            if event.get("type") == "text_delta":
+                reply_text += event.get("delta") or ""
+                yield event
+            elif event.get("type") == "done":
+                data = event.get("data") or {}
+                reply_text = data.get("reply") or reply_text
+                usage = normalize_usage(
+                    data.get("usage") if isinstance(data.get("usage"), dict) else None
+                )
+            elif event.get("type") == "error":
+                yield event
+                return
+            else:
+                yield event
 
-        result = WorkspaceAgentClass(self.db).trigger_chat(
-            user_input, trigger_url=trigger_url
-        )
-        if result.get("status") == "error":
-            yield {
-                "type": "error",
-                "message": result.get("message") or "Error al consultar Workspace ChatGPT.",
-                "code": "workspace_agent_error",
-            }
-            return
+        visible_reply = reply_text
+        response_files: list[dict[str, Any]] = []
+        warning: str | None = None
+        want_doc = wants_document_generation(text, history)
+        fields = extract_fields_from_reply(reply_text)
 
-        body = (result.get("data") or {}).get("body")
-        reply_text = _extract_workspace_reply(body)
-        if not reply_text:
-            reply_text = "El Workspace Agent respondió sin texto útil."
+        if want_doc or fields:
+            if student_issue == "needs_rut" and not resolved_student_id:
+                warning = (
+                    "Para generar el documento indica el RUT del estudiante "
+                    "o ábrelo desde la ficha (student_id en la URL)."
+                )
+            elif student_issue == "not_found":
+                warning = f"No encontré estudiante con RUT {rut_used}."
+            elif not resolved_student_id:
+                warning = "Falta student_id para generar el documento."
+            elif not resolved_document_id:
+                warning = (
+                    "Falta document_id / plantilla del agente. "
+                    "Sube el modelo en Documentos del agente."
+                )
+            elif not fields:
+                warning = (
+                    "El agente redactó pero no envió el bloque JSON de fields. "
+                    "Pide de nuevo «genera el informe» o completa los campos."
+                )
+            else:
+                yield {"type": "step", "message": "Generando documento (create_document)…"}
+                try:
+                    created = AgentsMcpClass(self.db).create_document(
+                        agent_id=agent_id,
+                        customer_id=int(self.customer_id),
+                        student_id=int(resolved_student_id),
+                        document_id=int(resolved_document_id),
+                        fields=fields,
+                    )
+                    if created.get("status") == "error":
+                        warning = created.get("message") or "No se pudo generar el documento."
+                    else:
+                        data = created.get("data") or {}
+                        response_files = list(data.get("responseFiles") or [])
+                        visible_reply = strip_fields_json_from_reply(reply_text)
+                        if data.get("formFilled"):
+                            visible_reply = (
+                                visible_reply.rstrip()
+                                + "\n\nDocumento generado y datos del formulario guardados "
+                                "en la carpeta del estudiante."
+                            )
+                except Exception as exc:
+                    warning = f"Error al generar documento: {exc}"
 
-        # El trigger no es streaming: un solo bloque compatible con la UI SSE.
-        yield {"type": "text_delta", "delta": reply_text}
-        yield {"type": "done", "data": {"reply": reply_text}}
+        done_data: dict[str, Any] = {
+            "reply": visible_reply,
+            "usage": usage,
+            "model": model_code,
+            "responseFiles": response_files,
+        }
+        if warning:
+            done_data["warning"] = warning
+        yield {"type": "done", "data": done_data}
 
         if not self.customer_id:
             return
+
+        if not usage:
+            prompt_chars = "\n".join(
+                str(m.get("content") or "") for m in messages if isinstance(m, dict)
+            )
+            pt = estimate_tokens_from_text(prompt_chars)
+            ct = estimate_tokens_from_text(reply_text)
+            usage = {
+                "prompt_tokens": pt,
+                "completion_tokens": ct,
+                "total_tokens": pt + ct,
+            }
 
         try:
             AgentsUsageClass(self.db).record_chat(
@@ -246,11 +306,11 @@ class AgentsChatClass:
                 user_id=int(self.user_id) if self.user_id else None,
                 agent_id=agent_id,
                 model=model_code,
-                prompt_tokens=0,
-                completion_tokens=0,
-                total_tokens=0,
+                prompt_tokens=int(usage.get("prompt_tokens") or 0),
+                completion_tokens=int(usage.get("completion_tokens") or 0),
+                total_tokens=int(usage.get("total_tokens") or 0),
                 input_text=text,
-                output_text=reply_text,
+                output_text=visible_reply,
             )
         except Exception:
             self.db.rollback()

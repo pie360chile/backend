@@ -404,52 +404,31 @@ class AgentsClass:
         except ValueError as exc:
             return {"status": "error", "message": str(exc), "http_status": 400}
 
-        drive_uploads: list[dict[str, Any]] = []
-        drive_errors: list[str] = []
-        drive_configured = False
-        try:
-            from app.backend.utils import google_drive_storage as drive_storage
-            from app.backend.utils.school_drive_config import load_agents_global_drive_config
+        # Texto derivado para RAG barato. Google Drive desactivado temporalmente.
+        from app.backend.utils import agents_derived_storage as derived
 
-            load_agents_global_drive_config(self.db)
-            drive_configured = True
-            for relative_path, data in files:
-                try:
-                    drive_uploads.append(
-                        drive_storage.upload_to_agent_folder(
-                            db=self.db,
-                            customer_id=int(customer_id),
-                            agent_name=agent.name,
-                            relative_path=relative_path,
-                            data=data,
-                        )
+        derived_ok = 0
+        derived_errors: list[str] = []
+        for relative_path, _data in files:
+            try:
+                meta = derived.write_derived_for_file(
+                    agent.name, relative_path, int(customer_id)
+                )
+                if meta.get("ok"):
+                    derived_ok += 1
+                else:
+                    derived_errors.append(
+                        f"{relative_path}: {meta.get('error') or 'sin texto'}"
                     )
-                except Exception as exc:
-                    drive_errors.append(f"{relative_path}: {exc}")
-        except ValueError:
-            # Drive de Agentes no configurado: solo disco local.
-            pass
-        except Exception as exc:
-            drive_errors.append(str(exc))
+            except Exception as exc:
+                derived_errors.append(f"{relative_path}: {exc}")
 
         agent.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         self.db.commit()
 
         message = f"{len(saved)} file(s) uploaded."
-        if drive_configured and drive_errors and not drive_uploads:
-            message = (
-                f"{len(saved)} archivo(s) en servidor local, pero ninguno llegó a Google Drive. "
-                f"{drive_errors[0]}"
-            )
-        elif drive_configured and drive_errors:
-            message = (
-                f"{len(saved)} archivo(s) locales; Drive: {len(drive_uploads)} ok, "
-                f"{len(drive_errors)} con error. {drive_errors[0]}"
-            )
-        elif drive_configured and drive_uploads:
-            message = (
-                f"{len(saved)} archivo(s) subidos (local + Drive: {len(drive_uploads)})."
-            )
+        if derived_ok:
+            message += f" Texto derivado: {derived_ok}."
 
         return {
             "status": "success",
@@ -457,9 +436,11 @@ class AgentsClass:
             "data": {
                 "uploaded": saved,
                 "totalFiles": storage.count_files(agent.name, int(customer_id)),
-                "driveUploads": drive_uploads,
-                "driveErrors": drive_errors,
-                "driveConfigured": drive_configured,
+                "driveUploads": [],
+                "driveErrors": [],
+                "driveConfigured": False,
+                "derivedOk": derived_ok,
+                "derivedErrors": derived_errors,
             },
         }
 
@@ -472,28 +453,26 @@ class AgentsClass:
         except ValueError as exc:
             return {"status": "error", "message": str(exc), "http_status": 400}
 
-        drive_result: dict[str, Any] | None = None
-        drive_error: str | None = None
         try:
-            from app.backend.utils import google_drive_storage as drive_storage
-            from app.backend.utils.school_drive_config import load_agents_global_drive_config
+            from app.backend.utils import agents_derived_storage as derived
 
-            load_agents_global_drive_config(self.db)
-            drive_result = drive_storage.delete_from_agent_folder(
-                db=self.db,
-                customer_id=int(customer_id),
-                agent_name=agent.name,
-                relative_path=path,
-            )
-        except ValueError:
-            # Drive no configurado: solo borrado local.
+            derived.delete_derived(agent.name, path, int(customer_id))
+        except Exception:
             pass
-        except Exception as exc:
-            drive_error = str(exc)
 
         agent.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         self.db.commit()
 
+        return {
+            "status": "success",
+            "message": "File deleted.",
+            "data": {
+                "path": path,
+                "driveResult": None,
+                "driveError": None,
+                "totalFiles": storage.count_files(agent.name, int(customer_id)),
+            },
+        }
         message = "Deleted."
         if drive_error:
             message = f"Eliminado en local; Drive falló: {drive_error}"

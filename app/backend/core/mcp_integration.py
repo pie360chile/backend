@@ -1,4 +1,4 @@
-"""Monta el MCP del Workspace Agent dentro de la app FastAPI."""
+"""Monta el MCP de Agentes dentro de la app FastAPI."""
 
 from __future__ import annotations
 
@@ -7,11 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from starlette.routing import Route
 
-from app.backend.services.agent_workspace_mcp import (
-    MCP_HTTP_PATH,
-    get_mcp_asgi_app,
-    workspace_mcp,
-)
+from app.backend.mcp import MCP_HTTP_PATH, agents_mcp, get_mcp_asgi_app
 
 # Ruta interna (con root_path=/api la URL pública es /api/mcp)
 MCP_PUBLIC_PATH = MCP_HTTP_PATH
@@ -20,7 +16,7 @@ MCP_PUBLIC_PATH = MCP_HTTP_PATH
 def workspace_mcp_lifespan():
     """Context manager del session manager MCP (requerido por streamable HTTP)."""
     get_mcp_asgi_app()
-    return workspace_mcp.session_manager.run()
+    return agents_mcp.session_manager.run()
 
 
 @asynccontextmanager
@@ -35,7 +31,6 @@ def mount_workspace_mcp(app: FastAPI) -> None:
     for route in mcp_asgi.routes:
         if not isinstance(route, Route):
             continue
-        # add_route de FastAPI no sirve para ASGI apps; usar Route de Starlette.
         app.router.routes.append(
             Route(
                 MCP_PUBLIC_PATH,

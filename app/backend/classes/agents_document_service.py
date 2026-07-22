@@ -25,7 +25,6 @@ from app.backend.utils.agents_family_report_store import (
     link_folder_to_family_report,
     persist_family_report_from_agent,
 )
-from app.backend.utils.agents_template_inspector import fields_from_json
 
 _FAMILIA_DOCUMENT_ID = FAMILIA_DOCUMENT_ID
 _WORD_PLACEHOLDERS = (
@@ -185,11 +184,3 @@ def generate_and_save_document(
         "studentId": student_id,
         "familyReportId": family_report_id,
     }
-
-
-def build_fields_prompt(template: AgentDocumentTemplateModel) -> str:
-    fields = fields_from_json(template.detected_fields)
-    if not fields:
-        return "No hay campos detectados en la plantilla."
-    lines = [f"- {field}" for field in fields]
-    return "\n".join(lines)

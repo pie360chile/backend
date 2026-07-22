@@ -14,6 +14,7 @@ from app.backend.db.models.agents_usage import (
     AgentsRateLimitHitModel,
     AgentsTokenUsageModel,
 )
+from app.backend.db.models.pie_core import CustomerModel
 
 
 def can_use_agents_chat(session_user: Any, db: Session) -> bool:
@@ -83,6 +84,19 @@ class AgentsRateLimitClass:
             q = q.filter(AgentsTokenUsageModel.school_id == int(school_id))
         return int(q.scalar() or 0)
 
+    def _spent_usd(self, customer_id: int) -> float:
+        total = (
+            self.db.query(
+                func.coalesce(func.sum(AgentsTokenUsageModel.estimated_cost_usd), 0)
+            )
+            .filter(AgentsTokenUsageModel.customer_id == int(customer_id))
+            .scalar()
+        )
+        try:
+            return float(total or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
     def check_and_register_chat(
         self,
         *,
@@ -91,7 +105,7 @@ class AgentsRateLimitClass:
         school_id: int | None,
     ) -> dict[str, Any]:
         """
-        Enforce requests/min and tokens/day for user and customer (and school if present).
+        Enforce requests/min, tokens/day and presupuesto USD del cliente.
         Registers a hit only when allowed.
         """
         now = datetime.utcnow()
@@ -103,6 +117,31 @@ class AgentsRateLimitClass:
 
         try:
             self._purge_old_hits(now - timedelta(minutes=10))
+
+            if customer_id:
+                customer = (
+                    self.db.query(CustomerModel)
+                    .filter(CustomerModel.id == int(customer_id))
+                    .first()
+                )
+                budget_raw = getattr(customer, "agents_budget_usd_max", None) if customer else None
+                if budget_raw is not None:
+                    try:
+                        budget = float(budget_raw)
+                    except (TypeError, ValueError):
+                        budget = None
+                    if budget is not None and budget >= 0:
+                        spent = self._spent_usd(int(customer_id))
+                        if spent >= budget:
+                            return {
+                                "ok": False,
+                                "code": "budget_exceeded",
+                                "message": (
+                                    f"El cliente alcanzó el presupuesto máximo de Agentes "
+                                    f"(${spent:.2f} / ${budget:.2f} USD). "
+                                    "Contacta al superadministrador para ampliarlo."
+                                ),
+                            }
 
             if user_id:
                 user_hits = self._count_hits(since=window_start, user_id=int(user_id))
@@ -151,7 +190,6 @@ class AgentsRateLimitClass:
                     }
 
             if school_id and customer_id:
-                # Soft school cap: same as customer requests/min if configured path is busy
                 school_hits = self._count_hits(
                     since=window_start,
                     customer_id=int(customer_id),

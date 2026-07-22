@@ -20,7 +20,8 @@ class CustomerModel(Base):
     company_name = Column(String(255))
     phone = Column(String(255))
     email = Column(String(255))
-    openai_api_key = Column(String(512), nullable=True)
+    # Presupuesto máximo de gasto estimado de tokens (USD) para Agentes. Null = sin tope.
+    agents_budget_usd_max = Column(Numeric(12, 2), nullable=True)
     license_time = Column(Date)
     added_date = Column(DateTime())
     updated_date = Column(DateTime())
