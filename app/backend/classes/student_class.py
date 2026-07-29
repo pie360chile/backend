@@ -1,5 +1,7 @@
 from datetime import datetime, date
 from typing import Any, Dict, List, Optional
+import re
+import unicodedata
 
 from app.backend.db.models import (
     StudentModel,
@@ -11,7 +13,7 @@ from app.backend.db.models import (
     CommuneModel,
     FolderModel,
 )
-from sqlalchemy import and_
+from sqlalchemy import and_, or_, func
 from sqlalchemy.orm import aliased
 
 
@@ -24,6 +26,84 @@ def _date_str(v, fmt="%Y-%m-%d %H:%M:%S"):
     if hasattr(v, "strftime"):
         return v.strftime(fmt)
     return str(v)
+
+
+def _strip_accents(value: str) -> str:
+    text = unicodedata.normalize("NFKD", value or "")
+    return "".join(c for c in text if not unicodedata.combining(c))
+
+
+def _collapse_repeated_letters(value: str) -> str:
+    """diiaz -> diaz (tolerancia a letras duplicadas al escribir)."""
+    return re.sub(r"(.)\1+", r"\1", value or "", flags=re.IGNORECASE)
+
+
+def _name_token_variants(token: str) -> list[str]:
+    raw = (token or "").strip().lower()
+    if len(raw) < 2:
+        return []
+    variants: list[str] = []
+    seen: set[str] = set()
+    for candidate in (
+        raw,
+        _strip_accents(raw),
+        _collapse_repeated_letters(raw),
+        _collapse_repeated_letters(_strip_accents(raw)),
+    ):
+        c = candidate.strip()
+        if len(c) >= 2 and c not in seen:
+            seen.add(c)
+            variants.append(c)
+    return variants
+
+
+def _escape_like(value: str) -> str:
+    return (
+        (value or "")
+        .replace("\\", "\\\\")
+        .replace("%", "\\%")
+        .replace("_", "\\_")
+    )
+
+
+def _apply_student_names_filter(query, names: str | None):
+    """
+    Busca por nombre completo (nombres + apellidos), tokenizado.
+    Tolera acentos y letras repetidas (p. ej. diiaz → diaz).
+    """
+    raw = (names or "").strip()
+    if not raw:
+        return query
+
+    tokens = [t for t in re.split(r"\s+", raw) if len(t.strip()) >= 2]
+    if not tokens:
+        return query
+
+    full_name = func.lower(
+        func.concat_ws(
+            " ",
+            func.coalesce(StudentPersonalInfoModel.names, ""),
+            func.coalesce(StudentPersonalInfoModel.father_lastname, ""),
+            func.coalesce(StudentPersonalInfoModel.mother_lastname, ""),
+            func.coalesce(StudentPersonalInfoModel.social_name, ""),
+        )
+    )
+
+    for token in tokens:
+        variants = _name_token_variants(token)
+        if not variants:
+            continue
+        ors = []
+        for variant in variants:
+            pattern = f"%{_escape_like(variant)}%"
+            ors.append(full_name.like(pattern, escape="\\"))
+            # Prefijo corto si el token es largo: ayuda con typos al final
+            if len(variant) >= 4:
+                prefix = f"%{_escape_like(variant[: max(3, len(variant) - 1)])}%"
+                ors.append(full_name.like(prefix, escape="\\"))
+        if ors:
+            query = query.filter(or_(*ors))
+    return query
 
 
 def _parse_date(v):
@@ -236,7 +316,7 @@ class StudentClass:
                 query = query.filter(StudentModel.identification_number.like(f"%{rut.strip()}%"))
             
             if names and names.strip():
-                query = query.filter(StudentPersonalInfoModel.names.like(f"%{names.strip()}%"))
+                query = _apply_student_names_filter(query, names)
             
             if identification_number and identification_number.strip():
                 query = query.filter(StudentPersonalInfoModel.identification_number.like(f"%{identification_number.strip()}%"))
