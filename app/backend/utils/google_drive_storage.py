@@ -477,6 +477,166 @@ def _safe_filename(filename: str) -> str:
     return name.replace("/", "_").replace("\\", "_")
 
 
+def _drive_folder_label(value: str, *, fallback: str = "Sin nombre") -> str:
+    """Nombre de carpeta legible (conserva espacios/acentos; sin separadores de ruta)."""
+    text = (value or "").strip()
+    text = text.replace("/", "-").replace("\\", "-").replace("\0", "")
+    text = re.sub(r"\s+", " ", text).strip()
+    return (text[:200] if text else fallback)
+
+
+def _numeric_rut(rut: str) -> str:
+    """RUT solo alfanumérico (sin puntos ni guión), p. ej. 274309032."""
+    cleaned = re.sub(r"[^0-9kK]", "", (rut or "").strip())
+    if not cleaned:
+        raise ValueError("RUT del alumno no disponible o inválido.")
+    return cleaned.upper()
+
+
+def _find_child_file(config: DriveSchoolConfig, parent_id: str, name: str) -> str | None:
+    service = _service_for_config(config)
+    safe_name = name.replace("'", "\\'")
+    query = (
+        f"'{parent_id}' in parents and "
+        f"name = '{safe_name}' and "
+        f"mimeType != '{_FOLDER_MIME}' and trashed = false"
+    )
+    result = (
+        service.files()
+        .list(
+            q=query,
+            spaces="drive",
+            fields="files(id,name)",
+            pageSize=1,
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
+        )
+        .execute()
+    )
+    files = result.get("files") or []
+    return files[0]["id"] if files else None
+
+
+def upload_student_document_tree(
+    *,
+    db: Any,
+    customer_id: int,
+    school_name: str,
+    year: int,
+    course_name: str,
+    student_rut: str,
+    document_type_name: str,
+    data: bytes,
+    file_extension: str,
+    mime_type: str | None = None,
+) -> dict[str, Any]:
+    """
+    Sube a Drive del customer con árbol:
+      {root}/{Liceo}/{Año}/{Curso}/{RUT numérico}/{RUT_Tipo de documento}.{ext}
+    Crea carpetas si no existen. Si el archivo ya existe, lo reemplaza.
+    """
+    from app.backend.utils.customer_drive_config import (
+        customer_drive_configured,
+        load_customer_drive_config,
+    )
+
+    if not data:
+        raise ValueError("El archivo está vacío.")
+    if int(customer_id) < 1:
+        raise ValueError("customer_id inválido.")
+    if not customer_drive_configured(db, int(customer_id)):
+        raise ValueError(
+            "Google Drive no está configurado para este cliente. "
+            "Conéctalo en Configuración → Google Drive."
+        )
+
+    config = load_customer_drive_config(db, int(customer_id))
+    root_id = config.root_folder_id.strip()
+    rut_num = _numeric_rut(student_rut)
+    year_label = str(int(year))
+    if int(year) < 2000 or int(year) > 2100:
+        raise ValueError("Año inválido.")
+
+    liceo = _drive_folder_label(school_name, fallback="Liceo")
+    curso = _drive_folder_label(course_name, fallback="Curso")
+    doc_type = _drive_folder_label(document_type_name, fallback="Documento")
+    ext = (file_extension or "docx").lower().lstrip(".")
+    if ext not in {"docx", "pdf", "doc"}:
+        ext = "docx"
+    filename = _safe_filename(f"{rut_num}_{doc_type}.{ext}")
+
+    try:
+        liceo_id = _ensure_folder(config, root_id, liceo)
+        year_id = _ensure_folder(config, liceo_id, year_label)
+        course_id = _ensure_folder(config, year_id, curso)
+        student_folder_id = _ensure_folder(config, course_id, rut_num)
+
+        service = _service_for_config(config)
+        try:
+            from googleapiclient.http import MediaIoBaseUpload
+        except ImportError as exc:
+            raise ValueError("googleapiclient no está instalado.") from exc
+
+        mime = mime_type or (
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            if ext == "docx"
+            else "application/pdf"
+            if ext == "pdf"
+            else "application/octet-stream"
+        )
+        resumable = len(data) >= 5 * 1024 * 1024
+        media = MediaIoBaseUpload(io.BytesIO(data), mimetype=mime, resumable=resumable)
+
+        existing_id = _find_child_file(config, student_folder_id, filename)
+        if existing_id:
+            updated = (
+                service.files()
+                .update(
+                    fileId=existing_id,
+                    media_body=media,
+                    fields="id,name,mimeType,size,webViewLink",
+                    supportsAllDrives=True,
+                )
+                .execute()
+            )
+            file_meta = updated
+            replaced = True
+        else:
+            body = {"name": filename, "parents": [student_folder_id]}
+            file_meta = (
+                service.files()
+                .create(
+                    body=body,
+                    media_body=media,
+                    fields="id,name,mimeType,size,webViewLink",
+                    supportsAllDrives=True,
+                )
+                .execute()
+            )
+            replaced = False
+    except Exception as exc:
+        raise ValueError(_drive_api_error_message(exc)) from exc
+
+    logical = f"{liceo}/{year_label}/{curso}/{rut_num}/{filename}"
+    return {
+        "ok": True,
+        "file_id": file_meta.get("id"),
+        "filename": file_meta.get("name") or filename,
+        "mime_type": file_meta.get("mimeType") or mime,
+        "size_bytes": int(file_meta.get("size") or len(data)),
+        "web_view_link": file_meta.get("webViewLink"),
+        "drive_path": logical,
+        "replaced": replaced,
+        "customer_id": int(customer_id),
+        "school_name": liceo,
+        "year": int(year),
+        "course_name": curso,
+        "student_rut_numeric": rut_num,
+        "document_type_name": doc_type,
+        "drive_config_source": config.source,
+    }
+
+
 def upload_bytes(
     *,
     config: DriveSchoolConfig,

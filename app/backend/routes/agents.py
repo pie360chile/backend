@@ -22,6 +22,7 @@ from app.backend.schemas.agents import (
     AgentCreateFolderRequest,
     AgentCreateRequest,
     AgentsMcpCreateDocumentRequest,
+    AgentsMcpSaveDocumentToDriveRequest,
     AgentsMcpSearchFilesRequest,
     AgentsMcpStoreDataRequest,
     AgentsSettingsUpdateRequest,
@@ -163,6 +164,35 @@ def mcp_create_document_rest(
         document_id=body.document_id,
         fields=body.fields,
         meta=body.meta,
+    )
+    if result.get("status") == "error":
+        return api_error(
+            status_code=result.get("http_status", status.HTTP_400_BAD_REQUEST),
+            message=result.get("message") or "Error",
+        )
+    return api_response(message=result.get("message"), data=result.get("data"))
+
+
+@agents.post("/mcp/save_document_to_google_drive")
+def mcp_save_document_to_google_drive_rest(
+    body: AgentsMcpSaveDocumentToDriveRequest,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(default=None),
+    x_mcp_secret: str | None = Header(default=None, alias="X-MCP-Secret"),
+):
+    """REST gemelo: sube documento generado a Drive (Liceo/Año/Curso/RUT/archivo)."""
+    if not _mcp_secret_ok(authorization, x_mcp_secret):
+        return api_error(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            message="MCP secret inválido.",
+        )
+    result = AgentsMcpClass(db).save_document_to_google_drive(
+        agent_id=body.agent_id,
+        customer_id=body.customer_id,
+        student_id=body.student_id,
+        document_id=body.document_id,
+        save_id=body.save_id,
+        file_name=body.file_name,
     )
     if result.get("status") == "error":
         return api_error(

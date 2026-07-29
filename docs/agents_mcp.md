@@ -9,7 +9,8 @@ Auth: `secret` = `MCP_SECRET` (o Bearer / `X-MCP-Secret` en REST).
 app/backend/mcp/
 ├── auth.py / server.py
 └── tools/
-    ├── create_document.py   # genera Word + carpeta estudiante + ficha
+    ├── create_document.py              # genera + ficha + sube a Drive
+    ├── save_document_to_google_drive.py # re-sube a Drive (árbol colegio)
     ├── store_data.py
     └── search_agent_files.py
 ```
@@ -29,12 +30,29 @@ En el agente, **Documentos**:
 `create_document(document_id=…)` usa exactamente esa plantilla y actualiza ese formulario
 (ej. familia → `family_reports`). Sin plantilla para ese `document_id` → error claro.
 
+## Google Drive (por customer)
+
+Tras generar, el archivo se sube al Drive del cliente (si está conectado):
+
+```
+{carpeta raíz del cliente}/
+  {Nombre del liceo}/
+    {Año}/
+      {Curso}/
+        {RUT numérico}/
+          {RUT}_{Tipo de documento}.docx
+```
+
+Ejemplo: `Liceo Demo/2026/1° Medio A/274309032/274309032_Informe a la Familia.docx`
+
+Las carpetas se crean si no existen. Si el archivo ya está, se reemplaza.
 
 ## Tools
 
 | Tool | REST |
 |------|------|
 | `create_document` | `POST /api/agents/mcp/create_document` |
+| `save_document_to_google_drive` | `POST /api/agents/mcp/save_document_to_google_drive` |
 | `store_data` | `POST /api/agents/mcp/store_data` |
 | `search_agent_files` | `POST /api/agents/mcp/search_files` |
 

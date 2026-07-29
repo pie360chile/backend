@@ -16,10 +16,16 @@ def register_tools(mcp: "FastMCP") -> None:
     if _registered:
         return
 
-    from app.backend.mcp.tools import create_document, search_agent_files, store_data
+    from app.backend.mcp.tools import (
+        create_document,
+        save_document_to_google_drive,
+        search_agent_files,
+        store_data,
+    )
 
     create_document.register(mcp)
     store_data.register(mcp)
     search_agent_files.register(mcp)
+    save_document_to_google_drive.register(mcp)
 
     _registered = True

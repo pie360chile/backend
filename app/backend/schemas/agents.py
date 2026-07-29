@@ -106,3 +106,12 @@ class AgentsMcpCreateDocumentRequest(BaseModel):
     document_id: int = Field(..., ge=1)
     fields: dict = Field(..., description="Mapa nombre_campo → valor")
     meta: dict | None = Field(default=None)
+
+
+class AgentsMcpSaveDocumentToDriveRequest(BaseModel):
+    agent_id: str = Field(..., min_length=1)
+    customer_id: int = Field(..., ge=1)
+    student_id: int = Field(..., ge=1)
+    document_id: int = Field(..., ge=1)
+    save_id: int | None = Field(default=None, ge=1)
+    file_name: str | None = Field(default=None)

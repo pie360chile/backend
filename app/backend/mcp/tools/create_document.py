@@ -79,4 +79,6 @@ def register(mcp: "FastMCP") -> None:
             "save": data.get("save"),
             "responseFiles": data.get("responseFiles") or [],
             "formFilled": bool(data.get("formFilled")),
+            "googleDrive": data.get("googleDrive"),
+            "googleDriveError": data.get("googleDriveError"),
         }
