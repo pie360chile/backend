@@ -40,6 +40,41 @@ class CustomerDriveUpdateBody(BaseModel):
     clear: bool = Field(default=False, description="Si true, borra la config Drive del cliente")
 
 
+def _can_manage_customer_drive(
+    session_user: UserLogin, customer_id: int, db: Session
+) -> bool:
+    """Superadmin (1) cualquier customer; Administrador solo el suyo."""
+    rol_id = int(getattr(session_user, "rol_id", 0) or 0)
+    if rol_id == 1:
+        return True
+
+    own = int(getattr(session_user, "customer_id", 0) or 0)
+    if own < 1 or own != int(customer_id):
+        return False
+
+    if rol_id == 2:
+        return True
+
+    rol = db.query(RolModel).filter(RolModel.id == rol_id).first()
+    if not rol or not getattr(rol, "rol", None):
+        return False
+    n = str(rol.rol).lower()
+    if "superadmin" in n or ("super" in n and "administrador" in n):
+        return False
+    return "administrador" in n and "super" not in n
+
+
+def _drive_forbidden() -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_403_FORBIDDEN,
+        content={
+            "status": 403,
+            "message": "No autorizado para gestionar Google Drive de este cliente.",
+            "data": None,
+        },
+    )
+
+
 @customers.get("/{customer_id}/google-drive/oauth/start")
 def start_customer_google_drive_oauth(
     customer_id: int,
@@ -47,11 +82,8 @@ def start_customer_google_drive_oauth(
     db: Session = Depends(get_db),
 ):
     """Devuelve la URL de Google (tipo Web) para conectar el Drive de este customer."""
-    if int(getattr(session_user, "rol_id", 0) or 0) != 1:
-        return JSONResponse(
-            status_code=status.HTTP_403_FORBIDDEN,
-            content={"status": 403, "message": "Solo superadministrador.", "data": None},
-        )
+    if not _can_manage_customer_drive(session_user, customer_id, db):
+        return _drive_forbidden()
     result = CustomerDriveClass(db).start_oauth(customer_id)
     if result.get("status") == "error":
         return JSONResponse(
@@ -106,11 +138,8 @@ def get_customer_google_drive(
     session_user: UserLogin = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
-    if int(getattr(session_user, "rol_id", 0) or 0) != 1:
-        return JSONResponse(
-            status_code=status.HTTP_403_FORBIDDEN,
-            content={"status": 403, "message": "Solo superadministrador.", "data": None},
-        )
+    if not _can_manage_customer_drive(session_user, customer_id, db):
+        return _drive_forbidden()
     data = CustomerDriveClass(db).get(customer_id)
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -125,11 +154,8 @@ def update_customer_google_drive(
     session_user: UserLogin = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
-    if int(getattr(session_user, "rol_id", 0) or 0) != 1:
-        return JSONResponse(
-            status_code=status.HTTP_403_FORBIDDEN,
-            content={"status": 403, "message": "Solo superadministrador.", "data": None},
-        )
+    if not _can_manage_customer_drive(session_user, customer_id, db):
+        return _drive_forbidden()
     result = CustomerDriveClass(db).upsert(
         customer_id,
         root_folder_id=body.root_folder_id,
@@ -154,11 +180,8 @@ def test_customer_google_drive(
     session_user: UserLogin = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
-    if int(getattr(session_user, "rol_id", 0) or 0) != 1:
-        return JSONResponse(
-            status_code=status.HTTP_403_FORBIDDEN,
-            content={"status": 403, "message": "Solo superadministrador.", "data": None},
-        )
+    if not _can_manage_customer_drive(session_user, customer_id, db):
+        return _drive_forbidden()
     result = CustomerDriveClass(db).test(customer_id)
     if result.get("status") == "error":
         return JSONResponse(
