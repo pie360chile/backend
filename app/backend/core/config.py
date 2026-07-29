@@ -153,7 +153,7 @@ class Settings:
     google_drive_oauth_success_url: str = field(
         default_factory=lambda: os.getenv(
             "GOOGLE_DRIVE_OAUTH_SUCCESS_URL",
-            "https://pie-360-chile.web.app/agents/settings",
+            "https://pie-360-chile.web.app/configuracion/google-drive",
         )
     )
     agents_rate_requests_per_min_user: int = field(

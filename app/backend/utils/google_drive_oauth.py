@@ -187,11 +187,15 @@ def _mask_secret(value: str | None, head: int = 8) -> str | None:
 def frontend_return_url(*, ok: bool, customer_id: int | None, message: str = "") -> str:
     base = (
         settings.google_drive_oauth_success_url
-        or "https://pie-360-chile.web.app/agents/settings"
+        or "https://pie-360-chile.web.app/configuracion/google-drive"
     ).strip().rstrip("/")
-    # URL amigable: /agents/settings/cliente/{id}
-    if customer_id and base.endswith("/agents/settings"):
-        base = f"{base}/cliente/{int(customer_id)}"
+    # URL amigable: /configuracion/google-drive/cliente/{id}
+    # Compat: si aún apunta a /agents/settings, también anexamos /cliente/{id}
+    if customer_id:
+        if base.endswith("/configuracion/google-drive") or base.endswith("/agents/settings"):
+            if base.endswith("/agents/settings"):
+                base = base.replace("/agents/settings", "/configuracion/google-drive")
+            base = f"{base}/cliente/{int(customer_id)}"
     sep = "&" if "?" in base else "?"
     q = {
         "drive_oauth": "ok" if ok else "error",
