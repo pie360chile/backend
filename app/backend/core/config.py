@@ -137,6 +137,25 @@ class Settings:
     google_drive_root_folder_id: str = field(
         default_factory=lambda: os.getenv("GOOGLE_DRIVE_ROOT_FOLDER_ID", "")
     )
+    # OAuth Web (tipo "Aplicación web" en Google Cloud) — una app PIE360, tokens por customer
+    google_drive_oauth_client_id: str = field(
+        default_factory=lambda: os.getenv("GOOGLE_DRIVE_OAUTH_CLIENT_ID", "")
+    )
+    google_drive_oauth_client_secret: str = field(
+        default_factory=lambda: os.getenv("GOOGLE_DRIVE_OAUTH_CLIENT_SECRET", "")
+    )
+    google_drive_oauth_redirect_uri: str = field(
+        default_factory=lambda: os.getenv(
+            "GOOGLE_DRIVE_OAUTH_REDIRECT_URI",
+            "https://pie360backend.cl/api/customers/google-drive/oauth/callback",
+        )
+    )
+    google_drive_oauth_success_url: str = field(
+        default_factory=lambda: os.getenv(
+            "GOOGLE_DRIVE_OAUTH_SUCCESS_URL",
+            "https://pie-360-chile.web.app/agents/settings",
+        )
+    )
     agents_rate_requests_per_min_user: int = field(
         default_factory=lambda: int(os.getenv("AGENTS_RATE_REQUESTS_PER_MIN_USER", "10") or "10")
     )

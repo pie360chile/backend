@@ -17,15 +17,159 @@ from app.backend.classes.user_class import UserClass
 from app.backend.classes.school_class import SchoolClass
 from app.backend.classes.rol_class import RolClass
 from app.backend.classes.teaching_class import TeachingClass
+from app.backend.classes.customer_drive_class import CustomerDriveClass
 from app.backend.db.models import RolModel, SchoolModel, UserModel, UsersRolModel
 from app.backend.auth.auth_user import get_current_active_user
 from app.backend.utils.users_rol_period import resolve_period_year_for_session, users_rol_period_clause
 from datetime import datetime as dt
+from pydantic import BaseModel, Field
 
 customers = APIRouter(
     prefix="/customers",
     tags=["Customers"]
 )
+
+
+class CustomerDriveUpdateBody(BaseModel):
+    root_folder_id: str | None = Field(default=None)
+    credentials_json: str | None = Field(
+        default=None,
+        description="JSON OAuth (client_id, client_secret, refresh_token) o service_account",
+    )
+    enabled: bool | None = Field(default=None)
+    clear: bool = Field(default=False, description="Si true, borra la config Drive del cliente")
+
+
+@customers.get("/{customer_id}/google-drive/oauth/start")
+def start_customer_google_drive_oauth(
+    customer_id: int,
+    session_user: UserLogin = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Devuelve la URL de Google (tipo Web) para conectar el Drive de este customer."""
+    if int(getattr(session_user, "rol_id", 0) or 0) != 1:
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={"status": 403, "message": "Solo superadministrador.", "data": None},
+        )
+    result = CustomerDriveClass(db).start_oauth(customer_id)
+    if result.get("status") == "error":
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"status": 400, "message": result.get("message"), "data": None},
+        )
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={"status": 200, "message": "OK", "data": result.get("data")},
+    )
+
+
+@customers.get("/google-drive/oauth/callback")
+def google_drive_oauth_callback(
+    code: str | None = Query(None),
+    state: str | None = Query(None),
+    error: str | None = Query(None),
+    db: Session = Depends(get_db),
+):
+    """
+    Callback OAuth Web (sin auth de sesión: Google redirige aquí).
+    Guarda tokens del customer y redirige al admin.
+    """
+    from fastapi.responses import RedirectResponse
+    from app.backend.utils import google_drive_oauth as drive_oauth
+
+    if error:
+        url = drive_oauth.frontend_return_url(
+            ok=False, customer_id=None, message=str(error)
+        )
+        return RedirectResponse(url=url, status_code=302)
+
+    result = CustomerDriveClass(db).complete_oauth(code=code or "", state=state or "")
+    if result.get("status") == "error":
+        url = drive_oauth.frontend_return_url(
+            ok=False, customer_id=None, message=result.get("message") or "Error OAuth"
+        )
+        return RedirectResponse(url=url, status_code=302)
+
+    cid = (result.get("data") or {}).get("customer_id")
+    url = drive_oauth.frontend_return_url(
+        ok=True,
+        customer_id=int(cid) if cid else None,
+        message=result.get("message") or "OK",
+    )
+    return RedirectResponse(url=url, status_code=302)
+
+
+@customers.get("/{customer_id}/google-drive")
+def get_customer_google_drive(
+    customer_id: int,
+    session_user: UserLogin = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    if int(getattr(session_user, "rol_id", 0) or 0) != 1:
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={"status": 403, "message": "Solo superadministrador.", "data": None},
+        )
+    data = CustomerDriveClass(db).get(customer_id)
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={"status": 200, "message": "OK", "data": data},
+    )
+
+
+@customers.put("/{customer_id}/google-drive")
+def update_customer_google_drive(
+    customer_id: int,
+    body: CustomerDriveUpdateBody,
+    session_user: UserLogin = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    if int(getattr(session_user, "rol_id", 0) or 0) != 1:
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={"status": 403, "message": "Solo superadministrador.", "data": None},
+        )
+    result = CustomerDriveClass(db).upsert(
+        customer_id,
+        root_folder_id=body.root_folder_id,
+        credentials_json=body.credentials_json,
+        enabled=body.enabled,
+        clear=body.clear,
+    )
+    if result.get("status") == "error":
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"status": 400, "message": result.get("message"), "data": None},
+        )
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={"status": 200, "message": result.get("message"), "data": result.get("data")},
+    )
+
+
+@customers.post("/{customer_id}/google-drive/test")
+def test_customer_google_drive(
+    customer_id: int,
+    session_user: UserLogin = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    if int(getattr(session_user, "rol_id", 0) or 0) != 1:
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={"status": 403, "message": "Solo superadministrador.", "data": None},
+        )
+    result = CustomerDriveClass(db).test(customer_id)
+    if result.get("status") == "error":
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"status": 400, "message": result.get("message"), "data": None},
+        )
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={"status": 200, "message": result.get("message"), "data": result.get("data")},
+    )
+
 
 @customers.post("/")
 def index(customer_list: CustomerList, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):

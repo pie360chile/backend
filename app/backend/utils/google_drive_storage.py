@@ -1,4 +1,4 @@
-"""Subida de archivos a Google Drive (credenciales por colegio en settings)."""
+"""Subida de archivos a Google Drive (credenciales por customer)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,10 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
 
-from app.backend.utils.school_drive_config import DriveSchoolConfig
+from app.backend.utils.customer_drive_config import DriveCustomerConfig
+
+# Alias compat
+DriveSchoolConfig = DriveCustomerConfig
 
 DRIVE_SCOPES = ("https://www.googleapis.com/auth/drive",)
 _FOLDER_MIME = "application/vnd.google-apps.folder"
@@ -63,11 +66,54 @@ def _drive_service(cache_key: str, service_account_json: str):
     return build("drive", "v3", credentials=creds, cache_discovery=False)
 
 
+@lru_cache(maxsize=32)
+def _drive_service_oauth(cache_key: str, oauth_json: str):
+    try:
+        from google.auth.transport.requests import Request
+        from google.oauth2.credentials import Credentials
+        from googleapiclient.discovery import build
+    except ImportError as exc:
+        raise ValueError(
+            "Faltan dependencias Google Drive. Instala: "
+            "google-api-python-client google-auth"
+        ) from exc
+
+    import json
+
+    info = json.loads(oauth_json)
+    creds = Credentials(
+        token=info.get("token"),
+        refresh_token=info.get("refresh_token"),
+        token_uri=info.get("token_uri") or "https://oauth2.googleapis.com/token",
+        client_id=info.get("client_id"),
+        client_secret=info.get("client_secret"),
+        scopes=list(DRIVE_SCOPES),
+    )
+    if not creds.valid:
+        if creds.expired or not creds.token:
+            if not creds.refresh_token:
+                raise ValueError(
+                    "El access_token expiró y no hay refresh_token. "
+                    "Genera un nuevo refresh_token OAuth para este cliente."
+                )
+            creds.refresh(Request())
+    return build("drive", "v3", credentials=creds, cache_discovery=False)
+
+
 def _service_for_config(config: DriveSchoolConfig):
     import json
 
-    sa_json = json.dumps(config.service_account_info, sort_keys=True)
-    return _drive_service(config.cache_key, sa_json)
+    if getattr(config, "oauth_info", None):
+        return _drive_service_oauth(
+            config.cache_key,
+            json.dumps(config.oauth_info, sort_keys=True),
+        )
+    if not config.service_account_info:
+        raise ValueError("Drive sin credenciales (OAuth o service account).")
+    return _drive_service(
+        config.cache_key,
+        json.dumps(config.service_account_info, sort_keys=True),
+    )
 
 
 def _find_child_folder(config: DriveSchoolConfig, parent_id: str, name: str) -> str | None:
@@ -212,8 +258,8 @@ def delete_from_agent_folder(
     agent_name: str,
     relative_path: str,
 ) -> dict[str, Any]:
-    """Elimina (papelera) archivo o carpeta en Drive: {root}/{customer_id}/{agent_name}/{path}."""
-    from app.backend.utils.school_drive_config import load_agents_global_drive_config
+    """Elimina (papelera) archivo o carpeta en Drive del customer: {root}/{agent_name}/{path}."""
+    from app.backend.utils.customer_drive_config import load_customer_drive_config
 
     if int(customer_id) < 1:
         raise ValueError("customer_id inválido.")
@@ -222,18 +268,11 @@ def delete_from_agent_folder(
     if not parts:
         raise ValueError("No se puede eliminar la carpeta raíz del agente en Drive.")
 
-    config = load_agents_global_drive_config(db)
+    config = load_customer_drive_config(db, int(customer_id))
     root_id = config.root_folder_id.strip()
     agent_label = (agent_name or "").strip() or f"agent-{customer_id}"
 
-    customer_folder_id = _find_child_folder(config, root_id, str(int(customer_id)))
-    if not customer_folder_id:
-        return {
-            "ok": True,
-            "skipped": True,
-            "message": "Carpeta de cliente no existe en Drive.",
-        }
-    agent_folder_id = _find_child_folder(config, customer_folder_id, agent_label)
+    agent_folder_id = _find_child_folder(config, root_id, agent_label)
     if not agent_folder_id:
         return {
             "ok": True,
@@ -287,35 +326,30 @@ def _drive_api_error_message(exc: BaseException) -> str:
         )
     return text
 
-def sync_customer_agent_folders(db) -> dict[str, Any]:
+def sync_customer_agent_folders(db, customer_id: int | None = None) -> dict[str, Any]:
     """
-    Bajo la carpeta raíz de Agentes (agents_app_settings):
-      {customer_id}/{agent_name}/
-    - Crea carpetas faltantes
-    - Elimina (a la papelera) carpetas de agentes que ya no existen en BD
-    - Elimina carpetas de cliente numéricas sin agentes
+    En el Drive del customer: {root}/{agent_name}/
+    Si customer_id es None, sincroniza cada customer que tenga Drive configurado.
     """
     from app.backend.db.models.agent import AgentModel
-    from app.backend.utils.school_drive_config import load_agents_global_drive_config
-
-    try:
-        config = load_agents_global_drive_config(db)
-    except ValueError as exc:
-        return {"ok": False, "message": str(exc), "customers": [], "summary": {}}
-
-    agents = (
-        db.query(AgentModel)
-        .filter(AgentModel.customer_id.isnot(None))
-        .order_by(AgentModel.customer_id.asc(), AgentModel.name.asc())
-        .all()
+    from app.backend.utils.customer_drive_config import (
+        customer_drive_configured,
+        load_customer_drive_config,
     )
+
+    agents_q = db.query(AgentModel).filter(AgentModel.customer_id.isnot(None))
+    if customer_id is not None and int(customer_id) > 0:
+        agents_q = agents_q.filter(AgentModel.customer_id == int(customer_id))
+    agents = agents_q.order_by(AgentModel.customer_id.asc(), AgentModel.name.asc()).all()
 
     by_customer: dict[int, list[Any]] = {}
     for agent in agents:
         cid = int(agent.customer_id)
         by_customer.setdefault(cid, []).append(agent)
 
-    root_id = config.root_folder_id
+    if customer_id is not None and int(customer_id) > 0 and int(customer_id) not in by_customer:
+        by_customer[int(customer_id)] = []
+
     customers_out: list[dict[str, Any]] = []
     summary = {
         "customers_touched": 0,
@@ -327,62 +361,49 @@ def sync_customer_agent_folders(db) -> dict[str, Any]:
         "agent_folders_deleted": 0,
     }
 
-    expected_customer_ids = {str(cid) for cid in by_customer.keys()}
-
-    # 1) Limpiar carpetas de cliente huérfanas bajo la raíz (solo nombres numéricos).
-    for child in _list_child_folders(config, root_id):
-        name = child["name"]
-        if not name.isdigit():
-            continue
-        if name in expected_customer_ids:
+    for cid, agent_list in sorted(by_customer.items()):
+        if not customer_drive_configured(db, cid):
+            customers_out.append(
+                {
+                    "customer_id": cid,
+                    "ok": False,
+                    "message": "Drive no configurado para este customer.",
+                    "agents": [],
+                }
+            )
             continue
         try:
-            _trash_folder(config, child["id"])
-            summary["customer_folders_deleted"] += 1
-        except Exception:
-            # No abortar el sync completo por un borrado fallido.
+            config = load_customer_drive_config(db, cid)
+        except ValueError as exc:
+            customers_out.append(
+                {"customer_id": cid, "ok": False, "message": str(exc), "agents": []}
+            )
             continue
 
-    # 2) Crear / sincronizar por cada cliente con agentes.
-    for cid, agent_rows in by_customer.items():
         summary["customers_touched"] += 1
-        customer_folder_id, customer_created = _ensure_folder_with_status(
-            config, root_id, str(cid)
-        )
-        if customer_created:
-            summary["customer_folders_created"] += 1
-        else:
-            summary["customer_folders_existing"] += 1
+        root_id = config.root_folder_id
+        wanted_names = {(a.name or "").strip() for a in agent_list if (a.name or "").strip()}
 
-        expected_names = {
-            ((agent.name or "").strip() or f"agent-{agent.id}") for agent in agent_rows
-        }
+        for child in _list_child_folders(config, root_id):
+            name = child.get("name") or ""
+            if name not in wanted_names and name:
+                try:
+                    _trash_folder(config, child["id"])
+                    summary["agent_folders_deleted"] += 1
+                except Exception:
+                    pass
 
-        # Borrar carpetas de agente que ya no están en BD.
-        deleted_agents: list[dict[str, Any]] = []
-        for child in _list_child_folders(config, customer_folder_id):
-            if child["name"] in expected_names:
+        agent_rows: list[dict[str, Any]] = []
+        for agent in agent_list:
+            name = (agent.name or "").strip()
+            if not name:
                 continue
-            try:
-                _trash_folder(config, child["id"])
-                summary["agent_folders_deleted"] += 1
-                deleted_agents.append(
-                    {"name": child["name"], "folder_id": child["id"], "deleted": True}
-                )
-            except Exception:
-                continue
-
-        agent_items: list[dict[str, Any]] = []
-        for agent in agent_rows:
-            name = (agent.name or "").strip() or f"agent-{agent.id}"
-            folder_id, created = _ensure_folder_with_status(
-                config, customer_folder_id, name
-            )
+            folder_id, created = _ensure_folder_with_status(config, root_id, name)
             if created:
                 summary["agent_folders_created"] += 1
             else:
                 summary["agent_folders_existing"] += 1
-            agent_items.append(
+            agent_rows.append(
                 {
                     "agent_id": agent.id,
                     "name": name,
@@ -394,24 +415,23 @@ def sync_customer_agent_folders(db) -> dict[str, Any]:
         customers_out.append(
             {
                 "customer_id": cid,
-                "folder_id": customer_folder_id,
-                "created": customer_created,
-                "agents": agent_items,
-                "deleted_agents": deleted_agents,
+                "ok": True,
+                "folder_id": root_id,
+                "created": False,
+                "agents": agent_rows,
             }
         )
 
     return {
         "ok": True,
         "message": (
-            f"Sincronizado: +{summary['agent_folders_created']} creadas, "
+            f"Sincronizado por customer: +{summary['agent_folders_created']} creadas, "
             f"{summary['agent_folders_existing']} existentes, "
-            f"-{summary['agent_folders_deleted']} agentes eliminados, "
-            f"-{summary['customer_folders_deleted']} clientes sin agentes eliminados."
+            f"-{summary['agent_folders_deleted']} eliminadas."
         ),
-        "root_folder_id": root_id,
-        "customers": customers_out,
+        "root_folder_id": None,
         "summary": summary,
+        "customers": customers_out,
     }
 
 
@@ -532,21 +552,21 @@ def upload_to_agent_folder(
     data: bytes,
     mime_type: str | None = None,
 ) -> dict[str, Any]:
-    """Sube un archivo a Drive Agentes: {root}/{customer_id}/{agent_name}/[parent…]/file."""
-    from app.backend.utils.school_drive_config import load_agents_global_drive_config
+    """Sube un archivo a Drive del customer: {root}/{agent_name}/[parent…]/file."""
+    from app.backend.utils.school_drive_config import load_customer_drive_config
 
     if not data:
         raise ValueError("El archivo está vacío.")
     if int(customer_id) < 1:
         raise ValueError("customer_id inválido.")
 
-    config = load_agents_global_drive_config(db)
+    config = load_customer_drive_config(db, int(customer_id))
     root_id = config.root_folder_id.strip()
     agent_label = (agent_name or "").strip() or f"agent-{customer_id}"
 
     try:
-        customer_folder_id = _ensure_folder(config, root_id, str(int(customer_id)))
-        agent_folder_id = _ensure_folder(config, customer_folder_id, agent_label)
+        # La raíz ya es del customer: no anidar otro nivel customer_id.
+        agent_folder_id = _ensure_folder(config, root_id, agent_label)
 
         posix = Path(relative_path).as_posix().strip("/")
         parts = [p for p in posix.split("/") if p and p not in (".", "..")]
@@ -586,9 +606,7 @@ def upload_to_agent_folder(
     except Exception as exc:
         raise ValueError(_drive_api_error_message(exc)) from exc
 
-    logical = f"{int(customer_id)}/{agent_label}/{'/'.join(parts[:-1] + [name])}".replace(
-        "//", "/"
-    )
+    logical = f"{agent_label}/{'/'.join(parts[:-1] + [name])}".replace("//", "/")
     return {
         "ok": True,
         "file_id": created.get("id"),
