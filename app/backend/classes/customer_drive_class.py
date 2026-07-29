@@ -24,6 +24,15 @@ def _now() -> datetime:
     return datetime.utcnow()
 
 
+def _mask_secret(value: str | None, head: int = 8) -> str | None:
+    text = (value or "").strip()
+    if not text:
+        return None
+    if len(text) <= head:
+        return "••••••••"
+    return f"{text[:head]}••••••••"
+
+
 class CustomerDriveClass:
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -85,9 +94,26 @@ class CustomerDriveClass:
                 if not hint:
                     hint = "Credenciales parciales (falta conectar Google)"
         configured = customer_drive_configured(self.db, int(customer_id))
-        can_start = drive_oauth.oauth_redirect_configured() and (
-            has_oauth_client or bool(drive_oauth.platform_oauth_client())
-        )
+        can_start = drive_oauth.oauth_redirect_configured() and has_oauth_client
+        client_id_preview = None
+        client_secret_preview = None
+        refresh_token_preview = None
+        if raw:
+            try:
+                pair = parse_oauth_client_pair(raw)
+                client_id_preview = _mask_secret(pair["client_id"])
+                client_secret_preview = _mask_secret(pair["client_secret"])
+            except ValueError:
+                pass
+            try:
+                kind, info = parse_drive_credentials_json(raw)
+                if kind == "oauth":
+                    client_id_preview = _mask_secret(str(info.get("client_id") or ""))
+                    client_secret_preview = _mask_secret(str(info.get("client_secret") or ""))
+                    if info.get("refresh_token"):
+                        refresh_token_preview = _mask_secret(str(info.get("refresh_token") or ""))
+            except ValueError:
+                pass
         return {
             "customer_id": int(customer_id),
             "enabled": bool(row.enabled) if row else False,
@@ -95,6 +121,9 @@ class CustomerDriveClass:
             "has_credentials": bool(raw) and has_refresh,
             "has_oauth_client": has_oauth_client,
             "credentials_hint": hint,
+            "client_id_preview": client_id_preview,
+            "client_secret_preview": client_secret_preview,
+            "refresh_token_preview": refresh_token_preview,
             "auth_kind": auth_kind,
             "configured": configured,
             "oauth_web_ready": can_start,

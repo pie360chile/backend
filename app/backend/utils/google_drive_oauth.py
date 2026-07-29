@@ -175,15 +175,26 @@ def exchange_code_for_credentials(
     }
 
 
+def _mask_secret(value: str | None, head: int = 8) -> str | None:
+    text = (value or "").strip()
+    if not text:
+        return None
+    if len(text) <= head:
+        return "••••••••"
+    return f"{text[:head]}••••••••"
+
+
 def frontend_return_url(*, ok: bool, customer_id: int | None, message: str = "") -> str:
     base = (
         settings.google_drive_oauth_success_url
         or "https://pie-360-chile.web.app/agents/settings"
-    ).strip()
+    ).strip().rstrip("/")
+    # URL amigable: /agents/settings/cliente/{id}
+    if customer_id and base.endswith("/agents/settings"):
+        base = f"{base}/cliente/{int(customer_id)}"
     sep = "&" if "?" in base else "?"
     q = {
         "drive_oauth": "ok" if ok else "error",
-        "customer_id": str(customer_id or ""),
         "message": message[:200],
     }
     return f"{base}{sep}{urlencode(q)}"
