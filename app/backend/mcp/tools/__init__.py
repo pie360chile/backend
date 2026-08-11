@@ -18,6 +18,7 @@ def register_tools(mcp: "FastMCP") -> None:
 
     from app.backend.mcp.tools import (
         create_document,
+        get_student_psychopedagogical_evaluation,
         save_document_to_google_drive,
         search_agent_files,
         store_data,
@@ -26,6 +27,7 @@ def register_tools(mcp: "FastMCP") -> None:
     create_document.register(mcp)
     store_data.register(mcp)
     search_agent_files.register(mcp)
+    get_student_psychopedagogical_evaluation.register(mcp)
     save_document_to_google_drive.register(mcp)
 
     _registered = True

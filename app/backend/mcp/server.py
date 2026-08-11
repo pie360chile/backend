@@ -21,7 +21,9 @@ agents_mcp = FastMCP(
         "sube a Google Drive (Liceo/Año/Curso/RUT/RUT_TipoDocumento).\n"
         "2) store_data — solo guarda campos pending (sin generar aún).\n"
         "3) search_agent_files — busca texto en archivos del agente (_derived/).\n"
-        "4) save_document_to_google_drive — re-sube un documento ya generado al árbol Drive.\n"
+        "4) get_student_psychopedagogical_evaluation — lee el psicopedagógico "
+        "desde la ficha/carpeta del estudiante (doc 27) si no está en Files.\n"
+        "5) save_document_to_google_drive — re-sube un documento ya generado al árbol Drive.\n"
         "Auth: parámetro secret = MCP_SECRET.\n"
         "Agregar tools en app/backend/mcp/tools/ (una por archivo)."
     ),

@@ -99,6 +99,17 @@ class AgentsMcpSearchFilesRequest(BaseModel):
     student_rut: str | None = Field(default=None)
 
 
+class AgentsMcpGetStudentPsychopedRequest(BaseModel):
+    agent_id: str = Field(..., min_length=1)
+    customer_id: int = Field(..., ge=1)
+    student_id: int = Field(..., ge=1)
+    document_id: int = Field(
+        default=27,
+        ge=1,
+        description="Tipo de documento en la ficha (27 = Informe Evaluación Psicopedagógica)",
+    )
+
+
 class AgentsMcpCreateDocumentRequest(BaseModel):
     agent_id: str = Field(..., min_length=1)
     customer_id: int = Field(..., ge=1)

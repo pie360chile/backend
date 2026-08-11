@@ -251,6 +251,9 @@ class AgentsMcpClass:
                         "downloadUrl": row.download_url,
                     }
                 ],
+                "formFilled": bool(result.get("formFilled")),
+                "familyReportId": result.get("familyReportId"),
+                "psychopedEvaluationId": result.get("psychopedEvaluationId"),
             },
         }
 
@@ -301,6 +304,82 @@ class AgentsMcpClass:
             },
         }
 
+    def get_student_psychopedagogical_evaluation(
+        self,
+        *,
+        agent_id: str,
+        customer_id: int,
+        student_id: int,
+        document_id: int | None = None,
+    ) -> dict[str, Any]:
+        """
+        Lee el informe psicopedagógico (u otro document_id) desde la ficha/carpeta
+        del estudiante (tabla folders → files/system/students), no desde Files del agente.
+        """
+        aid = (agent_id or "").strip()
+        if not aid:
+            return {"status": "error", "message": "agent_id es requerido.", "http_status": 400}
+        if int(customer_id) < 1:
+            return {"status": "error", "message": "customer_id inválido.", "http_status": 400}
+        if int(student_id) < 1:
+            return {"status": "error", "message": "student_id inválido.", "http_status": 400}
+
+        agent = (
+            self.db.query(AgentModel)
+            .filter(
+                AgentModel.id == aid,
+                AgentModel.customer_id == int(customer_id),
+            )
+            .first()
+        )
+        if not agent:
+            return {"status": "error", "message": "Agente no encontrado.", "http_status": 404}
+
+        from app.backend.utils.agents_student_folder_context import (
+            PSYCHOPED_CATALOG_DOCUMENT_ID,
+            extract_student_catalog_document_text,
+        )
+
+        doc_id = int(document_id) if document_id and int(document_id) > 0 else PSYCHOPED_CATALOG_DOCUMENT_ID
+        result = extract_student_catalog_document_text(
+            self.db,
+            student_id=int(student_id),
+            document_id=doc_id,
+        )
+        if not result.get("ok"):
+            return {
+                "status": "error",
+                "message": result.get("message") or "No se encontró el documento en la ficha.",
+                "http_status": int(result.get("http_status") or 404),
+                "data": {
+                    "agentId": agent.id,
+                    "studentId": int(student_id),
+                    "documentId": doc_id,
+                    "filename": result.get("filename"),
+                },
+            }
+        return {
+            "status": "success",
+            "message": result.get("message") or "OK",
+            "data": {
+                "agentId": agent.id,
+                "agentName": agent.name,
+                "studentId": result.get("studentId"),
+                "documentId": result.get("documentId"),
+                "folderId": result.get("folderId"),
+                "versionId": result.get("versionId"),
+                "filename": result.get("filename"),
+                "downloadUrl": result.get("downloadUrl"),
+                "truncated": result.get("truncated"),
+                "chars": result.get("chars"),
+                "context": result.get("context"),
+                "source": "student_folder",
+                "isLatest": True,
+                "addedDate": result.get("addedDate"),
+                "updatedDate": result.get("updatedDate"),
+            },
+        }
+
     def create_document(
         self,
         *,
@@ -318,7 +397,8 @@ class AgentsMcpClass:
         - document_id = tipo de documento PIE360 (catálogo)
         - plantilla .docx/.pdf subida en Agente → Documentos para ese document_id
         - al generar: rellena Word/PDF + guarda en carpeta del estudiante
-          + persiste el formulario asociado a ese tipo (ej. familia → family_reports)
+          + persiste el formulario asociado a ese tipo
+            (familia → family_reports; psicoped → psychopedagogical_evaluation_info)
         """
         aid = (agent_id or "").strip()
         template = (
@@ -398,10 +478,16 @@ class AgentsMcpClass:
             "data": {
                 "save": save,
                 "responseFiles": data.get("responseFiles") or [],
-                "formFilled": bool(save.get("status") == "generated"),
+                "formFilled": bool(
+                    data.get("formFilled")
+                    or data.get("familyReportId")
+                    or data.get("psychopedEvaluationId")
+                    or save.get("status") == "generated"
+                ),
                 "documentId": int(template.document_id),
                 "documentName": template.document_name,
-                "familyReportId": None,
+                "familyReportId": data.get("familyReportId"),
+                "psychopedEvaluationId": data.get("psychopedEvaluationId"),
                 "googleDrive": drive_info,
                 "googleDriveError": drive_error,
             },
@@ -580,37 +666,47 @@ class AgentsMcpClass:
             "data": payload,
         }
 
-    def build_store_data_prompt_block(
-        self,
-        *,
-        agent: AgentModel,
-        customer_id: int,
-        document_id: int | None = None,
-        student_id: int | None = None,
-        student_rut: str | None = None,
-        mcp_url: str,
-    ) -> str:
-        """Instrucciones: plantilla Documentos ↔ document_id ↔ formulario."""
-        q = self.db.query(AgentDocumentTemplateModel).filter(
-            AgentDocumentTemplateModel.agent_id == agent.id
-        )
-        if document_id is not None and int(document_id) > 0:
-            preferred = q.filter(
-                AgentDocumentTemplateModel.document_id == int(document_id)
-            ).all()
-            templates = preferred or q.order_by(
-                AgentDocumentTemplateModel.document_name.asc()
-            ).all()
-        else:
-            templates = q.order_by(AgentDocumentTemplateModel.document_name.asc()).all()
+    def _prompt_content_rules_for_document(self, document_id: int | None) -> list[str]:
+        """Reglas de contenido según tipo de documento (familia vs psicopedagógico)."""
+        doc = int(document_id) if document_id is not None else None
+        if doc == 27:
+            return [
+                "Contenido obligatorio del INFORME DE EVALUACIÓN PSICOPEDAGÓGICA (document_id=27):",
+                "- AUTORIDAD DE CAMPOS: usa SOLO los nombres listados en «Plantillas configuradas»",
+                "  (tags de la plantilla Word cargada en Agente → Documentos). Esos son los únicos",
+                "  nombres válidos en el JSON `fields`.",
+                "- NO inventes ni uses nombres del formulario web si la plantilla tiene otros",
+                "  (ej. no uses `diagnosis` si la plantilla pide `diagnostic`; no uses `social_name`",
+                "  / `age` si pide `student_social_name` / `student_age`; no uses `admission_type`",
+                "  si pide `admission_type_1`/`_2`/`_3`; no uses `pedagogical_scale_*` si la",
+                "  plantilla no los lista).",
+                "- Rellena los campos NARRATIVOS de ESA plantilla con texto respaldado en los",
+                "  ARCHIVOS del agente / texto derivado (cuestionarios, pautas, anamnesis, etc.).",
+                "- EXTENSIÓN: cada narrativo DETALLADO (aprox. 80–180 palabras; 2 a 5 oraciones).",
+                "  Prohibido una sola frase corta si hay evidencia en los archivos.",
+                "- INSTRUMENTOS: si el campo existe en la plantilla, lista con guion (-), un ítem",
+                "  por línea.",
+                "- ANÁLISIS / SÍNTESIS / SUGERENCIAS / CONCLUSIÓN: completa cada campo narrativo",
+                "  que aparezca en la lista de la plantilla (si hay evidencia).",
+                "- Checkboxes / tipos de ingreso / escalas: solo si aparecen en la lista de la",
+                "  plantilla; sigue exactamente esos nombres y valores esperados por el Word.",
+                "- NO uses campos de Informe a la Familia (agreements, collaborative_work,",
+                "  supports de hogar).",
+                "- Si en ESTE turno hay bloque ARCHIVOS / texto derivado del estudiante, ÚSALO:",
+                "  no digas que faltan antecedentes si el texto está en el contexto.",
+                "- NO dejes el informe solo con datos personales (nombre, RUT, curso, fechas).",
+                "- Si un dato no está en los archivos, ese campo va \"\" (vacío). No inventes.",
+                "- FIDELIDAD DOCUMENTAL: nunca presentes como hecho algo que no esté en los archivos;",
+                "  nunca mezcles antecedentes entre estudiantes distintos.",
+                "- REDACCIÓN: español latino, formal e inclusivo; sin lenguaje estigmatizante;",
+                "  en TDA/TEA/DIL describe cualitativamente (sin puntuaciones numéricas inventadas).",
+                "  Diagnósticos documentados con Mayúscula Inicial En Cada Palabra;",
+                "  «años»/«meses» en minúscula. Tipografía la define la plantilla PIE360.",
+                "- Tú solo entregas fields; PIE360 genera el archivo.",
+            ]
 
-        lines: list[str] = [
-            "Documentos del agente (regla fija):",
-            "- Cada MODELO se carga en Agente → Documentos.",
-            "- Cada modelo está asociado a UN tipo de documento PIE360 (document_id)",
-            "  y a SU formulario (al generar se rellena ese formulario).",
-            "- create_document SIEMPRE usa la plantilla de ese document_id (no inventes otra).",
-            "",
+        # Default / Informe a la Familia (7) u otros
+        return [
             "Contenido obligatorio del informe:",
             "- Debes rellenar los campos NARRATIVOS de la plantilla (motivos, instrumentos,",
             "  diagnóstico general, fortalezas, apoyos, acuerdos, etc.) con texto respaldado",
@@ -670,6 +766,10 @@ class AgentsMcpClass:
             "  aparecen de forma verificable; no los omitas.",
             "- Si en ESTE turno hay bloque ARCHIVOS / texto derivado del estudiante, ÚSALO:",
             "  no digas que «no se adjuntó» el documento de evaluación ni que faltan antecedentes.",
+            "- Si NO hay psicopedagógico usable en Files del agente, PIE360 busca en la ficha",
+            "  del estudiante (document_id=27) e inyecta el bloque",
+            "  «INFORME PSICOPEDAGÓGICO DESDE FICHA DEL ESTUDIANTE». Si aparece, úsalo como",
+            "  fuente principal de narrativos. Tool MCP: get_student_psychopedagogical_evaluation.",
             "- NO dejes el informe solo con datos personales (nombre, RUT, curso, fechas).",
             "  Eso no es un informe completo.",
             "- Si un dato no está en los archivos, ese campo va \"\" (vacío). No inventes.",
@@ -693,22 +793,69 @@ class AgentsMcpClass:
             "  contexto te lo indique en ESTE turno: tú solo entregas fields; PIE360 genera el archivo.",
             "- Si en un mensaje anterior falló la plantilla pero ahora el usuario pide generar de nuevo,",
             "  vuelve a enviar el JSON fields completo (con narrativo); no asumas que sigue fallando.",
-            "",
-            "Flujo:",
-            "1) Lee tu ROL y los ARCHIVOS/JSON del agente.",
-            "2) Redacta un resumen breve en el chat.",
-            "3) Si hay que generar el documento, al FINAL un bloque JSON con TODOS los campos",
-            "   de la plantilla de ese document_id (narrativos incluidos):",
-            "```json",
-            '{"fields": {"nombre_campo": "texto completo", ...}}',
-            "```",
-            "   El servidor ejecuta create_document → Word/PDF con esa plantilla →",
-            "   carpeta del estudiante → formulario → Google Drive",
-            "   (Liceo/Año/Curso/RUT/RUT_TipoDocumento.ext).",
-            "",
-            f"IDs: agent_id={agent.id}, customer_id={int(customer_id)}",
-            f"MCP create_document URL: {mcp_url}",
         ]
+
+    def build_store_data_prompt_block(
+        self,
+        *,
+        agent: AgentModel,
+        customer_id: int,
+        document_id: int | None = None,
+        student_id: int | None = None,
+        student_rut: str | None = None,
+        mcp_url: str,
+    ) -> str:
+        """Instrucciones: plantilla Documentos ↔ document_id ↔ formulario."""
+        q = self.db.query(AgentDocumentTemplateModel).filter(
+            AgentDocumentTemplateModel.agent_id == agent.id
+        )
+        if document_id is not None and int(document_id) > 0:
+            preferred = q.filter(
+                AgentDocumentTemplateModel.document_id == int(document_id)
+            ).all()
+            templates = preferred or q.order_by(
+                AgentDocumentTemplateModel.document_name.asc()
+            ).all()
+        else:
+            templates = q.order_by(AgentDocumentTemplateModel.document_name.asc()).all()
+
+        # Si aún no hay document_id, inferir por nombre del agente
+        effective_doc = int(document_id) if document_id is not None else None
+        if effective_doc is None:
+            aname = (agent.name or "").lower()
+            if "psicoped" in aname:
+                effective_doc = 27
+            elif "familia" in aname:
+                effective_doc = 7
+
+        lines: list[str] = [
+            "Documentos del agente (regla fija):",
+            "- Cada MODELO se carga en Agente → Documentos.",
+            "- Cada modelo está asociado a UN tipo de documento PIE360 (document_id)",
+            "  y a SU formulario (al generar se rellena ese formulario).",
+            "- create_document SIEMPRE usa la plantilla de ese document_id (no inventes otra).",
+            "",
+        ]
+        lines.extend(self._prompt_content_rules_for_document(effective_doc))
+        lines.extend(
+            [
+                "",
+                "Flujo:",
+                "1) Lee tu ROL y los ARCHIVOS/JSON del agente.",
+                "2) Redacta un resumen breve en el chat.",
+                "3) Si hay que generar el documento, al FINAL un bloque JSON con TODOS los campos",
+                "   de la plantilla listada abajo (mismos nombres EXACTOS; narrativos incluidos):",
+                "```json",
+                '{"fields": {"nombre_campo": "texto completo", ...}}',
+                "```",
+                "   El servidor ejecuta create_document → Word/PDF con esa plantilla →",
+                "   carpeta del estudiante → formulario → Google Drive",
+                "   (Liceo/Año/Curso/RUT/RUT_TipoDocumento.ext).",
+                "",
+                f"IDs: agent_id={agent.id}, customer_id={int(customer_id)}",
+                f"MCP create_document URL: {mcp_url}",
+            ]
+        )
         if student_id:
             lines.append(f"- student_id del contexto: {int(student_id)}")
         if student_rut:
@@ -724,17 +871,26 @@ class AgentsMcpClass:
                     "- El nombre solo no basta (puede haber homónimos).",
                 ]
             )
-        if document_id:
+        if effective_doc:
             lines.append(
-                f"- document_id prioritario (tipo + formulario + plantilla): {int(document_id)}"
+                f"- document_id prioritario (tipo + formulario + plantilla): {int(effective_doc)}"
             )
 
         lines.append("")
-        lines.append("Plantillas configuradas (document_id → campos del formulario/plantilla):")
+        lines.append(
+            "Plantillas configuradas (document_id → CAMPOS OBLIGATORIOS del Word;"
+            " usa exactamente estos nombres en `fields`):"
+        )
         if not templates:
-            lines.append(
-                "- (ninguna) Sube el modelo en Documentos del agente asociado al tipo de documento."
-            )
+            if effective_doc == 27:
+                lines.append(
+                    "- (ninguna plantilla subida aún) Sube el modelo en Agente → Documentos"
+                    " (document_id=27). Sin plantilla no hay lista de campos fiable."
+                )
+            else:
+                lines.append(
+                    "- (ninguna) Sube el modelo en Documentos del agente asociado al tipo de documento."
+                )
         else:
             for tpl in templates:
                 fields = fields_from_json(tpl.detected_fields)
@@ -744,6 +900,9 @@ class AgentsMcpClass:
                 if fields:
                     for field in fields:
                         lines.append(f"  · {field}")
+                    lines.append(
+                        "  → El JSON `fields` debe usar ESTOS nombres (no los del formulario web)."
+                    )
                 else:
                     lines.append("  · (sin campos detectados en la plantilla)")
                 example_fields = {f: f"<{f}>" for f in (fields[:8] if fields else ["campo"])}

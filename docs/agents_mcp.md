@@ -11,13 +11,15 @@ app/backend/mcp/
 └── tools/
     ├── create_document.py              # genera + ficha + sube a Drive
     ├── save_document_to_google_drive.py # re-sube a Drive (árbol colegio)
+    ├── get_student_psychopedagogical_evaluation.py  # lee doc 27 desde ficha
     ├── store_data.py
     └── search_agent_files.py
 ```
 
 Negocio: `classes/agents_mcp_class.py`  
 Generación física: `classes/agents_document_service.py` (`generate_and_save_document`)  
-Chat auto: `classes/agents_chat_class.py`
+Chat auto: `classes/agents_chat_class.py`  
+Si Files del agente no trae el psicopedagógico del estudiante, el chat inyecta el de la ficha (document_id=27).
 
 ## Asociación Documentos (importante)
 
@@ -53,6 +55,7 @@ Las carpetas se crean si no existen. Si el archivo ya está, se reemplaza.
 |------|------|
 | `create_document` | `POST /api/agents/mcp/create_document` |
 | `save_document_to_google_drive` | `POST /api/agents/mcp/save_document_to_google_drive` |
+| `get_student_psychopedagogical_evaluation` | `POST /api/agents/mcp/get_student_psychopedagogical_evaluation` |
 | `store_data` | `POST /api/agents/mcp/store_data` |
 | `search_agent_files` | `POST /api/agents/mcp/search_files` |
 

@@ -107,6 +107,25 @@ def _build_system_prompt(
         )
         if files_block:
             parts.append(files_block)
+
+        # Si Files no trae el psicopedagógico del caso → leer ficha del estudiante (doc 27)
+        try:
+            from app.backend.utils.agents_student_folder_context import (
+                maybe_build_ficha_psychoped_block,
+            )
+
+            ficha_block = maybe_build_ficha_psychoped_block(
+                db,
+                student_id=student_id,
+                document_id=document_id,
+                files_block=files_block or "",
+                student_name=student_name,
+                student_rut=student_rut,
+            )
+            if ficha_block:
+                parts.append(ficha_block)
+        except Exception:
+            pass
     except Exception:
         pass
 
@@ -212,6 +231,12 @@ class AgentsChatClass:
         resolved_document_id = document_id or infer_document_id(
             self.db, agent_id, text, history
         )
+        if not resolved_document_id:
+            aname = (agent_row.name or "").lower()
+            if "psicoped" in aname:
+                resolved_document_id = 27
+            elif "familia" in aname:
+                resolved_document_id = 7
         effective_rut = (student_rut or rut_used or "").strip() or None
 
         # Sin RUT/ficha: pedir RUT antes de llamar al LLM / generar documento.

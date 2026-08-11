@@ -25,6 +25,15 @@ from app.backend.utils.agents_family_report_store import (
     link_folder_to_family_report,
     persist_family_report_from_agent,
 )
+from app.backend.utils.agents_psychoped_fill import (
+    PSYCHOPED_CONTENT_CONTROL_ALIASES,
+    PSYCHOPED_DOCUMENT_ID,
+    normalize_psychoped_replacements,
+)
+from app.backend.utils.agents_psychoped_report_store import (
+    link_folder_to_psychoped_evaluation,
+    persist_psychoped_from_agent,
+)
 
 _FAMILIA_DOCUMENT_ID = FAMILIA_DOCUMENT_ID
 _WORD_PLACEHOLDERS = (
@@ -159,6 +168,8 @@ def generate_and_save_document(
     student_ctx = _student_context(db, student_id, int(template.document_id))
     if is_familia_document(int(template.document_id)):
         replacements = merge_pie360_fallback_into_replacements(replacements, student_ctx)
+    elif int(template.document_id) == PSYCHOPED_DOCUMENT_ID:
+        replacements = normalize_psychoped_replacements(replacements, student_ctx)
     output_dir = Path(settings.files_dir) / "system" / "students"
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -177,12 +188,19 @@ def generate_and_save_document(
             )
         else:
             shutil.copy2(template_abs, output_path)
+            fill_kwargs: dict[str, Any] = {
+                "remove_literal_strings": list(_WORD_PLACEHOLDERS),
+                "preserve_empty_content_controls": True,
+            }
+            if int(template.document_id) == PSYCHOPED_DOCUMENT_ID:
+                fill_kwargs["content_control_tag_aliases"] = (
+                    PSYCHOPED_CONTENT_CONTROL_ALIASES
+                )
             result = DocumentsClass.fill_docx_form(
                 str(output_path),
                 replacements,
                 str(output_path),
-                remove_literal_strings=list(_WORD_PLACEHOLDERS),
-                preserve_empty_content_controls=True,
+                **fill_kwargs,
             )
             if result.get("status") != "error" and not validate_docx(output_path):
                 result = {
@@ -224,6 +242,7 @@ def generate_and_save_document(
         return folder_result
 
     family_report_id: int | None = None
+    psychoped_evaluation_id: int | None = None
     if int(template.document_id) == _FAMILIA_DOCUMENT_ID:
         fr_result = persist_family_report_from_agent(
             db,
@@ -242,6 +261,26 @@ def generate_and_save_document(
             }
         family_report_id = fr_result.get("id")
         link_folder_to_family_report(db, folder_result.get("id"), family_report_id)
+    elif int(template.document_id) == PSYCHOPED_DOCUMENT_ID:
+        pe_result = persist_psychoped_from_agent(
+            db,
+            student_id,
+            replacements,
+            student_context=student_ctx,
+        )
+        if pe_result.get("status") == "error":
+            return {
+                "status": "error",
+                "message": (
+                    "The Word file was generated but the psychopedagogical form could not "
+                    f"be saved to the student record: {pe_result.get('message', 'unknown error')}"
+                ),
+                "filename": filename,
+            }
+        psychoped_evaluation_id = pe_result.get("id")
+        link_folder_to_psychoped_evaluation(
+            db, folder_result.get("id"), psychoped_evaluation_id
+        )
 
     folder_id = folder_result.get("id") if isinstance(folder_result, dict) else None
     download_url = f"/files/system/students/{filename}" if filename else None
@@ -256,4 +295,6 @@ def generate_and_save_document(
         "formatType": template.format_type,
         "studentId": student_id,
         "familyReportId": family_report_id,
+        "psychopedEvaluationId": psychoped_evaluation_id,
+        "formFilled": bool(family_report_id or psychoped_evaluation_id),
     }

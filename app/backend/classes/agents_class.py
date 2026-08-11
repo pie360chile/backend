@@ -444,6 +444,30 @@ class AgentsClass:
             },
         }
 
+    def resolve_download_file(
+        self, agent_id: str, customer_id: int, path: str
+    ) -> dict[str, Any]:
+        agent = self._get_agent(agent_id, customer_id)
+        if not agent:
+            return {"status": "error", "message": "Agent not found.", "http_status": 404}
+        try:
+            target = storage.resolve_target(agent.name, path, int(customer_id))
+        except ValueError as exc:
+            return {"status": "error", "message": str(exc), "http_status": 400}
+        if not target.exists() or not target.is_file():
+            return {
+                "status": "error",
+                "message": "File not found.",
+                "http_status": 404,
+            }
+        return {
+            "status": "success",
+            "data": {
+                "path": str(target),
+                "filename": target.name,
+            },
+        }
+
     def delete_file(self, agent_id: str, customer_id: int, path: str) -> dict[str, Any]:
         agent = self._get_agent(agent_id, customer_id)
         if not agent:

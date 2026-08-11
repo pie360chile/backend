@@ -1,7 +1,7 @@
 import json
 
 from fastapi import APIRouter, Depends, File, Form, Header, Query, UploadFile, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.backend.auth.auth_user import get_current_active_user
@@ -22,6 +22,7 @@ from app.backend.schemas.agents import (
     AgentCreateFolderRequest,
     AgentCreateRequest,
     AgentsMcpCreateDocumentRequest,
+    AgentsMcpGetStudentPsychopedRequest,
     AgentsMcpSaveDocumentToDriveRequest,
     AgentsMcpSearchFilesRequest,
     AgentsMcpStoreDataRequest,
@@ -140,6 +141,34 @@ def mcp_search_files_rest(
         return api_error(
             status_code=result.get("http_status", status.HTTP_400_BAD_REQUEST),
             message=result.get("message") or "Error",
+        )
+    return api_response(message=result.get("message"), data=result.get("data"))
+
+
+@agents.post("/mcp/get_student_psychopedagogical_evaluation")
+def mcp_get_student_psychopedagogical_evaluation_rest(
+    body: AgentsMcpGetStudentPsychopedRequest,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(default=None),
+    x_mcp_secret: str | None = Header(default=None, alias="X-MCP-Secret"),
+):
+    """REST gemelo: lee psicopedagógico (doc 27) desde la ficha del estudiante."""
+    if not _mcp_secret_ok(authorization, x_mcp_secret):
+        return api_error(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            message="MCP secret inválido.",
+        )
+    result = AgentsMcpClass(db).get_student_psychopedagogical_evaluation(
+        agent_id=body.agent_id,
+        customer_id=body.customer_id,
+        student_id=body.student_id,
+        document_id=body.document_id,
+    )
+    if result.get("status") == "error":
+        return api_error(
+            status_code=result.get("http_status", status.HTTP_400_BAD_REQUEST),
+            message=result.get("message") or "Error",
+            data=result.get("data"),
         )
     return api_response(message=result.get("message"), data=result.get("data"))
 
@@ -605,6 +634,37 @@ def list_agent_files(
             message=result.get("message", "Error"),
         )
     return api_response(data=result.get("data"))
+
+
+@agents.get("/{agent_id}/files/download")
+def download_agent_file(
+    agent_id: str,
+    path: str = Query(..., min_length=1),
+    customer_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+    session_user: UserModel = Depends(get_current_active_user),
+):
+    denied = _forbid_agents_access(session_user, db)
+    if denied:
+        return denied
+    cid, err = _resolve_customer_id(session_user, customer_id)
+    if err or not cid:
+        return api_error(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            message=err or "customer_id is required",
+        )
+    result = AgentsClass(db).resolve_download_file(agent_id, cid, path)
+    if result.get("status") == "error":
+        return api_error(
+            status_code=result.get("http_status", status.HTTP_404_NOT_FOUND),
+            message=result.get("message", "Error"),
+        )
+    data = result.get("data") or {}
+    return FileResponse(
+        path=data["path"],
+        filename=data["filename"],
+        media_type="application/octet-stream",
+    )
 
 
 @agents.post("/{agent_id}/files/folder")
