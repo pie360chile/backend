@@ -66,9 +66,22 @@ class DynamicFormClass:
             .order_by(desc(StudentGuardianModel.id))
             .first()
         )
-        if not g or not g.celphone:
+        if not g:
             return None
-        return str(g.celphone).strip()
+        # Sin nombre de apoderado ni celular → no disparar
+        g_name = " ".join(
+            x
+            for x in [
+                (g.names or "").strip(),
+                (g.father_lastname or "").strip(),
+                (g.mother_lastname or "").strip(),
+            ]
+            if x
+        ).strip()
+        phone = (g.celphone or "").strip()
+        if not g_name or not phone:
+            return None
+        return phone
 
     def _student_display_name(self, student_id: int) -> str:
         p = (
@@ -303,16 +316,10 @@ class DynamicFormClass:
             self.db.commit()
             self.db.refresh(row)
 
-            notify_ids = self._parse_notify_ids(data)
-            whatsapp_summary = None
-            if notify_ids is not None and len(notify_ids) > 0:
-                whatsapp_summary = self._run_whatsapp_notify(notify_ids, name)
-
             return {
                 "status": "success",
                 "message": "Formulario creado.",
                 "id": row.id,
-                "whatsapp": whatsapp_summary,
             }
         except Exception as e:
             self.db.rollback()
@@ -347,22 +354,69 @@ class DynamicFormClass:
             self.db.commit()
             self.db.refresh(row)
 
-            notify_ids = None
-            if "notifyStudentIds" in data or "notify_student_ids" in data:
-                tmp = self._parse_notify_ids(data)
-                notify_ids = tmp if tmp is not None else []
-            whatsapp_summary = None
-            if notify_ids is not None and len(notify_ids) > 0:
-                whatsapp_summary = self._run_whatsapp_notify(notify_ids, row.name or "Formulario")
-
             return {
                 "status": "success",
                 "message": "Formulario actualizado.",
                 "id": id,
-                "whatsapp": whatsapp_summary,
             }
         except Exception as e:
             self.db.rollback()
+            return {"status": "error", "message": str(e)}
+
+    def notify_whatsapp_bulk(
+        self,
+        form_id: int,
+        student_ids: List[int],
+        school_id: Optional[int],
+        customer_id: Optional[int],
+        period_year: Optional[int] = None,
+    ) -> Any:
+        """Envía WhatsApp a apoderados marcados. No afecta el guardado del formulario."""
+        try:
+            form_row = self._get_form_row(form_id, school_id, period_year)
+            if not form_row:
+                return {"status": "error", "message": "Formulario no encontrado."}
+            if not form_row.course_id:
+                return {"status": "error", "message": "El formulario no tiene curso asociado."}
+            if not student_ids:
+                return {
+                    "status": "error",
+                    "message": "Seleccione al menos un estudiante con celular de apoderado.",
+                }
+            allowed = self._course_student_ids(
+                int(form_row.course_id), school_id, customer_id, period_year
+            )
+            ids = [int(s) for s in student_ids if int(s) in allowed]
+            if not ids:
+                return {
+                    "status": "error",
+                    "message": "Ningún estudiante seleccionado pertenece al curso del formulario.",
+                }
+            # Solo quienes aún no respondieron
+            already = {
+                int(r.student_id)
+                for r in self.db.query(DynamicFormSubmissionModel)
+                .filter(
+                    DynamicFormSubmissionModel.dynamic_form_id == form_id,
+                    DynamicFormSubmissionModel.student_id.in_(ids),
+                )
+                .all()
+            }
+            pending = [sid for sid in ids if sid not in already]
+            if not pending:
+                return {
+                    "status": "error",
+                    "message": "Todos los seleccionados ya respondieron; no hay a quién notificar.",
+                }
+            whatsapp_summary = self._run_whatsapp_notify(
+                pending, form_row.name or "Formulario"
+            )
+            return {
+                "status": "success",
+                "message": "Notificación disparada.",
+                "whatsapp": whatsapp_summary,
+            }
+        except Exception as e:
             return {"status": "error", "message": str(e)}
 
     def delete(self, id: int, school_id: Optional[int], period_year: Optional[int] = None) -> Any:

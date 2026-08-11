@@ -150,7 +150,14 @@ def notify_guardians_for_form(
         phone_raw = guardian_phone_fn(sid)
         to = normalize_whatsapp_e164(phone_raw)
         if not to:
-            failed.append({"student_id": sid, "reason": "invalid_or_missing_phone", "raw": phone_raw})
+            failed.append(
+                {
+                    "student_id": sid,
+                    "reason": "invalid_or_missing_phone",
+                    "raw": phone_raw,
+                    "detail": "Sin apoderado o sin teléfono válido; no se dispara.",
+                }
+            )
             continue
         st_name = student_label_fn(sid) or "Estudiante"
         fn = (form_name or "Formulario")[:200]

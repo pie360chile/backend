@@ -1613,6 +1613,17 @@ class ResendFormWhatsApp(BaseModel):
     studentId: int = Field(..., ge=1, validation_alias=AliasChoices("studentId", "student_id"))
 
 
+class NotifyFormWhatsApp(BaseModel):
+    """Disparar WhatsApp a varios apoderados (después de crear el formulario)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    studentIds: List[int] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("studentIds", "student_ids", "notifyStudentIds", "notify_student_ids"),
+    )
+
+
 # ---------------------------------------------------------------------------
 # informal_tests (plantillas de pruebas informales por colegio)
 # ---------------------------------------------------------------------------

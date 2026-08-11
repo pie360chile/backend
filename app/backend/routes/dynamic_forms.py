@@ -11,6 +11,7 @@ from app.backend.classes.dynamic_form_class import DynamicFormClass
 from app.backend.db.database import get_db
 from app.backend.schemas import (
     ResendFormWhatsApp,
+    NotifyFormWhatsApp,
     StoreDynamicForm,
     SubmitDynamicFormAnswers,
     UpdateDynamicForm,
@@ -250,6 +251,50 @@ def resend_whatsapp(
         )
 
 
+@dynamic_forms.post("/{form_id}/notify_whatsapp")
+def notify_whatsapp(
+    form_id: int,
+    body: NotifyFormWhatsApp,
+    period_year: int = Query(..., ge=2000, le=2100, description="Año del período escolar"),
+    session_user: UserLogin = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Dispara WhatsApp a varios apoderados (acción separada de crear/guardar el formulario)."""
+    try:
+        payload = body.model_dump(by_alias=True) if hasattr(body, "model_dump") else body.dict()
+        raw_ids = payload.get("studentIds") or payload.get("student_ids") or []
+        student_ids = [int(x) for x in raw_ids if x is not None]
+        result = DynamicFormClass(db).notify_whatsapp_bulk(
+            form_id,
+            student_ids,
+            _school_id(session_user),
+            getattr(session_user, "customer_id", None),
+            period_year,
+        )
+        if result.get("status") == "error":
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={
+                    "status": 400,
+                    "message": result.get("message", "Error"),
+                    "data": None,
+                },
+            )
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "status": 200,
+                "message": result.get("message", "OK"),
+                "data": {"whatsapp": result.get("whatsapp")},
+            },
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"status": 500, "message": str(e), "data": None},
+        )
+
+
 @dynamic_forms.get("/{form_id}/student_submission")
 def student_submission_lookup(
     form_id: int,
@@ -368,7 +413,6 @@ def store(
                 "message": result.get("message", "Creado"),
                 "data": {
                     "id": result.get("id"),
-                    "whatsapp": result.get("whatsapp"),
                 },
             },
         )
@@ -401,7 +445,6 @@ def update(
                 "message": result.get("message", "Actualizado"),
                 "data": {
                     "id": id,
-                    "whatsapp": result.get("whatsapp"),
                 },
             },
         )

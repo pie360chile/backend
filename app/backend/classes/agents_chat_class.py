@@ -244,7 +244,7 @@ class AgentsChatClass:
 
         llm = AgentsLlmModelsClass(self.db)
         model_code = llm.get_selected_model_code()
-        yield {"type": "step", "message": f"Consultando DeepSeek ({model_code})…"}
+        yield {"type": "step", "message": "Preparando contexto del estudiante…"}
 
         system_prompt = _build_system_prompt(
             db=self.db,
@@ -261,10 +261,16 @@ class AgentsChatClass:
             history=history,
         )
 
+        yield {"type": "step", "message": "Redactando respuesta…"}
+
         reply_text = ""
         usage: dict[str, Any] | None = None
+        first_token = True
         for event in stream_chat_completion(messages, model=model_code, db=self.db):
             if event.get("type") == "text_delta":
+                if first_token:
+                    first_token = False
+                    yield {"type": "step", "message": "Escribiendo respuesta…"}
                 reply_text += event.get("delta") or ""
                 yield event
             elif event.get("type") == "done":
@@ -308,8 +314,12 @@ class AgentsChatClass:
                     "Pide de nuevo «genera el informe» o completa los campos."
                 )
             else:
-                yield {"type": "step", "message": "Generando documento (create_document)…"}
+                yield {"type": "step", "message": "Creando documento…"}
                 try:
+                    yield {
+                        "type": "step",
+                        "message": "Rellenando plantilla y guardando en la carpeta…",
+                    }
                     created = AgentsMcpClass(self.db).create_document(
                         agent_id=agent_id,
                         customer_id=int(self.customer_id),
@@ -323,6 +333,18 @@ class AgentsChatClass:
                         data = created.get("data") or {}
                         response_files = list(data.get("responseFiles") or [])
                         visible_reply = strip_fields_json_from_reply(reply_text)
+                        if data.get("googleDrive") and data["googleDrive"].get("drive_path"):
+                            yield {
+                                "type": "step",
+                                "message": "Documento subido a Google Drive…",
+                            }
+                        elif data.get("googleDriveError"):
+                            yield {
+                                "type": "step",
+                                "message": "Documento listo (Drive no disponible)…",
+                            }
+                        else:
+                            yield {"type": "step", "message": "Documento listo…"}
                         if is_content_too_thin(fields):
                             warning = (
                                 "El documento se generó, pero el contenido narrativo quedó "
