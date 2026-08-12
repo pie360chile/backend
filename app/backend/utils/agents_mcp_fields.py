@@ -248,10 +248,24 @@ def strip_questionnaire_scale_labels(text: str) -> str:
 def sanitize_psychoped_fields(fields: dict[str, Any] | None) -> dict[str, Any]:
     if not fields:
         return {}
+    from app.backend.utils.agents_psychoped_fill import (
+        _SUGGESTION_KEYS,
+        _is_date_field_key,
+        _normalize_key,
+        format_psychoped_date,
+        format_suggestions_as_dashes,
+    )
+
+    suggestion_norm = {_normalize_key(k) for k in _SUGGESTION_KEYS}
     out: dict[str, Any] = {}
     for key, val in fields.items():
         if isinstance(val, str):
-            out[key] = strip_questionnaire_scale_labels(val)
+            text = strip_questionnaire_scale_labels(val)
+            if _is_date_field_key(str(key)):
+                text = format_psychoped_date(text)
+            elif _normalize_key(str(key)) in suggestion_norm:
+                text = format_suggestions_as_dashes(text)
+            out[key] = text
         else:
             out[key] = val
     return out

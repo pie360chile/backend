@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from datetime import date, datetime
 from typing import Any
 
 PSYCHOPED_DOCUMENT_ID = 27
@@ -65,6 +66,42 @@ PSYCHOPED_CONTENT_CONTROL_ALIASES: dict[str, str] = {
     "especialidad_profesional": "professional_specialty",
 }
 
+_SUGGESTION_KEYS = {
+    "suggestions_to_school",
+    "suggestions_to_classroom_team",
+    "suggestions_to_student",
+    "suggestions_to_family",
+    "other_suggestions",
+    "sugerencias_al_establecimiento",
+    "sugerencias_al_equipo_de_aula",
+    "sugerencias_al_estudiante",
+    "sugerencias_a_la_familia",
+    "otras_sugerencias",
+}
+
+
+def format_suggestions_as_dashes(text: str) -> str:
+    """Convierte recomendaciones a lista con '- ' (un ítem por línea)."""
+    raw = (text or "").strip()
+    if not raw:
+        return raw
+    chunk = re.sub(r"\r\n?", "\n", raw)
+    chunk = re.sub(r"(?m)^\s*(?:\d+\s*[.)\-]+|[-•*–—])\s*", "\n", chunk)
+    chunk = re.sub(r"(?:\n\s*)?(?<!\d)(\d+)\s*[.)\-]+\s+", "\n", chunk)
+    parts = [re.sub(r"\s+", " ", p).strip(" \t-•*–—") for p in chunk.split("\n")]
+    items = [p for p in parts if p]
+    if len(items) <= 1 and re.search(r"[.!?]\s+\S", raw):
+        items = [
+            re.sub(r"\s+", " ", s).strip(" \t-•*–—")
+            for s in re.split(r"(?<=[.!?])\s+", raw)
+            if s.strip()
+        ]
+        items = [p for p in items if p]
+    if not items:
+        return raw
+    return "\n".join(f"- {item.rstrip('.')}" for item in items)
+
+
 # Claves del formulario/LLM → tags de plantilla (copia de valor)
 _FORM_TO_TEMPLATE: dict[str, str] = {
     "diagnosis": "diagnostic",
@@ -72,6 +109,86 @@ _FORM_TO_TEMPLATE: dict[str, str] = {
     "social_name": "student_social_name",
     "age": "student_age",
 }
+
+
+_DATE_KEY_HINTS = (
+    "date",
+    "fecha",
+    "birth_day",
+    "born",
+)
+_MONTHS_ES = {
+    "enero": 1,
+    "febrero": 2,
+    "marzo": 3,
+    "abril": 4,
+    "mayo": 5,
+    "junio": 6,
+    "julio": 7,
+    "agosto": 8,
+    "septiembre": 9,
+    "setiembre": 9,
+    "octubre": 10,
+    "noviembre": 11,
+    "diciembre": 12,
+}
+
+
+def _is_date_field_key(key: str) -> bool:
+    k = _normalize_key(key)
+    return any(h in k for h in _DATE_KEY_HINTS)
+
+
+def format_psychoped_date(value: str) -> str:
+    """Normaliza fechas del informe psicopedagógico a dd-mm-YYYY."""
+    raw = (value or "").strip()
+    if not raw:
+        return raw
+    if re.fullmatch(r"\d{2}-\d{2}-\d{4}", raw):
+        return raw
+
+    parsed: date | None = None
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%Y/%m/%d", "%d.%m.%Y"):
+        try:
+            parsed = datetime.strptime(raw[:10], fmt).date()
+            break
+        except ValueError:
+            continue
+    if parsed is None:
+        m = re.search(
+            r"(\d{1,2})\s+de\s+([a-záéíóú]+)\s*(?:de|,)?\s*(\d{4})",
+            raw.lower(),
+        )
+        if m:
+            month = _MONTHS_ES.get(m.group(2))
+            if month:
+                try:
+                    parsed = date(int(m.group(3)), month, int(m.group(1)))
+                except ValueError:
+                    parsed = None
+    if parsed is None:
+        m = re.search(r"\b(\d{1,2})[/-](\d{1,2})[/-](\d{4})\b", raw)
+        if m:
+            d, mo, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
+            # Si el primer número > 12, es día-mes.
+            if d > 12:
+                try:
+                    parsed = date(y, mo, d)
+                except ValueError:
+                    parsed = None
+            elif mo > 12:
+                try:
+                    parsed = date(y, d, mo)
+                except ValueError:
+                    parsed = None
+            else:
+                try:
+                    parsed = date(y, mo, d)
+                except ValueError:
+                    parsed = None
+    if parsed is None:
+        return raw
+    return parsed.strftime("%d-%m-%Y")
 
 
 def _normalize_key(key: str) -> str:
@@ -154,6 +271,8 @@ def normalize_psychoped_replacements(
         k = str(key).strip()
         if not k:
             continue
+        if _is_date_field_key(k):
+            text = format_psychoped_date(text)
         raw[k] = text
         merged[k] = text
         nk = _normalize_key(k)
@@ -174,5 +293,11 @@ def normalize_psychoped_replacements(
     full_name = (ctx.get("student_fullname") or "").strip()
     if full_name:
         merged.setdefault("student_full_name", full_name)
+
+    for key, text in list(merged.items()):
+        if _is_date_field_key(key):
+            merged[key] = format_psychoped_date(str(text))
+        elif _normalize_key(key) in {_normalize_key(k) for k in _SUGGESTION_KEYS} or key in _SUGGESTION_KEYS:
+            merged[key] = format_suggestions_as_dashes(str(text))
 
     return merged
