@@ -86,6 +86,10 @@ _GENERATION_HINTS = (
     "entrega el informe",
     "entregar el informe",
     "haz el informe",
+    "hazme el informe",
+    "hazme el documento",
+    "dame el informe",
+    "dame el documento",
     "hacer el informe",
     "haz el documento",
     "hacer el documento",
@@ -111,8 +115,8 @@ _GENERATION_PHRASE_RE = re.compile(
     r"genera(r)?|realiza(r)?|elabora(r)?|redacta(r)?|escribe(r)?|crea(r)?|"
     r"completa(r)?|finaliza(r)?|emite(r)?|confecciona(r)?|arma(r)?|produce(r)?|"
     r"exporta(r)?|descarga(r)?|prepara(r)?|regenera(r)?|"
-    r"haz|hacer|entrega(r)?"
-    r")\s+(el\s+|un\s+|la\s+)?(informe|documento|word|docx)\b",
+    r"haz(me)?|hacer|dame|entrega(r)?"
+    r")\s+(el\s+|un\s+|la\s+|los\s+)?(informe|informes|documento|documentos|word|docx)\b",
     re.IGNORECASE,
 )
 
@@ -123,7 +127,7 @@ _GENERATION_START_RE = re.compile(
     r"escribe|escribir|crea|crear|completa|completar|finaliza|finalizar|"
     r"emite|emitir|confecciona|confeccionar|arma|armar|produce|producir|"
     r"exporta|exportar|descarga|descargar|prepara|preparar|"
-    r"regenera|regenerar|haz|hacer|entrega|entregar"
+    r"regenera|regenerar|hazme|haz|hacer|dame|entrega|entregar"
     r")\b",
     re.IGNORECASE,
 )
@@ -236,19 +240,40 @@ def lookup_student_id_by_rut(db: Session, rut: str) -> int | None:
 
 _NAME_NOISE = {
     "haz",
+    "hazme",
     "hacer",
+    "dame",
+    "deme",
     "genera",
+    "generame",
     "generar",
     "completa",
     "completar",
+    "redacta",
+    "redactar",
+    "elabora",
+    "elaborar",
+    "realiza",
+    "realizar",
+    "escribe",
+    "escribir",
+    "crea",
+    "crear",
+    "emite",
+    "emitir",
+    "prepara",
+    "preparar",
     "informe",
     "informde",
     "informes",
     "documento",
+    "documentos",
     "familia",
     "psicopedagogico",
     "psicopedagogica",
+    "psicopedagogico",
     "estudiante",
+    "estudiantes",
     "alumna",
     "alumno",
     "de",
@@ -264,11 +289,22 @@ _NAME_NOISE = {
     "necesito",
     "quiero",
     "puedes",
+    "puede",
     "con",
     "para",
     "word",
     "docx",
     "pdf",
+    "todos",
+    "todas",
+    "datos",
+    "correctos",
+    "rut",
+    "ficha",
+    "chat",
+    "ahora",
+    "nuevo",
+    "nueva",
 }
 
 
@@ -294,24 +330,24 @@ def extract_name_tokens_from_text(text: str) -> list[str]:
         for t in folded.split()
         if len(t) >= 3 and t not in _NAME_NOISE and not t.startswith("inform")
     ]
-    return tokens[:6]
+    return tokens[:8]
 
 
-def lookup_student_id_by_name(
+def _score_students_by_name(
     db: Session,
-    name_text: str,
+    tokens: list[str],
     *,
     customer_id: int | None = None,
     school_id: int | None = None,
+    period_year: int | None = None,
 ) -> int | None:
-    """Busca estudiante por nombre/apellido. Solo si hay un match claramente mejor."""
-    tokens = extract_name_tokens_from_text(name_text)
-    if len(tokens) < 2:
-        return None
-
     q = db.query(StudentPersonalInfoModel, StudentModel).join(
         StudentModel, StudentModel.id == StudentPersonalInfoModel.student_id
     )
+    try:
+        q = q.filter(StudentModel.deleted_status_id == 0)
+    except Exception:
+        pass
     if school_id:
         q = q.filter(StudentModel.school_id == int(school_id))
     elif customer_id:
@@ -320,7 +356,8 @@ def lookup_student_id_by_name(
         )
 
     scored: list[tuple[int, int]] = []
-    for personal, _student in q.all():
+    year_s = str(int(period_year)) if period_year else None
+    for personal, student in q.all():
         names = _fold_name(personal.names or "")
         father = _fold_name(personal.father_lastname or "")
         mother = _fold_name(personal.mother_lastname or "")
@@ -346,16 +383,46 @@ def lookup_student_id_by_name(
                 score += 2
             else:
                 score += 1
+        if year_s and str(getattr(student, "period_year", "") or "") == year_s:
+            score += 4
         scored.append((score, int(personal.student_id)))
 
     if not scored:
         return None
     scored.sort(key=lambda x: (-x[0], x[1]))
     best_score, best_id = scored[0]
-    # Empate en el mejor puntaje → ambiguo.
     if len(scored) > 1 and scored[1][0] == best_score:
         return None
     return best_id
+
+
+def lookup_student_id_by_name(
+    db: Session,
+    name_text: str,
+    *,
+    customer_id: int | None = None,
+    school_id: int | None = None,
+    period_year: int | None = None,
+) -> int | None:
+    """Busca estudiante por nombre/apellido. Solo si hay un match claramente mejor."""
+    tokens = extract_name_tokens_from_text(name_text)
+    if len(tokens) < 2:
+        return None
+
+    found = None
+    if school_id:
+        found = _score_students_by_name(
+            db, tokens, school_id=int(school_id), period_year=period_year
+        )
+    if found:
+        return found
+    if customer_id:
+        return _score_students_by_name(
+            db, tokens, customer_id=int(customer_id), period_year=period_year
+        )
+    if not school_id:
+        return _score_students_by_name(db, tokens, period_year=period_year)
+    return None
 
 
 def resolve_student_id(
@@ -367,6 +434,7 @@ def resolve_student_id(
     history: list[dict[str, str]] | None,
     customer_id: int | None = None,
     school_id: int | None = None,
+    period_year: int | None = None,
 ) -> tuple[int | None, str | None, str | None]:
     """
     Returns (student_id, rut_used, issue).
@@ -383,11 +451,13 @@ def resolve_student_id(
             return None, rut_raw, "not_found"
         return found, rut_raw, None
 
+    name_text = (message or "").strip() or conversation_blob(message, history)
     by_name = lookup_student_id_by_name(
         db,
-        conversation_blob(message, history),
+        name_text,
         customer_id=customer_id,
         school_id=school_id,
+        period_year=period_year,
     )
     if by_name:
         return by_name, None, None

@@ -14,6 +14,7 @@ from app.backend.classes.agents_usage_class import AgentsUsageClass
 from app.backend.core.config import settings
 from app.backend.db.models.agent import AgentModel
 from app.backend.utils.agents_bulk_reports import (
+    FAMILIA_DOCUMENT_ID as _FAMILIA_DOCUMENT_ID,
     MAX_BULK_STUDENTS,
     PSYCHOPED_DOCUMENT_ID as _PSYCHOPED_DOCUMENT_ID,
     bulk_confirm_ask,
@@ -50,6 +51,92 @@ def _missing_psychoped_files_reply() -> str:
         "(cuestionarios, pautas, anamnesis u otras evidencias de evaluación).\n\n"
         "Sin esa información no puedo redactar ni emitir el informe."
     )
+
+
+def _missing_family_sources_reply() -> str:
+    return (
+        "No es posible elaborar el Informe a la Familia: "
+        "no dispongo de antecedentes documentales del estudiante en Files "
+        "ni de un informe psicopedagógico en su ficha.\n\n"
+        "Sin esa información no puedo redactar ni emitir el informe."
+    )
+
+
+def _load_student_name_rut(db: Session, student_id: int) -> tuple[str | None, str | None]:
+    from app.backend.db.models.pie_core import StudentModel, StudentPersonalInfoModel
+
+    personal = (
+        db.query(StudentPersonalInfoModel)
+        .filter(StudentPersonalInfoModel.student_id == int(student_id))
+        .first()
+    )
+    student = db.query(StudentModel).filter(StudentModel.id == int(student_id)).first()
+    name = None
+    rut = None
+    if personal:
+        name = " ".join(
+            p
+            for p in (
+                getattr(personal, "names", None),
+                getattr(personal, "father_lastname", None),
+                getattr(personal, "mother_lastname", None),
+            )
+            if p
+        ).strip() or None
+        rut = (getattr(personal, "identification_number", None) or "").strip() or None
+    if not rut and student:
+        rut = (getattr(student, "identification_number", None) or "").strip() or None
+    return name, rut
+
+
+def _student_has_report_sources(
+    *,
+    db: Session,
+    agent_name: str,
+    customer_id: int,
+    student_id: int,
+    student_name: str | None,
+    student_rut: str | None,
+    document_id: int | None,
+) -> bool:
+    files_block = ""
+    try:
+        from app.backend.utils import agents_derived_storage as derived
+
+        files_block, _n = derived.build_selective_files_context(
+            agent_name or "",
+            query=student_name or "",
+            student_rut=student_rut,
+            student_name=student_name,
+            customer_id=int(customer_id),
+        )
+    except Exception:
+        files_block = ""
+
+    if files_mention_student(files_block, student_name or "", student_rut):
+        return True
+
+    doc = int(document_id) if document_id else None
+    if doc == _PSYCHOPED_DOCUMENT_ID:
+        return False
+
+    # Familia: puede usar el psicopedagógico de la ficha.
+    try:
+        from app.backend.utils.agents_student_folder_context import (
+            maybe_build_ficha_psychoped_block,
+        )
+
+        ficha = maybe_build_ficha_psychoped_block(
+            db,
+            student_id=int(student_id),
+            document_id=doc or _FAMILIA_DOCUMENT_ID,
+            files_block=files_block or "",
+            student_name=student_name,
+            student_rut=student_rut,
+        )
+        return bool((ficha or "").strip())
+    except Exception:
+        return False
 
 
 def _drive_path_block(*, customer_id: int, agent_name: str) -> str:
@@ -293,10 +380,46 @@ class AgentsChatClass:
             history=history,
             customer_id=int(self.customer_id) if self.customer_id else None,
             school_id=int(self.school_id) if self.school_id else None,
+            period_year=int(self.period_year) if self.period_year else None,
         )
         effective_rut = (student_rut or rut_used or "").strip() or None
+        student_name: str | None = None
+        if resolved_student_id:
+            student_name, personal_rut = _load_student_name_rut(
+                self.db, int(resolved_student_id)
+            )
+            effective_rut = effective_rut or personal_rut
 
-        # Sin RUT/ficha: pedir RUT antes de llamar al LLM / generar documento.
+        # Estudiante identificado pero sin fuentes: rechazar. No pedir RUT.
+        if want_doc_early and resolved_student_id:
+            has_sources = _student_has_report_sources(
+                db=self.db,
+                agent_name=agent_row.name or "",
+                customer_id=int(self.customer_id),
+                student_id=int(resolved_student_id),
+                student_name=student_name,
+                student_rut=effective_rut,
+                document_id=resolved_document_id,
+            )
+            if not has_sources:
+                if resolved_document_id == _PSYCHOPED_DOCUMENT_ID:
+                    ask = _missing_psychoped_files_reply()
+                else:
+                    ask = _missing_family_sources_reply()
+                yield {"type": "text_delta", "delta": ask}
+                yield {
+                    "type": "done",
+                    "data": {
+                        "reply": ask,
+                        "usage": None,
+                        "model": None,
+                        "responseFiles": [],
+                        "warning": None,
+                    },
+                }
+                return
+
+        # Sin identificar al estudiante: pedir RUT antes de llamar al LLM.
         if (
             want_doc_early
             and not resolved_student_id
@@ -377,21 +500,9 @@ class AgentsChatClass:
         fields = extract_fields_from_reply(reply_text)
 
         if want_doc or fields:
-            if student_issue == "needs_rut" and not resolved_student_id:
-                visible_reply = build_ask_rut_reply(
-                    text,
-                    document_id=resolved_document_id,
-                    agent_name=agent_row.name,
-                )
+            if not resolved_student_id:
+                # No reemplazar la respuesta del modelo pidiendo RUT.
                 warning = None
-            elif student_issue == "not_found":
-                visible_reply = (
-                    f"No encontré un estudiante con RUT **{rut_used}**. "
-                    "Verifica el número e inténtalo de nuevo."
-                )
-                warning = None
-            elif not resolved_student_id:
-                warning = "Falta student_id para generar el documento."
             elif not resolved_document_id:
                 warning = (
                     "Falta document_id / plantilla del agente. "
