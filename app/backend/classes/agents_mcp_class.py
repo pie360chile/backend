@@ -400,6 +400,16 @@ class AgentsMcpClass:
           + persiste el formulario asociado a ese tipo
             (familia → family_reports; psicoped → psychopedagogical_evaluation_info)
         """
+        from app.backend.utils.agents_code_guard import strip_html_tags
+
+        clean_fields: dict[str, Any] = {}
+        for key, val in (fields or {}).items():
+            if isinstance(val, str):
+                clean_fields[str(key)] = strip_html_tags(val)
+            else:
+                clean_fields[str(key)] = val
+        fields = clean_fields
+
         aid = (agent_id or "").strip()
         template = (
             self.db.query(AgentDocumentTemplateModel)
@@ -785,9 +795,12 @@ class AgentsMcpClass:
             "- DATOS COMPLEMENTARIOS: las fuentes son el TEXTO DERIVADO / JSON del contexto",
             "  (no se «abre» el Excel). Educadora que entrega (`professional_*`) = nómina PIE",
             "  del estudiante; si no está, déjala en blanco. Apoderado que recibe",
-            "  (`received_person_*`) = reporte interactivo de la sede. Prioriza reporte",
-            "  interactivo ante discrepancias de identificación. Completa RUT/curso si",
-            "  aparecen de forma verificable; no los omitas.",
+            "  (`received_person_*`) = reporte interactivo de la sede.",
+            "- RUT DEL ESTUDIANTE: solo el que escribió el usuario o el de PIE360, coincidencia",
+            "  exacta. PROHIBIDO completar o corregir dígitos con la nómina o el reporte",
+            "  (p. ej. no pases 3.012.603-8 a 23.012.603-8). Si no coincide, el RUT es",
+            "  incorrecto: no identifiques a nadie ni envíes JSON fields.",
+            "  Curso y RUT de plantilla: usa ficha PIE360 si el estudiante ya está identificado.",
             "- Si en ESTE turno hay bloque ARCHIVOS / texto derivado del estudiante, ÚSALO:",
             "  no digas que «no se adjuntó» el documento de evaluación ni que faltan antecedentes.",
             "- Si NO hay psicopedagógico usable en Files del agente, PIE360 busca en la ficha",
@@ -800,7 +813,8 @@ class AgentsMcpClass:
             "- FIDELIDAD DOCUMENTAL: nunca presentes como hecho algo que no esté en los archivos;",
             "  nunca mezcles antecedentes entre estudiantes distintos. Si hay varios estudiantes",
             "  en los archivos, sepáralos y un informe por cada uno. Sin RUT/ficha claros,",
-            "  pide confirmación/RUT antes de generar el documento final nominado.",
+            "  pide el RUT; no adivines ni completes el número. Si el RUT no existe en PIE360,",
+            "  di que es incorrecto y no generes el documento.",
             "- ANÁLISIS DE ANTECEDENTES: con una sola fuente, igual elabora con rigor. Con varias,",
             "  cruza informantes (coincidencias, diferencias, complementariedades). Si hay",
             "  discrepancias, expónlas con profesionalismo; no elijas una versión al azar.",
@@ -867,6 +881,15 @@ class AgentsMcpClass:
         lines.extend(
             [
                 "",
+                "Fuentes (regla dura):",
+                "- PROHIBIDO buscar en internet, navegar la web o usar buscadores.",
+                "- Solo archivos del agente / texto derivado, el chat y datos PIE360 del contexto.",
+                "- PROHIBIDO HTML y código (CSS, JS, Python, SQL, etc.). Solo prosa en español.",
+                "  El único JSON permitido es el bloque fields para generar el documento.",
+                "- Solo atiendes PIE Chile (informes, estudiantes, NEE, Decreto 170, PIE360).",
+                "  Si el tema no es de PIE Chile, no respondas el contenido: indica que solo",
+                "  contestas consultas de PIE Chile.",
+                "",
                 "Flujo:",
                 "1) Lee tu ROL y los ARCHIVOS/JSON del agente.",
                 "2) Redacta un resumen breve en el chat.",
@@ -887,6 +910,17 @@ class AgentsMcpClass:
             lines.append(f"- student_id del contexto: {int(student_id)}")
         if student_rut:
             lines.append(f"- student_rut del contexto: {student_rut}")
+        lines.extend(
+            [
+                "",
+                "RUT (regla dura):",
+                "- Usa el RUT tal como lo escribió el usuario o el que entrega PIE360.",
+                "- PROHIBIDO completar, prefijar, acortar o 'corregir' un RUT (p. ej. no pases",
+                "  de 3.012.603-8 a 23.012.603-8 porque 'parece' el de la nómina).",
+                "- Si el número no coincide exactamente con un estudiante de PIE360, no identifiques",
+                "  a nadie, no redactes el informe y no envíes JSON fields.",
+            ]
+        )
         if not student_id and not student_rut:
             lines.extend(
                 [

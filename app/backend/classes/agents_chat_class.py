@@ -31,6 +31,16 @@ from app.backend.utils.agents_chat_context import (
     student_identification_hint,
     wants_document_generation,
     build_ask_rut_reply,
+    build_invalid_rut_reply,
+)
+from app.backend.utils.agents_code_guard import (
+    CODE_REJECT_REPLY,
+    message_is_html_or_code,
+    strip_html_and_code_blocks,
+)
+from app.backend.utils.agents_scope_guard import (
+    SCOPE_REJECT_REPLY,
+    message_is_off_topic,
 )
 from app.backend.utils.agents_llm_client import (
     estimate_tokens_from_text,
@@ -165,6 +175,36 @@ def _build_system_prompt(
     instructions = (agent.role_instructions or "").strip()
     if instructions:
         parts.append(instructions)
+    parts.append(
+        "RUT (ambos informes: familia y psicopedagógico): coincidencia exacta con PIE360. "
+        "Si el usuario entrega un RUT que no existe, responde que el RUT es incorrecto y "
+        "no identifiques a nadie ni generes el documento. "
+        "Prohibido completar, prefijar o corregir dígitos con la nómina u otros archivos."
+    )
+    parts.append(
+        "SIN INTERNET / SIN BÚSQUEDA WEB (regla dura, ambos agentes): "
+        "está PROHIBIDO buscar en internet, navegar la web, usar buscadores, citar sitios "
+        "externos o consultar fuentes online. Solo puedes usar: (1) archivos del agente y su "
+        "texto derivado en el contexto, (2) mensajes del chat, (3) datos PIE360 / ficha "
+        "inyectados. Si falta un dato, dilo y deja el campo vacío; no lo busques en la red."
+    )
+    parts.append(
+        "SIN HTML NI CÓDIGO (regla dura, ambos agentes): está PROHIBIDO escribir, aceptar o "
+        "devolver HTML, CSS, JavaScript, Python, SQL u otro lenguaje de programación. "
+        "Responde solo en español, prosa profesional. El único JSON permitido es el bloque "
+        "`fields` al final cuando hay que generar el documento (eso lo consume el servidor, "
+        "no es código para el usuario). Nunca uses etiquetas <p>, <div>, <script> ni fences "
+        "de código (```html, ```python, etc.)."
+    )
+    parts.append(
+        "ÁMBITO PIE CHILE (regla dura, ambos agentes): solo atiendes el Programa de "
+        "Integración Escolar de Chile y PIE360: informes psicopedagógicos, informes a la "
+        "familia, estudiantes, NEE, Decreto 170 y documentación del establecimiento. "
+        "Si preguntan cualquier otra cosa (clima, recetas, noticias, cultura general, "
+        "programación, deporte, etc.), NO respondas el contenido: indica con profesionalismo "
+        "que solo contestas temas de PIE Chile y ofrece continuar con un informe o un dato "
+        "de un estudiante del programa."
+    )
 
     mcp_base = (settings.api_public_base or "").rstrip("/")
     mcp_url = f"{mcp_base}/mcp" if mcp_base else "/api/mcp"
@@ -329,6 +369,36 @@ class AgentsChatClass:
             }
             return
 
+        if message_is_html_or_code(text):
+            ask = CODE_REJECT_REPLY
+            yield {"type": "text_delta", "delta": ask}
+            yield {
+                "type": "done",
+                "data": {
+                    "reply": ask,
+                    "usage": None,
+                    "model": None,
+                    "responseFiles": [],
+                    "warning": None,
+                },
+            }
+            return
+
+        if message_is_off_topic(text):
+            ask = SCOPE_REJECT_REPLY
+            yield {"type": "text_delta", "delta": ask}
+            yield {
+                "type": "done",
+                "data": {
+                    "reply": ask,
+                    "usage": None,
+                    "model": None,
+                    "responseFiles": [],
+                    "warning": None,
+                },
+            }
+            return
+
         resolved_document_id = resolve_document_id_for_agent(
             self.db,
             agent_id=agent_id,
@@ -420,24 +490,33 @@ class AgentsChatClass:
                 }
                 return
 
+        # RUT informado y no existe: no llamar al LLM ni adivinar otro número.
+        if student_issue == "not_found" and not resolved_student_id:
+            ask = build_invalid_rut_reply(rut_used)
+            yield {"type": "text_delta", "delta": ask}
+            yield {
+                "type": "done",
+                "data": {
+                    "reply": ask,
+                    "usage": None,
+                    "model": None,
+                    "responseFiles": [],
+                    "warning": None,
+                },
+            }
+            return
+
         # Sin identificar al estudiante: pedir RUT antes de llamar al LLM.
         if (
             want_doc_early
             and not resolved_student_id
-            and student_issue in {"needs_rut", "not_found"}
+            and student_issue == "needs_rut"
         ):
-            if student_issue == "not_found":
-                ask = (
-                    f"No encontré un estudiante con RUT **{rut_used}**. "
-                    "Verifica el número (con dígito verificador) e inténtalo de nuevo, "
-                    "o abre el chat desde la ficha del estudiante."
-                )
-            else:
-                ask = build_ask_rut_reply(
-                    text,
-                    document_id=resolved_document_id,
-                    agent_name=agent_row.name,
-                )
+            ask = build_ask_rut_reply(
+                text,
+                document_id=resolved_document_id,
+                agent_name=agent_row.name,
+            )
             yield {"type": "text_delta", "delta": ask}
             yield {
                 "type": "done",
@@ -579,6 +658,7 @@ class AgentsChatClass:
             visible_reply or ""
         ):
             visible_reply = strip_fields_json_from_reply(visible_reply)
+        visible_reply = strip_html_and_code_blocks(visible_reply)
 
         done_data: dict[str, Any] = {
             "reply": visible_reply,

@@ -222,8 +222,9 @@ def wants_document_generation(message: str, history: list[dict[str, str]] | None
 
 
 def lookup_student_id_by_rut(db: Session, rut: str) -> int | None:
+    """Coincidencia exacta del RUT normalizado. No completa ni recorta dígitos."""
     target = normalize_rut(rut)
-    if len(target) < 2:
+    if len(target) < 8:
         return None
     rows = (
         db.query(StudentPersonalInfoModel.student_id, StudentPersonalInfoModel.identification_number)
@@ -232,6 +233,15 @@ def lookup_student_id_by_rut(db: Session, rut: str) -> int | None:
         .all()
     )
     for student_id, identification in rows:
+        if normalize_rut(identification or "") == target:
+            return int(student_id)
+    student_rows = (
+        db.query(StudentModel.id, StudentModel.identification_number)
+        .filter(StudentModel.identification_number.isnot(None))
+        .filter(StudentModel.identification_number != "")
+        .all()
+    )
+    for student_id, identification in student_rows:
         if normalize_rut(identification or "") == target:
             return int(student_id)
     return None
@@ -443,12 +453,32 @@ def resolve_student_id(
     if student_id:
         return student_id, None, None
 
-    rut_raw = extract_rut_from_conversation(message, history, student_rut)
-    if rut_raw:
-        found = lookup_student_id_by_rut(db, rut_raw)
+    # RUT del turno actual: si no existe en PIE360, cortar. Nunca completar dígitos.
+    rut_in_message = extract_rut_from_text(message or "")
+    if rut_in_message:
+        found = lookup_student_id_by_rut(db, rut_in_message)
         if found is None:
-            return None, rut_raw, "not_found"
-        return found, rut_raw, None
+            return None, rut_in_message, "not_found"
+        return found, rut_in_message, None
+
+    if student_rut and str(student_rut).strip():
+        explicit = str(student_rut).strip()
+        found = lookup_student_id_by_rut(db, explicit)
+        if found is None:
+            return None, explicit, "not_found"
+        return found, explicit, None
+
+    # Historial: solo reutilizar un RUT que SÍ exista. Uno incorrecto no se "arregla".
+    for item in reversed(history or []):
+        if item.get("role") != "user":
+            continue
+        hist_rut = extract_rut_from_text(item.get("content") or "")
+        if not hist_rut:
+            continue
+        found = lookup_student_id_by_rut(db, hist_rut)
+        if found:
+            return found, hist_rut, None
+        break
 
     name_text = (message or "").strip() or conversation_blob(message, history)
     by_name = lookup_student_id_by_name(
@@ -471,6 +501,18 @@ def _document_label(document_id: int | None, agent_name: str | None = None) -> s
     if doc == 7 or "familia" in aname:
         return "el Informe a la Familia"
     return "el informe"
+
+
+def build_invalid_rut_reply(rut: str | None) -> str:
+    """RUT informado que no existe: no adivinar ni generar."""
+    shown = (rut or "").strip() or "indicado"
+    return (
+        f"El RUT **{shown}** es incorrecto: no coincide con ningún estudiante "
+        "registrado en PIE360.\n\n"
+        "No identifico al alumno ni genero el informe con ese número. "
+        "Revisa el RUT (todos los dígitos y el dígito verificador) e inténtalo de nuevo, "
+        "o abre el chat desde la ficha del estudiante."
+    )
 
 
 def build_ask_rut_reply(

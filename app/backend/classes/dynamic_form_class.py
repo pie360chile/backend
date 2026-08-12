@@ -666,11 +666,20 @@ class DynamicFormClass:
                 )
                 .first()
             )
+            answers: dict = {}
+            if sub and sub.answers_json:
+                try:
+                    parsed = json.loads(sub.answers_json)
+                    if isinstance(parsed, dict):
+                        answers = parsed
+                except (json.JSONDecodeError, TypeError):
+                    answers = {}
             return {
                 "status": "success",
                 "data": {
                     "hasSubmission": sub is not None,
                     "submissionId": sub.id if sub else None,
+                    "answers": answers,
                 },
             }
         except Exception as e:

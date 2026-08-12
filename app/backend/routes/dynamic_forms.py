@@ -1,4 +1,4 @@
-﻿"""formularios dinámicos (dynamic_forms)."""
+"""formularios dinámicos (dynamic_forms)."""
 
 from typing import Optional
 
