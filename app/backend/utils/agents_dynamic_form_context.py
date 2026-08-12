@@ -180,11 +180,14 @@ def build_dynamic_form_answers_block(
     who = (student_name or "").strip() or (student_rut or "").strip() or f"student_id={sid}"
     sections: list[str] = [
         "RESPUESTAS DEL FORMULARIO PIE360 (Inf. Eval. Psicopedagógica / Formularios). "
-        "Si el Excel / Files del agente no trae el cuestionario de ESTE estudiante, "
-        "USA ESTAS RESPUESTAS como fuente principal de observación en aula "
-        "(origen MCP: get_student_psychopedagogical_form_answers). "
+        "Fuente MCP: get_student_psychopedagogical_form_answers. "
+        "Si hay VARIOS envíos del mismo estudiante (distinta área/especialidad), "
+        "DEBES integrar TODOS en el informe psicopedagógico: detalla por área "
+        "(p. ej. Fonoaudiología vs Terapia Ocupacional), coincidencias y diferencias; "
+        "no ignores ninguna. "
         f"{_SCALE_HINT}",
         f"Estudiante: {who} (student_id={sid})",
+        f"Cantidad de respuestas/áreas en formulario: {len(rows)}",
     ]
 
     for sub, form in rows:

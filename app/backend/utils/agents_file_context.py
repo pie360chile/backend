@@ -230,6 +230,36 @@ def _row_matches_student(
     return False
 
 
+def _excel_row_area_label(
+    header_vals: list[str],
+    row_values: list[str],
+) -> str:
+    """Especialidad / especialista desde columnas tipo Excel de observación."""
+    specialty = ""
+    respondent = ""
+    for i, h in enumerate(header_vals):
+        hl = _fold_sheet_text(h)
+        val = row_values[i].strip() if i < len(row_values) else ""
+        if not val:
+            continue
+        if not specialty and (
+            hl in {"especialidad", "area", "especialidad area"} or "especialidad" in hl
+        ):
+            specialty = val
+        if not respondent and (
+            "especialista" in hl
+            or ("docente" in hl and "responde" in hl)
+            or hl == "nombre especialista"
+        ):
+            respondent = val
+    parts: list[str] = []
+    if specialty:
+        parts.append(f"área/especialidad: {specialty}")
+    if respondent:
+        parts.append(f"responde: {respondent}")
+    return "; ".join(parts)
+
+
 def _format_excel_hit_row(
     *,
     sheet_name: str,
@@ -246,7 +276,11 @@ def _format_excel_hit_row(
         # Si la fila anterior parece más un encabezado corto, úsala.
         if prev and sum(1 for v in prev if v) <= max(3, len(header_vals) // 4):
             header_vals = prev
-    lines = [f"## Hoja: {sheet_name} — {label}"]
+    area = _excel_row_area_label(header_vals, row_values) if header_vals else ""
+    title = f"## Hoja: {sheet_name} — {label}"
+    if area:
+        title += f" ({area})"
+    lines = [title]
     if header_vals and any(header_vals):
         pairs = []
         for col_idx, val in enumerate(row_values):
@@ -340,7 +374,7 @@ def extract_spreadsheet_hint_for_student(
                     )
                 )
                 hits_in_sheet += 1
-                if hits_in_sheet >= 4:
+                if hits_in_sheet >= 12:
                     break
 
         if file_hits:
@@ -354,6 +388,10 @@ def extract_spreadsheet_hint_for_student(
         "DATOS EXTRAÍDOS DE EXCEL (cuestionario / pauta / respuestas del estudiante). "
         "Esto SÍ es evidencia de evaluación: úsalo en instrumentos, análisis, síntesis "
         "y sugerencias. No digas que faltan cuestionarios si estos datos están aquí. "
+        "Si hay VARIAS FILAS del mismo estudiante (distinta Especialidad / área, p. ej. "
+        "Fonoaudiología y Terapia Ocupacional), DEBES integrar TODAS en el informe: "
+        "detalla hallazgos de cada área/especialista, coincidencias y diferencias; "
+        "no uses solo una fila. "
         "PROHIBIDO copiar al Word las etiquetas LOGRADO, EN PROCESO o REQUIERE APOYO: "
         "redacta en prosa profesional y detallada las características de ESTE estudiante.\n"
     )

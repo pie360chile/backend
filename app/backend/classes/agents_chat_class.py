@@ -271,40 +271,24 @@ def _build_system_prompt(
         if files_block:
             parts.append(files_block)
 
-        # Psicopedagógico: si el cuestionario/Excel de Files no trae al estudiante,
-        # MCP get_student_psychopedagogical_form_answers → respuestas de Formularios PIE360.
+        # Psicopedagógico: MCP get_student_psychopedagogical_form_answers.
+        # Se inyecta siempre que haya respuestas (complementa Excel si también hay filas).
         doc_int = int(document_id) if document_id is not None else None
         if student_id and doc_int == _PSYCHOPED_DOCUMENT_ID:
             try:
-                excel_matched: list[str] = []
-                try:
-                    from app.backend.utils.agents_file_context import (
-                        extract_spreadsheet_hint_for_student,
-                    )
-
-                    _excel_txt, excel_matched = extract_spreadsheet_hint_for_student(
-                        agent.name or "",
-                        student_rut=student_rut,
-                        student_name=student_name,
-                        customer_id=int(customer_id),
-                    )
-                except Exception:
-                    excel_matched = []
-
-                if not excel_matched:
-                    mcp_form = AgentsMcpClass(db).get_student_psychopedagogical_form_answers(
-                        agent_id=str(agent.id),
-                        customer_id=int(customer_id),
-                        student_id=int(student_id),
-                        school_id=int(school_id) if school_id else None,
-                        period_year=int(period_year) if period_year else None,
-                        student_name=student_name,
-                        student_rut=student_rut,
-                    )
-                    if mcp_form.get("status") == "success":
-                        ctx = (mcp_form.get("data") or {}).get("context") or ""
-                        if str(ctx).strip():
-                            parts.append(str(ctx).strip())
+                mcp_form = AgentsMcpClass(db).get_student_psychopedagogical_form_answers(
+                    agent_id=str(agent.id),
+                    customer_id=int(customer_id),
+                    student_id=int(student_id),
+                    school_id=int(school_id) if school_id else None,
+                    period_year=int(period_year) if period_year else None,
+                    student_name=student_name,
+                    student_rut=student_rut,
+                )
+                if mcp_form.get("status") == "success":
+                    ctx = (mcp_form.get("data") or {}).get("context") or ""
+                    if str(ctx).strip():
+                        parts.append(str(ctx).strip())
             except Exception:
                 pass
 
