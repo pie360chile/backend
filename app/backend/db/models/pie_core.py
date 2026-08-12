@@ -890,7 +890,7 @@ class DynamicFormModel(Base):
     deleted_date = Column(DateTime, nullable=True)
 
 class DynamicFormSubmissionModel(Base):
-    """Respuestas enviadas a un formulario dinámico (un registro por estudiante y formulario)."""
+    """Respuestas a un formulario dinámico (varias por estudiante: una por área/especialista)."""
 
     __tablename__ = 'dynamic_form_submissions'
 
@@ -899,6 +899,8 @@ class DynamicFormSubmissionModel(Base):
     student_id = Column(Integer, nullable=False)
     school_id = Column(Integer, nullable=True)
     period_year = Column(Integer, nullable=True)
+    specialty = Column(String(255), nullable=True)
+    respondent_name = Column(String(255), nullable=True)
     answers_json = Column(Text, nullable=False)
     submitted_by_user_id = Column(Integer, nullable=True)
     added_date = Column(DateTime, nullable=True)

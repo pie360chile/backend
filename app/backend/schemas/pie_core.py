@@ -1570,6 +1570,7 @@ class DynamicFormFieldSchema(BaseModel):
 
     id: Optional[str] = None
     question: str
+    section: Optional[str] = None
     fieldType: str = Field(validation_alias=AliasChoices("fieldType", "field_type"))
     options: List[DynamicFormFieldOptionSchema] = Field(default_factory=list)
     required: bool = False
@@ -1599,12 +1600,22 @@ class UpdateDynamicForm(BaseModel):
     )
 
 class SubmitDynamicFormAnswers(BaseModel):
-    """Envío de respuestas del formulario para un estudiante."""
+    """Envío de respuestas del formulario para un estudiante (puede haber varias por área)."""
 
     model_config = ConfigDict(populate_by_name=True)
 
     studentId: int = Field(..., ge=1, validation_alias=AliasChoices("studentId", "student_id"))
     answers: Dict[str, Any] = Field(default_factory=dict)
+    specialty: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("specialty", "especialidad", "area"),
+        description="Especialidad / área (ej. Fonoaudiología, Terapia Ocupacional)",
+    )
+    respondentName: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("respondentName", "respondent_name", "especialista", "docente"),
+        description="Nombre del especialista o docente que responde",
+    )
 
 class ResendFormWhatsApp(BaseModel):
     """Reenviar plantilla WhatsApp al apoderado (estudiante en espera)."""

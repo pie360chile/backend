@@ -510,9 +510,12 @@ class DynamicFormClass:
             subs = (
                 self.db.query(DynamicFormSubmissionModel)
                 .filter(DynamicFormSubmissionModel.dynamic_form_id == form_id)
+                .order_by(DynamicFormSubmissionModel.id.asc())
                 .all()
             )
-            by_student = {int(s.student_id): s for s in subs}
+            by_student: dict[int, list] = {}
+            for s in subs:
+                by_student.setdefault(int(s.student_id), []).append(s)
 
             out: List[dict] = []
             for r in cr.get("data") or []:
@@ -523,14 +526,26 @@ class DynamicFormClass:
                     sid_int = int(sid)
                 except (TypeError, ValueError):
                     continue
-                sub = by_student.get(sid_int)
+                student_subs = by_student.get(sid_int) or []
+                submissions = [
+                    {
+                        "submissionId": int(s.id),
+                        "specialty": (s.specialty or "").strip() or None,
+                        "respondentName": (s.respondent_name or "").strip() or None,
+                        "submittedAt": _iso_dt(s.added_date),
+                    }
+                    for s in student_subs
+                ]
+                latest = student_subs[-1] if student_subs else None
                 out.append(
                     {
                         "studentId": sid_int,
                         "studentName": r.get("studentName") or "—",
                         "studentRut": r.get("studentRut") or "—",
-                        "status": "respondido" if sub else "en_espera",
-                        "submissionId": sub.id if sub else None,
+                        "status": "respondido" if student_subs else "en_espera",
+                        "submissionId": int(latest.id) if latest else None,
+                        "submissionCount": len(student_subs),
+                        "submissions": submissions,
                     }
                 )
             return {"status": "success", "data": out}
@@ -578,6 +593,8 @@ class DynamicFormClass:
                 "submissionId": sub.id,
                 "studentId": sub.student_id,
                 "studentName": name or "—",
+                "specialty": (sub.specialty or "").strip() or None,
+                "respondentName": (sub.respondent_name or "").strip() or None,
                 "submittedAt": _iso_dt(sub.added_date),
                 "answers": answers,
                 "form": _row_to_api(form_row),
@@ -595,6 +612,8 @@ class DynamicFormClass:
         answers: dict,
         user_id: Optional[int],
         period_year: Optional[int] = None,
+        specialty: Optional[str] = None,
+        respondent_name: Optional[str] = None,
     ) -> Any:
         try:
             form_row = self._get_form_row(form_id, school_id, period_year)
@@ -616,24 +635,51 @@ class DynamicFormClass:
                 return {"status": "error", "message": err}
             now = datetime.now()
             payload = json.dumps(answers, ensure_ascii=False)
-            existing = (
-                self.db.query(DynamicFormSubmissionModel)
-                .filter(
+            spec = (specialty or "").strip() or None
+            resp = (respondent_name or "").strip() or None
+            # Varias respuestas por estudiante (Excel: una fila por especialista/área).
+            # Si ya existe la misma especialidad+respondente, actualiza esa fila.
+            existing = None
+            if spec or resp:
+                q = self.db.query(DynamicFormSubmissionModel).filter(
                     DynamicFormSubmissionModel.dynamic_form_id == form_id,
                     DynamicFormSubmissionModel.student_id == student_id,
                 )
-                .first()
-            )
+                if spec:
+                    q = q.filter(DynamicFormSubmissionModel.specialty == spec)
+                else:
+                    q = q.filter(
+                        (DynamicFormSubmissionModel.specialty.is_(None))
+                        | (DynamicFormSubmissionModel.specialty == "")
+                    )
+                if resp:
+                    q = q.filter(DynamicFormSubmissionModel.respondent_name == resp)
+                else:
+                    q = q.filter(
+                        (DynamicFormSubmissionModel.respondent_name.is_(None))
+                        | (DynamicFormSubmissionModel.respondent_name == "")
+                    )
+                existing = q.first()
             if existing:
+                existing.answers_json = payload
+                existing.specialty = spec
+                existing.respondent_name = resp
+                existing.updated_date = now
+                existing.submitted_by_user_id = user_id
+                self.db.commit()
+                self.db.refresh(existing)
                 return {
-                    "status": "error",
-                    "message": "Este formulario ya fue respondido para este estudiante. Elimine las respuestas desde el listado de estudiantes (icono papelera) si debe volver a completarlo.",
+                    "status": "success",
+                    "message": "Respuestas actualizadas.",
+                    "submissionId": existing.id,
                 }
             row = DynamicFormSubmissionModel(
                 dynamic_form_id=form_id,
                 student_id=student_id,
                 school_id=school_id,
                 period_year=form_row.period_year,
+                specialty=spec,
+                respondent_name=resp,
                 answers_json=payload,
                 submitted_by_user_id=user_id,
                 added_date=now,
@@ -664,6 +710,7 @@ class DynamicFormClass:
                     DynamicFormSubmissionModel.dynamic_form_id == form_id,
                     DynamicFormSubmissionModel.student_id == student_id,
                 )
+                .order_by(DynamicFormSubmissionModel.id.desc())
                 .first()
             )
             answers: dict = {}
@@ -674,12 +721,33 @@ class DynamicFormClass:
                         answers = parsed
                 except (json.JSONDecodeError, TypeError):
                     answers = {}
+            all_subs = (
+                self.db.query(DynamicFormSubmissionModel)
+                .filter(
+                    DynamicFormSubmissionModel.dynamic_form_id == form_id,
+                    DynamicFormSubmissionModel.student_id == student_id,
+                )
+                .order_by(DynamicFormSubmissionModel.id.asc())
+                .all()
+            )
             return {
                 "status": "success",
                 "data": {
                     "hasSubmission": sub is not None,
                     "submissionId": sub.id if sub else None,
+                    "submissionCount": len(all_subs),
+                    "submissions": [
+                        {
+                            "submissionId": int(s.id),
+                            "specialty": (s.specialty or "").strip() or None,
+                            "respondentName": (s.respondent_name or "").strip() or None,
+                            "submittedAt": _iso_dt(s.added_date),
+                        }
+                        for s in all_subs
+                    ],
                     "answers": answers,
+                    "specialty": (sub.specialty or "").strip() or None if sub else None,
+                    "respondentName": (sub.respondent_name or "").strip() or None if sub else None,
                 },
             }
         except Exception as e:

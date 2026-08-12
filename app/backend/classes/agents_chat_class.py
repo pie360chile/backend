@@ -47,7 +47,6 @@ from app.backend.utils.agents_llm_client import (
     normalize_usage,
     stream_chat_completion,
 )
-from app.backend.utils.agents_file_context import agent_files_have_evaluation_evidence
 from app.backend.utils.agents_mcp_fields import (
     extract_fields_from_reply,
     is_content_too_thin,
@@ -109,6 +108,8 @@ def _student_has_report_sources(
     student_name: str | None,
     student_rut: str | None,
     document_id: int | None,
+    school_id: int | None = None,
+    period_year: int | None = None,
 ) -> bool:
     files_block = ""
     try:
@@ -129,7 +130,19 @@ def _student_has_report_sources(
 
     doc = int(document_id) if document_id else None
     if doc == _PSYCHOPED_DOCUMENT_ID:
-        return False
+        try:
+            from app.backend.utils.agents_dynamic_form_context import (
+                student_has_dynamic_form_answers,
+            )
+
+            return student_has_dynamic_form_answers(
+                db,
+                student_id=int(student_id),
+                school_id=int(school_id) if school_id else None,
+                period_year=int(period_year) if period_year else None,
+            )
+        except Exception:
+            return False
 
     # Familia: puede usar el psicopedagógico de la ficha.
     try:
@@ -170,6 +183,8 @@ def _build_system_prompt(
     student_rut: str | None,
     document_id: int | None,
     message: str = "",
+    school_id: int | None = None,
+    period_year: int | None = None,
 ) -> str:
     parts: list[str] = []
     instructions = (agent.role_instructions or "").strip()
@@ -255,6 +270,43 @@ def _build_system_prompt(
         )
         if files_block:
             parts.append(files_block)
+
+        # Psicopedagógico: si el cuestionario/Excel de Files no trae al estudiante,
+        # MCP get_student_psychopedagogical_form_answers → respuestas de Formularios PIE360.
+        doc_int = int(document_id) if document_id is not None else None
+        if student_id and doc_int == _PSYCHOPED_DOCUMENT_ID:
+            try:
+                excel_matched: list[str] = []
+                try:
+                    from app.backend.utils.agents_file_context import (
+                        extract_spreadsheet_hint_for_student,
+                    )
+
+                    _excel_txt, excel_matched = extract_spreadsheet_hint_for_student(
+                        agent.name or "",
+                        student_rut=student_rut,
+                        student_name=student_name,
+                        customer_id=int(customer_id),
+                    )
+                except Exception:
+                    excel_matched = []
+
+                if not excel_matched:
+                    mcp_form = AgentsMcpClass(db).get_student_psychopedagogical_form_answers(
+                        agent_id=str(agent.id),
+                        customer_id=int(customer_id),
+                        student_id=int(student_id),
+                        school_id=int(school_id) if school_id else None,
+                        period_year=int(period_year) if period_year else None,
+                        student_name=student_name,
+                        student_rut=student_rut,
+                    )
+                    if mcp_form.get("status") == "success":
+                        ctx = (mcp_form.get("data") or {}).get("context") or ""
+                        if str(ctx).strip():
+                            parts.append(str(ctx).strip())
+            except Exception:
+                pass
 
         # Si Files no trae el psicopedagógico del caso → leer ficha del estudiante (doc 27)
         try:
@@ -409,27 +461,8 @@ class AgentsChatClass:
         )
         want_doc_early = wants_document_generation(text, history)
         bulk_request = looks_like_bulk_request(text, history)
-        has_eval_files = agent_files_have_evaluation_evidence(
-            agent_row.name or "", int(self.customer_id)
-        )
-        if (
-            (want_doc_early or bulk_request)
-            and resolved_document_id == _PSYCHOPED_DOCUMENT_ID
-            and not has_eval_files
-        ):
-            ask = _missing_psychoped_files_reply()
-            yield {"type": "text_delta", "delta": ask}
-            yield {
-                "type": "done",
-                "data": {
-                    "reply": ask,
-                    "usage": None,
-                    "model": None,
-                    "responseFiles": [],
-                    "warning": None,
-                },
-            }
-            return
+        # Psicopedagógico: no rechazar solo por falta de Files; el estudiante puede tener
+        # respuestas vía MCP get_student_psychopedagogical_form_answers (se valida abajo).
 
         if bulk_request:
             yield from self._stream_bulk_reports(
@@ -471,6 +504,8 @@ class AgentsChatClass:
                 student_name=student_name,
                 student_rut=effective_rut,
                 document_id=resolved_document_id,
+                school_id=int(self.school_id) if self.school_id else None,
+                period_year=int(self.period_year) if self.period_year else None,
             )
             if not has_sources:
                 if resolved_document_id == _PSYCHOPED_DOCUMENT_ID:
@@ -542,6 +577,8 @@ class AgentsChatClass:
             student_rut=effective_rut,
             document_id=resolved_document_id,
             message=text,
+            school_id=int(self.school_id) if self.school_id else None,
+            period_year=int(self.period_year) if self.period_year else None,
         )
         messages = _build_messages(
             system_prompt=system_prompt,
@@ -955,9 +992,25 @@ class AgentsChatClass:
                 )
             except Exception:
                 files_block = ""
-            if not files_mention_student(files_block, student_name, student_rut):
+            has_files = files_mention_student(files_block, student_name, student_rut)
+            has_form = False
+            if not has_files:
+                try:
+                    from app.backend.utils.agents_dynamic_form_context import (
+                        student_has_dynamic_form_answers,
+                    )
+
+                    has_form = student_has_dynamic_form_answers(
+                        self.db,
+                        student_id=int(student_id),
+                        school_id=int(self.school_id) if self.school_id else None,
+                        period_year=int(self.period_year) if self.period_year else None,
+                    )
+                except Exception:
+                    has_form = False
+            if not has_files and not has_form:
                 empty["reason"] = (
-                    "sin antecedentes documentales en Files; no se emite el informe"
+                    "sin antecedentes en Files ni respuestas de formulario; no se emite el informe"
                 )
                 return empty
 
@@ -969,13 +1022,15 @@ class AgentsChatClass:
             student_rut=student_rut,
             document_id=document_id,
             message=f"Genera el {label} de {student_name}",
+            school_id=int(self.school_id) if self.school_id else None,
+            period_year=int(self.period_year) if self.period_year else None,
         )
         user_msg = (
             f"Genera ahora el {label} de {student_name}"
             f"{f' (RUT {student_rut})' if student_rut else ''} "
             f"(student_id={student_id}). "
             "Incluye el bloque JSON con \"fields\" para rellenar la plantilla. "
-            "Usa solo Files y la ficha; no inventes datos."
+            "Usa Files, formulario MCP y ficha; no inventes datos."
         )
         messages = _build_messages(
             system_prompt=system_prompt,

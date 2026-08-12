@@ -380,6 +380,74 @@ class AgentsMcpClass:
             },
         }
 
+    def get_student_psychopedagogical_form_answers(
+        self,
+        *,
+        agent_id: str,
+        customer_id: int,
+        student_id: int,
+        school_id: int | None = None,
+        period_year: int | None = None,
+        student_name: str | None = None,
+        student_rut: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Lee respuestas de formularios dinámicos (Inf. Eval. Psicopedagógica → Formularios).
+
+        Usar cuando el cuestionario/Excel en Files del agente no trae la fila del estudiante.
+        """
+        aid = (agent_id or "").strip()
+        if not aid:
+            return {"status": "error", "message": "agent_id es requerido.", "http_status": 400}
+        if int(customer_id) < 1:
+            return {"status": "error", "message": "customer_id inválido.", "http_status": 400}
+        if int(student_id) < 1:
+            return {"status": "error", "message": "student_id inválido.", "http_status": 400}
+
+        agent = (
+            self.db.query(AgentModel)
+            .filter(
+                AgentModel.id == aid,
+                AgentModel.customer_id == int(customer_id),
+            )
+            .first()
+        )
+        if not agent:
+            return {"status": "error", "message": "Agente no encontrado.", "http_status": 404}
+
+        from app.backend.utils.agents_dynamic_form_context import (
+            collect_dynamic_form_answers_payload,
+        )
+
+        payload = collect_dynamic_form_answers_payload(
+            self.db,
+            student_id=int(student_id),
+            student_name=student_name,
+            student_rut=student_rut,
+            school_id=int(school_id) if school_id else None,
+            period_year=int(period_year) if period_year else None,
+        )
+        if not payload:
+            return {
+                "status": "error",
+                "message": "No hay respuestas de formulario para este estudiante.",
+                "http_status": 404,
+                "data": {
+                    "agentId": agent.id,
+                    "studentId": int(student_id),
+                    "source": "dynamic_forms",
+                },
+            }
+        return {
+            "status": "success",
+            "message": "Respuestas de formulario obtenidas.",
+            "data": {
+                "agentId": agent.id,
+                "agentName": agent.name,
+                **payload,
+            },
+        }
+
     def create_document(
         self,
         *,
@@ -728,8 +796,13 @@ class AgentsMcpClass:
                 "  supports de hogar).",
                 "- Si en ESTE turno hay bloque ARCHIVOS / Excel / texto derivado del estudiante,",
                 "  ÚSALO: no digas que faltan cuestionarios si las respuestas están en el contexto.",
+                "- Si el cuestionario/Excel de Files NO trae la fila de ESTE estudiante, PIE360",
+                "  consulta MCP get_student_psychopedagogical_form_answers (respuestas en",
+                "  Inf. Eval. Psicopedagógica → Formularios) e inyecta el bloque",
+                "  «RESPUESTAS DEL FORMULARIO PIE360». Si aparece, úsalo como fuente de",
+                "  observación en aula (traduce LOGRADO/EN PROCESO/REQUIERE APOYO a prosa).",
                 "- NO dejes el informe solo con datos personales (nombre, RUT, curso, fechas).",
-                "- No inventes evaluaciones que no estén en Files ni en ficha PIE360.",
+                "- No inventes evaluaciones que no estén en Files, formulario MCP ni ficha PIE360.",
                 "- FIDELIDAD DOCUMENTAL: nunca presentes como hecho algo que no esté en los archivos;",
                 "  nunca mezcles antecedentes entre estudiantes distintos.",
                 "- REDACCIÓN: español latino, formal e inclusivo; sin lenguaje estigmatizante;",
@@ -883,7 +956,8 @@ class AgentsMcpClass:
                 "",
                 "Fuentes (regla dura):",
                 "- PROHIBIDO buscar en internet, navegar la web o usar buscadores.",
-                "- Solo archivos del agente / texto derivado, el chat y datos PIE360 del contexto.",
+                "- Solo archivos del agente / texto derivado, el chat, datos PIE360 del contexto",
+                "  y tools MCP (p. ej. get_student_psychopedagogical_form_answers).",
                 "- PROHIBIDO HTML y código (CSS, JS, Python, SQL, etc.). Solo prosa en español.",
                 "  El único JSON permitido es el bloque fields para generar el documento.",
                 "- Solo atiendes PIE Chile (informes, estudiantes, NEE, Decreto 170, PIE360).",

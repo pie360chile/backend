@@ -22,6 +22,7 @@ from app.backend.schemas.agents import (
     AgentCreateFolderRequest,
     AgentCreateRequest,
     AgentsMcpCreateDocumentRequest,
+    AgentsMcpGetStudentFormAnswersRequest,
     AgentsMcpGetStudentPsychopedRequest,
     AgentsMcpSaveDocumentToDriveRequest,
     AgentsMcpSearchFilesRequest,
@@ -175,6 +176,35 @@ def mcp_get_student_psychopedagogical_evaluation_rest(
         customer_id=body.customer_id,
         student_id=body.student_id,
         document_id=body.document_id,
+    )
+    if result.get("status") == "error":
+        return api_error(
+            status_code=result.get("http_status", status.HTTP_400_BAD_REQUEST),
+            message=result.get("message") or "Error",
+            data=result.get("data"),
+        )
+    return api_response(message=result.get("message"), data=result.get("data"))
+
+
+@agents.post("/mcp/get_student_psychopedagogical_form_answers")
+def mcp_get_student_psychopedagogical_form_answers_rest(
+    body: AgentsMcpGetStudentFormAnswersRequest,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(default=None),
+    x_mcp_secret: str | None = Header(default=None, alias="X-MCP-Secret"),
+):
+    """REST gemelo: respuestas de Formularios (observación) para el informe psicopedagógico."""
+    if not _mcp_secret_ok(authorization, x_mcp_secret):
+        return api_error(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            message="MCP secret inválido.",
+        )
+    result = AgentsMcpClass(db).get_student_psychopedagogical_form_answers(
+        agent_id=body.agent_id,
+        customer_id=body.customer_id,
+        student_id=body.student_id,
+        school_id=body.school_id,
+        period_year=body.period_year,
     )
     if result.get("status") == "error":
         return api_error(

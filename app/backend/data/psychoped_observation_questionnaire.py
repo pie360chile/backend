@@ -69,7 +69,8 @@ MOTOR_ITEMS = [
 def _field(field_id: str, domain: str, item: str) -> dict:
     return {
         "id": field_id,
-        "question": f"{domain}: [{item}]",
+        "section": domain,
+        "question": item,
         "fieldType": "radio",
         "options": [dict(o) for o in SCALE_OPTIONS],
         "required": False,

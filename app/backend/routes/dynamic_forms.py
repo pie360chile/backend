@@ -183,6 +183,13 @@ def submit_answers(
             payload.get("answers") or {},
             getattr(session_user, "id", None),
             period_year,
+            specialty=payload.get("specialty") or payload.get("especialidad") or payload.get("area"),
+            respondent_name=(
+                payload.get("respondentName")
+                or payload.get("respondent_name")
+                or payload.get("especialista")
+                or payload.get("docente")
+            ),
         )
         if result.get("status") == "error":
             return JSONResponse(

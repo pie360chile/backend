@@ -110,6 +110,14 @@ class AgentsMcpGetStudentPsychopedRequest(BaseModel):
     )
 
 
+class AgentsMcpGetStudentFormAnswersRequest(BaseModel):
+    agent_id: str = Field(..., min_length=1)
+    customer_id: int = Field(..., ge=1)
+    student_id: int = Field(..., ge=1)
+    school_id: int | None = Field(default=None, ge=1)
+    period_year: int | None = Field(default=None, ge=2000, le=2100)
+
+
 class AgentsMcpCreateDocumentRequest(BaseModel):
     agent_id: str = Field(..., min_length=1)
     customer_id: int = Field(..., ge=1)
