@@ -13,8 +13,19 @@ from app.backend.classes.agents_mcp_class import AgentsMcpClass
 from app.backend.classes.agents_usage_class import AgentsUsageClass
 from app.backend.core.config import settings
 from app.backend.db.models.agent import AgentModel
+from app.backend.utils.agents_bulk_reports import (
+    MAX_BULK_STUDENTS,
+    PSYCHOPED_DOCUMENT_ID as _PSYCHOPED_DOCUMENT_ID,
+    bulk_confirm_ask,
+    bulk_document_label,
+    files_mention_student,
+    looks_like_bulk_request,
+    resolve_bulk_plan,
+    user_confirmed_bulk,
+    zip_generated_files,
+)
 from app.backend.utils.agents_chat_context import (
-    infer_document_id,
+    resolve_document_id_for_agent,
     resolve_student_id,
     student_identification_hint,
     wants_document_generation,
@@ -25,11 +36,20 @@ from app.backend.utils.agents_llm_client import (
     normalize_usage,
     stream_chat_completion,
 )
+from app.backend.utils.agents_file_context import agent_files_have_evaluation_evidence
 from app.backend.utils.agents_mcp_fields import (
     extract_fields_from_reply,
     is_content_too_thin,
     strip_fields_json_from_reply,
 )
+
+def _missing_psychoped_files_reply() -> str:
+    return (
+        "No es posible elaborar el Informe de Evaluación Psicopedagógica: "
+        "no dispongo de antecedentes documentales del estudiante en Files "
+        "(cuestionarios, pautas, anamnesis u otras evidencias de evaluación).\n\n"
+        "Sin esa información no puedo redactar ni emitir el informe."
+    )
 
 
 def _drive_path_block(*, customer_id: int, agent_name: str) -> str:
@@ -178,11 +198,13 @@ class AgentsChatClass:
         customer_id: int | None = None,
         school_id: int | None = None,
         user_id: int | None = None,
+        period_year: int | None = None,
     ) -> None:
         self.db = db
         self.customer_id = customer_id
         self.school_id = school_id
         self.user_id = user_id
+        self.period_year = period_year
 
     def stream_chat(
         self,
@@ -219,6 +241,50 @@ class AgentsChatClass:
             }
             return
 
+        resolved_document_id = resolve_document_id_for_agent(
+            self.db,
+            agent_id=agent_id,
+            agent_name=agent_row.name,
+            requested_document_id=document_id,
+            message=text,
+            history=history,
+        )
+        want_doc_early = wants_document_generation(text, history)
+        bulk_request = looks_like_bulk_request(text, history)
+        has_eval_files = agent_files_have_evaluation_evidence(
+            agent_row.name or "", int(self.customer_id)
+        )
+        if (
+            (want_doc_early or bulk_request)
+            and resolved_document_id == _PSYCHOPED_DOCUMENT_ID
+            and not has_eval_files
+        ):
+            ask = _missing_psychoped_files_reply()
+            yield {"type": "text_delta", "delta": ask}
+            yield {
+                "type": "done",
+                "data": {
+                    "reply": ask,
+                    "usage": None,
+                    "model": None,
+                    "responseFiles": [],
+                    "warning": None,
+                },
+            }
+            return
+
+        if bulk_request:
+            yield from self._stream_bulk_reports(
+                agent_id=agent_id,
+                agent_row=agent_row,
+                text=text,
+                history=history,
+                document_id=resolved_document_id,
+            )
+            return
+
+        # Uno a uno: si no hay ficha/RUT, se pide el RUT más abajo.
+
         resolved_student_id, rut_used, student_issue = resolve_student_id(
             self.db,
             student_id=student_id,
@@ -228,19 +294,9 @@ class AgentsChatClass:
             customer_id=int(self.customer_id) if self.customer_id else None,
             school_id=int(self.school_id) if self.school_id else None,
         )
-        resolved_document_id = document_id or infer_document_id(
-            self.db, agent_id, text, history
-        )
-        if not resolved_document_id:
-            aname = (agent_row.name or "").lower()
-            if "psicoped" in aname:
-                resolved_document_id = 27
-            elif "familia" in aname:
-                resolved_document_id = 7
         effective_rut = (student_rut or rut_used or "").strip() or None
 
         # Sin RUT/ficha: pedir RUT antes de llamar al LLM / generar documento.
-        want_doc_early = wants_document_generation(text, history)
         if (
             want_doc_early
             and not resolved_student_id
@@ -253,7 +309,11 @@ class AgentsChatClass:
                     "o abre el chat desde la ficha del estudiante."
                 )
             else:
-                ask = build_ask_rut_reply(text)
+                ask = build_ask_rut_reply(
+                    text,
+                    document_id=resolved_document_id,
+                    agent_name=agent_row.name,
+                )
             yield {"type": "text_delta", "delta": ask}
             yield {
                 "type": "done",
@@ -318,7 +378,11 @@ class AgentsChatClass:
 
         if want_doc or fields:
             if student_issue == "needs_rut" and not resolved_student_id:
-                visible_reply = build_ask_rut_reply(text)
+                visible_reply = build_ask_rut_reply(
+                    text,
+                    document_id=resolved_document_id,
+                    agent_name=agent_row.name,
+                )
                 warning = None
             elif student_issue == "not_found":
                 visible_reply = (
@@ -333,6 +397,12 @@ class AgentsChatClass:
                     "Falta document_id / plantilla del agente. "
                     "Sube el modelo en Documentos del agente."
                 )
+            elif (
+                int(resolved_document_id) == _PSYCHOPED_DOCUMENT_ID
+                and not has_eval_files
+            ):
+                visible_reply = _missing_psychoped_files_reply()
+                warning = None
             elif not fields:
                 warning = (
                     "El agente redactó pero no envió el bloque JSON de fields. "
@@ -418,6 +488,8 @@ class AgentsChatClass:
                 "prompt_tokens": pt,
                 "completion_tokens": ct,
                 "total_tokens": pt + ct,
+                "prompt_cache_hit_tokens": 0,
+                "prompt_cache_miss_tokens": pt,
             }
 
         try:
@@ -430,8 +502,398 @@ class AgentsChatClass:
                 prompt_tokens=int(usage.get("prompt_tokens") or 0),
                 completion_tokens=int(usage.get("completion_tokens") or 0),
                 total_tokens=int(usage.get("total_tokens") or 0),
+                prompt_cache_hit_tokens=int(usage.get("prompt_cache_hit_tokens") or 0),
+                prompt_cache_miss_tokens=int(usage.get("prompt_cache_miss_tokens") or 0),
                 input_text=text,
                 output_text=visible_reply,
             )
         except Exception:
             self.db.rollback()
+
+    def _stream_bulk_reports(
+        self,
+        *,
+        agent_id: str,
+        agent_row: AgentModel,
+        text: str,
+        history: list[dict[str, str]] | None,
+        document_id: int | None,
+    ) -> Iterator[dict[str, Any]]:
+        plan = resolve_bulk_plan(
+            self.db,
+            customer_id=int(self.customer_id),
+            message=text,
+            history=history,
+            document_id=document_id,
+            agent_name=agent_row.name,
+            default_year=int(self.period_year) if self.period_year else None,
+            session_school_id=int(self.school_id) if self.school_id else None,
+        )
+        if plan is None:
+            ask = (
+                "Para continuar con los informes del curso, indica el liceo, "
+                "el año (ej. 2026) y el curso (ej. 1° Medio A)."
+            )
+            yield {"type": "text_delta", "delta": ask}
+            yield {
+                "type": "done",
+                "data": {
+                    "reply": ask,
+                    "usage": None,
+                    "model": None,
+                    "responseFiles": [],
+                    "warning": None,
+                },
+            }
+            return
+
+        if plan.ask and not plan.students:
+            yield {"type": "text_delta", "delta": plan.ask}
+            yield {
+                "type": "done",
+                "data": {
+                    "reply": plan.ask,
+                    "usage": None,
+                    "model": None,
+                    "responseFiles": [],
+                    "warning": None,
+                },
+            }
+            return
+
+        if not document_id:
+            ask = (
+                "No hay plantilla asociada a este agente. "
+                "Sube el modelo en Documentos del agente e inténtalo de nuevo."
+            )
+            yield {"type": "text_delta", "delta": ask}
+            yield {
+                "type": "done",
+                "data": {
+                    "reply": ask,
+                    "usage": None,
+                    "model": None,
+                    "responseFiles": [],
+                    "warning": None,
+                },
+            }
+            return
+
+        students = list(plan.students or [])
+        if len(students) > MAX_BULK_STUDENTS and not user_confirmed_bulk(text):
+            ask = bulk_confirm_ask(
+                course_name=(plan.course_name or "").strip() or "curso",
+                school_name=(plan.school_name or "").strip() or "establecimiento",
+                year=int(plan.year or 0),
+                total=len(students),
+            )
+            yield {"type": "text_delta", "delta": ask}
+            yield {
+                "type": "done",
+                "data": {
+                    "reply": ask,
+                    "usage": None,
+                    "model": None,
+                    "responseFiles": [],
+                    "warning": None,
+                },
+            }
+            return
+
+        batch = students[:MAX_BULK_STUDENTS]
+        label = bulk_document_label(document_id, agent_row.name)
+        course_title = (plan.course_name or "").strip() or "curso"
+        school_title = (plan.school_name or "").strip()
+        year_title = plan.year
+        roster = "\n".join(
+            f"{i}. {s.get('name') or ('Estudiante ' + str(s.get('id')))}"
+            for i, s in enumerate(batch, start=1)
+        )
+        header = (
+            f"Curso **{course_title}**"
+            f"{f' ({school_title}, {year_title})' if school_title else ''}: "
+            f"**{len(batch)}** estudiante(s). Generaré el {label} uno a uno "
+            "y lo guardaré en cada ficha.\n\n"
+            f"{roster}\n"
+        )
+        if len(students) > MAX_BULK_STUDENTS:
+            header += (
+                f"\n(Tanda 1 de {MAX_BULK_STUDENTS}; quedan "
+                f"{len(students) - MAX_BULK_STUDENTS} para otra tanda.)\n"
+            )
+        yield {"type": "text_delta", "delta": header}
+        yield {"type": "step", "message": f"0/{len(batch)} preparando generación…"}
+
+        llm = AgentsLlmModelsClass(self.db)
+        model_code = llm.get_selected_model_code()
+        ok_names: list[str] = []
+        omitted: list[tuple[str, str]] = []
+        filenames: list[str] = []
+        usage_acc: dict[str, Any] | None = None
+
+        for index, student in enumerate(batch, start=1):
+            sid = int(student.get("id") or 0)
+            sname = (student.get("name") or f"Estudiante {sid}").strip()
+            srut = (student.get("rut") or "").strip() or None
+            yield {
+                "type": "step",
+                "message": f"{index}/{len(batch)} {sname}…",
+            }
+            if not sid:
+                omitted.append((sname, "ficha incompleta"))
+                continue
+
+            result = self._generate_one_bulk_document(
+                agent_id=agent_id,
+                agent_row=agent_row,
+                student_id=sid,
+                student_name=sname,
+                student_rut=srut,
+                document_id=int(document_id),
+                label=label,
+                model_code=model_code,
+            )
+            usage_acc = _merge_usage(usage_acc, result.get("usage"))
+            if result.get("template_missing"):
+                ask = result.get("reason") or "No hay plantilla en Documentos del agente."
+                yield {"type": "text_delta", "delta": f"\n\n{ask}"}
+                yield {
+                    "type": "done",
+                    "data": {
+                        "reply": header + "\n" + ask,
+                        "usage": usage_acc,
+                        "model": model_code,
+                        "responseFiles": [],
+                        "warning": ask,
+                    },
+                }
+                self._record_bulk_usage(
+                    agent_id=agent_id,
+                    model_code=model_code,
+                    usage=usage_acc,
+                    input_text=text,
+                    output_text=header + "\n" + ask,
+                )
+                return
+            if result.get("ok"):
+                ok_names.append(sname)
+                fname = (result.get("filename") or "").strip()
+                if fname:
+                    filenames.append(fname)
+            else:
+                omitted.append((sname, result.get("reason") or "no se pudo generar"))
+
+        zip_file = zip_generated_files(filenames)
+        response_files = [zip_file] if zip_file else []
+        lines = [
+            header,
+            f"**Generados:** {len(ok_names)}",
+        ]
+        if ok_names:
+            lines.append(", ".join(ok_names))
+        if omitted:
+            lines.append(f"\n**Omitidos:** {len(omitted)}")
+            for name, reason in omitted:
+                lines.append(f"- {name}: {reason}")
+        if zip_file:
+            lines.append(
+                "\nZIP con los Word generados listo para descargar. "
+                "Cada informe quedó también en la ficha del estudiante."
+            )
+        elif ok_names:
+            lines.append(
+                "\nLos informes se guardaron en la ficha de cada estudiante."
+            )
+        else:
+            lines.append("\nNo se generó ningún informe en esta tanda.")
+
+        reply = "\n".join(lines).strip()
+        yield {"type": "text_delta", "delta": "\n\n" + reply[len(header) :].lstrip()}
+        yield {
+            "type": "done",
+            "data": {
+                "reply": reply,
+                "usage": usage_acc,
+                "model": model_code,
+                "responseFiles": response_files,
+                "warning": None,
+            },
+        }
+        self._record_bulk_usage(
+            agent_id=agent_id,
+            model_code=model_code,
+            usage=usage_acc,
+            input_text=text,
+            output_text=reply,
+        )
+
+    def _generate_one_bulk_document(
+        self,
+        *,
+        agent_id: str,
+        agent_row: AgentModel,
+        student_id: int,
+        student_name: str,
+        student_rut: str | None,
+        document_id: int,
+        label: str,
+        model_code: str,
+    ) -> dict[str, Any]:
+        empty: dict[str, Any] = {
+            "ok": False,
+            "filename": None,
+            "reason": None,
+            "usage": None,
+            "template_missing": False,
+        }
+        if document_id == _PSYCHOPED_DOCUMENT_ID:
+            files_block = ""
+            try:
+                from app.backend.utils import agents_derived_storage as derived
+
+                files_block, _n = derived.build_selective_files_context(
+                    agent_row.name or "",
+                    query=student_name,
+                    student_rut=student_rut,
+                    student_name=student_name,
+                    customer_id=int(self.customer_id),
+                )
+            except Exception:
+                files_block = ""
+            if not files_mention_student(files_block, student_name, student_rut):
+                empty["reason"] = (
+                    "sin antecedentes documentales en Files; no se emite el informe"
+                )
+                return empty
+
+        system_prompt = _build_system_prompt(
+            db=self.db,
+            agent=agent_row,
+            customer_id=int(self.customer_id),
+            student_id=student_id,
+            student_rut=student_rut,
+            document_id=document_id,
+            message=f"Genera el {label} de {student_name}",
+        )
+        user_msg = (
+            f"Genera ahora el {label} de {student_name}"
+            f"{f' (RUT {student_rut})' if student_rut else ''} "
+            f"(student_id={student_id}). "
+            "Incluye el bloque JSON con \"fields\" para rellenar la plantilla. "
+            "Usa solo Files y la ficha; no inventes datos."
+        )
+        messages = _build_messages(
+            system_prompt=system_prompt,
+            message=user_msg,
+            history=None,
+        )
+        reply_text = ""
+        usage: dict[str, Any] | None = None
+        for event in stream_chat_completion(
+            messages, model=model_code, db=self.db, timeout=180
+        ):
+            if event.get("type") == "text_delta":
+                reply_text += event.get("delta") or ""
+            elif event.get("type") == "done":
+                data = event.get("data") or {}
+                reply_text = data.get("reply") or reply_text
+                usage = normalize_usage(
+                    data.get("usage") if isinstance(data.get("usage"), dict) else None
+                )
+            elif event.get("type") == "error":
+                empty["reason"] = event.get("message") or "error del modelo"
+                empty["usage"] = usage
+                return empty
+
+        fields = extract_fields_from_reply(reply_text)
+        if not fields:
+            empty["reason"] = "el modelo no entregó los campos del informe"
+            empty["usage"] = usage
+            return empty
+
+        try:
+            created = AgentsMcpClass(self.db).create_document(
+                agent_id=agent_id,
+                customer_id=int(self.customer_id),
+                student_id=int(student_id),
+                document_id=int(document_id),
+                fields=fields,
+            )
+        except Exception as exc:
+            empty["reason"] = f"error al guardar: {exc}"
+            empty["usage"] = usage
+            return empty
+
+        if created.get("status") == "error":
+            msg = created.get("message") or "no se pudo generar el documento"
+            empty["reason"] = msg
+            empty["usage"] = usage
+            if "plantilla" in msg.lower():
+                empty["template_missing"] = True
+            return empty
+
+        data = created.get("data") or {}
+        files = list(data.get("responseFiles") or [])
+        filename = ""
+        if files:
+            filename = str(files[0].get("name") or "")
+        return {
+            "ok": True,
+            "filename": filename,
+            "reason": None,
+            "usage": usage,
+            "template_missing": False,
+        }
+
+    def _record_bulk_usage(
+        self,
+        *,
+        agent_id: str,
+        model_code: str,
+        usage: dict[str, Any] | None,
+        input_text: str,
+        output_text: str,
+    ) -> None:
+        if not self.customer_id or not usage:
+            return
+        try:
+            AgentsUsageClass(self.db).record_chat(
+                customer_id=int(self.customer_id),
+                school_id=int(self.school_id) if self.school_id else None,
+                user_id=int(self.user_id) if self.user_id else None,
+                agent_id=agent_id,
+                model=model_code,
+                prompt_tokens=int(usage.get("prompt_tokens") or 0),
+                completion_tokens=int(usage.get("completion_tokens") or 0),
+                total_tokens=int(usage.get("total_tokens") or 0),
+                prompt_cache_hit_tokens=int(usage.get("prompt_cache_hit_tokens") or 0),
+                prompt_cache_miss_tokens=int(usage.get("prompt_cache_miss_tokens") or 0),
+                input_text=input_text,
+                output_text=output_text,
+            )
+        except Exception:
+            self.db.rollback()
+
+
+def _merge_usage(
+    acc: dict[str, Any] | None, extra: dict[str, Any] | None
+) -> dict[str, Any] | None:
+    if not extra:
+        return acc
+    if not acc:
+        return {
+            "prompt_tokens": int(extra.get("prompt_tokens") or 0),
+            "completion_tokens": int(extra.get("completion_tokens") or 0),
+            "total_tokens": int(extra.get("total_tokens") or 0),
+            "prompt_cache_hit_tokens": int(extra.get("prompt_cache_hit_tokens") or 0),
+            "prompt_cache_miss_tokens": int(extra.get("prompt_cache_miss_tokens") or 0),
+        }
+    for key in (
+        "prompt_tokens",
+        "completion_tokens",
+        "total_tokens",
+        "prompt_cache_hit_tokens",
+        "prompt_cache_miss_tokens",
+    ):
+        acc[key] = int(acc.get(key) or 0) + int(extra.get(key) or 0)
+    return acc

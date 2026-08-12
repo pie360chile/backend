@@ -34,7 +34,7 @@ def llm_chat_completions_url() -> str:
 
 
 def normalize_usage(raw: dict[str, Any] | None) -> dict[str, int] | None:
-    """Normaliza usage de DeepSeek/OpenAI a prompt/completion/total."""
+    """Normaliza usage de DeepSeek/OpenAI a prompt/completion/total + cache hit/miss."""
     if not isinstance(raw, dict) or not raw:
         return None
     prompt = int(
@@ -50,14 +50,42 @@ def normalize_usage(raw: dict[str, Any] | None) -> dict[str, int] | None:
         or 0
     )
     total = int(raw.get("total_tokens") or raw.get("totalTokens") or 0)
-    if prompt <= 0 and completion <= 0 and total <= 0:
+    cache_hit = int(
+        raw.get("prompt_cache_hit_tokens")
+        or raw.get("cache_hit_tokens")
+        or raw.get("promptCacheHitTokens")
+        or 0
+    )
+    cache_miss = int(
+        raw.get("prompt_cache_miss_tokens")
+        or raw.get("cache_miss_tokens")
+        or raw.get("promptCacheMissTokens")
+        or 0
+    )
+    # prompt_tokens_details (OpenAI-style) si viene anidado
+    details = raw.get("prompt_tokens_details")
+    if isinstance(details, dict):
+        if cache_hit <= 0:
+            cache_hit = int(details.get("cached_tokens") or details.get("cache_hit_tokens") or 0)
+        if cache_miss <= 0 and prompt > 0 and cache_hit > 0:
+            cache_miss = max(0, prompt - cache_hit)
+    if prompt <= 0 and completion <= 0 and total <= 0 and cache_hit <= 0 and cache_miss <= 0:
         return None
     if total <= 0:
         total = prompt + completion
+    if prompt > 0 and cache_hit <= 0 and cache_miss <= 0:
+        # Sin desglose del proveedor: todo el input cuenta como miss
+        cache_miss = prompt
+    elif prompt > 0 and cache_miss <= 0 and cache_hit > 0:
+        cache_miss = max(0, prompt - cache_hit)
+    elif prompt > 0 and cache_hit <= 0 and cache_miss > 0:
+        cache_hit = max(0, prompt - cache_miss)
     return {
         "prompt_tokens": max(0, prompt),
         "completion_tokens": max(0, completion),
         "total_tokens": max(0, total),
+        "prompt_cache_hit_tokens": max(0, cache_hit),
+        "prompt_cache_miss_tokens": max(0, cache_miss),
     }
 
 

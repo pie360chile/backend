@@ -70,6 +70,13 @@ def list_all_context_file_paths(agent_name: str, customer_id: int | None = None)
     return sorted(files, key=_context_file_sort_key)
 
 
+def agent_files_have_evaluation_evidence(
+    agent_name: str, customer_id: int | None = None
+) -> bool:
+    """True si hay archivos en Files (no plantillas) de los que extraer antecedentes."""
+    return bool(list_all_context_file_paths(agent_name, customer_id))
+
+
 def list_context_file_paths(agent_name: str, customer_id: int | None = None) -> list[Path]:
     return list_all_context_file_paths(agent_name, customer_id)[:MAX_FILES]
 

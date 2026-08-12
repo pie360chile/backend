@@ -64,6 +64,18 @@ def _resolve_customer_id(
     return own_id, None
 
 
+def _period_year_or_none(value) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        year = int(value)
+    except (TypeError, ValueError):
+        return None
+    if year < 2000 or year > 2100:
+        return None
+    return year
+
+
 def _forbid_agents_access(session_user: UserModel, db: Session):
     if can_use_agents_chat(session_user, db):
         return None
@@ -508,6 +520,7 @@ def chat_agent(
     history = [{"role": m.role, "content": m.content} for m in body.history]
     school_id = getattr(session_user, "school_id", None)
     user_id = getattr(session_user, "id", None)
+    period_year = getattr(session_user, "period_year", None)
 
     rate = AgentsRateLimitClass(db).check_and_register_chat(
         user_id=int(user_id) if user_id else None,
@@ -526,6 +539,7 @@ def chat_agent(
             customer_id=cid,
             school_id=int(school_id) if school_id else None,
             user_id=int(user_id) if user_id else None,
+            period_year=_period_year_or_none(period_year),
         )
         for event in chat.stream_chat(
             agent_id,

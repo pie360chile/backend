@@ -30,17 +30,40 @@ def _estimate_cost_usd(
     prompt_tokens: int,
     completion_tokens: int,
     db: Session,
+    prompt_cache_hit_tokens: int = 0,
+    prompt_cache_miss_tokens: int = 0,
 ) -> Decimal:
     row = (
         db.query(AgentsOpenAIModel)
         .filter(AgentsOpenAIModel.model_code == model_code)
         .first()
     )
+    # Default ≈ deepseek-v4-pro (cache miss / output) de la tabla pública DeepSeek
     in_price = Decimal(str(row.input_per_1m_usd)) if row else Decimal("0.435")
     out_price = Decimal(str(row.output_per_1m_usd)) if row else Decimal("0.870")
-    cost = (Decimal(prompt_tokens) / Decimal(1_000_000)) * in_price + (
-        Decimal(completion_tokens) / Decimal(1_000_000)
-    ) * out_price
+    cached_price = (
+        Decimal(str(row.cached_input_per_1m_usd))
+        if row and row.cached_input_per_1m_usd is not None
+        else None
+    )
+
+    hit = max(0, int(prompt_cache_hit_tokens or 0))
+    miss = max(0, int(prompt_cache_miss_tokens or 0))
+    prompt = max(0, int(prompt_tokens or 0))
+    if hit + miss <= 0 and prompt > 0:
+        miss = prompt
+    elif hit + miss > 0 and hit + miss != prompt and prompt > 0:
+        # Preferir desglose del proveedor; ajustar miss al resto del prompt
+        miss = max(0, prompt - hit)
+
+    if cached_price is not None and (hit > 0 or miss > 0):
+        input_cost = (Decimal(hit) / Decimal(1_000_000)) * cached_price + (
+            Decimal(miss) / Decimal(1_000_000)
+        ) * in_price
+    else:
+        input_cost = (Decimal(prompt) / Decimal(1_000_000)) * in_price
+
+    cost = input_cost + (Decimal(completion_tokens) / Decimal(1_000_000)) * out_price
     return cost.quantize(Decimal("0.000001"))
 
 
@@ -70,16 +93,26 @@ class AgentsUsageClass:
         prompt_tokens: int,
         completion_tokens: int,
         total_tokens: int | None = None,
+        prompt_cache_hit_tokens: int = 0,
+        prompt_cache_miss_tokens: int = 0,
         input_text: str | None = None,
         output_text: str | None = None,
     ) -> dict[str, Any]:
         pt = max(0, int(prompt_tokens or 0))
         ct = max(0, int(completion_tokens or 0))
+        hit = max(0, int(prompt_cache_hit_tokens or 0))
+        miss = max(0, int(prompt_cache_miss_tokens or 0))
+        if hit + miss <= 0 and pt > 0:
+            miss = pt
+        elif pt > 0 and hit > 0 and miss <= 0:
+            miss = max(0, pt - hit)
         tt = int(total_tokens) if total_tokens is not None else pt + ct
         cost = _estimate_cost_usd(
             model_code=model,
             prompt_tokens=pt,
             completion_tokens=ct,
+            prompt_cache_hit_tokens=hit,
+            prompt_cache_miss_tokens=miss,
             db=self.db,
         )
         row = AgentsTokenUsageModel(
@@ -90,6 +123,8 @@ class AgentsUsageClass:
             request_kind="chat",
             model=(model or "").strip() or "unknown",
             prompt_tokens=pt,
+            prompt_cache_hit_tokens=hit,
+            prompt_cache_miss_tokens=miss,
             completion_tokens=ct,
             total_tokens=tt,
             estimated_cost_usd=cost,
@@ -129,6 +164,8 @@ class AgentsUsageClass:
             func.coalesce(func.sum(AgentsTokenUsageModel.completion_tokens), 0),
             func.coalesce(func.sum(AgentsTokenUsageModel.total_tokens), 0),
             func.coalesce(func.sum(AgentsTokenUsageModel.estimated_cost_usd), 0),
+            func.coalesce(func.sum(AgentsTokenUsageModel.prompt_cache_hit_tokens), 0),
+            func.coalesce(func.sum(AgentsTokenUsageModel.prompt_cache_miss_tokens), 0),
         ).one()
 
         rows = (
@@ -164,6 +201,12 @@ class AgentsUsageClass:
                     "request_kind": r.request_kind,
                     "model": r.model,
                     "prompt_tokens": r.prompt_tokens,
+                    "prompt_cache_hit_tokens": int(
+                        getattr(r, "prompt_cache_hit_tokens", 0) or 0
+                    ),
+                    "prompt_cache_miss_tokens": int(
+                        getattr(r, "prompt_cache_miss_tokens", 0) or 0
+                    ),
                     "completion_tokens": r.completion_tokens,
                     "total_tokens": r.total_tokens,
                     "estimated_cost_usd": float(r.estimated_cost_usd or 0),
@@ -189,6 +232,8 @@ class AgentsUsageClass:
                     "completion_tokens": int(totals[1] or 0),
                     "total_tokens": int(totals[2] or 0),
                     "estimated_cost_usd": float(totals[3] or 0),
+                    "prompt_cache_hit_tokens": int(totals[4] or 0),
+                    "prompt_cache_miss_tokens": int(totals[5] or 0),
                 },
             },
         }

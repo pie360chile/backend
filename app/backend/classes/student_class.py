@@ -66,10 +66,44 @@ def _escape_like(value: str) -> str:
     )
 
 
+_SQL_ACCENT_REPLACEMENTS = (
+    ("á", "a"),
+    ("à", "a"),
+    ("ä", "a"),
+    ("â", "a"),
+    ("é", "e"),
+    ("è", "e"),
+    ("ë", "e"),
+    ("ê", "e"),
+    ("í", "i"),
+    ("ì", "i"),
+    ("ï", "i"),
+    ("î", "i"),
+    ("ó", "o"),
+    ("ò", "o"),
+    ("ö", "o"),
+    ("ô", "o"),
+    ("ú", "u"),
+    ("ù", "u"),
+    ("ü", "u"),
+    ("û", "u"),
+    ("ñ", "n"),
+    ("ç", "c"),
+)
+
+
+def _sql_fold_name(expr):
+    """LOWER + sin tildes en SQL (para LIKE contra tokens sin acento)."""
+    folded = func.lower(expr)
+    for src, dst in _SQL_ACCENT_REPLACEMENTS:
+        folded = func.replace(folded, src, dst)
+    return folded
+
+
 def _apply_student_names_filter(query, names: str | None):
     """
     Busca por nombre completo (nombres + apellidos), tokenizado.
-    Tolera acentos y letras repetidas (p. ej. diiaz → diaz).
+    Tolera acentos y letras repetidas (p. ej. diiaz → diaz, munoz → muñoz).
     """
     raw = (names or "").strip()
     if not raw:
@@ -79,7 +113,7 @@ def _apply_student_names_filter(query, names: str | None):
     if not tokens:
         return query
 
-    full_name = func.lower(
+    full_name = _sql_fold_name(
         func.concat_ws(
             " ",
             func.coalesce(StudentPersonalInfoModel.names, ""),
@@ -95,11 +129,11 @@ def _apply_student_names_filter(query, names: str | None):
             continue
         ors = []
         for variant in variants:
-            pattern = f"%{_escape_like(variant)}%"
+            folded = _strip_accents(variant).lower()
+            pattern = f"%{_escape_like(folded)}%"
             ors.append(full_name.like(pattern, escape="\\"))
-            # Prefijo corto si el token es largo: ayuda con typos al final
-            if len(variant) >= 4:
-                prefix = f"%{_escape_like(variant[: max(3, len(variant) - 1)])}%"
+            if len(folded) >= 4:
+                prefix = f"%{_escape_like(folded[: max(3, len(folded) - 1)])}%"
                 ors.append(full_name.like(prefix, escape="\\"))
         if ors:
             query = query.filter(or_(*ors))
@@ -257,7 +291,7 @@ class StudentClass:
             fld.updated_date = datetime.now()
             self.db.commit()
 
-    def get_all(self, page=0, items_per_page=10, school_id=None, rut=None, names=None, identification_number=None, course_id=None, period_year=None):
+    def get_all(self, page=0, items_per_page=10, school_id=None, rut=None, names=None, identification_number=None, course_id=None, period_year=None, customer_id=None):
         try:
             query = self.db.query(
                 StudentModel.id,
@@ -310,6 +344,10 @@ class StudentClass:
             # Si hay course_id, el profesional debe ver todos los estudiantes de ese curso sin importar la escuela
             if school_id and not course_id:
                 query = query.filter(StudentModel.school_id == school_id)
+            elif customer_id and not course_id:
+                query = query.join(
+                    SchoolModel, SchoolModel.id == StudentModel.school_id
+                ).filter(SchoolModel.customer_id == int(customer_id))
 
             # Aplicar filtros de búsqueda
             if rut and rut.strip():

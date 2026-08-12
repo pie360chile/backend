@@ -18,6 +18,8 @@ class AgentsTokenUsageModel(Base):
     request_kind = Column(String(32), nullable=False, default="chat")
     model = Column(String(64), nullable=False)
     prompt_tokens = Column(Integer, nullable=False, default=0)
+    prompt_cache_hit_tokens = Column(Integer, nullable=False, default=0)
+    prompt_cache_miss_tokens = Column(Integer, nullable=False, default=0)
     completion_tokens = Column(Integer, nullable=False, default=0)
     total_tokens = Column(Integer, nullable=False, default=0)
     estimated_cost_usd = Column(Numeric(12, 6), nullable=False, default=0)

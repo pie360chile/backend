@@ -50,6 +50,18 @@ def main() -> None:
         print("ok: agents_token_usage table")
         _add_column_if_missing(conn, "agents_token_usage", "input_text", "input_text TEXT NULL")
         _add_column_if_missing(conn, "agents_token_usage", "output_text", "output_text TEXT NULL")
+        _add_column_if_missing(
+            conn,
+            "agents_token_usage",
+            "prompt_cache_hit_tokens",
+            "prompt_cache_hit_tokens INT NOT NULL DEFAULT 0",
+        )
+        _add_column_if_missing(
+            conn,
+            "agents_token_usage",
+            "prompt_cache_miss_tokens",
+            "prompt_cache_miss_tokens INT NOT NULL DEFAULT 0",
+        )
 
     tables = set(inspect(engine).get_table_names())
     print("has table:", "agents_token_usage" in tables)

@@ -401,6 +401,7 @@ class StudentList(BaseModel):
     identification_number: Optional[str] = None
     course_id: Optional[int] = None
     period_year: Optional[int] = None  # Filtrar estudiantes por año (ej. 2026)
+    across_schools: Optional[bool] = None  # buscador header: todos los colegios del cliente
 
 class StudentAcademicInfo(BaseModel):
     special_educational_need_id: Optional[int] = None

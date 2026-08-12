@@ -809,24 +809,27 @@ class AgentsMcpClass:
         q = self.db.query(AgentDocumentTemplateModel).filter(
             AgentDocumentTemplateModel.agent_id == agent.id
         )
-        if document_id is not None and int(document_id) > 0:
-            preferred = q.filter(
-                AgentDocumentTemplateModel.document_id == int(document_id)
-            ).all()
-            templates = preferred or q.order_by(
-                AgentDocumentTemplateModel.document_name.asc()
-            ).all()
+        all_templates = q.order_by(AgentDocumentTemplateModel.document_name.asc()).all()
+        template_ids = {int(t.document_id) for t in all_templates}
+        requested = int(document_id) if document_id is not None and int(document_id) > 0 else None
+        if requested and requested in template_ids:
+            templates = [t for t in all_templates if int(t.document_id) == requested]
         else:
-            templates = q.order_by(AgentDocumentTemplateModel.document_name.asc()).all()
+            templates = all_templates
 
-        # Si aún no hay document_id, inferir por nombre del agente
-        effective_doc = int(document_id) if document_id is not None else None
-        if effective_doc is None:
+        # El tipo lo define la plantilla del agente, no un document_id ajeno (p. ej. URL de Familia).
+        if len(template_ids) == 1:
+            effective_doc = next(iter(template_ids))
+        elif requested and requested in template_ids:
+            effective_doc = requested
+        else:
             aname = (agent.name or "").lower()
             if "psicoped" in aname:
                 effective_doc = 27
             elif "familia" in aname:
                 effective_doc = 7
+            else:
+                effective_doc = requested
 
         lines: list[str] = [
             "Documentos del agente (regla fija):",

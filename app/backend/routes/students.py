@@ -9,7 +9,7 @@ from app.backend.auth.auth_user import get_current_active_user
 from app.backend.classes.school_class import SchoolClass
 from app.backend.classes.inspection_api_client import InspectionApiClient
 from app.backend.classes.teaching_class import _normalize_school_id
-from app.backend.db.models import CourseModel, SchoolModel, PlatformStatusModel
+from app.backend.db.models import CourseModel, SchoolModel, PlatformStatusModel, RolModel
 from pathlib import Path
 from datetime import datetime
 
@@ -17,6 +17,41 @@ students = APIRouter(
     prefix="/students",
     tags=["Students"]
 )
+
+
+def _empty_students_list(page: int, per_page: int) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "status": 200,
+            "message": "OK",
+            "data": {
+                "total_items": 0,
+                "total_pages": 0,
+                "current_page": page,
+                "items_per_page": per_page,
+                "data": [],
+            },
+        },
+    )
+
+
+def _is_superadmin_role(session_user) -> bool:
+    return int(getattr(session_user, "rol_id", 0) or 0) == 1
+
+
+def _is_customer_admin_role(session_user, db: Session) -> bool:
+    rid = int(getattr(session_user, "rol_id", 0) or 0)
+    if rid == 1:
+        return False
+    if rid == 2:
+        return True
+    try:
+        row = db.query(RolModel).filter(RolModel.id == rid).first()
+        name = (getattr(row, "rol", None) or "").lower()
+        return "administrador" in name and "super" not in name
+    except Exception:
+        return False
 
 
 @students.get("/by_school_course_with_sen")
@@ -117,12 +152,29 @@ def index(student_item: StudentList, session_user: UserLogin = Depends(get_curre
     # Obtener school_id del customer_id del usuario en sesión
     customer_id = session_user.customer_id if session_user else None
     school_id = session_user.school_id if session_user else None
-    
-    if customer_id and not school_id:
-        schools_list = SchoolClass(db).get_all(page=0, customer_id=customer_id)
-        if isinstance(schools_list, list) and len(schools_list) > 0:
-            school_id = schools_list[0].get('id')
-    
+    rol_id = int(getattr(session_user, "rol_id", 0) or 0)
+    across = bool(getattr(student_item, "across_schools", False))
+
+    # Buscador header:
+    # - superadmin: no busca
+    # - administrador: todos los colegios del cliente
+    # - resto: solo el colegio de la sesión
+    if across:
+        if _is_superadmin_role(session_user):
+            return _empty_students_list(page_value, student_item.per_page)
+        if _is_customer_admin_role(session_user, db) and customer_id:
+            school_id = None
+        else:
+            if not school_id:
+                return _empty_students_list(page_value, student_item.per_page)
+    elif customer_id and not school_id:
+        if rol_id == 1:
+            school_id = None
+        else:
+            schools_list = SchoolClass(db).get_all(page=0, customer_id=customer_id)
+            if isinstance(schools_list, list) and len(schools_list) > 0:
+                school_id = schools_list[0].get("id")
+
     result = StudentClass(db).get_all(
         page=page_value,
         items_per_page=student_item.per_page,
@@ -132,6 +184,7 @@ def index(student_item: StudentList, session_user: UserLogin = Depends(get_curre
         identification_number=student_item.identification_number,
         course_id=student_item.course_id,
         period_year=student_item.period_year,
+        customer_id=customer_id if school_id is None else None,
     )
 
     if isinstance(result, dict) and result.get("status") == "error":

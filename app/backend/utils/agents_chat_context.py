@@ -242,8 +242,12 @@ _NAME_NOISE = {
     "completa",
     "completar",
     "informe",
+    "informde",
+    "informes",
     "documento",
     "familia",
+    "psicopedagogico",
+    "psicopedagogica",
     "estudiante",
     "alumna",
     "alumno",
@@ -285,7 +289,11 @@ def _fold_name(value: str) -> str:
 
 def extract_name_tokens_from_text(text: str) -> list[str]:
     folded = _fold_name(text or "")
-    tokens = [t for t in folded.split() if len(t) >= 3 and t not in _NAME_NOISE]
+    tokens = [
+        t
+        for t in folded.split()
+        if len(t) >= 3 and t not in _NAME_NOISE and not t.startswith("inform")
+    ]
     return tokens[:6]
 
 
@@ -362,38 +370,70 @@ def resolve_student_id(
 ) -> tuple[int | None, str | None, str | None]:
     """
     Returns (student_id, rut_used, issue).
-    Identificación firme: solo student_id (ficha) o RUT (no por nombre).
+    Prioridad: ficha (student_id) → RUT → nombre único en el cliente/sede.
     issue: None | 'needs_rut' | 'not_found'
     """
-    del customer_id, school_id
     if student_id:
         return student_id, None, None
 
     rut_raw = extract_rut_from_conversation(message, history, student_rut)
-    if not rut_raw:
-        return None, None, "needs_rut"
+    if rut_raw:
+        found = lookup_student_id_by_rut(db, rut_raw)
+        if found is None:
+            return None, rut_raw, "not_found"
+        return found, rut_raw, None
 
-    found = lookup_student_id_by_rut(db, rut_raw)
-    if found is None:
-        return None, rut_raw, "not_found"
-    return found, rut_raw, None
+    by_name = lookup_student_id_by_name(
+        db,
+        conversation_blob(message, history),
+        customer_id=customer_id,
+        school_id=school_id,
+    )
+    if by_name:
+        return by_name, None, None
+    return None, None, "needs_rut"
 
 
-def build_ask_rut_reply(message: str) -> str:
+def _document_label(document_id: int | None, agent_name: str | None = None) -> str:
+    doc = int(document_id) if document_id is not None else None
+    aname = (agent_name or "").lower()
+    if doc == 27 or "psicoped" in aname:
+        return "el Informe de Evaluación Psicopedagógica"
+    if doc == 7 or "familia" in aname:
+        return "el Informe a la Familia"
+    return "el informe"
+
+
+def build_ask_rut_reply(
+    message: str,
+    document_id: int | None = None,
+    agent_name: str | None = None,
+) -> str:
     """Pide el RUT antes de generar el documento."""
     tokens = extract_name_tokens_from_text(message or "")
     name_bit = ""
     if tokens:
         pretty = " ".join(t.capitalize() for t in tokens)
         name_bit = f" (mencionaste a {pretty})"
+    label = _document_label(document_id, agent_name)
 
     return (
-        f"Para identificar bien al estudiante{name_bit} y generar el Informe a la Familia "
+        f"Para identificar bien al estudiante{name_bit} y generar {label} "
         "con todos los datos correctos, indícame el **RUT** con dígito verificador "
         "(por ejemplo `12.345.678-9`).\n\n"
         "Cuando lo envíes, continúo con la redacción detallada y la generación del documento. "
         "También puedes abrir el chat desde la ficha del estudiante."
     )
+
+
+def agent_template_document_ids(db: Session, agent_id: str) -> list[int]:
+    rows = (
+        db.query(AgentDocumentTemplateModel.document_id)
+        .filter(AgentDocumentTemplateModel.agent_id == agent_id)
+        .order_by(AgentDocumentTemplateModel.document_name.asc())
+        .all()
+    )
+    return [int(r[0]) for r in rows]
 
 
 def infer_document_id(
@@ -421,13 +461,44 @@ def infer_document_id(
                 return int(row.document_id)
     if any(h in blob for h in _PSICOPED_HINTS):
         for row in rows:
-            if "psicoped" in (row.document_name or "").lower():
-                return int(row.document_id)
-    if wants_document_generation(message, history):
-        for row in rows:
-            if "familia" in (row.document_name or "").lower():
+            if "psicoped" in (row.document_name or "").lower() or int(row.document_id) == 27:
                 return int(row.document_id)
     return None
+
+
+def resolve_document_id_for_agent(
+    db: Session,
+    *,
+    agent_id: str,
+    agent_name: str | None,
+    requested_document_id: int | None,
+    message: str,
+    history: list[dict[str, str]] | None,
+) -> int | None:
+    """
+    El tipo de documento lo define el AGENTE (su plantilla), no la URL de otra ficha.
+    Si la URL trae document_id=7 pero el agente es psicopedagógico, se usa 27.
+    """
+    template_ids = agent_template_document_ids(db, agent_id)
+    if len(template_ids) == 1:
+        return template_ids[0]
+
+    requested = int(requested_document_id) if requested_document_id else None
+    if requested and requested in template_ids:
+        return requested
+
+    inferred = infer_document_id(db, agent_id, message, history)
+    if inferred:
+        return inferred
+
+    aname = (agent_name or "").lower()
+    if "psicoped" in aname:
+        return 27
+    if "familia" in aname:
+        return 7
+    if requested and not template_ids:
+        return requested
+    return template_ids[0] if template_ids else requested
 
 
 def student_identification_hint(
