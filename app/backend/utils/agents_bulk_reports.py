@@ -364,9 +364,15 @@ def _format_course_list(courses: list[CourseModel]) -> str:
 
 def files_mention_student(files_block: str, name: str, rut: str | None) -> bool:
     """True si el contexto de Files parece corresponder a ese estudiante."""
-    blob = _fold(files_block or "")
+    raw = files_block or ""
+    blob = _fold(raw)
     if not blob or "sin trozos relevantes" in blob:
         return False
+    low = raw.lower()
+    if "datos extraidos de excel" in _fold(raw) or "datos extraídos de excel" in low:
+        if "sin fila coincidente" in low:
+            return False
+        return True
     rut_digits = re.sub(r"[^0-9kK]", "", rut or "").lower()
     blob_digits = re.sub(r"[^0-9k]", "", blob)
     if len(rut_digits) >= 8 and rut_digits in blob_digits:

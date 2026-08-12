@@ -70,11 +70,32 @@ def list_all_context_file_paths(agent_name: str, customer_id: int | None = None)
     return sorted(files, key=_context_file_sort_key)
 
 
+_NON_EVIDENCE_NAME_MARKERS = (
+    "ejemplo_",
+    "ejemplo-",
+    "formato_",
+    "formato-",
+    "formato ",
+    "glosario",
+    "decreto",
+    "orientaciones",
+    "cartilla",
+    "normativa",
+    "base_institucional",
+)
+
+
 def agent_files_have_evaluation_evidence(
     agent_name: str, customer_id: int | None = None
 ) -> bool:
-    """True si hay archivos en Files (no plantillas) de los que extraer antecedentes."""
-    return bool(list_all_context_file_paths(agent_name, customer_id))
+    """True si hay archivos en Files (no plantillas/ejemplos) de los que extraer antecedentes."""
+    for path in list_all_context_file_paths(agent_name, customer_id):
+        rel = path.as_posix().lower()
+        name = path.name.lower()
+        if any(m in rel or m in name for m in _NON_EVIDENCE_NAME_MARKERS):
+            continue
+        return True
+    return False
 
 
 def list_context_file_paths(agent_name: str, customer_id: int | None = None) -> list[Path]:
@@ -182,13 +203,83 @@ def _cell_matches_rut(cell_value: str, target_rut: str) -> bool:
     return False
 
 
-def extract_spreadsheet_hint_for_rut(agent_name: str, student_rut: str, customer_id: int | None = None) -> tuple[str, list[str]]:
+def _fold_sheet_text(value: str) -> str:
+    import unicodedata
+
+    raw = unicodedata.normalize("NFKD", value or "")
+    raw = "".join(c for c in raw if not unicodedata.combining(c)).lower()
+    return re.sub(r"[^a-z0-9]+", " ", raw).strip()
+
+
+def _name_tokens(student_name: str | None) -> list[str]:
+    return [t for t in _fold_sheet_text(student_name or "").split() if len(t) >= 3]
+
+
+def _row_matches_student(
+    row_values: list[str],
+    *,
+    target_rut: str,
+    name_tokens: list[str],
+) -> bool:
+    if target_rut and any(_cell_matches_rut(v, target_rut) for v in row_values if v):
+        return True
+    if len(name_tokens) >= 2:
+        blob = _fold_sheet_text(" ".join(row_values))
+        hits = sum(1 for t in name_tokens if t in blob)
+        return hits >= min(2, len(name_tokens))
+    return False
+
+
+def _format_excel_hit_row(
+    *,
+    sheet_name: str,
+    df,
+    row_idx: int,
+    row_values: list[str],
+    label: str,
+) -> str:
+    header_vals: list[str] = []
+    # Fila 0 suele ser encabezado de Google Forms / cuestionario.
+    if int(row_idx) > 0:
+        header_vals = [str(v).strip() for v in df.iloc[0].fillna("").tolist()]
+        prev = [str(v).strip() for v in df.iloc[int(row_idx) - 1].fillna("").tolist()]
+        # Si la fila anterior parece más un encabezado corto, úsala.
+        if prev and sum(1 for v in prev if v) <= max(3, len(header_vals) // 4):
+            header_vals = prev
+    lines = [f"## Hoja: {sheet_name} — {label}"]
+    if header_vals and any(header_vals):
+        pairs = []
+        for col_idx, val in enumerate(row_values):
+            if not val:
+                continue
+            col_label = (
+                header_vals[col_idx]
+                if col_idx < len(header_vals) and header_vals[col_idx]
+                else f"col_{col_idx + 1}"
+            )
+            pairs.append(f"{col_label}: {val}")
+        lines.append("\n".join(pairs))
+    else:
+        lines.append("\t".join(v for v in row_values if v))
+    return "\n".join(lines)
+
+
+def extract_spreadsheet_hint_for_student(
+    agent_name: str,
+    *,
+    student_rut: str | None = None,
+    student_name: str | None = None,
+    customer_id: int | None = None,
+) -> tuple[str, list[str]]:
     """
-    Busca el RUT del estudiante en TODOS los Excel de Files (sin límite de 25 archivos).
-    Devuelve (bloque de texto para el prompt, rutas de archivos donde hubo coincidencia).
+    Busca al estudiante (RUT y/o nombre) en todos los Excel de Files.
+    Los cuestionarios de observación suelen traer nombre, no RUT.
     """
-    target = _normalize_rut(student_rut)
+    target = _normalize_rut(student_rut or "")
     if len(target) < 8:
+        target = ""
+    tokens = _name_tokens(student_name)
+    if not target and len(tokens) < 2:
         return "", []
 
     root = storage.agent_folder(agent_name, customer_id)
@@ -222,52 +313,58 @@ def extract_spreadsheet_hint_for_rut(agent_name: str, student_rut: str, customer
         file_hits: list[str] = []
         for sheet_name, df in sheets.items():
             df = df.fillna("")
+            hits_in_sheet = 0
             for row_idx, row in df.iterrows():
                 row_values = [str(v).strip() for v in row.tolist()]
-                if not any(_cell_matches_rut(v, target) for v in row_values if v):
+                if not any(row_values):
                     continue
-                # Cabecera: fila anterior si existe (reportes interactivos suelen tener encabezados)
-                header_vals: list[str] = []
-                if int(row_idx) > 0:
-                    header_vals = [
-                        str(v).strip()
-                        for v in df.iloc[int(row_idx) - 1].fillna("").tolist()
-                    ]
-                lines = [f"## Hoja: {sheet_name} — fila con RUT {student_rut}"]
-                if header_vals and any(header_vals):
-                    pairs = []
-                    for col_idx, val in enumerate(row_values):
-                        if not val:
-                            continue
-                        label = (
-                            header_vals[col_idx]
-                            if col_idx < len(header_vals) and header_vals[col_idx]
-                            else f"col_{col_idx + 1}"
-                        )
-                        pairs.append(f"{label}: {val}")
-                    lines.append("\n".join(pairs))
-                else:
-                    lines.append("\t".join(v for v in row_values if v))
-                file_hits.append("\n".join(lines))
-                break  # una fila por hoja
+                # Fila 0 suele ser el enunciado del cuestionario, no un alumno.
+                if int(row_idx) == 0:
+                    continue
+                if not _row_matches_student(
+                    row_values, target_rut=target, name_tokens=tokens
+                ):
+                    continue
+                who = (
+                    f"fila del estudiante {student_name or student_rut}"
+                    if student_name
+                    else f"fila con RUT {student_rut}"
+                )
+                file_hits.append(
+                    _format_excel_hit_row(
+                        sheet_name=str(sheet_name),
+                        df=df,
+                        row_idx=int(row_idx),
+                        row_values=row_values,
+                        label=who,
+                    )
+                )
+                hits_in_sheet += 1
+                if hits_in_sheet >= 4:
+                    break
 
         if file_hits:
             matched_files.append(rel)
             sections.append(f"### Archivo: {rel}\n\n" + "\n\n".join(file_hits))
 
     if not sections:
-        index = ", ".join(p.relative_to(root).as_posix() for p in paths)
-        return (
-            "EXCEL EN FILES (sin fila coincidente para el RUT indicado). "
-            f"Archivos revisados ({len(paths)}): {index}",
-            [],
-        )
+        return "", []
 
     header = (
-        "DATOS EXTRAÍDOS DE EXCEL (búsqueda directa por RUT del estudiante). "
-        "Usa esto para apoderado, contacto y datos del reporte interactivo.\n"
+        "DATOS EXTRAÍDOS DE EXCEL (cuestionario / pauta / respuestas del estudiante). "
+        "Esto SÍ es evidencia de evaluación: úsalo en instrumentos, análisis, síntesis "
+        "y sugerencias. No digas que faltan cuestionarios si estos datos están aquí.\n"
     )
     return header + "\n\n---\n\n".join(sections), matched_files
+
+
+def extract_spreadsheet_hint_for_rut(
+    agent_name: str, student_rut: str, customer_id: int | None = None
+) -> tuple[str, list[str]]:
+    """Compatibilidad: busca solo por RUT."""
+    return extract_spreadsheet_hint_for_student(
+        agent_name, student_rut=student_rut, customer_id=customer_id
+    )
 
 
 def extract_file_text(path: Path) -> str:

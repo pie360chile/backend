@@ -53,7 +53,9 @@ _STOPWORDS = {
 # Palabras del pedido de chat que no identifican al estudiante.
 _QUERY_NOISE = _STOPWORDS | {
     "haz",
+    "hazme",
     "hacer",
+    "dame",
     "genera",
     "generar",
     "completa",
@@ -305,8 +307,10 @@ def retrieve_relevant_chunks(
             file_bonus += 5.0
 
         if any(marker in rel_l for marker in _GENERIC_PATH_MARKERS):
-            # Bajar prioridad de plantillas/ejemplos cuando el pedido nombra a alguien.
-            file_bonus -= 25.0 if (person_tokens or rut_norm) else 0.0
+            if person_tokens or rut_norm:
+                # Plantillas/ejemplos/decretos no son el expediente del estudiante.
+                continue
+            file_bonus -= 25.0
 
         for chunk in _chunk_text(text):
             chunk_tokens = _tokenize(chunk)
@@ -384,14 +388,16 @@ def build_selective_files_context(
 ) -> tuple[str, int]:
     """(texto para prompt, n archivos indexados)."""
     parts: list[str] = []
-    if student_rut and student_rut.strip():
-        rut_block, _ = file_ctx.extract_spreadsheet_hint_for_rut(
-            agent_name, student_rut, customer_id
-        )
-        if rut_block:
-            if len(rut_block) > 4_000:
-                rut_block = rut_block[:4_000] + "\n… [RUT hint truncado]"
-            parts.append(rut_block)
+    excel_block, _matched = file_ctx.extract_spreadsheet_hint_for_student(
+        agent_name,
+        student_rut=student_rut,
+        student_name=student_name,
+        customer_id=customer_id,
+    )
+    if excel_block:
+        if len(excel_block) > 8_000:
+            excel_block = excel_block[:8_000] + "\n… [Excel del estudiante truncado]"
+        parts.append(excel_block)
 
     remaining = max(2_000, CHAT_BUDGET_CHARS - sum(len(p) for p in parts))
     retrieved = retrieve_relevant_chunks(
