@@ -101,6 +101,7 @@ def stream_chat_completion(
     api_key: str | None = None,
     db: Session | None = None,
     timeout: int = 120,
+    max_tokens: int | None = None,
 ) -> Iterator[dict[str, Any]]:
     """
     Yields:
@@ -113,14 +114,22 @@ def stream_chat_completion(
         yield {
             "type": "error",
             "message": (
-                "Falta el DeepSeek Token. "
-                "Configúralo en Agentes → DeepSeek Token."
+                "Falta AGENTS_LLM_API_KEY en el .env del servidor. "
+                "La API key ya no se configura desde la web."
             ),
             "code": "missing_api_key",
         }
         return
 
     model_code = (model or DEFAULT_MODEL_CODE).strip() or DEFAULT_MODEL_CODE
+    payload: dict[str, Any] = {
+        "model": model_code,
+        "messages": messages,
+        "stream": True,
+        "stream_options": {"include_usage": True},
+    }
+    if max_tokens is not None and int(max_tokens) > 0:
+        payload["max_tokens"] = int(max_tokens)
     try:
         response = requests.post(
             llm_chat_completions_url(),
@@ -128,12 +137,7 @@ def stream_chat_completion(
                 "Authorization": f"Bearer {key}",
                 "Content-Type": "application/json",
             },
-            json={
-                "model": model_code,
-                "messages": messages,
-                "stream": True,
-                "stream_options": {"include_usage": True},
-            },
+            json=payload,
             stream=True,
             timeout=timeout,
         )

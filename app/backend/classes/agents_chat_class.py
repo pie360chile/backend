@@ -58,7 +58,8 @@ def _missing_psychoped_files_reply() -> str:
     return (
         "No es posible elaborar el Informe de Evaluación Psicopedagógica: "
         "no dispongo de antecedentes documentales del estudiante en Files "
-        "(cuestionarios, pautas, anamnesis u otras evidencias de evaluación).\n\n"
+        "(cuestionarios, pautas, anamnesis u otras evidencias) ni de respuestas "
+        "en Formularios (Inf. Eval. Psicopedagógica).\n\n"
         "Sin esa información no puedo redactar ni emitir el informe."
     )
 
@@ -479,8 +480,9 @@ class AgentsChatClass:
             effective_rut = effective_rut or personal_rut
 
         # Estudiante identificado pero sin fuentes: rechazar. No pedir RUT.
+        has_report_sources = False
         if want_doc_early and resolved_student_id:
-            has_sources = _student_has_report_sources(
+            has_report_sources = _student_has_report_sources(
                 db=self.db,
                 agent_name=agent_row.name or "",
                 customer_id=int(self.customer_id),
@@ -491,7 +493,7 @@ class AgentsChatClass:
                 school_id=int(self.school_id) if self.school_id else None,
                 period_year=int(self.period_year) if self.period_year else None,
             )
-            if not has_sources:
+            if not has_report_sources:
                 if resolved_document_id == _PSYCHOPED_DOCUMENT_ID:
                     ask = _missing_psychoped_files_reply()
                 else:
@@ -508,6 +510,18 @@ class AgentsChatClass:
                     },
                 }
                 return
+        elif resolved_student_id:
+            has_report_sources = _student_has_report_sources(
+                db=self.db,
+                agent_name=agent_row.name or "",
+                customer_id=int(self.customer_id),
+                student_id=int(resolved_student_id),
+                student_name=student_name,
+                student_rut=effective_rut,
+                document_id=resolved_document_id,
+                school_id=int(self.school_id) if self.school_id else None,
+                period_year=int(self.period_year) if self.period_year else None,
+            )
 
         # RUT informado y no existe: no llamar al LLM ni adivinar otro número.
         if student_issue == "not_found" and not resolved_student_id:
@@ -572,10 +586,20 @@ class AgentsChatClass:
 
         yield {"type": "step", "message": "Redactando respuesta…"}
 
+        want_doc = wants_document_generation(text, history)
+        llm_timeout = 240 if want_doc else 120
+        llm_max_tokens = 8192 if want_doc else None
+
         reply_text = ""
         usage: dict[str, Any] | None = None
         first_token = True
-        for event in stream_chat_completion(messages, model=model_code, db=self.db):
+        for event in stream_chat_completion(
+            messages,
+            model=model_code,
+            db=self.db,
+            timeout=llm_timeout,
+            max_tokens=llm_max_tokens,
+        ):
             if event.get("type") == "text_delta":
                 if first_token:
                     first_token = False
@@ -597,8 +621,80 @@ class AgentsChatClass:
         visible_reply = reply_text
         response_files: list[dict[str, Any]] = []
         warning: str | None = None
-        want_doc = wants_document_generation(text, history)
         fields = extract_fields_from_reply(reply_text)
+
+        # Si pidió el informe y el modelo se quedó en la intro sin JSON → 1 reintento forzado.
+        if (
+            want_doc
+            and not fields
+            and resolved_student_id
+            and resolved_document_id
+            and has_report_sources
+        ):
+            yield {
+                "type": "step",
+                "message": "Completando campos del documento (reintento)…",
+            }
+            retry_msg = (
+                "Tu respuesta anterior NO incluyó el bloque JSON `fields` y por eso "
+                "NO se generó el documento. Responde AHORA solo con el bloque "
+                '```json\n{"fields": {...}}\n``` completo (todos los campos de la '
+                "plantilla, narrativos detallados). Prohibido intro larga; máximo "
+                "1 oración antes del JSON. Usa Files, formulario MCP y ficha; "
+                "no inventes datos."
+            )
+            retry_messages = list(messages) + [
+                {"role": "assistant", "content": reply_text or "(sin JSON)"},
+                {"role": "user", "content": retry_msg},
+            ]
+            retry_reply = ""
+            for event in stream_chat_completion(
+                retry_messages,
+                model=model_code,
+                db=self.db,
+                timeout=llm_timeout,
+                max_tokens=llm_max_tokens,
+            ):
+                if event.get("type") == "text_delta":
+                    delta = event.get("delta") or ""
+                    retry_reply += delta
+                    yield event
+                elif event.get("type") == "done":
+                    data = event.get("data") or {}
+                    retry_reply = data.get("reply") or retry_reply
+                    retry_usage = normalize_usage(
+                        data.get("usage")
+                        if isinstance(data.get("usage"), dict)
+                        else None
+                    )
+                    if retry_usage and usage:
+                        usage = {
+                            "prompt_tokens": int(usage.get("prompt_tokens") or 0)
+                            + int(retry_usage.get("prompt_tokens") or 0),
+                            "completion_tokens": int(usage.get("completion_tokens") or 0)
+                            + int(retry_usage.get("completion_tokens") or 0),
+                            "total_tokens": int(usage.get("total_tokens") or 0)
+                            + int(retry_usage.get("total_tokens") or 0),
+                            "prompt_cache_hit_tokens": int(
+                                usage.get("prompt_cache_hit_tokens") or 0
+                            )
+                            + int(retry_usage.get("prompt_cache_hit_tokens") or 0),
+                            "prompt_cache_miss_tokens": int(
+                                usage.get("prompt_cache_miss_tokens") or 0
+                            )
+                            + int(retry_usage.get("prompt_cache_miss_tokens") or 0),
+                        }
+                    elif retry_usage:
+                        usage = retry_usage
+                elif event.get("type") == "error":
+                    yield event
+                    return
+            if retry_reply:
+                reply_text = ((reply_text or "").rstrip() + "\n\n" + retry_reply).strip()
+                visible_reply = reply_text
+                fields = extract_fields_from_reply(retry_reply) or extract_fields_from_reply(
+                    reply_text
+                )
 
         if want_doc or fields:
             if not resolved_student_id:
@@ -611,7 +707,7 @@ class AgentsChatClass:
                 )
             elif (
                 int(resolved_document_id) == _PSYCHOPED_DOCUMENT_ID
-                and not has_eval_files
+                and not has_report_sources
             ):
                 visible_reply = _missing_psychoped_files_reply()
                 warning = None
@@ -1024,7 +1120,11 @@ class AgentsChatClass:
         reply_text = ""
         usage: dict[str, Any] | None = None
         for event in stream_chat_completion(
-            messages, model=model_code, db=self.db, timeout=180
+            messages,
+            model=model_code,
+            db=self.db,
+            timeout=240,
+            max_tokens=8192,
         ):
             if event.get("type") == "text_delta":
                 reply_text += event.get("delta") or ""
@@ -1040,6 +1140,58 @@ class AgentsChatClass:
                 return empty
 
         fields = extract_fields_from_reply(reply_text)
+        if not fields:
+            # Reintento: el modelo a veces se queda en la intro sin JSON.
+            retry_msg = (
+                "Responde AHORA solo con ```json {\"fields\": {...}} ``` completo "
+                "para la plantilla. Sin intro. Narrativos detallados; no inventes datos."
+            )
+            retry_messages = list(messages) + [
+                {"role": "assistant", "content": reply_text or "(sin JSON)"},
+                {"role": "user", "content": retry_msg},
+            ]
+            retry_reply = ""
+            for event in stream_chat_completion(
+                retry_messages,
+                model=model_code,
+                db=self.db,
+                timeout=240,
+                max_tokens=8192,
+            ):
+                if event.get("type") == "text_delta":
+                    retry_reply += event.get("delta") or ""
+                elif event.get("type") == "done":
+                    data = event.get("data") or {}
+                    retry_reply = data.get("reply") or retry_reply
+                    retry_usage = normalize_usage(
+                        data.get("usage")
+                        if isinstance(data.get("usage"), dict)
+                        else None
+                    )
+                    if retry_usage and usage:
+                        usage = {
+                            "prompt_tokens": int(usage.get("prompt_tokens") or 0)
+                            + int(retry_usage.get("prompt_tokens") or 0),
+                            "completion_tokens": int(usage.get("completion_tokens") or 0)
+                            + int(retry_usage.get("completion_tokens") or 0),
+                            "total_tokens": int(usage.get("total_tokens") or 0)
+                            + int(retry_usage.get("total_tokens") or 0),
+                            "prompt_cache_hit_tokens": int(
+                                usage.get("prompt_cache_hit_tokens") or 0
+                            )
+                            + int(retry_usage.get("prompt_cache_hit_tokens") or 0),
+                            "prompt_cache_miss_tokens": int(
+                                usage.get("prompt_cache_miss_tokens") or 0
+                            )
+                            + int(retry_usage.get("prompt_cache_miss_tokens") or 0),
+                        }
+                    elif retry_usage:
+                        usage = retry_usage
+                elif event.get("type") == "error":
+                    empty["reason"] = event.get("message") or "error del modelo"
+                    empty["usage"] = usage
+                    return empty
+            fields = extract_fields_from_reply(retry_reply)
         if not fields:
             empty["reason"] = "el modelo no entregó los campos del informe"
             empty["usage"] = usage

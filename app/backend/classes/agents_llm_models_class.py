@@ -166,12 +166,21 @@ class AgentsLlmModelsClass:
         return self.get_llm_api_key()
 
     def get_llm_api_key(self) -> str:
-        """API key DeepSeek: primero BD (Configuraciones), luego AGENTS_LLM_API_KEY."""
-        app = self._ensure_app_settings_row()
-        key = (app.llm_api_key or "").strip()
-        if key:
-            return key
+        """API key DeepSeek: solo AGENTS_LLM_API_KEY del .env (nunca desde BD/UI)."""
         from app.backend.core.config import settings
+
+        # Limpia restos antiguos en BD para que no queden secretos guardados.
+        try:
+            app = self._ensure_app_settings_row()
+            if (app.llm_api_key or "").strip():
+                app.llm_api_key = None
+                app.updated_at = _now()
+                self.db.commit()
+        except Exception:
+            try:
+                self.db.rollback()
+            except Exception:
+                pass
 
         return (settings.agents_llm_api_key or "").strip()
 
@@ -200,11 +209,16 @@ class AgentsLlmModelsClass:
             .all()
         )
         app = self._ensure_app_settings_row()
+        # La API key ya no se guarda ni se expone desde Configuraciones.
+        if (app.llm_api_key or "").strip():
+            app.llm_api_key = None
+            app.updated_at = _now()
+            self.db.commit()
         agents_q = self.db.query(AgentModel)
         if customer_id is not None:
             agents_q = agents_q.filter(AgentModel.customer_id == customer_id)
         agents = agents_q.order_by(AgentModel.name.asc()).all()
-        stored_key = (app.llm_api_key or "").strip()
+        env_key = (settings.agents_llm_api_key or "").strip()
         base = (settings.workspace_agent_api_base or "").rstrip("/")
         agent_id = (settings.workspace_agent_id or "").strip()
         trigger_url = f"{base}/{agent_id}/trigger" if base and agent_id else ""
@@ -229,9 +243,10 @@ class AgentsLlmModelsClass:
         return {
             "selected_model_code": selected,
             "default_agent_id": app.default_agent_id,
-            "has_llm_api_key": bool(stored_key) or bool((settings.agents_llm_api_key or "").strip()),
-            "llm_api_key_hint": (f"****{stored_key[-4:]}" if len(stored_key) >= 4 else None),
-            "llm_api_key_value": stored_key or None,
+            "has_llm_api_key": bool(env_key),
+            "llm_api_key_hint": None,
+            "llm_api_key_value": None,
+            "llm_api_key_source": "env" if env_key else None,
             "workspace_agent_id": agent_id or None,
             "workspace_trigger_url": trigger_url or None,
             "provider": "deepseek",
@@ -316,14 +331,18 @@ class AgentsLlmModelsClass:
                 app.default_agent_id = aid
             app.updated_at = now
 
-        if clear_llm_api_key:
+        if clear_llm_api_key or llm_api_key is not None:
+            # La key ya no se administra por UI/BD: solo se limpia si quedaba algo.
             app.llm_api_key = None
             app.updated_at = now
-        elif llm_api_key is not None:
-            key = llm_api_key.strip()
-            if key:
-                app.llm_api_key = key
-                app.updated_at = now
+            if llm_api_key is not None and (llm_api_key or "").strip():
+                return {
+                    "status": "error",
+                    "message": (
+                        "La API key ya no se guarda en Configuraciones. "
+                        "Configúrala en el servidor con AGENTS_LLM_API_KEY en el .env."
+                    ),
+                }
 
         if clear_google_drive:
             app.google_drive_root_folder_id = None
