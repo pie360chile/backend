@@ -353,7 +353,9 @@ def extract_spreadsheet_hint_for_student(
     header = (
         "DATOS EXTRAÍDOS DE EXCEL (cuestionario / pauta / respuestas del estudiante). "
         "Esto SÍ es evidencia de evaluación: úsalo en instrumentos, análisis, síntesis "
-        "y sugerencias. No digas que faltan cuestionarios si estos datos están aquí.\n"
+        "y sugerencias. No digas que faltan cuestionarios si estos datos están aquí. "
+        "PROHIBIDO copiar al Word las etiquetas LOGRADO, EN PROCESO o REQUIERE APOYO: "
+        "redacta en prosa profesional y detallada las características de ESTE estudiante.\n"
     )
     return header + "\n\n---\n\n".join(sections), matched_files
 

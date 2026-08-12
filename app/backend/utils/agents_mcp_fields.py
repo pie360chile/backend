@@ -222,3 +222,36 @@ def is_content_too_thin(fields: dict[str, Any] | None) -> bool:
     avg_len = sum(len(t) for t in texts) / len(texts)
     # ~1 frase muy corta; el informe a la familia debe ir en párrafos.
     return avg_len < 120
+
+
+_SCALE_PAREN_RE = re.compile(
+    r"\s*\(\s*(LOGRADO[AS]?|REQUIERE\s+APOYO|EN\s+PROCESO|NO\s+OBSERVADO|NO\s+EVALUADO)\s*\)",
+    re.IGNORECASE,
+)
+_SCALE_BARE_RE = re.compile(
+    r"[ \t]*[-–—:]?[ \t]*(LOGRADO[AS]?|REQUIERE\s+APOYO|EN\s+PROCESO)\s*(?=[.;,]|$)",
+    re.IGNORECASE,
+)
+
+
+def strip_questionnaire_scale_labels(text: str) -> str:
+    """Quita etiquetas de pauta (LOGRADO / EN PROCESO / REQUIERE APOYO) del narrativo."""
+    if not text:
+        return text
+    out = _SCALE_PAREN_RE.sub("", text)
+    out = _SCALE_BARE_RE.sub("", out)
+    out = re.sub(r"[ \t]{2,}", " ", out)
+    out = re.sub(r"\s+\.", ".", out)
+    return out.strip()
+
+
+def sanitize_psychoped_fields(fields: dict[str, Any] | None) -> dict[str, Any]:
+    if not fields:
+        return {}
+    out: dict[str, Any] = {}
+    for key, val in fields.items():
+        if isinstance(val, str):
+            out[key] = strip_questionnaire_scale_labels(val)
+        else:
+            out[key] = val
+    return out

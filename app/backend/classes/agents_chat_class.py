@@ -41,6 +41,7 @@ from app.backend.utils.agents_file_context import agent_files_have_evaluation_ev
 from app.backend.utils.agents_mcp_fields import (
     extract_fields_from_reply,
     is_content_too_thin,
+    sanitize_psychoped_fields,
     strip_fields_json_from_reply,
 )
 
@@ -526,12 +527,15 @@ class AgentsChatClass:
                         "type": "step",
                         "message": "Rellenando plantilla y guardando en la carpeta…",
                     }
+                    payload_fields = fields
+                    if int(resolved_document_id) == _PSYCHOPED_DOCUMENT_ID:
+                        payload_fields = sanitize_psychoped_fields(fields)
                     created = AgentsMcpClass(self.db).create_document(
                         agent_id=agent_id,
                         customer_id=int(self.customer_id),
                         student_id=int(resolved_student_id),
                         document_id=int(resolved_document_id),
-                        fields=fields,
+                        fields=payload_fields,
                     )
                     if created.get("status") == "error":
                         warning = created.get("message") or "No se pudo generar el documento."
@@ -923,12 +927,15 @@ class AgentsChatClass:
             return empty
 
         try:
+            payload_fields = fields
+            if int(document_id) == _PSYCHOPED_DOCUMENT_ID:
+                payload_fields = sanitize_psychoped_fields(fields)
             created = AgentsMcpClass(self.db).create_document(
                 agent_id=agent_id,
                 customer_id=int(self.customer_id),
                 student_id=int(student_id),
                 document_id=int(document_id),
-                fields=fields,
+                fields=payload_fields,
             )
         except Exception as exc:
             empty["reason"] = f"error al guardar: {exc}"

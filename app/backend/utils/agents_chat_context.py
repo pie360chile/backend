@@ -13,7 +13,6 @@ from app.backend.utils.agents_familia_pie360 import (
     FAMILIA_DOCUMENT_ID,
     build_familia_pie360_context,
     familia_pie360_hint_lines,
-    is_familia_document,
 )
 
 _RUT_RE = re.compile(
@@ -592,12 +591,31 @@ def student_identification_hint(
     if rut:
         parts.append(f"RUT/IPE: {rut}")
 
-    if is_familia_document(document_id):
-        pie = build_familia_pie360_context(db, student_id)
-        parts.extend(familia_pie360_hint_lines(pie))
-        parts.append(
-            "Para Informe a la Familia: si Files/Excel no traen apoderado o profesional, "
-            "usa estos datos de ficha PIE360 como respaldo."
-        )
+    pie = build_familia_pie360_context(db, student_id)
+    school = (pie.get("student_school") or "").strip()
+    course = (pie.get("student_course") or "").strip()
+    age = (pie.get("student_age") or "").strip()
+    if school:
+        parts.append(f"Establecimiento (PIE360): {school}")
+    if course:
+        parts.append(f"Curso (PIE360): {course}")
+    if age:
+        parts.append(f"Edad (PIE360): {age}")
+    try:
+        from app.backend.classes.student_class import StudentClass
+
+        got = StudentClass(db).get(student_id)
+        academic = ((got or {}).get("student_data") or {}).get("academic_info") or {}
+        nee = (academic.get("special_educational_need_name") or "").strip()
+        if nee:
+            parts.append(f"NEE (PIE360): {nee}")
+    except Exception:
+        pass
+    parts.extend(familia_pie360_hint_lines(pie))
+    parts.append(
+        "DATOS DEL SISTEMA PIE360: si el cuestionario o Files no traen identificación, "
+        "curso, establecimiento, NEE, profesional o apoderado, usa estos datos "
+        "(equivalente a consultar la ficha / MCP). No los dejes en blanco."
+    )
 
     return ". ".join(parts) + "."
