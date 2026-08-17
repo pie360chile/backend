@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any, Mapping, Optional
 
 from docx import Document
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement, parse_xml
 from docx.oxml.ns import qn
 from sqlalchemy.orm import Session
@@ -54,13 +55,17 @@ FUR_TEMPLATE_BY_VARIANT: dict[str, str] = {
 }
 
 FUR_FIELD_FONT_NAME = "Arial"
-FUR_FIELD_FONT_HALF_POINTS = "20"  # 10 pt
+FUR_FIELD_FONT_HALF_POINTS = "18"  # 9 pt
 FUR_FIELD_FONT_COLOR = "000000"  # negro
+# Largo a partir del cual un campo se considera texto redactado y se justifica.
+# Deja fuera los datos cortos (RUN, fechas, curso, teléfono/correo), donde
+# justificar estiraría una línea suelta de lado a lado.
+FUR_JUSTIFY_MIN_CHARS = 60
 
 FUR_CHECKBOX_FONT = "MS Gothic"
 # Las plantillas oficiales traen casillas entre 3 y 11 pt; se unifican para que
 # ninguna quede ilegible en el Word exportado.
-FUR_CHECKBOX_HALF_POINTS = "20"  # 10 pt
+FUR_CHECKBOX_HALF_POINTS = "18"  # 9 pt
 FUR_CHECKED_CHAR = "\u25a0"  # ■ cuadro relleno
 FUR_UNCHECKED_CHAR = "\u2610"  # ☐ cuadro vacío
 FUR_CHECKED_STATE_HEX = "25A0"
@@ -149,7 +154,7 @@ def apply_field_font(
     half_points: str = FUR_FIELD_FONT_HALF_POINTS,
     east_asia: bool = False,
 ) -> None:
-    """Fija tipografía, tamaño y color del campo (por defecto Arial 10 negro).
+    """Fija tipografía, tamaño y color del campo (por defecto Arial 9 negro).
 
     `east_asia` se usa en las casillas, cuyo símbolo se dibuja con la tipografía
     CJK declarada por el propio control.
@@ -286,6 +291,33 @@ def _set_checkbox_state(sdt, sdt_pr, checked: bool) -> None:
         extra.getparent().remove(extra)
 
 
+def _justify_paragraphs(sdt) -> None:
+    """Justifica los párrafos del control.
+
+    Solo se aplica a los textos redactados: en un valor de una sola línea la
+    justificación no estira nada y movería a la izquierda lo que la plantilla
+    centra (RUN, fechas, curso).
+    """
+    content = sdt.find(qn("w:sdtContent"))
+    if content is None:
+        return
+    paragraphs = list(content.iter(qn("w:p")))
+    if not paragraphs:
+        # Control en línea: el párrafo es el que contiene al control.
+        ancestor = sdt
+        while ancestor is not None and ancestor.tag != qn("w:p"):
+            ancestor = ancestor.getparent()
+        paragraphs = [ancestor] if ancestor is not None else []
+    for paragraph in paragraphs:
+        p_pr = paragraph.get_or_add_pPr()
+        p_pr.jc_val = WD_ALIGN_PARAGRAPH.JUSTIFY
+        # La sangría francesa está pensada para respuestas de una línea junto al
+        # rótulo; con un texto largo dejaría las líneas siguientes a media hoja.
+        indent = p_pr.find(qn("w:ind"))
+        if indent is not None and indent.get(qn("w:hanging")):
+            p_pr.remove(indent)
+
+
 def _set_control_text(sdt, sdt_pr, text: str) -> None:
     for placeholder in sdt_pr.findall(qn("w:showingPlcHdr")):
         sdt_pr.remove(placeholder)
@@ -297,6 +329,8 @@ def _set_control_text(sdt, sdt_pr, text: str) -> None:
     _write_run_text(run, text)
     for extra in runs[1:]:
         extra.getparent().remove(extra)
+    if len(text) >= FUR_JUSTIFY_MIN_CHARS or "\n" in text:
+        _justify_paragraphs(sdt)
 
 
 def relax_fixed_row_heights(document: Document) -> int:

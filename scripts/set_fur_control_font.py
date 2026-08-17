@@ -1,6 +1,6 @@
 """Normaliza la apariencia de los campos de los FUR `*_formulario.docx`.
 
-- Campos de texto en Arial 10 negro (también lo que se escriba después en Word).
+- Campos de texto en Arial 9 negro (también lo que se escriba después en Word).
 - Casillas: cuadro vacío sin marcar y cuadro negro relleno al marcarlas, todas
   del mismo tamaño.
 - Filas de altura fija convertidas en altura mínima, para que no recorten texto.
@@ -58,7 +58,7 @@ def restyle(path: Path) -> dict[str, int]:
             for run in content.iter(qn("w:r")):
                 apply_field_font(ensure_rpr(run))
                 stats["runs"] += 1
-            # Marca de párrafo: lo que se escriba en un campo vacío hereda Arial 10.
+            # Marca de párrafo: lo que se escriba en un campo vacío hereda Arial 9.
             for paragraph in content.iter(qn("w:p")):
                 p_pr = paragraph.find(qn("w:pPr"))
                 if p_pr is None:
