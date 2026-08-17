@@ -77,6 +77,12 @@ _PATH_SEGMENT = re.compile(r"^([A-Za-z0-9_]+)(?:\[(\d+)\])?$")
 
 _PROFESSIONAL_ID_KEYS = {"professional_id"}
 _CAREER_TYPE_ID_KEYS = {"profession_id", "profession_specialty_id", "career_type_id"}
+_POSITION_LABELS = {
+    1: "Coordinador/a PIE",
+    2: "Docente de aula",
+    3: "Profesional de apoyo",
+    4: "Otro",
+}
 
 # CT_RPr define un orden fijo de hijos; Word rechaza propiedades fuera de secuencia.
 _RPR_ORDER = (
@@ -619,6 +625,8 @@ def _replace_ids(node: Any, professionals: Mapping[int, str], careers: Mapping[i
                 out[key] = professionals.get(numeric) or value
             elif key in _CAREER_TYPE_ID_KEYS:
                 out[key] = careers.get(numeric) or value
+            elif key == "position_id":
+                out[key] = _POSITION_LABELS.get(numeric) or value
             else:
                 out[key] = value
         return out

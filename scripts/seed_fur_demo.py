@@ -104,6 +104,7 @@ def build_demo_form_data(lead_professional_id: int | None, lead_profession_id: i
         # --- Profesional responsable ---
         "professional_id": lead_professional_id,
         "profession_specialty_id": lead_profession_id,
+        "position_id": 1,
         "professional_identification_number": "16.482.375-9",
         "contact_phone": "+56 9 5555 1010",
         "contact_email": "coordinacion.pie@ejemplo.cl",
