@@ -1,0 +1,546 @@
+fur7_dv_formulario.docx — 129 controles
+
+[  1] texto   full_name
+        fila previa: DEL ESTUDIANTE
+        fila previa: 1. DATOS DE INDENTIFICACIÓN (Escriba con letra legible o marque con una equis (X) según corresponda )
+        antes: 
+        despues: 
+[  2] texto   identification_number
+        fila previa: DEL ESTUDIANTE
+        fila previa: 1. DATOS DE INDENTIFICACIÓN (Escriba con letra legible o marque con una equis (X) según corresponda )
+        antes: 
+        despues: RUN
+[  3] texto   born_date
+        fila previa: Nombres y Apellidos
+        fila previa: RUN
+        fila previa: DEL ESTUDIANTE
+        antes: 
+        despues: 
+[  4] texto   age
+        fila previa: Nombres y Apellidos
+        fila previa: RUN
+        fila previa: DEL ESTUDIANTE
+        antes: 
+        despues: 
+[  5] texto   current_course
+        fila previa: Nombres y Apellidos
+        fila previa: RUN
+        fila previa: DEL ESTUDIANTE
+        antes: 
+        despues: 
+[  6] casilla communication_way__oral
+        fila previa: Vía comunicación :
+        fila previa: Nombres y Apellidos
+        fila previa: RUN
+        antes: 
+        despues: ☐ Oral [ ] lengua señas [ ] otra [ ]
+[  7] casilla communication_way__lengua_senas
+        fila previa: Vía comunicación :
+        fila previa: Nombres y Apellidos
+        fila previa: RUN
+        antes: [ ] Oral
+        despues: ☐ lengua señas [ ] otra [ ]
+[  8] casilla communication_way__otra
+        fila previa: Vía comunicación :
+        fila previa: Nombres y Apellidos
+        fila previa: RUN
+        antes: [ ] Oral [ ] lengua señas
+        despues: ☐ otra [ ]
+[  9] texto   communication_way_other_detail
+        fila previa: Vía comunicación :
+        fila previa: Nombres y Apellidos
+        fila previa: RUN
+        antes: [ ] Oral [ ] lengua señas [ ] otra
+        despues: 
+[ 10] texto   establishment_name
+        fila previa: Fecha nacimiento ( dd/mm/aaaa ) Edad ( en años y meses ) ☐ Oral ☐ lengua señas ☐ otra
+        fila previa: Vía comunicación :
+        fila previa: Nombres y Apellidos
+        antes: 
+        despues: 
+[ 11] texto   rbd
+        fila previa: Fecha nacimiento ( dd/mm/aaaa ) Edad ( en años y meses ) ☐ Oral ☐ lengua señas ☐ otra
+        fila previa: Vía comunicación :
+        fila previa: Nombres y Apellidos
+        antes: 
+        despues: 
+[ 12] texto   director_signature
+        antes: 
+        despues: 
+[ 13] texto   professional_id
+        fila previa: Fecha nacimiento ( dd/mm/aaaa ) Edad ( en años y meses ) ☐ Oral ☐ lengua señas ☐ otra
+        fila previa: Vía comunicación :
+        fila previa: Nombres y Apellidos
+        antes: 
+        despues: 
+[ 14] texto   professional_identification_number
+        fila previa: Profesional responsable del proceso de REVALUACIÓN integral del estudiante .
+        fila previa: DE LOS PROFESIONALES
+        antes: 
+        despues: 
+[ 15] texto   profession_specialty_id
+        fila previa: Profesional responsable del proceso de REVALUACIÓN integral del estudiante .
+        fila previa: DE LOS PROFESIONALES
+        antes: 
+        despues: 
+[ 16] texto   contact_phone
+        fila previa: Nombres y Apellido s RUN
+        fila previa: Profesional responsable del proceso de REVALUACIÓN integral del estudiante .
+        antes: 
+        despues: 
+[ 17] texto   contact_email
+        fila previa: Nombres y Apellido s RUN
+        fila previa: Profesional responsable del proceso de REVALUACIÓN integral del estudiante .
+        antes: 
+        despues: 
+[ 18] texto   professional_signature
+        fila previa: Nombres y Apellido s RUN
+        fila previa: Profesional responsable del proceso de REVALUACIÓN integral del estudiante .
+        antes: 
+        despues: 
+[ 19] texto   registration_date
+        fila previa: Profesión/ Especialidad Cargo F ono contacto
+        fila previa: Nombres y Apellido s RUN
+        antes: 
+        despues: 
+[ 20] texto   participating_professionals[0].professional_id
+        antes: 
+        despues: 
+[ 21] texto   participating_professionals[0].profession_id
+        fila previa: Profesionales (Nombre completo) Profesión/ Especialidad/ Cargo Fono/E-mail Registro profesional
+        fila previa: P rofesional/les que han participado en el proceso de entrega de apoyos al estudiante durante el período que se evalúa (profesores, especialistas, fam
+        antes: 
+        despues: 
+[ 22] texto   participating_professionals[0].phone_email
+        antes: 
+        despues: 
+[ 23] texto   participating_professionals[0].professional_registration
+        antes: 
+        despues: 
+[ 24] texto   participating_professionals[1].professional_id
+        antes: 
+        despues: 
+[ 25] texto   participating_professionals[1].profession_id
+        antes: 
+        despues: 
+[ 26] texto   participating_professionals[1].phone_email
+        antes: 
+        despues: 
+[ 27] texto   participating_professionals[1].professional_registration
+        antes: 
+        despues: 
+[ 28] texto   participating_professionals[2].professional_id
+        antes: 
+        despues: 
+[ 29] texto   participating_professionals[2].profession_id
+        antes: 
+        despues: 
+[ 30] texto   participating_professionals[2].phone_email
+        antes: 
+        despues: 
+[ 31] texto   participating_professionals[2].professional_registration
+        antes: 
+        despues: 
+[ 32] texto   participating_professionals[3].professional_id
+        antes: 
+        despues: 
+[ 33] texto   participating_professionals[3].profession_id
+        antes: 
+        despues: 
+[ 34] texto   participating_professionals[3].phone_email
+        antes: 
+        despues: 
+[ 35] texto   participating_professionals[3].professional_registration
+        antes: 
+        despues: 
+[ 36] texto   participating_professionals[4].professional_id
+        antes: 
+        despues: 
+[ 37] texto   participating_professionals[4].profession_id
+        antes: 
+        despues: 
+[ 38] texto   participating_professionals[4].phone_email
+        antes: 
+        despues: 
+[ 39] texto   participating_professionals[4].professional_registration
+        antes: 
+        despues: 
+[ 40] texto   position_id
+        antes: 
+        despues: 
+[ 41] texto   current_diagnosis_issue_date
+        antes: 
+        despues: 
+[ 42] casilla visual_diagnosis_low_vision
+        fila previa: A . M arque con una equis (X) el diagnóstico actual del estudiante ( El último diagnóstico en caso de una pérdida visual progresiva o indicación expre
+        fila previa: 2. SÍNTESIS DE LA REVALUACIÓN DIAGNÓSTICA
+        antes: 
+        despues: ☐ Baja Visión
+[ 43] casilla visual_diagnosis_blindness
+        fila previa: A . M arque con una equis (X) el diagnóstico actual del estudiante ( El último diagnóstico en caso de una pérdida visual progresiva o indicación expre
+        fila previa: 2. SÍNTESIS DE LA REVALUACIÓN DIAGNÓSTICA
+        antes: 
+        despues: ☐ Ceguera
+[ 44] casilla visual_var_prognosis
+        fila previa: B. Señale aquellos aspectos que han presentado alguna variación
+        antes: Visión
+        despues: ☐ Pronóstico. Especifique: [ ]
+[ 45] texto   visual_var_prognosis_detail
+        fila previa: B. Señale aquellos aspectos que han presentado alguna variación
+        antes: Visión[ ] Pronóstico. Especifique:
+        despues: 
+[ 46] casilla visual_var_auditory_functionality
+        fila previa: B. Señale aquellos aspectos que han presentado alguna variación
+        antes: Orientación y movilidad
+        despues: ☐ Funcionalidad auditiva[ ] Orientación espacial [ ] Desplazamiento
+[ 47] casilla visual_var_spatial_orientation
+        fila previa: B. Señale aquellos aspectos que han presentado alguna variación
+        antes: Orientación y movilidad[ ] Funcionalidad auditiva
+        despues: ☐ Orientación espacial [ ] Desplazamiento
+[ 48] casilla visual_var_displacement
+        fila previa: B. Señale aquellos aspectos que han presentado alguna variación
+        antes: Orientación y movilidad[ ] Funcionalidad auditiva[ ] Orientación espacial
+        despues: ☐ Desplazamiento
+[ 49] casilla visual_var_optical_implementation
+        fila previa: Visión ☐ Pronóstico . Especifique: Orientación y movilidad ☐ Funcionalidad auditiva ☐ Orientación espacial ☐ Desplazamiento
+        fila previa: B. Señale aquellos aspectos que han presentado alguna variación
+        antes: 
+        despues: ☐ Implementación óptica. Detalle: [ ]
+[ 50] texto   visual_var_optical_implementation_detail
+        fila previa: Visión ☐ Pronóstico . Especifique: Orientación y movilidad ☐ Funcionalidad auditiva ☐ Orientación espacial ☐ Desplazamiento
+        fila previa: B. Señale aquellos aspectos que han presentado alguna variación
+        antes: [ ] Implementación óptica. Detalle:
+        despues: 
+[ 51] casilla visual_var_classroom_visual_function
+        fila previa: ☐ Implementación óptica. Detalle:
+        fila previa: Visión ☐ Pronóstico . Especifique: Orientación y movilidad ☐ Funcionalidad auditiva ☐ Orientación espacial ☐ Desplazamiento
+        fila previa: B. Señale aquellos aspectos que han presentado alguna variación
+        antes: Condiciones para el aprendizaje
+        despues: ☐ Funcionalidad visual en el aula[ ] Vía y estilo de aprendizaje[ ] Dominio de Signografía
+[ 52] casilla visual_var_learning_style
+        fila previa: ☐ Implementación óptica. Detalle:
+        fila previa: Visión ☐ Pronóstico . Especifique: Orientación y movilidad ☐ Funcionalidad auditiva ☐ Orientación espacial ☐ Desplazamiento
+        fila previa: B. Señale aquellos aspectos que han presentado alguna variación
+        antes: Condiciones para el aprendizaje[ ] Funcionalidad visual en el aula
+        despues: ☐ Vía y estilo de aprendizaje[ ] Dominio de Signografía[ ] Nivel lector y de comprensión l
+[ 53] casilla visual_var_signography
+        fila previa: ☐ Implementación óptica. Detalle:
+        fila previa: Visión ☐ Pronóstico . Especifique: Orientación y movilidad ☐ Funcionalidad auditiva ☐ Orientación espacial ☐ Desplazamiento
+        fila previa: B. Señale aquellos aspectos que han presentado alguna variación
+        antes: Condiciones para el aprendizaje[ ] Funcionalidad visual en el aula[ ] Vía y estilo de aprendizaje
+        despues: ☐ Dominio de Signografía[ ] Nivel lector y de comprensión lectora
+[ 54] casilla visual_var_reading_level
+        fila previa: ☐ Implementación óptica. Detalle:
+        fila previa: Visión ☐ Pronóstico . Especifique: Orientación y movilidad ☐ Funcionalidad auditiva ☐ Orientación espacial ☐ Desplazamiento
+        fila previa: B. Señale aquellos aspectos que han presentado alguna variación
+        antes: Condiciones para el aprendizaje[ ] Funcionalidad visual en el aula[ ] Vía y estilo de aprendizaje[ ] Dominio de Signografía
+        despues: ☐ Nivel lector y de comprensión lectora
+[ 55] casilla visual_var_self_care
+        fila previa: ☐ Implementación óptica. Detalle:
+        fila previa: Visión ☐ Pronóstico . Especifique: Orientación y movilidad ☐ Funcionalidad auditiva ☐ Orientación espacial ☐ Desplazamiento
+        fila previa: B. Señale aquellos aspectos que han presentado alguna variación
+        antes: Actividades de la vida diaria
+        despues: ☐ Autocuidado[ ] Autonomía[ ] Manejo de dinero
+[ 56] casilla visual_var_autonomy
+        fila previa: ☐ Implementación óptica. Detalle:
+        fila previa: Visión ☐ Pronóstico . Especifique: Orientación y movilidad ☐ Funcionalidad auditiva ☐ Orientación espacial ☐ Desplazamiento
+        fila previa: B. Señale aquellos aspectos que han presentado alguna variación
+        antes: Actividades de la vida diaria[ ] Autocuidado
+        despues: ☐ Autonomía[ ] Manejo de dinero
+[ 57] casilla visual_var_money_management
+        fila previa: ☐ Implementación óptica. Detalle:
+        fila previa: Visión ☐ Pronóstico . Especifique: Orientación y movilidad ☐ Funcionalidad auditiva ☐ Orientación espacial ☐ Desplazamiento
+        fila previa: B. Señale aquellos aspectos que han presentado alguna variación
+        antes: Actividades de la vida diaria[ ] Autocuidado[ ] Autonomía
+        despues: ☐ Manejo de dinero
+[ 58] casilla visual_support_replanned_personal
+        fila previa: Indique aquellos apoyos que se han replanteado
+        fila previa: Condiciones para el aprendizaje ☐ Funcionalidad visual en el aula ☐ Vía y estilo de aprendizaje ☐ Dominio de Signografía ☐ Nivel lector y de comprensi
+        fila previa: ☐ Implementación óptica. Detalle:
+        antes: 
+        despues: ☐ Personales[ ] Curriculares[ ] Medios y recursos materiales y/o tecnológicos
+[ 59] casilla visual_support_replanned_curricular
+        fila previa: Indique aquellos apoyos que se han replanteado
+        fila previa: Condiciones para el aprendizaje ☐ Funcionalidad visual en el aula ☐ Vía y estilo de aprendizaje ☐ Dominio de Signografía ☐ Nivel lector y de comprensi
+        fila previa: ☐ Implementación óptica. Detalle:
+        antes: [ ] Personales
+        despues: ☐ Curriculares[ ] Medios y recursos materiales y/o tecnológicos
+[ 60] casilla visual_support_replanned_materials
+        fila previa: Indique aquellos apoyos que se han replanteado
+        fila previa: Condiciones para el aprendizaje ☐ Funcionalidad visual en el aula ☐ Vía y estilo de aprendizaje ☐ Dominio de Signografía ☐ Nivel lector y de comprensi
+        fila previa: ☐ Implementación óptica. Detalle:
+        antes: [ ] Personales[ ] Curriculares
+        despues: ☐ Medios y recursos materiales y/o tecnológicos
+[ 61] casilla visual_support_replanned_organizational
+        fila previa: Indique aquellos apoyos que se han replanteado
+        fila previa: Condiciones para el aprendizaje ☐ Funcionalidad visual en el aula ☐ Vía y estilo de aprendizaje ☐ Dominio de Signografía ☐ Nivel lector y de comprensi
+        fila previa: ☐ Implementación óptica. Detalle:
+        antes: 
+        despues: ☐ Organización y agrupamiento en el aula[ ] Familiares[ ] Otros (Indicar):
+[ 62] casilla visual_support_replanned_family
+        fila previa: Indique aquellos apoyos que se han replanteado
+        fila previa: Condiciones para el aprendizaje ☐ Funcionalidad visual en el aula ☐ Vía y estilo de aprendizaje ☐ Dominio de Signografía ☐ Nivel lector y de comprensi
+        fila previa: ☐ Implementación óptica. Detalle:
+        antes: [ ] Organización y agrupamiento en el aula
+        despues: ☐ Familiares[ ] Otros (Indicar):
+[ 63] casilla visual_support_replanned_other
+        fila previa: Indique aquellos apoyos que se han replanteado
+        fila previa: Condiciones para el aprendizaje ☐ Funcionalidad visual en el aula ☐ Vía y estilo de aprendizaje ☐ Dominio de Signografía ☐ Nivel lector y de comprensi
+        fila previa: ☐ Implementación óptica. Detalle:
+        antes: [ ] Organización y agrupamiento en el aula[ ] Familiares
+        despues: ☐ Otros (Indicar):
+[ 64] texto   visual_support_replanned_other_detail
+        fila previa: C . Resuma los avances y logros generales en el aprendizaje y participación del estudiante con los apoyos implementados.
+        antes: 
+        despues: 
+[ 65] texto   visual_general_progress_summary
+        antes: 
+        despues: 
+[ 66] casilla evidence_school_context_observation
+        fila previa: 3. DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE REVALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO
+        antes: 
+        despues: ☐ Observación en el contexto escolar [ ] Pauta/s de observación [ ] Lista/s de cotejo [ ] 
+[ 67] casilla evidence_observation_guideline
+        fila previa: 3. DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE REVALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO
+        antes: [ ] Observación en el contexto escolar
+        despues: ☐ Pauta/s de observación [ ] Lista/s de cotejo [ ] Otros: [ ]
+[ 68] casilla evidence_checklist
+        fila previa: 3. DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE REVALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO
+        antes: [ ] Observación en el contexto escolar [ ] Pauta/s de observación
+        despues: ☐ Lista/s de cotejo [ ] Otros: [ ]
+[ 69] casilla evidence_general_other
+        fila previa: 3. DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE REVALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO
+        antes: [ ] Observación en el contexto escolar [ ] Pauta/s de observación [ ] Lista/s de cotejo
+        despues: ☐ Otros: [ ]
+[ 70] texto   evidence_general_other_detail
+        fila previa: 3. DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE REVALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO
+        antes: [ ] Observación en el contexto escolar [ ] Pauta/s de observación [ ] Lista/s de cotejo [ ] Otros:
+        despues: 
+[ 71] casilla evidence_report_school
+        fila previa: ☐ Observación en el contexto escolar ☐ Pauta/s de observación ☐ Lista/s de cotejo ☐ Otros:
+        fila previa: 3. DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE REVALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO
+        antes: Certificados/Protocolos/ Informes:
+        despues: ☐ Escolar [ ] Social [ ] Neurológico [ ] Psicológico [ ] Fonoaudiológico [ ] Evaluación pe
+[ 72] casilla evidence_report_social
+        fila previa: ☐ Observación en el contexto escolar ☐ Pauta/s de observación ☐ Lista/s de cotejo ☐ Otros:
+        fila previa: 3. DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE REVALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO
+        antes: Certificados/Protocolos/ Informes:[ ] Escolar
+        despues: ☐ Social [ ] Neurológico [ ] Psicológico [ ] Fonoaudiológico [ ] Evaluación pedagógica [ ]
+[ 73] casilla evidence_neurological
+        fila previa: ☐ Observación en el contexto escolar ☐ Pauta/s de observación ☐ Lista/s de cotejo ☐ Otros:
+        fila previa: 3. DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE REVALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO
+        antes: Certificados/Protocolos/ Informes:[ ] Escolar [ ] Social
+        despues: ☐ Neurológico [ ] Psicológico [ ] Fonoaudiológico [ ] Evaluación pedagógica [ ] Psicopedag
+[ 74] casilla evidence_report_psychological
+        fila previa: ☐ Observación en el contexto escolar ☐ Pauta/s de observación ☐ Lista/s de cotejo ☐ Otros:
+        fila previa: 3. DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE REVALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO
+        antes: Certificados/Protocolos/ Informes:[ ] Escolar [ ] Social [ ] Neurológico
+        despues: ☐ Psicológico [ ] Fonoaudiológico [ ] Evaluación pedagógica [ ] Psicopedagógica[ ] Valorac
+[ 75] casilla evidence_report_fonoaudiological
+        fila previa: ☐ Observación en el contexto escolar ☐ Pauta/s de observación ☐ Lista/s de cotejo ☐ Otros:
+        fila previa: 3. DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE REVALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO
+        antes: Certificados/Protocolos/ Informes:[ ] Escolar [ ] Social [ ] Neurológico [ ] Psicológico
+        despues: ☐ Fonoaudiológico [ ] Evaluación pedagógica [ ] Psicopedagógica[ ] Valoración de salud [ ]
+[ 76] casilla evidence_report_pedagogical
+        fila previa: ☐ Observación en el contexto escolar ☐ Pauta/s de observación ☐ Lista/s de cotejo ☐ Otros:
+        fila previa: 3. DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE REVALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO
+        antes: Certificados/Protocolos/ Informes:[ ] Escolar [ ] Social [ ] Neurológico [ ] Psicológico [ ] Fonoaudiológico
+        despues: ☐ Evaluación pedagógica [ ] Psicopedagógica[ ] Valoración de salud [ ] Examen médico espec
+[ 77] casilla evidence_report_psychopedagogical
+        fila previa: ☐ Observación en el contexto escolar ☐ Pauta/s de observación ☐ Lista/s de cotejo ☐ Otros:
+        fila previa: 3. DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE REVALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO
+        antes: Certificados/Protocolos/ Informes:[ ] Escolar [ ] Social [ ] Neurológico [ ] Psicológico [ ] Fonoaudiológico [ ] Evaluación pedagógica
+        despues: ☐ Psicopedagógica[ ] Valoración de salud [ ] Examen médico especialista (señale cuál) [ ]
+[ 78] casilla evidence_health_assessment
+        fila previa: ☐ Observación en el contexto escolar ☐ Pauta/s de observación ☐ Lista/s de cotejo ☐ Otros:
+        fila previa: 3. DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE REVALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO
+        antes: Certificados/Protocolos/ Informes:[ ] Escolar [ ] Social [ ] Neurológico [ ] Psicológico [ ] Fonoaudiológico [ ] Evaluación pedagógica [ ] Psicopedagógica
+        despues: ☐ Valoración de salud [ ] Examen médico especialista (señale cuál) [ ]
+[ 79] casilla evidence_specialized_health_exam
+        fila previa: ☐ Observación en el contexto escolar ☐ Pauta/s de observación ☐ Lista/s de cotejo ☐ Otros:
+        fila previa: 3. DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE REVALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO
+        antes: cados/Protocolos/ Informes:[ ] Escolar [ ] Social [ ] Neurológico [ ] Psicológico [ ] Fonoaudiológico [ ] Evaluación pedagógica [ ] Psicopedagógica[ ] Valoración de salud
+        despues: ☐ Examen médico especialista (señale cuál) [ ]
+[ 80] texto   evidence_specialized_health_detail
+        fila previa: ☐ Observación en el contexto escolar ☐ Pauta/s de observación ☐ Lista/s de cotejo ☐ Otros:
+        fila previa: 3. DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE REVALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO
+        antes: cial [ ] Neurológico [ ] Psicológico [ ] Fonoaudiológico [ ] Evaluación pedagógica [ ] Psicopedagógica[ ] Valoración de salud [ ] Examen médico especialista (señale cuál)
+        despues: 
+[ 81] casilla evidence_other
+        fila previa: Certificados/Protocolos/ Informes: ☐ Escolar ☐ Social ☐ Neurológico ☐ Psicológico ☐ Fonoaudiológico ☐ Evaluación pedagógica ☐ Psicopedagógica ☐ Valora
+        fila previa: ☐ Observación en el contexto escolar ☐ Pauta/s de observación ☐ Lista/s de cotejo ☐ Otros:
+        fila previa: 3. DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE REVALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO
+        antes: 
+        despues: ☐ Otro(s) (especificar): [ ]
+[ 82] texto   evidence_other_detail
+        fila previa: Certificados/Protocolos/ Informes: ☐ Escolar ☐ Social ☐ Neurológico ☐ Psicológico ☐ Fonoaudiológico ☐ Evaluación pedagógica ☐ Psicopedagógica ☐ Valora
+        fila previa: ☐ Observación en el contexto escolar ☐ Pauta/s de observación ☐ Lista/s de cotejo ☐ Otros:
+        fila previa: 3. DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE REVALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO
+        antes: [ ] Otro(s) (especificar):
+        despues: 
+[ 83] texto   evidence_documents_count
+        fila previa: Certificados/Protocolos/ Informes: ☐ Escolar ☐ Social ☐ Neurológico ☐ Psicológico ☐ Fonoaudiológico ☐ Evaluación pedagógica ☐ Psicopedagógica ☐ Valora
+        fila previa: ☐ Observación en el contexto escolar ☐ Pauta/s de observación ☐ Lista/s de cotejo ☐ Otros:
+        fila previa: 3. DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE REVALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO
+        antes: Señale el número de documentos que se adjuntan:
+        despues: 
+[ 84] texto   identification_number
+        antes: RUN estudiante:
+        despues: 
+[ 85] texto   visual_school_learning_achieved
+        fila previa: Describa brevemente los progresos en el d esempeño d el o la estudiante de acuerdo a las Bases curriculares
+        fila previa: AVANCES EN EL CONTEXTO ESCOLAR
+        antes: jes (curriculares y/o de desarrollo) logrados por el/la estudiante en las distintas asignaturas o ámbitos de aprendizaje con énfasis en el proceso de lectura y escritura:
+        despues: 
+[ 86] texto   visual_school_learning_unachieved
+        fila previa: Señale aprendizajes (curriculares y/o de desarrollo) no logrados y principales asignaturas en la s que el estudiante mantiene dificultades .
+        fila previa: Refiérase a los principales a prendizajes (curriculares y/o de desarrollo) logrados por el/la estudiante en las distintas asignaturas o ámbitos de apr
+        fila previa: Describa brevemente los progresos en el d esempeño d el o la estudiante de acuerdo a las Bases curriculares
+        antes: 
+        despues: 
+[ 87] texto   visual_school_context_achievements
+        fila previa: Describa brevemente los progresos del o la estudiante respecto de sus Habilidades para aprender y participar en la sala de clases u otro
+        fila previa: Señale aprendizajes (curriculares y/o de desarrollo) no logrados y principales asignaturas en la s que el estudiante mantiene dificultades .
+        antes: Señale logros relevantes o destacados y dificultades que presenta para participar en el contexto escolar (aulas, patio, otros) y familiar.
+        despues: 
+[ 88] texto   visual_school_barrier_reduction
+        fila previa: Señale aquellos aspectos destacados que han favorecido al estudiante respecto del curso y d el establecimiento (disminución de barreras)
+        fila previa: Señale logros relevantes o destacados y dificultades que presenta para participar en el contexto escolar (aulas, patio, otros) y familiar.
+        fila previa: Describa brevemente los progresos del o la estudiante respecto de sus Habilidades para aprender y participar en la sala de clases u otro
+        antes: 
+        despues: 
+[ 89] texto   specialized_family_participation
+        antes: 
+        despues: 
+[ 90] texto   specialized_next_period_emphasis
+        antes: 
+        despues: 
+[ 91] texto   visual_specific_vision_progress
+        fila previa: A. Describa los progreso s del/la estudiante en el área de VISIÓN
+        fila previa: AVANCES ESPECÍFICOS
+        antes: Señalar cambios respecto de la implementación de ayuda/s visual/es y/o del pronóstico inicial
+        despues: 
+[ 92] texto   visual_specific_orientation_progress
+        fila previa: B. Describa los progresos del/la estudiante en el área de ORIE NTACION Y MOVILIDAD
+        fila previa: Señalar cambios respecto de la implementación de ayuda/s visual/es y/o del pronóstico inicial
+        fila previa: A. Describa los progreso s del/la estudiante en el área de VISIÓN
+        antes: En la orientación:
+        despues: 
+[ 93] texto   visual_specific_mobility_progress
+        fila previa: B. Describa los progresos del/la estudiante en el área de ORIE NTACION Y MOVILIDAD
+        fila previa: Señalar cambios respecto de la implementación de ayuda/s visual/es y/o del pronóstico inicial
+        fila previa: A. Describa los progreso s del/la estudiante en el área de VISIÓN
+        antes: En la movilidad:
+        despues: 
+[ 94] texto   visual_specific_orientation_mobility_emphasis
+        antes: 
+        despues: 
+[ 95] texto   visual_specific_adl_progress
+        fila previa: C.- Describa los progresos d e l/la estudiante respecto a las ACTIVIDADES DE LA VIDA DIARIA
+        fila previa: - Señale aquellos aspectos en estas áreas a los cuales dar énfasis durante el próximo periodo académico
+        antes: Considere autonomía, autocuidado, manejo de dinero, entre otros aspectos relevantes para el/la estudiante
+        despues: 
+[ 96] texto   visual_specific_adl_emphasis
+        antes: 
+        despues: 
+[ 97] texto   visual_specific_functional_vision
+        antes: 
+        despues: 
+[ 98] texto   visual_specific_signography
+        antes: 
+        despues: 
+[ 99] texto   visual_specific_learning_motivation
+        fila previa: Respecto a la visión funcional Respecto del dominio signográfico (braille, estenografía, ábaco, u otros)
+        fila previa: D .- D escriba los progresos d e l/la estudiante respecto a las CONDICIONES PARA EL APRENDIZAJE
+        antes: Respecto a su disposición y motivación para aprender
+        despues: 
+[100] texto   visual_specific_learning_emphasis
+        antes: 
+        despues: 
+[101] texto   identification_number
+        antes: RUN estudiante:
+        despues: 
+[102] texto   support_personal_specific
+        antes: 
+        despues: 
+[103] casilla support_personal_continuity__si
+        antes: 
+        despues: 
+[104] casilla support_personal_continuity__no
+        antes: 
+        despues: 
+[105] texto   support_personal_observations
+        antes: 
+        despues: 
+[106] texto   support_curricular_specific
+        antes: 
+        despues: 
+[107] casilla support_curricular_continuity__si
+        antes: 
+        despues: 
+[108] casilla support_curricular_continuity__no
+        antes: 
+        despues: 
+[109] texto   support_curricular_observations
+        antes: 
+        despues: 
+[110] texto   support_materials_specific
+        antes: 
+        despues: 
+[111] casilla support_materials_continuity__si
+        antes: 
+        despues: 
+[112] casilla support_materials_continuity__no
+        antes: 
+        despues: 
+[113] texto   support_materials_observations
+        antes: 
+        despues: 
+[114] texto   support_organizational_specific
+        antes: 
+        despues: 
+[115] casilla support_organizational_continuity__si
+        antes: 
+        despues: 
+[116] casilla support_organizational_continuity__no
+        antes: 
+        despues: 
+[117] texto   support_organizational_observations
+        antes: 
+        despues: 
+[118] texto   support_family_specific
+        antes: 
+        despues: 
+[119] casilla support_family_continuity__si
+        antes: 
+        despues: 
+[120] casilla support_family_continuity__no
+        antes: 
+        despues: 
+[121] texto   support_family_observations
+        antes: 
+        despues: 
+[122] texto   support_other_specific
+        antes: 
+        despues: 
+[123] casilla support_other_continuity__si
+        antes: 
+        despues: 
+[124] casilla support_other_continuity__no
+        antes: 
+        despues: 
+[125] texto   support_other_observations
+        antes: 
+        despues: 
+[126] texto   support_work_strategies
+        antes: 
+        despues: 
+[127] texto   support_family_strategies_effectiveness
+        antes: 
+        despues: 
+[128] texto   support_new_needs_required
+        antes: 
+        despues: 
+[129] texto   support_next_period_comments
+        antes: 
+        despues: 

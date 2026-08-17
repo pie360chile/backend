@@ -38,14 +38,24 @@ def _estimate_cost_usd(
         .filter(AgentsOpenAIModel.model_code == model_code)
         .first()
     )
-    # Default ≈ deepseek-v4-pro (cache miss / output) de la tabla pública DeepSeek
-    in_price = Decimal(str(row.input_per_1m_usd)) if row else Decimal("0.435")
-    out_price = Decimal(str(row.output_per_1m_usd)) if row else Decimal("0.870")
+    # BD guarda off-peak; en hora punta DeepSeek cobra 2×.
+    from app.backend.utils.agents_deepseek_pricing import (
+        apply_period_multiplier,
+        is_deepseek_peak,
+    )
+
+    in_price = Decimal(str(row.input_per_1m_usd)) if row else Decimal("0.660")
+    out_price = Decimal(str(row.output_per_1m_usd)) if row else Decimal("1.980")
     cached_price = (
         Decimal(str(row.cached_input_per_1m_usd))
         if row and row.cached_input_per_1m_usd is not None
         else None
     )
+    if is_deepseek_peak():
+        in_price = apply_period_multiplier(in_price)
+        out_price = apply_period_multiplier(out_price)
+        if cached_price is not None:
+            cached_price = apply_period_multiplier(cached_price)
 
     hit = max(0, int(prompt_cache_hit_tokens or 0))
     miss = max(0, int(prompt_cache_miss_tokens or 0))

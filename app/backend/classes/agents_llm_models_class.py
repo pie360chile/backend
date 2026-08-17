@@ -12,7 +12,8 @@ from app.backend.db.models.agent import AgentModel
 from app.backend.db.models.agents_app_settings import AgentsAppSettingModel
 from app.backend.db.models.agents_openai_models import AgentsOpenAIModel
 
-# DeepSeek V4 (última línea oficial; deepseek-chat/reasoner retirados 2026-07-24).
+# DeepSeek V4 — precios off-peak oficiales (desde 2026-08-16 16:00 UTC).
+# Peak = 2× (01:00–04:00 y 06:00–10:00 UTC). Ver agents_deepseek_pricing.py
 _DEFAULT_MODEL_CODE = "deepseek-v4-pro"
 _DEFAULT_MODEL_NAME = "DeepSeek-V4-Pro"
 
@@ -20,18 +21,18 @@ _SEED_MODELS: list[dict[str, Any]] = [
     {
         "model_code": "deepseek-v4-pro",
         "display_name": "DeepSeek-V4-Pro",
-        "input_per_1m_usd": Decimal("0.435000"),
-        "output_per_1m_usd": Decimal("0.870000"),
-        "cached_input_per_1m_usd": Decimal("0.003625"),
+        "input_per_1m_usd": Decimal("0.660000"),
+        "output_per_1m_usd": Decimal("1.980000"),
+        "cached_input_per_1m_usd": Decimal("0.022000"),
         "sort_order": 10,
         "is_selected": True,
     },
     {
         "model_code": "deepseek-v4-flash",
         "display_name": "DeepSeek-V4-Flash",
-        "input_per_1m_usd": Decimal("0.140000"),
-        "output_per_1m_usd": Decimal("0.280000"),
-        "cached_input_per_1m_usd": Decimal("0.002800"),
+        "input_per_1m_usd": Decimal("0.220000"),
+        "output_per_1m_usd": Decimal("0.660000"),
+        "cached_input_per_1m_usd": Decimal("0.007000"),
         "sort_order": 20,
         "is_selected": False,
     },
@@ -43,15 +44,37 @@ def _now() -> datetime:
 
 
 def _serialize_model(row: AgentsOpenAIModel) -> dict[str, Any]:
+    from app.backend.utils.agents_deepseek_pricing import rates_for_model
+
+    off_in = float(row.input_per_1m_usd or 0)
+    off_out = float(row.output_per_1m_usd or 0)
+    off_cached = (
+        float(row.cached_input_per_1m_usd)
+        if row.cached_input_per_1m_usd is not None
+        else None
+    )
+    rates = rates_for_model(
+        model_code=row.model_code or "",
+        off_peak_input=off_in,
+        off_peak_output=off_out,
+        off_peak_cached=off_cached,
+    )
+    active = rates["active"]
     return {
         "id": row.id,
         "model_code": row.model_code,
         "display_name": row.display_name,
-        "input_per_1m_usd": float(row.input_per_1m_usd or 0),
-        "output_per_1m_usd": float(row.output_per_1m_usd or 0),
-        "cached_input_per_1m_usd": (
-            float(row.cached_input_per_1m_usd) if row.cached_input_per_1m_usd is not None else None
-        ),
+        # Compat: campos planos = tarifa ACTIVA ahora (peak u off-peak)
+        "input_per_1m_usd": active["input_per_1m_usd"],
+        "output_per_1m_usd": active["output_per_1m_usd"],
+        "cached_input_per_1m_usd": active["cached_input_per_1m_usd"],
+        "off_peak_input_per_1m_usd": rates["off_peak"]["input_per_1m_usd"],
+        "off_peak_output_per_1m_usd": rates["off_peak"]["output_per_1m_usd"],
+        "off_peak_cached_input_per_1m_usd": rates["off_peak"]["cached_input_per_1m_usd"],
+        "peak_input_per_1m_usd": rates["peak"]["input_per_1m_usd"],
+        "peak_output_per_1m_usd": rates["peak"]["output_per_1m_usd"],
+        "peak_cached_input_per_1m_usd": rates["peak"]["cached_input_per_1m_usd"],
+        "active_period": rates["active_period"],
         "sort_order": row.sort_order,
         "is_selected": bool(row.is_selected),
         "is_active": bool(row.is_active),
@@ -240,6 +263,8 @@ class AgentsLlmModelsClass:
             creds_hint = str(env_sa.get("client_email"))
         root_id = (getattr(app, "google_drive_root_folder_id", None) or "").strip() or None
         selected = self.get_selected_model_code()
+        from app.backend.utils.agents_deepseek_pricing import pricing_period_snapshot
+
         return {
             "selected_model_code": selected,
             "default_agent_id": app.default_agent_id,
@@ -251,6 +276,7 @@ class AgentsLlmModelsClass:
             "workspace_trigger_url": trigger_url or None,
             "provider": "deepseek",
             "llm_api_base": (settings.agents_llm_api_base or "https://api.deepseek.com").rstrip("/"),
+            "pricing_period": pricing_period_snapshot(),
             "google_drive_root_folder_id": root_id,
             "has_google_drive_credentials": creds_ok,
             "google_drive_credentials_hint": creds_hint,

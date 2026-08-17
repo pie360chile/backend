@@ -1,0 +1,662 @@
+fur9_dmu_formulario.docx — 160 controles
+
+[  1] texto   full_name
+        antes: 
+        despues: 
+[  2] texto   born_date
+        fila previa: DEL ESTUDIANTE
+        fila previa: 1. DATOS DE INDENTIFICACIÓN (Escriba con letra legible o marque con una equis (X) según corresponda )
+        antes: 
+        despues: 
+[  3] texto   age
+        fila previa: DEL ESTUDIANTE
+        fila previa: 1. DATOS DE INDENTIFICACIÓN (Escriba con letra legible o marque con una equis (X) según corresponda )
+        antes: 
+        despues: 
+[  4] texto   identification_number
+        antes: 
+        despues: 
+[  5] casilla educational_option__escuela_especial
+        fila previa: Nombres y Apellidos Fecha nacimiento ( dd/mm/aaaa ) Edad ( en años y meses ) RUN
+        fila previa: DEL ESTUDIANTE
+        antes: 
+        despues: ☐ Escuela Especial [ ]PIE
+[  6] casilla educational_option__pie
+        fila previa: Nombres y Apellidos Fecha nacimiento ( dd/mm/aaaa ) Edad ( en años y meses ) RUN
+        fila previa: DEL ESTUDIANTE
+        antes: [ ] Escuela Especial
+        despues: ☐PIE
+[  7] texto   current_course
+        fila previa: Nombres y Apellidos Fecha nacimiento ( dd/mm/aaaa ) Edad ( en años y meses ) RUN
+        fila previa: DEL ESTUDIANTE
+        antes: 
+        despues: 
+[  8] texto   educational_option_other_detail
+        fila previa: Opción Educativa ☐ Escuela Especial ☐ PIE Vía comunicación :
+        fila previa: Nombres y Apellidos Fecha nacimiento ( dd/mm/aaaa ) Edad ( en años y meses ) RUN
+        antes: Otra:
+        despues: 
+[  9] casilla communication_way__oral
+        fila previa: Opción Educativa ☐ Escuela Especial ☐ PIE Vía comunicación :
+        fila previa: Nombres y Apellidos Fecha nacimiento ( dd/mm/aaaa ) Edad ( en años y meses ) RUN
+        antes: 
+        despues: ☐ Oral [ ] lengua señas [ ] otra [ ]
+[ 10] casilla communication_way__lengua_senas
+        fila previa: Opción Educativa ☐ Escuela Especial ☐ PIE Vía comunicación :
+        fila previa: Nombres y Apellidos Fecha nacimiento ( dd/mm/aaaa ) Edad ( en años y meses ) RUN
+        antes: [ ] Oral
+        despues: ☐ lengua señas [ ] otra [ ]
+[ 11] casilla communication_way__otra
+        fila previa: Opción Educativa ☐ Escuela Especial ☐ PIE Vía comunicación :
+        fila previa: Nombres y Apellidos Fecha nacimiento ( dd/mm/aaaa ) Edad ( en años y meses ) RUN
+        antes: [ ] Oral [ ] lengua señas
+        despues: ☐ otra [ ]
+[ 12] texto   communication_way_other_detail
+        fila previa: Opción Educativa ☐ Escuela Especial ☐ PIE Vía comunicación :
+        fila previa: Nombres y Apellidos Fecha nacimiento ( dd/mm/aaaa ) Edad ( en años y meses ) RUN
+        antes: [ ] Oral [ ] lengua señas [ ] otra
+        despues: 
+[ 13] texto   establishment_name
+        fila previa: Otra: Curso / Nivel educativo actual ☐ Oral ☐ lengua señas ☐ otra
+        fila previa: Opción Educativa ☐ Escuela Especial ☐ PIE Vía comunicación :
+        fila previa: Nombres y Apellidos Fecha nacimiento ( dd/mm/aaaa ) Edad ( en años y meses ) RUN
+        antes: 
+        despues: 
+[ 14] texto   rbd
+        antes: 
+        despues: 
+[ 15] texto   director_signature
+        fila previa: Otra: Curso / Nivel educativo actual ☐ Oral ☐ lengua señas ☐ otra
+        fila previa: Opción Educativa ☐ Escuela Especial ☐ PIE Vía comunicación :
+        fila previa: Nombres y Apellidos Fecha nacimiento ( dd/mm/aaaa ) Edad ( en años y meses ) RUN
+        antes: 
+        despues: 
+[ 16] texto   professional_id
+        fila previa: Profesional responsable del proceso de revaluación integral del estudiante.
+        fila previa: DE LOS PROFESIONALES
+        antes: 
+        despues: 
+[ 17] texto   professional_identification_number
+        fila previa: Profesional responsable del proceso de revaluación integral del estudiante.
+        fila previa: DE LOS PROFESIONALES
+        antes: 
+        despues: 
+[ 18] texto   profession_specialty_id
+        fila previa: Nombres y Apellido s RUN
+        fila previa: Profesional responsable del proceso de revaluación integral del estudiante.
+        antes: 
+        despues: 
+[ 19] texto   position_id
+        fila previa: Nombres y Apellido s RUN
+        fila previa: Profesional responsable del proceso de revaluación integral del estudiante.
+        antes: 
+        despues: 
+[ 20] texto   contact_phone
+        fila previa: Nombres y Apellido s RUN
+        fila previa: Profesional responsable del proceso de revaluación integral del estudiante.
+        antes: 
+        despues: 
+[ 21] texto   contact_email
+        fila previa: Profesión/ Especialidad Cargo F ono contacto
+        fila previa: Nombres y Apellido s RUN
+        antes: 
+        despues: 
+[ 22] texto   registration_date
+        antes: 
+        despues: 
+[ 23] texto   participating_professionals[0].professional_id
+        fila previa: Profesionales (Nombre completo) Profesión/ Especialidad/ Cargo Fono/E-mail Registro profesional
+        fila previa: Personas que han participado en el proceso de entrega de apoyos al estudiante durante el período que se evalúa (profesores, profesionales asistentes d
+        antes: 
+        despues: 
+[ 24] texto   participating_professionals[0].profession_id
+        antes: 
+        despues: 
+[ 25] texto   participating_professionals[0].phone_email
+        antes: 
+        despues: 
+[ 26] texto   participating_professionals[0].professional_registration
+        antes: 
+        despues: 
+[ 27] texto   participating_professionals[1].professional_id
+        antes: 
+        despues: 
+[ 28] texto   participating_professionals[1].profession_id
+        antes: 
+        despues: 
+[ 29] texto   participating_professionals[1].phone_email
+        antes: 
+        despues: 
+[ 30] texto   participating_professionals[1].professional_registration
+        antes: 
+        despues: 
+[ 31] texto   participating_professionals[2].professional_id
+        antes: 
+        despues: 
+[ 32] texto   participating_professionals[2].profession_id
+        antes: 
+        despues: 
+[ 33] texto   participating_professionals[2].phone_email
+        antes: 
+        despues: 
+[ 34] texto   participating_professionals[2].professional_registration
+        antes: 
+        despues: 
+[ 35] texto   participating_professionals[3].professional_id
+        antes: 
+        despues: 
+[ 36] texto   participating_professionals[3].profession_id
+        antes: 
+        despues: 
+[ 37] texto   participating_professionals[3].phone_email
+        antes: 
+        despues: 
+[ 38] texto   participating_professionals[3].professional_registration
+        antes: 
+        despues: 
+[ 39] texto   participating_professionals[4].professional_id
+        antes: 
+        despues: 
+[ 40] texto   participating_professionals[4].profession_id
+        antes: 
+        despues: 
+[ 41] texto   participating_professionals[4].phone_email
+        antes: 
+        despues: 
+[ 42] texto   participating_professionals[4].professional_registration
+        antes: 
+        despues: 
+[ 43] casilla multiple_nee_intellectual_disability
+        fila previa: DIAGNÓSTICO este recuadro debe ser completado por un profesional competente, Art.16/D ecreto N º170, sin embargo debe contar con el respaldo y la info
+        fila previa: 2-. SINTESIS DE LA REVALUACIÓN DIAGN Ó STICA
+        antes: 
+        despues: ☐ Discapacidad Intelectual[ ] Discapacidad Motora[ ] Discapacidad Auditiva[ ] Discapacidad
+[ 44] casilla multiple_nee_motor_disability
+        fila previa: DIAGNÓSTICO este recuadro debe ser completado por un profesional competente, Art.16/D ecreto N º170, sin embargo debe contar con el respaldo y la info
+        fila previa: 2-. SINTESIS DE LA REVALUACIÓN DIAGN Ó STICA
+        antes: [ ] Discapacidad Intelectual
+        despues: ☐ Discapacidad Motora[ ] Discapacidad Auditiva[ ] Discapacidad Visual
+[ 45] casilla multiple_nee_auditiva
+        fila previa: DIAGNÓSTICO este recuadro debe ser completado por un profesional competente, Art.16/D ecreto N º170, sin embargo debe contar con el respaldo y la info
+        fila previa: 2-. SINTESIS DE LA REVALUACIÓN DIAGN Ó STICA
+        antes: [ ] Discapacidad Intelectual[ ] Discapacidad Motora
+        despues: ☐ Discapacidad Auditiva[ ] Discapacidad Visual
+[ 46] casilla multiple_nee_visual
+        fila previa: DIAGNÓSTICO este recuadro debe ser completado por un profesional competente, Art.16/D ecreto N º170, sin embargo debe contar con el respaldo y la info
+        fila previa: 2-. SINTESIS DE LA REVALUACIÓN DIAGN Ó STICA
+        antes: [ ] Discapacidad Intelectual[ ] Discapacidad Motora[ ] Discapacidad Auditiva
+        despues: ☐ Discapacidad Visual
+[ 47] casilla multiple_nee_disfasia
+        fila previa: DIAGNÓSTICO este recuadro debe ser completado por un profesional competente, Art.16/D ecreto N º170, sin embargo debe contar con el respaldo y la info
+        fila previa: 2-. SINTESIS DE LA REVALUACIÓN DIAGN Ó STICA
+        antes: 
+        despues: ☐ Disfasia Severa o Trastorno Complejo o Central del Lenguaje[ ] Trastorno del Espectro Au
+[ 48] casilla multiple_nee_tea
+        fila previa: DIAGNÓSTICO este recuadro debe ser completado por un profesional competente, Art.16/D ecreto N º170, sin embargo debe contar con el respaldo y la info
+        fila previa: 2-. SINTESIS DE LA REVALUACIÓN DIAGN Ó STICA
+        antes: [ ] Disfasia Severa o Trastorno Complejo o Central del Lenguaje
+        despues: ☐ Trastorno del Espectro Autista[ ] Trastorno Generalizado del Desarrollo[ ] Otros: [ ]
+[ 49] casilla multiple_nee_tgd
+        fila previa: DIAGNÓSTICO este recuadro debe ser completado por un profesional competente, Art.16/D ecreto N º170, sin embargo debe contar con el respaldo y la info
+        fila previa: 2-. SINTESIS DE LA REVALUACIÓN DIAGN Ó STICA
+        antes: [ ] Disfasia Severa o Trastorno Complejo o Central del Lenguaje[ ] Trastorno del Espectro Autista
+        despues: ☐ Trastorno Generalizado del Desarrollo[ ] Otros: [ ]
+[ 50] casilla multiple_nee_other
+        fila previa: DIAGNÓSTICO este recuadro debe ser completado por un profesional competente, Art.16/D ecreto N º170, sin embargo debe contar con el respaldo y la info
+        fila previa: 2-. SINTESIS DE LA REVALUACIÓN DIAGN Ó STICA
+        antes: [ ] Disfasia Severa o Trastorno Complejo o Central del Lenguaje[ ] Trastorno del Espectro Autista[ ] Trastorno Generalizado del Desarrollo
+        despues: ☐ Otros: [ ]
+[ 51] texto   multiple_nee_other_detail
+        fila previa: DIAGNÓSTICO este recuadro debe ser completado por un profesional competente, Art.16/D ecreto N º170, sin embargo debe contar con el respaldo y la info
+        fila previa: 2-. SINTESIS DE LA REVALUACIÓN DIAGN Ó STICA
+        antes: [ ] Disfasia Severa o Trastorno Complejo o Central del Lenguaje[ ] Trastorno del Espectro Autista[ ] Trastorno Generalizado del Desarrollo[ ] Otros:
+        despues: 
+[ 52] casilla diagnosis_changed_from_admission__si
+        fila previa: ☐ Discapacidad Intelectual ☐ Discapacidad Motora ☐ Discapacidad Auditiva ☐ Discapacidad Visual ☐ Disfasia Severa o Trastorno Complejo o Central del Le
+        fila previa: DIAGNÓSTICO este recuadro debe ser completado por un profesional competente, Art.16/D ecreto N º170, sin embargo debe contar con el respaldo y la info
+        fila previa: 2-. SINTESIS DE LA REVALUACIÓN DIAGN Ó STICA
+        antes: 
+        despues: ☐SI
+[ 53] casilla diagnosis_changed_from_admission__no
+        fila previa: ☐ Discapacidad Intelectual ☐ Discapacidad Motora ☐ Discapacidad Auditiva ☐ Discapacidad Visual ☐ Disfasia Severa o Trastorno Complejo o Central del Le
+        fila previa: DIAGNÓSTICO este recuadro debe ser completado por un profesional competente, Art.16/D ecreto N º170, sin embargo debe contar con el respaldo y la info
+        fila previa: 2-. SINTESIS DE LA REVALUACIÓN DIAGN Ó STICA
+        antes: 
+        despues: ☐NO
+[ 54] texto   diagnosis_modifications_detail
+        fila previa: ☐ Discapacidad Intelectual ☐ Discapacidad Motora ☐ Discapacidad Auditiva ☐ Discapacidad Visual ☐ Disfasia Severa o Trastorno Complejo o Central del Le
+        fila previa: DIAGNÓSTICO este recuadro debe ser completado por un profesional competente, Art.16/D ecreto N º170, sin embargo debe contar con el respaldo y la info
+        fila previa: 2-. SINTESIS DE LA REVALUACIÓN DIAGN Ó STICA
+        antes: Indique modificaciones o un nuevo diagnostico:
+        despues: 
+[ 55] texto   current_diagnosis_issue_date
+        fila previa: ☐ Discapacidad Intelectual ☐ Discapacidad Motora ☐ Discapacidad Auditiva ☐ Discapacidad Visual ☐ Disfasia Severa o Trastorno Complejo o Central del Le
+        fila previa: DIAGNÓSTICO este recuadro debe ser completado por un profesional competente, Art.16/D ecreto N º170, sin embargo debe contar con el respaldo y la info
+        fila previa: 2-. SINTESIS DE LA REVALUACIÓN DIAGN Ó STICA
+        antes: 
+        despues: Fecha emisiónDiagnostico actual
+[ 56] texto   new_diagnosis_professional_data
+        fila previa: ¿Existen cambios en el diagnostico inicial? ☐ SI ☐ NO Indique modificaciones o un nuevo diagnostico: Fecha emisión Diagnostico actual
+        fila previa: ☐ Discapacidad Intelectual ☐ Discapacidad Motora ☐ Discapacidad Auditiva ☐ Discapacidad Visual ☐ Disfasia Severa o Trastorno Complejo o Central del Le
+        fila previa: DIAGNÓSTICO este recuadro debe ser completado por un profesional competente, Art.16/D ecreto N º170, sin embargo debe contar con el respaldo y la info
+        antes: Profesional (es) que emite (n) el nuevo diagnostico o sus modificaciones (especificar su (s) especialidad (es):
+        despues: 
+[ 57] texto   nee_synthesis_observations
+        fila previa: OBSERVACIONES
+        antes: Señale algún aspecto importante de enfatizar respecto de los cambios en el diagnóstico y respecto a los progresos, avances y apoyos entregados.
+        despues: 
+[ 58] casilla evidence_observation_guideline
+        fila previa: 3 . DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE RE VALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO
+        antes: 
+        despues: ☐Pauta de observación [ ] Observación en el contexto escolar (aula, patio, otras dependenc
+[ 59] casilla evidence_school_context_observation
+        fila previa: 3 . DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE RE VALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO
+        antes: [ ]Pauta de observación
+        despues: ☐ Observación en el contexto escolar (aula, patio, otras dependencias del establecimiento)
+[ 60] casilla evidence_report_school
+        fila previa: 3 . DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE RE VALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO
+        antes: [ ]Pauta de observación [ ] Observación en el contexto escolar (aula, patio, otras dependencias del establecimiento) Certificados/Protocolos/ Informes:
+        despues: ☐ Escolar [ ] Social [ ] Neurológico [ ] Psicológico [ ] Fonoaudiológico [ ] Evaluación pe
+[ 61] casilla evidence_report_social
+        fila previa: 3 . DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE RE VALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO
+        antes: [ ]Pauta de observación [ ] Observación en el contexto escolar (aula, patio, otras dependencias del establecimiento) Certificados/Protocolos/ Informes:[ ] Escolar
+        despues: ☐ Social [ ] Neurológico [ ] Psicológico [ ] Fonoaudiológico [ ] Evaluación pedagógica [ ]
+[ 62] casilla evidence_neurological
+        fila previa: 3 . DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE RE VALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO
+        antes: Pauta de observación [ ] Observación en el contexto escolar (aula, patio, otras dependencias del establecimiento) Certificados/Protocolos/ Informes:[ ] Escolar [ ] Social
+        despues: ☐ Neurológico [ ] Psicológico [ ] Fonoaudiológico [ ] Evaluación pedagógica [ ] Psicopedag
+[ 63] casilla evidence_report_psychological
+        fila previa: 3 . DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE RE VALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO
+        antes: ción [ ] Observación en el contexto escolar (aula, patio, otras dependencias del establecimiento) Certificados/Protocolos/ Informes:[ ] Escolar [ ] Social [ ] Neurológico
+        despues: ☐ Psicológico [ ] Fonoaudiológico [ ] Evaluación pedagógica [ ] Psicopedagógica[ ] Valorac
+[ 64] casilla evidence_report_fonoaudiological
+        fila previa: 3 . DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE RE VALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO
+        antes: ción en el contexto escolar (aula, patio, otras dependencias del establecimiento) Certificados/Protocolos/ Informes:[ ] Escolar [ ] Social [ ] Neurológico [ ] Psicológico
+        despues: ☐ Fonoaudiológico [ ] Evaluación pedagógica [ ] Psicopedagógica[ ] Valoración de salud [ ]
+[ 65] casilla evidence_report_pedagogical
+        fila previa: 3 . DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE RE VALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO
+        antes: escolar (aula, patio, otras dependencias del establecimiento) Certificados/Protocolos/ Informes:[ ] Escolar [ ] Social [ ] Neurológico [ ] Psicológico [ ] Fonoaudiológico
+        despues: ☐ Evaluación pedagógica [ ] Psicopedagógica[ ] Valoración de salud [ ] Examen médico espec
+[ 66] casilla evidence_report_psychopedagogical
+        fila previa: 3 . DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE RE VALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO
+        antes: s dependencias del establecimiento) Certificados/Protocolos/ Informes:[ ] Escolar [ ] Social [ ] Neurológico [ ] Psicológico [ ] Fonoaudiológico [ ] Evaluación pedagógica
+        despues: ☐ Psicopedagógica[ ] Valoración de salud [ ] Examen médico especialista (señale cuál) [ ]
+[ 67] casilla evidence_health_assessment
+        fila previa: 3 . DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE RE VALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO
+        antes: stablecimiento) Certificados/Protocolos/ Informes:[ ] Escolar [ ] Social [ ] Neurológico [ ] Psicológico [ ] Fonoaudiológico [ ] Evaluación pedagógica [ ] Psicopedagógica
+        despues: ☐ Valoración de salud [ ] Examen médico especialista (señale cuál) [ ]
+[ 68] casilla evidence_specialized_health_exam
+        fila previa: 3 . DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE RE VALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO
+        antes: cados/Protocolos/ Informes:[ ] Escolar [ ] Social [ ] Neurológico [ ] Psicológico [ ] Fonoaudiológico [ ] Evaluación pedagógica [ ] Psicopedagógica[ ] Valoración de salud
+        despues: ☐ Examen médico especialista (señale cuál) [ ]
+[ 69] texto   evidence_specialized_health_detail
+        fila previa: 3 . DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE RE VALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO
+        antes: cial [ ] Neurológico [ ] Psicológico [ ] Fonoaudiológico [ ] Evaluación pedagógica [ ] Psicopedagógica[ ] Valoración de salud [ ] Examen médico especialista (señale cuál)
+        despues: 
+[ 70] casilla evidence_other
+        fila previa: ☐ Pauta de observación ☐ Observación en el contexto escolar ( aula , patio, otras dependencias del establecimiento) Certificados/Protocolos/ Informes:
+        fila previa: 3 . DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE RE VALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO
+        antes: 
+        despues: ☐ Otro(s) (especificar): [ ]
+[ 71] texto   evidence_other_detail
+        fila previa: ☐ Pauta de observación ☐ Observación en el contexto escolar ( aula , patio, otras dependencias del establecimiento) Certificados/Protocolos/ Informes:
+        fila previa: 3 . DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE RE VALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO
+        antes: [ ] Otro(s) (especificar):
+        despues: 
+[ 72] texto   evidence_documents_count
+        fila previa: ☐ Pauta de observación ☐ Observación en el contexto escolar ( aula , patio, otras dependencias del establecimiento) Certificados/Protocolos/ Informes:
+        fila previa: 3 . DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE RE VALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO
+        antes: Señale el número de documentos que se adjuntan:
+        despues: 
+[ 73] texto   identification_number
+        antes: RUN estudiante:
+        despues: 
+[ 74] casilla dm_area_vision_family_interview
+        antes: Señale fuentes de información e instrumentos de evaluación utilizados:
+        despues: ☐ Entrevista a la familia [ ] Observación en el contexto escolar (Indicar: [ ] )
+[ 75] casilla dm_area_vision_school_observation
+        antes: Señale fuentes de información e instrumentos de evaluación utilizados:[ ] Entrevista a la familia
+        despues: ☐ Observación en el contexto escolar (Indicar: [ ] )
+[ 76] texto   dm_area_vision_school_observation_detail
+        antes: Señale fuentes de información e instrumentos de evaluación utilizados:[ ] Entrevista a la familia [ ] Observación en el contexto escolar (Indicar:
+        despues: )
+[ 77] casilla dm_area_vision_instrument
+        fila previa: Señale fuentes de información e instrumentos de evaluación utilizados: ☐ Entrevista a la familia ☐ Observación en el contexto escolar (Indicar: )
+        antes: 
+        despues: ☐ Aplicación de instrumento (cuáles): [ ]
+[ 78] texto   dm_area_vision_instrument_detail
+        fila previa: Señale fuentes de información e instrumentos de evaluación utilizados: ☐ Entrevista a la familia ☐ Observación en el contexto escolar (Indicar: )
+        antes: [ ] Aplicación de instrumento (cuáles):
+        despues: 
+[ 79] texto   dm_area_vision_progress
+        fila previa: ☐ Aplicación de instrumento (cuáles):
+        fila previa: Señale fuentes de información e instrumentos de evaluación utilizados: ☐ Entrevista a la familia ☐ Observación en el contexto escolar (Indicar: )
+        antes: Describa la situación actual del o la estudiante en esta área:
+        despues: 
+[ 80] texto   dm_area_vision_emphasis
+        fila previa: Describa la situación actual del o la estudiante en esta área:
+        fila previa: ☐ Aplicación de instrumento (cuáles):
+        fila previa: Señale fuentes de información e instrumentos de evaluación utilizados: ☐ Entrevista a la familia ☐ Observación en el contexto escolar (Indicar: )
+        antes: Describa aquellos aspectos de esta área a los cuales darle énfasis durante el próximo periodo académico:
+        despues: 
+[ 81] casilla dm_area_hearing_family_interview
+        fila previa: R EVALUACIÓN DE LA AUDICIÓN
+        antes: Señale fuentes de información e instrumentos de evaluación utilizados:
+        despues: ☐ Entrevista a la familia [ ] Observación en el contexto escolar (Indicar: [ ] )
+[ 82] casilla dm_area_hearing_school_observation
+        fila previa: R EVALUACIÓN DE LA AUDICIÓN
+        antes: Señale fuentes de información e instrumentos de evaluación utilizados:[ ] Entrevista a la familia
+        despues: ☐ Observación en el contexto escolar (Indicar: [ ] )
+[ 83] texto   dm_area_hearing_school_observation_detail
+        fila previa: R EVALUACIÓN DE LA AUDICIÓN
+        antes: Señale fuentes de información e instrumentos de evaluación utilizados:[ ] Entrevista a la familia [ ] Observación en el contexto escolar (Indicar:
+        despues: )
+[ 84] casilla dm_area_hearing_instrument
+        fila previa: Señale fuentes de información e instrumentos de evaluación utilizados: ☐ Entrevista a la familia ☐ Observación en el contexto escolar (Indicar: )
+        fila previa: R EVALUACIÓN DE LA AUDICIÓN
+        antes: 
+        despues: ☐ Aplicación de instrumento (cuáles): [ ]
+[ 85] texto   dm_area_hearing_instrument_detail
+        fila previa: Señale fuentes de información e instrumentos de evaluación utilizados: ☐ Entrevista a la familia ☐ Observación en el contexto escolar (Indicar: )
+        fila previa: R EVALUACIÓN DE LA AUDICIÓN
+        antes: [ ] Aplicación de instrumento (cuáles):
+        despues: 
+[ 86] texto   dm_area_hearing_progress
+        antes: 
+        despues: 
+[ 87] texto   dm_area_hearing_emphasis
+        fila previa: Describa la situación actual del o la estudiante en esta área:
+        fila previa: ☐ Aplicación de instrumento (cuáles):
+        antes: Describa aquellos aspectos de esta área a los cuales darle énfasis durante el próximo periodo académico:
+        despues: 
+[ 88] casilla dm_area_communication_family_interview
+        fila previa: a-. ÁREA COMUNICACIÓN
+        fila previa: 4 .2 -. DESCRIPCIÓN DE LA S CONDICIONES PARA EL APRENDIZAJE
+        antes: Señale fuentes de información e instrumentos de evaluación utilizados:
+        despues: ☐ Entrevista a la familia [ ] Observación en el contexto escolar (Indicar: [ ] )
+[ 89] casilla dm_area_communication_school_observation
+        fila previa: a-. ÁREA COMUNICACIÓN
+        fila previa: 4 .2 -. DESCRIPCIÓN DE LA S CONDICIONES PARA EL APRENDIZAJE
+        antes: Señale fuentes de información e instrumentos de evaluación utilizados:[ ] Entrevista a la familia
+        despues: ☐ Observación en el contexto escolar (Indicar: [ ] )
+[ 90] texto   dm_area_communication_school_observation_detail
+        fila previa: a-. ÁREA COMUNICACIÓN
+        fila previa: 4 .2 -. DESCRIPCIÓN DE LA S CONDICIONES PARA EL APRENDIZAJE
+        antes: Señale fuentes de información e instrumentos de evaluación utilizados:[ ] Entrevista a la familia [ ] Observación en el contexto escolar (Indicar:
+        despues: )
+[ 91] casilla dm_area_communication_instrument
+        fila previa: Señale fuentes de información e instrumentos de evaluación utilizados: ☐ Entrevista a la familia ☐ Observación en el contexto escolar (Indicar: )
+        fila previa: a-. ÁREA COMUNICACIÓN
+        fila previa: 4 .2 -. DESCRIPCIÓN DE LA S CONDICIONES PARA EL APRENDIZAJE
+        antes: 
+        despues: ☐ Aplicación de instrumento (cuáles): [ ]
+[ 92] texto   dm_area_communication_instrument_detail
+        fila previa: Señale fuentes de información e instrumentos de evaluación utilizados: ☐ Entrevista a la familia ☐ Observación en el contexto escolar (Indicar: )
+        fila previa: a-. ÁREA COMUNICACIÓN
+        fila previa: 4 .2 -. DESCRIPCIÓN DE LA S CONDICIONES PARA EL APRENDIZAJE
+        antes: [ ] Aplicación de instrumento (cuáles):
+        despues: 
+[ 93] texto   dm_area_communication_progress
+        antes: 
+        despues: 
+[ 94] texto   dm_area_communication_emphasis
+        fila previa: Describa los progresos del o la estudiante en esta área (ej.: nivel expresivo, receptivo, desempeño comunicativo, comunicación escrita, entre otros):
+        fila previa: ☐ Aplic ación de instrumento (cuáles):
+        antes: Describa aquellos aspectos de esta área a los cuales darle énfasis durante el próximo periodo académico:
+        despues: 
+[ 95] casilla dm_area_cognitive_family_interview
+        fila previa: b . ÁREA COGNITIVA
+        antes: Señale fuentes de información e instrumentos de evaluación utilizados:
+        despues: ☐ Entrevista a la familia [ ] Observación en el contexto escolar (Indicar: [ ] )
+[ 96] casilla dm_area_cognitive_school_observation
+        fila previa: b . ÁREA COGNITIVA
+        antes: Señale fuentes de información e instrumentos de evaluación utilizados:[ ] Entrevista a la familia
+        despues: ☐ Observación en el contexto escolar (Indicar: [ ] )
+[ 97] texto   dm_area_cognitive_school_observation_detail
+        fila previa: b . ÁREA COGNITIVA
+        antes: Señale fuentes de información e instrumentos de evaluación utilizados:[ ] Entrevista a la familia [ ] Observación en el contexto escolar (Indicar:
+        despues: )
+[ 98] casilla dm_area_cognitive_instrument
+        fila previa: Señale fuentes de información e instrumentos de evaluación utilizados: ☐ Entrevista a la familia ☐ Observación en el contexto escolar (Indicar: )
+        fila previa: b . ÁREA COGNITIVA
+        antes: 
+        despues: ☐ Aplicación de instrumento (cuáles): [ ]
+[ 99] texto   dm_area_cognitive_instrument_detail
+        fila previa: Señale fuentes de información e instrumentos de evaluación utilizados: ☐ Entrevista a la familia ☐ Observación en el contexto escolar (Indicar: )
+        fila previa: b . ÁREA COGNITIVA
+        antes: [ ] Aplicación de instrumento (cuáles):
+        despues: 
+[100] texto   dm_area_cognitive_progress
+        fila previa: Describa los progresos del o la estudiante en esta área (ej.: estilo de aprendizaje, habilidades cognitivas, exploración del medio, entre otros):
+        fila previa: ☐ Aplic ación de instrumento (cuáles):
+        fila previa: Señale fuentes de información e instrumentos de evaluación utilizados: ☐ Entrevista a la familia ☐ Observación en el contexto escolar (Indicar: )
+        antes: 
+        despues: 
+[101] texto   dm_area_cognitive_emphasis
+        fila previa: Describa los progresos del o la estudiante en esta área (ej.: estilo de aprendizaje, habilidades cognitivas, exploración del medio, entre otros):
+        fila previa: ☐ Aplic ación de instrumento (cuáles):
+        antes: Describa aquellos aspectos de esta área a los cuales darle énfasis durante el próximo periodo académico:
+        despues: 
+[102] texto   identification_number
+        antes: RUN estudiante:
+        despues: 
+[103] casilla dm_area_motor_family_interview
+        fila previa: c. ÁREA MOTORA RUN estudiante:
+        antes: Señale fuentes de información e instrumentos de evaluación utilizados:
+        despues: ☐ Entrevista a la familia [ ] Observación en el contexto escolar (Indicar: [ ] )
+[104] casilla dm_area_motor_school_observation
+        fila previa: c. ÁREA MOTORA RUN estudiante:
+        antes: Señale fuentes de información e instrumentos de evaluación utilizados:[ ] Entrevista a la familia
+        despues: ☐ Observación en el contexto escolar (Indicar: [ ] )
+[105] texto   dm_area_motor_school_observation_detail
+        fila previa: c. ÁREA MOTORA RUN estudiante:
+        antes: Señale fuentes de información e instrumentos de evaluación utilizados:[ ] Entrevista a la familia [ ] Observación en el contexto escolar (Indicar:
+        despues: )
+[106] casilla dm_area_motor_instrument
+        fila previa: Señale fuentes de información e instrumentos de evaluación utilizados: ☐ Entrevista a la familia ☐ Observación en el contexto escolar (Indicar: )
+        fila previa: c. ÁREA MOTORA RUN estudiante:
+        antes: 
+        despues: ☐ Aplicación de instrumento (cuáles): [ ]
+[107] texto   dm_area_motor_instrument_detail
+        fila previa: Señale fuentes de información e instrumentos de evaluación utilizados: ☐ Entrevista a la familia ☐ Observación en el contexto escolar (Indicar: )
+        fila previa: c. ÁREA MOTORA RUN estudiante:
+        antes: [ ] Aplicación de instrumento (cuáles):
+        despues: 
+[108] texto   dm_area_motor_progress
+        fila previa: Describa los progresos del o la estudiante en esta área:
+        fila previa: ☐ Aplic ación de instrumento (cuáles):
+        fila previa: Señale fuentes de información e instrumentos de evaluación utilizados: ☐ Entrevista a la familia ☐ Observación en el contexto escolar (Indicar: )
+        antes: 
+        despues: 
+[109] texto   dm_area_motor_emphasis
+        fila previa: Describa los progresos del o la estudiante en esta área:
+        fila previa: ☐ Aplic ación de instrumento (cuáles):
+        antes: Describa aquellos aspectos de esta área a los cuales darle énfasis durante el próximo periodo académico:
+        despues: 
+[110] casilla dm_area_functional_academic_family_interview
+        fila previa: d. ÁREA ACADÉMICA FUNCIONAL
+        antes: Señale fuentes de información e instrumentos de evaluación utilizados:
+        despues: ☐ Entrevista a la familia [ ] Observación en el contexto escolar (Indicar: [ ] )
+[111] casilla dm_area_functional_academic_school_observation
+        fila previa: d. ÁREA ACADÉMICA FUNCIONAL
+        antes: Señale fuentes de información e instrumentos de evaluación utilizados:[ ] Entrevista a la familia
+        despues: ☐ Observación en el contexto escolar (Indicar: [ ] )
+[112] texto   dm_area_functional_academic_school_observation_detail
+        fila previa: d. ÁREA ACADÉMICA FUNCIONAL
+        antes: Señale fuentes de información e instrumentos de evaluación utilizados:[ ] Entrevista a la familia [ ] Observación en el contexto escolar (Indicar:
+        despues: )
+[113] casilla dm_area_functional_academic_instrument
+        fila previa: Señale fuentes de información e instrumentos de evaluación utilizados: ☐ Entrevista a la familia ☐ Observación en el contexto escolar (Indicar: )
+        fila previa: d. ÁREA ACADÉMICA FUNCIONAL
+        antes: 
+        despues: ☐ Aplicación de instrumento (cuáles): [ ]
+[114] texto   dm_area_functional_academic_instrument_detail
+        fila previa: Señale fuentes de información e instrumentos de evaluación utilizados: ☐ Entrevista a la familia ☐ Observación en el contexto escolar (Indicar: )
+        fila previa: d. ÁREA ACADÉMICA FUNCIONAL
+        antes: [ ] Aplicación de instrumento (cuáles):
+        despues: 
+[115] texto   dm_area_functional_academic_achieved
+        fila previa: Describa brevemente los progresos en el d esempeño el o la estudiante en las asignaturas o ámbitos de aprendizaje
+        fila previa: ☐ Aplic ación de instrumento (cuáles):
+        fila previa: Señale fuentes de información e instrumentos de evaluación utilizados: ☐ Entrevista a la familia ☐ Observación en el contexto escolar (Indicar: )
+        antes: Refiérase a los principales aprendizajes (curriculares y/o de desarrollo) logrados por el/la estudiante (lenguaje y comunicación, matemáticas, ciencias):
+        despues: 
+[116] texto   dm_area_functional_academic_unachieved
+        antes: 
+        despues: 
+[117] texto   dm_area_functional_academic_context_participation
+        fila previa: Describa brevemente los progresos del o la estudiante respecto de sus h abilidades para aprender y participar en la sala de clases
+        fila previa: Señale aprendizajes (curriculares y/o de desarrollo) no logrados y principales asignaturas en la s que el estudiante mantiene dificultades .
+        antes: Señale logros relevantes o destacados que presenta para participar en el contexto escolar y familiar.
+        despues: 
+[118] casilla dm_area_personal_social_family_interview
+        fila previa: e . ÁREA DE DESEMPEÑO PERSONAL Y SOCIAL
+        antes: Señale fuentes de información e instrumentos de evaluación utilizados:
+        despues: ☐ Entrevista a la familia [ ] Observación en el contexto escolar (Indicar: [ ] )
+[119] casilla dm_area_personal_social_school_observation
+        fila previa: e . ÁREA DE DESEMPEÑO PERSONAL Y SOCIAL
+        antes: Señale fuentes de información e instrumentos de evaluación utilizados:[ ] Entrevista a la familia
+        despues: ☐ Observación en el contexto escolar (Indicar: [ ] )
+[120] texto   dm_area_personal_social_school_observation_detail
+        fila previa: e . ÁREA DE DESEMPEÑO PERSONAL Y SOCIAL
+        antes: Señale fuentes de información e instrumentos de evaluación utilizados:[ ] Entrevista a la familia [ ] Observación en el contexto escolar (Indicar:
+        despues: )
+[121] casilla dm_area_personal_social_instrument
+        fila previa: Señale fuentes de información e instrumentos de evaluación utilizados: ☐ Entrevista a la familia ☐ Observación en el contexto escolar (Indicar: )
+        fila previa: e . ÁREA DE DESEMPEÑO PERSONAL Y SOCIAL
+        antes: 
+        despues: ☐ Aplicación de instrumento (cuáles): [ ]
+[122] texto   dm_area_personal_social_instrument_detail
+        fila previa: Señale fuentes de información e instrumentos de evaluación utilizados: ☐ Entrevista a la familia ☐ Observación en el contexto escolar (Indicar: )
+        fila previa: e . ÁREA DE DESEMPEÑO PERSONAL Y SOCIAL
+        antes: [ ] Aplicación de instrumento (cuáles):
+        despues: 
+[123] texto   dm_area_personal_social_progress
+        antes: 
+        despues: 
+[124] texto   dm_area_personal_social_emphasis
+        fila previa: Describa los progresos del o la estudiante en esta área:
+        fila previa: ☐ Aplic ación de instrumento (cuáles):
+        antes: Describa aquellos aspectos de esta área a los cuales darle énfasis durante el próximo periodo académico:
+        despues: 
+[125] casilla dm_area_family_context_family_interview
+        fila previa: f . CONTEXTO FAMILIAR Y SOCIAL DEL ESTUDIANTE
+        antes: Señale fuentes de información e instrumentos de evaluación utilizados:
+        despues: ☐ Entrevista a la familia [ ] Observación en el contexto escolar (Indicar: [ ] )
+[126] casilla dm_area_family_context_school_observation
+        fila previa: f . CONTEXTO FAMILIAR Y SOCIAL DEL ESTUDIANTE
+        antes: Señale fuentes de información e instrumentos de evaluación utilizados:[ ] Entrevista a la familia
+        despues: ☐ Observación en el contexto escolar (Indicar: [ ] )
+[127] texto   dm_area_family_context_school_observation_detail
+        fila previa: f . CONTEXTO FAMILIAR Y SOCIAL DEL ESTUDIANTE
+        antes: Señale fuentes de información e instrumentos de evaluación utilizados:[ ] Entrevista a la familia [ ] Observación en el contexto escolar (Indicar:
+        despues: )
+[128] casilla dm_area_family_context_instrument
+        fila previa: Señale fuentes de información e instrumentos de evaluación utilizados: ☐ Entrevista a la familia ☐ Observación en el contexto escolar (Indicar: )
+        fila previa: f . CONTEXTO FAMILIAR Y SOCIAL DEL ESTUDIANTE
+        antes: 
+        despues: ☐ Aplicación de instrumento (cuáles): [ ]
+[129] texto   dm_area_family_context_instrument_detail
+        fila previa: Señale fuentes de información e instrumentos de evaluación utilizados: ☐ Entrevista a la familia ☐ Observación en el contexto escolar (Indicar: )
+        fila previa: f . CONTEXTO FAMILIAR Y SOCIAL DEL ESTUDIANTE
+        antes: [ ] Aplicación de instrumento (cuáles):
+        despues: 
+[130] texto   dm_area_family_context_progress
+        fila previa: ☐ Aplic ación de instrumento (cuáles):
+        fila previa: Señale fuentes de información e instrumentos de evaluación utilizados: ☐ Entrevista a la familia ☐ Observación en el contexto escolar (Indicar: )
+        fila previa: f . CONTEXTO FAMILIAR Y SOCIAL DEL ESTUDIANTE
+        antes: Describa aquellos aspectos destacados respecto a la participación de la familia en los progresos del o la estudiante:
+        despues: 
+[131] texto   dm_area_family_context_emphasis
+        fila previa: Describa aquellos aspectos destacados respecto a la participación de la familia en los progresos del o la estudiante:
+        fila previa: ☐ Aplic ación de instrumento (cuáles):
+        fila previa: Señale fuentes de información e instrumentos de evaluación utilizados: ☐ Entrevista a la familia ☐ Observación en el contexto escolar (Indicar: )
+        antes: Describa aquellos aspectos de esta área a los cuales darle énfasis durante el próximo periodo académico:
+        despues: 
+[132] texto   identification_number
+        antes: RUN estudiante:
+        despues: 
+[133] texto   support_personal_effectiveness
+        antes: 
+        despues: 
+[134] casilla support_personal_continuity__si
+        antes: 
+        despues: 
+[135] casilla support_personal_continuity__no
+        antes: 
+        despues: 
+[136] texto   support_personal_observations
+        antes: 
+        despues: 
+[137] texto   support_curricular_effectiveness
+        antes: 
+        despues: 
+[138] casilla support_curricular_continuity__si
+        antes: 
+        despues: 
+[139] casilla support_curricular_continuity__no
+        antes: 
+        despues: 
+[140] texto   support_curricular_observations
+        antes: 
+        despues: 
+[141] texto   support_materials_effectiveness
+        antes: 
+        despues: 
+[142] casilla support_materials_continuity__si
+        antes: 
+        despues: 
+[143] casilla support_materials_continuity__no
+        antes: 
+        despues: 
+[144] texto   support_materials_observations
+        antes: 
+        despues: 
+[145] texto   support_organizational_effectiveness
+        antes: 
+        despues: 
+[146] casilla support_organizational_continuity__si
+        antes: 
+        despues: 
+[147] casilla support_organizational_continuity__no
+        antes: 
+        despues: 
+[148] texto   support_organizational_observations
+        antes: 
+        despues: 
+[149] texto   support_family_effectiveness
+        antes: 
+        despues: 
+[150] casilla support_family_continuity__si
+        antes: 
+        despues: 
+[151] casilla support_family_continuity__no
+        antes: 
+        despues: 
+[152] texto   support_family_observations
+        antes: 
+        despues: 
+[153] texto   support_other_effectiveness
+        antes: 
+        despues: 
+[154] casilla support_other_continuity__si
+        antes: 
+        despues: 
+[155] casilla support_other_continuity__no
+        antes: 
+        despues: 
+[156] texto   support_other_observations
+        antes: 
+        despues: 
+[157] texto   support_work_strategies
+        antes: 
+        despues: 
+[158] texto   support_family_strategies_effectiveness
+        antes: 
+        despues: 
+[159] texto   support_new_needs_required
+        antes: 
+        despues: 
+[160] texto   support_next_period_comments
+        antes: 
+        despues: 

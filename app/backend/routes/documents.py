@@ -35,6 +35,8 @@ from app.backend.classes.fonoaudiological_report_class import FonoaudiologicalRe
 from app.backend.classes.school_integration_program_exit_certificate_class import SchoolIntegrationProgramExitCertificateClass
 from app.backend.classes.anamnesis_class import AnamnesisClass
 from app.backend.classes.family_report_class import FamilyReportClass
+from app.backend.classes.fur_form_class import FurFormClass
+from app.backend.utils.fur_docx_export import generate_fur_docx
 from app.backend.classes.interconsultation_class import InterconsultationClass
 from app.backend.classes.guardian_attendance_certificate_class import GuardianAttendanceCertificateClass
 from app.backend.classes.psychopedagogical_evaluation_class import PsychopedagogicalEvaluationClass
@@ -3541,11 +3543,16 @@ async def generate_document(
         None,
         description="ID de plantilla de prueba informal (obligatorio cuando document_id=43).",
     ),
+    fur_variant: Optional[str] = Query(
+        None,
+        description="Tipo de FUR a exportar (document_id=6). Sin valor se usa el último guardado.",
+    ),
     db: Session = Depends(get_db),
 ):
     """
     Genera un documento para un estudiante específico.
     Cuando document_id = 4, genera el documento de evaluación de salud desde health_evaluations.
+    Cuando document_id = 6, genera el FUR en Word sobre la plantilla oficial de la variante.
     """
     try:
         # Definir primero: si falla algo antes (p. ej. get estudiante), el except no debe usar variables no definidas
@@ -3650,7 +3657,7 @@ async def generate_document(
         document = DocumentsClass(db)
         document_result = document.get(document_id)
         # Documentos 3,4,7,8,18,19,22,23,24,25,27 se pueden generar aunque no existan en la tabla documents
-        known_generable = (3, 4, 7, 8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 27, 29, 31, 43)
+        known_generable = (3, 4, 6, 7, 8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 27, 29, 31, 43)
         if isinstance(document_result, dict) and document_result.get("status") == "error":
             if document_id in known_generable or _catalog_row_is_informe_evaluacion_psicomotriz(document_id, db):
                 document_result = {"document_type_id": document_id}
@@ -3695,6 +3702,39 @@ async def generate_document(
             return FileResponse(
                 path=result["file_path"],
                 filename=result["filename"],
+                media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+
+        # Si document_id = 6, generar el FUR en Word sobre la plantilla oficial
+        if document_id == 6:
+            fur_record = FurFormClass(db).get_by_student_id(student_id, fur_variant)
+            if isinstance(fur_record, dict) and fur_record.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    content={
+                        "status": 404,
+                        "message": fur_record.get("message", MSG_NO_DOC),
+                        "data": None,
+                    },
+                )
+            fur_result = generate_fur_docx(
+                db,
+                student_id,
+                fur_record,
+                output_directory="files/system/students",
+            )
+            if fur_result.get("status") == "error":
+                return JSONResponse(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    content={
+                        "status": 500,
+                        "message": fur_result.get("message", MSG_ERROR_GEN),
+                        "data": None,
+                    },
+                )
+            return FileResponse(
+                path=fur_result["file_path"],
+                filename=fur_result["filename"],
                 media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             )
 

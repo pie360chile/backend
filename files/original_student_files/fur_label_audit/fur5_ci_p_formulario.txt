@@ -1,0 +1,564 @@
+fur5_ci_p_formulario.docx — 139 controles
+
+[  1] texto   full_name
+        antes: 
+        despues: 
+[  2] texto   born_date
+        fila previa: A) DEL ESTUDIANTE
+        fila previa: 1. DATOS DE INDENTIFICACIÓN (Escriba con letra legible o marque con una equis (X) según corresponda)
+        fila previa: I SÍNTESIS GENERAL DE REVALUACIÓN
+        antes: 
+        despues: 
+[  3] texto   age
+        fila previa: A) DEL ESTUDIANTE
+        fila previa: 1. DATOS DE INDENTIFICACIÓN (Escriba con letra legible o marque con una equis (X) según corresponda)
+        fila previa: I SÍNTESIS GENERAL DE REVALUACIÓN
+        antes: 
+        despues: 
+[  4] texto   identification_number
+        antes: 
+        despues: 
+[  5] casilla educational_option__escuela_especial
+        fila previa: Nombres y Apellidos Fecha nacimiento ( dd/mm/aaaa ) Edad ( en años y meses ) RUN
+        fila previa: A) DEL ESTUDIANTE
+        antes: 
+        despues: ☐ Escuela Especial [ ]PIE
+[  6] casilla educational_option__pie
+        fila previa: Nombres y Apellidos Fecha nacimiento ( dd/mm/aaaa ) Edad ( en años y meses ) RUN
+        fila previa: A) DEL ESTUDIANTE
+        antes: [ ] Escuela Especial
+        despues: ☐PIE
+[  7] texto   current_course
+        fila previa: Nombres y Apellidos Fecha nacimiento ( dd/mm/aaaa ) Edad ( en años y meses ) RUN
+        fila previa: A) DEL ESTUDIANTE
+        antes: 
+        despues: 
+[  8] texto   educational_option_other_detail
+        fila previa: Opción Educativa ☐ Escuela Especial ☐ PIE Vía comunicación :
+        fila previa: Nombres y Apellidos Fecha nacimiento ( dd/mm/aaaa ) Edad ( en años y meses ) RUN
+        antes: Otra:
+        despues: 
+[  9] casilla communication_way__oral
+        fila previa: Opción Educativa ☐ Escuela Especial ☐ PIE Vía comunicación :
+        fila previa: Nombres y Apellidos Fecha nacimiento ( dd/mm/aaaa ) Edad ( en años y meses ) RUN
+        antes: 
+        despues: ☐ Oral [ ] lengua señas [ ] otra [ ]
+[ 10] casilla communication_way__lengua_senas
+        fila previa: Opción Educativa ☐ Escuela Especial ☐ PIE Vía comunicación :
+        fila previa: Nombres y Apellidos Fecha nacimiento ( dd/mm/aaaa ) Edad ( en años y meses ) RUN
+        antes: [ ] Oral
+        despues: ☐ lengua señas [ ] otra [ ]
+[ 11] casilla communication_way__otra
+        fila previa: Opción Educativa ☐ Escuela Especial ☐ PIE Vía comunicación :
+        fila previa: Nombres y Apellidos Fecha nacimiento ( dd/mm/aaaa ) Edad ( en años y meses ) RUN
+        antes: [ ] Oral [ ] lengua señas
+        despues: ☐ otra [ ]
+[ 12] texto   communication_way_other_detail
+        fila previa: Opción Educativa ☐ Escuela Especial ☐ PIE Vía comunicación :
+        fila previa: Nombres y Apellidos Fecha nacimiento ( dd/mm/aaaa ) Edad ( en años y meses ) RUN
+        antes: [ ] Oral [ ] lengua señas [ ] otra
+        despues: 
+[ 13] texto   establishment_name
+        antes: 
+        despues: 
+[ 14] texto   rbd
+        antes: 
+        despues: 
+[ 15] texto   director_signature
+        antes: 
+        despues: 
+[ 16] texto   professional_id
+        fila previa: Profesional responsable del proceso de REVALUACIÓN integral del estudiante .
+        fila previa: B) DE LOS PROFESIONALES
+        antes: 
+        despues: 
+[ 17] texto   professional_identification_number
+        fila previa: Profesional responsable del proceso de REVALUACIÓN integral del estudiante .
+        fila previa: B) DE LOS PROFESIONALES
+        antes: 
+        despues: 
+[ 18] texto   profession_specialty_id
+        fila previa: Nombres y Apellido s RU N
+        fila previa: Profesional responsable del proceso de REVALUACIÓN integral del estudiante .
+        antes: 
+        despues: 
+[ 19] texto   contact_phone
+        fila previa: Nombres y Apellido s RU N
+        fila previa: Profesional responsable del proceso de REVALUACIÓN integral del estudiante .
+        antes: 
+        despues: 
+[ 20] texto   contact_email
+        fila previa: Nombres y Apellido s RU N
+        fila previa: Profesional responsable del proceso de REVALUACIÓN integral del estudiante .
+        antes: 
+        despues: 
+[ 21] texto   professional_signature
+        antes: 
+        despues: 
+[ 22] texto   registration_date
+        antes: 
+        despues: 
+[ 23] texto   participating_professionals[0].professional_id
+        fila previa: Profesionales (Nombre completo) Profesión/ Especialidad/ Cargo Fono/E-mail Registro profesional
+        fila previa: P rofesional es que han participado en el proceso de entrega de apoyos al estudiante durante el período que se evalúa (profesores, especialistas, fami
+        antes: 
+        despues: 
+[ 24] texto   participating_professionals[0].profession_id
+        antes: 
+        despues: 
+[ 25] texto   participating_professionals[0].phone_email
+        antes: 
+        despues: 
+[ 26] texto   participating_professionals[0].professional_registration
+        antes: 
+        despues: 
+[ 27] texto   participating_professionals[1].professional_id
+        antes: 
+        despues: 
+[ 28] texto   participating_professionals[1].profession_id
+        antes: 
+        despues: 
+[ 29] texto   participating_professionals[1].phone_email
+        antes: 
+        despues: 
+[ 30] texto   participating_professionals[1].professional_registration
+        antes: 
+        despues: 
+[ 31] texto   participating_professionals[2].professional_id
+        antes: 
+        despues: 
+[ 32] texto   participating_professionals[2].profession_id
+        antes: 
+        despues: 
+[ 33] texto   participating_professionals[2].phone_email
+        antes: 
+        despues: 
+[ 34] texto   participating_professionals[2].professional_registration
+        antes: 
+        despues: 
+[ 35] texto   participating_professionals[3].professional_id
+        antes: 
+        despues: 
+[ 36] texto   participating_professionals[3].profession_id
+        antes: 
+        despues: 
+[ 37] texto   participating_professionals[3].phone_email
+        antes: 
+        despues: 
+[ 38] texto   participating_professionals[3].professional_registration
+        antes: 
+        despues: 
+[ 39] texto   participating_professionals[4].professional_id
+        antes: 
+        despues: 
+[ 40] texto   participating_professionals[4].profession_id
+        antes: 
+        despues: 
+[ 41] texto   participating_professionals[4].phone_email
+        antes: 
+        despues: 
+[ 42] texto   participating_professionals[4].professional_registration
+        antes: 
+        despues: 
+[ 43] casilla nee_is_intellectual_disability
+        fila previa: DIAGNÓSTICO: Indique el diagnóstico del déficit asociado a NEE , actualmente vigente para el/la estudiante y en base al cual el establecimiento educac
+        fila previa: 2. SÍNTESIS DE LA REVALUACIÓN DE NEE
+        antes: 
+        despues: ☐ Discapacidad Intelectual
+[ 44] casilla nee_disability_grade__leve
+        fila previa: DIAGNÓSTICO: Indique el diagnóstico del déficit asociado a NEE , actualmente vigente para el/la estudiante y en base al cual el establecimiento educac
+        fila previa: 2. SÍNTESIS DE LA REVALUACIÓN DE NEE
+        antes: En Grado:
+        despues: ☐ Leve [ ] Moderado [ ] Grave [ ] Profundo
+[ 45] casilla nee_disability_grade__moderado
+        fila previa: DIAGNÓSTICO: Indique el diagnóstico del déficit asociado a NEE , actualmente vigente para el/la estudiante y en base al cual el establecimiento educac
+        fila previa: 2. SÍNTESIS DE LA REVALUACIÓN DE NEE
+        antes: En Grado: [ ] Leve
+        despues: ☐ Moderado [ ] Grave [ ] Profundo
+[ 46] casilla nee_disability_grade__grave
+        fila previa: DIAGNÓSTICO: Indique el diagnóstico del déficit asociado a NEE , actualmente vigente para el/la estudiante y en base al cual el establecimiento educac
+        fila previa: 2. SÍNTESIS DE LA REVALUACIÓN DE NEE
+        antes: En Grado: [ ] Leve [ ] Moderado
+        despues: ☐ Grave [ ] Profundo
+[ 47] casilla nee_disability_grade__profundo
+        fila previa: DIAGNÓSTICO: Indique el diagnóstico del déficit asociado a NEE , actualmente vigente para el/la estudiante y en base al cual el establecimiento educac
+        fila previa: 2. SÍNTESIS DE LA REVALUACIÓN DE NEE
+        antes: En Grado: [ ] Leve [ ] Moderado [ ] Grave
+        despues: ☐ Profundo
+[ 48] texto   current_diagnosis_issue_date
+        antes: 
+        despues: 
+[ 49] texto   current_revaluation_date
+        antes: 
+        despues: 
+[ 50] texto   new_evaluations_revaluations
+        fila previa: Fecha revaluación actual
+        fila previa: ☐ Discapacidad Intelectual En Grado: ☐ Leve ☐ Moderado ☐ Grave ☐ Profundo Fecha emisión diagnóstico ingreso
+        fila previa: DIAGNÓSTICO: Indique el diagnóstico del déficit asociado a NEE , actualmente vigente para el/la estudiante y en base al cual el establecimiento educac
+        antes: Registre nuevas evaluaciones o revaluaciones realizadas: psicológica, médica, psicopedagógica, etc. ( adjunte evidencias correspondientes)
+        despues: 
+[ 51] casilla diagnosis_changed_from_admission__si
+        fila previa: Fecha revaluación actual
+        fila previa: ☐ Discapacidad Intelectual En Grado: ☐ Leve ☐ Moderado ☐ Grave ☐ Profundo Fecha emisión diagnóstico ingreso
+        fila previa: DIAGNÓSTICO: Indique el diagnóstico del déficit asociado a NEE , actualmente vigente para el/la estudiante y en base al cual el establecimiento educac
+        antes: 
+        despues: ☐SI
+[ 52] casilla diagnosis_changed_from_admission__no
+        fila previa: Fecha revaluación actual
+        fila previa: ☐ Discapacidad Intelectual En Grado: ☐ Leve ☐ Moderado ☐ Grave ☐ Profundo Fecha emisión diagnóstico ingreso
+        fila previa: DIAGNÓSTICO: Indique el diagnóstico del déficit asociado a NEE , actualmente vigente para el/la estudiante y en base al cual el establecimiento educac
+        antes: 
+        despues: ☐NO
+[ 53] texto   diagnosis_modifications_detail
+        fila previa: Registre nuevas evaluaciones o revaluaciones realizadas : psicológica, médica, psicopedagógica, etc . ( adjunte evidencias correspondientes) ¿Existen 
+        fila previa: Fecha revaluación actual
+        fila previa: ☐ Discapacidad Intelectual En Grado: ☐ Leve ☐ Moderado ☐ Grave ☐ Profundo Fecha emisión diagnóstico ingreso
+        antes: Indique modificaciones o nuevo diagnóstico:
+        despues: 
+[ 54] texto   new_diagnosis_professional_data
+        fila previa: Registre nuevas evaluaciones o revaluaciones realizadas : psicológica, médica, psicopedagógica, etc . ( adjunte evidencias correspondientes) ¿Existen 
+        fila previa: Fecha revaluación actual
+        fila previa: ☐ Discapacidad Intelectual En Grado: ☐ Leve ☐ Moderado ☐ Grave ☐ Profundo Fecha emisión diagnóstico ingreso
+        antes: Profesional(es) que emite el nuevo diagnostico o sus modificaciones (especificar especialidad)
+        despues: 
+[ 55] texto   diagnosis_change_emphasis
+        fila previa: Indiq ue modificaciones o nuevo diagnó stico: Profesional (es) que emite el nuevo diagnostico o sus modificaciones (especificar especialidad)
+        fila previa: Registre nuevas evaluaciones o revaluaciones realizadas : psicológica, médica, psicopedagógica, etc . ( adjunte evidencias correspondientes) ¿Existen 
+        fila previa: Fecha revaluación actual
+        antes: Señale algún aspecto importante de enfatizar respecto del cambio en el diagnóstico en relación a los progresos, avances y apoyos entregados.
+        despues: 
+[ 56] texto   student_educational_progress_sen
+        fila previa: AVANCES EDUCATIVOS
+        fila previa: Señale algún aspecto importante de enfatizar respecto de l cambio en el diagnóstico en relación a los progresos, avances y apoyos entregados.
+        fila previa: Indiq ue modificaciones o nuevo diagnó stico: Profesional (es) que emite el nuevo diagnostico o sus modificaciones (especificar especialidad)
+        antes: Describa los principales progresos del estudiante en su proceso educativo y en la evolución de sus NEE.
+        despues: 
+[ 57] texto   main_difficulty_areas_summary
+        fila previa: Describa l o s principales progresos del estudiante en su proceso educativo y en la evolución de sus NEE.
+        fila previa: AVANCES EDUCATIVOS
+        fila previa: Señale algún aspecto importante de enfatizar respecto de l cambio en el diagnóstico en relación a los progresos, avances y apoyos entregados.
+        antes: Resuma las principales áreas en las que el/la estudiante requiere continuar con apoyos especializados para progresar en su aprendizaje y participación.
+        despues: 
+[ 58] texto   evidence_documents_count
+        antes: N° documentos
+        despues: 
+[ 59] casilla evidence_anamnesis
+        fila previa: 3. DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE REVALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO: N° documentos
+        antes: Informes/ Certificados/ Evaluaciones:
+        despues: ☐ Anamnesis [ ] Entrevista a la familia [ ] Pauta de Observación [ ] Protocolos de evaluac
+[ 60] casilla evidence_family_interview
+        fila previa: 3. DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE REVALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO: N° documentos
+        antes: Informes/ Certificados/ Evaluaciones: [ ] Anamnesis
+        despues: ☐ Entrevista a la familia [ ] Pauta de Observación [ ] Protocolos de evaluación [ ] Evalua
+[ 61] casilla evidence_observation_guideline
+        fila previa: 3. DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE REVALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO: N° documentos
+        antes: Informes/ Certificados/ Evaluaciones: [ ] Anamnesis [ ] Entrevista a la familia
+        despues: ☐ Pauta de Observación [ ] Protocolos de evaluación [ ] Evaluación de aprendizaje [ ] Esco
+[ 62] casilla evidence_evaluation_protocols
+        fila previa: 3. DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE REVALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO: N° documentos
+        antes: Informes/ Certificados/ Evaluaciones: [ ] Anamnesis [ ] Entrevista a la familia [ ] Pauta de Observación
+        despues: ☐ Protocolos de evaluación [ ] Evaluación de aprendizaje [ ] Escolar [ ] Social [ ] Psicol
+[ 63] casilla evidence_learning_evaluation
+        fila previa: 3. DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE REVALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO: N° documentos
+        antes: Informes/ Certificados/ Evaluaciones: [ ] Anamnesis [ ] Entrevista a la familia [ ] Pauta de Observación [ ] Protocolos de evaluación
+        despues: ☐ Evaluación de aprendizaje [ ] Escolar [ ] Social [ ] Psicológica [ ] Fonoaudiológica [ ]
+[ 64] casilla evidence_report_school
+        fila previa: 3. DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE REVALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO: N° documentos
+        antes: Informes/ Certificados/ Evaluaciones: [ ] Anamnesis [ ] Entrevista a la familia [ ] Pauta de Observación [ ] Protocolos de evaluación [ ] Evaluación de aprendizaje
+        despues: ☐ Escolar [ ] Social [ ] Psicológica [ ] Fonoaudiológica [ ] Pedagógica [ ] Psicopedagógic
+[ 65] casilla evidence_report_social
+        fila previa: 3. DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE REVALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO: N° documentos
+        antes: mes/ Certificados/ Evaluaciones: [ ] Anamnesis [ ] Entrevista a la familia [ ] Pauta de Observación [ ] Protocolos de evaluación [ ] Evaluación de aprendizaje [ ] Escolar
+        despues: ☐ Social [ ] Psicológica [ ] Fonoaudiológica [ ] Pedagógica [ ] Psicopedagógica [ ] Examen
+[ 66] casilla evidence_report_psychological
+        fila previa: 3. DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE REVALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO: N° documentos
+        antes: icados/ Evaluaciones: [ ] Anamnesis [ ] Entrevista a la familia [ ] Pauta de Observación [ ] Protocolos de evaluación [ ] Evaluación de aprendizaje [ ] Escolar [ ] Social
+        despues: ☐ Psicológica [ ] Fonoaudiológica [ ] Pedagógica [ ] Psicopedagógica [ ] Examen general de
+[ 67] casilla evidence_report_fonoaudiological
+        fila previa: 3. DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE REVALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO: N° documentos
+        antes: ones: [ ] Anamnesis [ ] Entrevista a la familia [ ] Pauta de Observación [ ] Protocolos de evaluación [ ] Evaluación de aprendizaje [ ] Escolar [ ] Social [ ] Psicológica
+        despues: ☐ Fonoaudiológica [ ] Pedagógica [ ] Psicopedagógica [ ] Examen general de salud [ ] Exame
+[ 68] casilla evidence_report_pedagogical
+        fila previa: 3. DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE REVALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO: N° documentos
+        antes: [ ] Entrevista a la familia [ ] Pauta de Observación [ ] Protocolos de evaluación [ ] Evaluación de aprendizaje [ ] Escolar [ ] Social [ ] Psicológica [ ] Fonoaudiológica
+        despues: ☐ Pedagógica [ ] Psicopedagógica [ ] Examen general de salud [ ] Examen especializado de s
+[ 69] casilla evidence_report_psychopedagogical
+        fila previa: 3. DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE REVALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO: N° documentos
+        antes: a la familia [ ] Pauta de Observación [ ] Protocolos de evaluación [ ] Evaluación de aprendizaje [ ] Escolar [ ] Social [ ] Psicológica [ ] Fonoaudiológica [ ] Pedagógica
+        despues: ☐ Psicopedagógica [ ] Examen general de salud [ ] Examen especializado de salud (señale cu
+[ 70] casilla evidence_general_health_exam
+        fila previa: 3. DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE REVALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO: N° documentos
+        antes: ta de Observación [ ] Protocolos de evaluación [ ] Evaluación de aprendizaje [ ] Escolar [ ] Social [ ] Psicológica [ ] Fonoaudiológica [ ] Pedagógica [ ] Psicopedagógica
+        despues: ☐ Examen general de salud [ ] Examen especializado de salud (señale cuál) [ ] [ ] Otro(s) 
+[ 71] casilla evidence_specialized_health_exam
+        fila previa: 3. DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE REVALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO: N° documentos
+        antes: olos de evaluación [ ] Evaluación de aprendizaje [ ] Escolar [ ] Social [ ] Psicológica [ ] Fonoaudiológica [ ] Pedagógica [ ] Psicopedagógica [ ] Examen general de salud
+        despues: ☐ Examen especializado de salud (señale cuál) [ ] [ ] Otro(s) (especificar): [ ]
+[ 72] texto   evidence_specialized_health_detail
+        fila previa: 3. DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE REVALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO: N° documentos
+        antes:  [ ] Escolar [ ] Social [ ] Psicológica [ ] Fonoaudiológica [ ] Pedagógica [ ] Psicopedagógica [ ] Examen general de salud [ ] Examen especializado de salud (señale cuál)
+        despues: [ ] Otro(s) (especificar): [ ]
+[ 73] casilla evidence_other
+        fila previa: 3. DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE REVALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO: N° documentos
+        antes:  Escolar [ ] Social [ ] Psicológica [ ] Fonoaudiológica [ ] Pedagógica [ ] Psicopedagógica [ ] Examen general de salud [ ] Examen especializado de salud (señale cuál) [ ]
+        despues: ☐ Otro(s) (especificar): [ ]
+[ 74] texto   evidence_other_detail
+        fila previa: 3. DOCUMENTOS (EVIDENCIAS) DEL PROCESO DE REVALUACIÓN QUE SE ADJUNTAN A ESTE FORMULARIO: N° documentos
+        antes: cológica [ ] Fonoaudiológica [ ] Pedagógica [ ] Psicopedagógica [ ] Examen general de salud [ ] Examen especializado de salud (señale cuál) [ ] [ ] Otro(s) (especificar):
+        despues: 
+[ 75] texto   identification_number
+        antes: RUN estudiante:
+        despues: 
+[ 76] texto   specialized_curricular_achievements
+        fila previa: Describa brevemente la evolución observada en su desempeño y participación en el currículo
+        fila previa: AVANCES DEL/ LA ESTUDIANTE EN EL CONTEXTO ESCOLAR
+        antes: Describa los principales aprendizajes curriculares y de desarrollo logrados por el/la estudiante en el período evaluado.
+        despues: 
+[ 77] texto   specialized_unachieved_learning
+        fila previa: Describa los principales aprendizajes curriculares y de desarrollo logrados por el/la estudiante en el período evaluado .
+        fila previa: Describa brevemente la evolución observada en su desempeño y participación en el currículo
+        antes: Describa aprendizajes no logrados y principales áreas en las que se requiere mantener apoyos especializados.
+        despues: 
+[ 78] texto   specialized_learning_participation_progress
+        antes: 
+        despues: 
+[ 79] texto   specialized_context_participation
+        antes: 
+        despues: 
+[ 80] texto   specialized_barriers_reduction
+        antes: 
+        despues: 
+[ 81] texto   specialized_family_participation
+        antes: 
+        despues: 
+[ 82] texto   specialized_next_period_emphasis
+        antes: 
+        despues: 
+[ 83] texto   specialized_dea_literacy_math_progress
+        antes: 
+        despues: 
+[ 84] texto   specialized_tab_observations
+        fila previa: Señale aquellos aspectos a los cuales es necesario dar énfasis durante el próximo periodo académico (habilidades conceptuales, sociales, prácticas).
+        antes: OBSERVACIONES:
+        despues: 
+[ 85] texto   identification_number
+        antes: RUN estudiante:
+        despues: 
+[ 86] casilla support_area_communication
+        fila previa: Señale á reas y á mbitos generales en los que el/la estudiante requi rió apoyos especializados:
+        fila previa: III EVALUACIÓN DE LOS APOYOS RUN estudiante:
+        antes: 
+        despues: ☐ Comunicación [ ] Autocuidado [ ] Actividades de la vida doméstica [ ] Habilidades social
+[ 87] casilla support_area_self_care
+        fila previa: Señale á reas y á mbitos generales en los que el/la estudiante requi rió apoyos especializados:
+        fila previa: III EVALUACIÓN DE LOS APOYOS RUN estudiante:
+        antes: [ ] Comunicación
+        despues: ☐ Autocuidado [ ] Actividades de la vida doméstica [ ] Habilidades sociales [ ] Habilidade
+[ 88] casilla support_area_domestic_life
+        fila previa: Señale á reas y á mbitos generales en los que el/la estudiante requi rió apoyos especializados:
+        fila previa: III EVALUACIÓN DE LOS APOYOS RUN estudiante:
+        antes: [ ] Comunicación [ ] Autocuidado
+        despues: ☐ Actividades de la vida doméstica [ ] Habilidades sociales [ ] Habilidades académicas fun
+[ 89] casilla support_area_social_skills
+        fila previa: Señale á reas y á mbitos generales en los que el/la estudiante requi rió apoyos especializados:
+        fila previa: III EVALUACIÓN DE LOS APOYOS RUN estudiante:
+        antes: [ ] Comunicación [ ] Autocuidado [ ] Actividades de la vida doméstica
+        despues: ☐ Habilidades sociales [ ] Habilidades académicas funcionales
+[ 90] casilla support_area_functional_academic
+        fila previa: Señale á reas y á mbitos generales en los que el/la estudiante requi rió apoyos especializados:
+        fila previa: III EVALUACIÓN DE LOS APOYOS RUN estudiante:
+        antes: [ ] Comunicación [ ] Autocuidado [ ] Actividades de la vida doméstica [ ] Habilidades sociales
+        despues: ☐ Habilidades académicas funcionales
+[ 91] casilla support_area_community_use
+        fila previa: Señale á reas y á mbitos generales en los que el/la estudiante requi rió apoyos especializados:
+        fila previa: III EVALUACIÓN DE LOS APOYOS RUN estudiante:
+        antes: 
+        despues: ☐ Uso de la comunidad [ ] Autodirección [ ] Cuidado de su salud y seguridad [ ] Actividade
+[ 92] casilla support_area_self_direction
+        fila previa: Señale á reas y á mbitos generales en los que el/la estudiante requi rió apoyos especializados:
+        fila previa: III EVALUACIÓN DE LOS APOYOS RUN estudiante:
+        antes: [ ] Uso de la comunidad
+        despues: ☐ Autodirección [ ] Cuidado de su salud y seguridad [ ] Actividades de ocio y recreación[ 
+[ 93] casilla support_area_health_safety
+        fila previa: Señale á reas y á mbitos generales en los que el/la estudiante requi rió apoyos especializados:
+        fila previa: III EVALUACIÓN DE LOS APOYOS RUN estudiante:
+        antes: [ ] Uso de la comunidad [ ] Autodirección
+        despues: ☐ Cuidado de su salud y seguridad [ ] Actividades de ocio y recreación[ ] Trabajo
+[ 94] casilla support_area_leisure
+        fila previa: Señale á reas y á mbitos generales en los que el/la estudiante requi rió apoyos especializados:
+        fila previa: III EVALUACIÓN DE LOS APOYOS RUN estudiante:
+        antes: [ ] Uso de la comunidad [ ] Autodirección [ ] Cuidado de su salud y seguridad
+        despues: ☐ Actividades de ocio y recreación[ ] Trabajo
+[ 95] casilla support_area_work
+        fila previa: Señale á reas y á mbitos generales en los que el/la estudiante requi rió apoyos especializados:
+        fila previa: III EVALUACIÓN DE LOS APOYOS RUN estudiante:
+        antes: [ ] Uso de la comunidad [ ] Autodirección [ ] Cuidado de su salud y seguridad [ ] Actividades de ocio y recreación
+        despues: ☐ Trabajo
+[ 96] casilla support_area_curricular_general
+        fila previa: Señale á reas y á mbitos generales en los que el/la estudiante requi rió apoyos especializados:
+        fila previa: III EVALUACIÓN DE LOS APOYOS RUN estudiante:
+        antes: 
+        despues: ☐ Curricular general[ ] Asignaturas específicas [ ] Afectivo social [ ] otro(s) (especifíq
+[ 97] casilla support_area_specific_subjects
+        fila previa: Señale á reas y á mbitos generales en los que el/la estudiante requi rió apoyos especializados:
+        fila previa: III EVALUACIÓN DE LOS APOYOS RUN estudiante:
+        antes: [ ] Curricular general
+        despues: ☐ Asignaturas específicas [ ] Afectivo social [ ] otro(s) (especifíque) [ ]
+[ 98] casilla support_area_affective_social
+        fila previa: Señale á reas y á mbitos generales en los que el/la estudiante requi rió apoyos especializados:
+        fila previa: III EVALUACIÓN DE LOS APOYOS RUN estudiante:
+        antes: [ ] Curricular general[ ] Asignaturas específicas
+        despues: ☐ Afectivo social [ ] otro(s) (especifíque) [ ]
+[ 99] casilla support_area_other
+        fila previa: Señale á reas y á mbitos generales en los que el/la estudiante requi rió apoyos especializados:
+        fila previa: III EVALUACIÓN DE LOS APOYOS RUN estudiante:
+        antes: [ ] Curricular general[ ] Asignaturas específicas [ ] Afectivo social
+        despues: ☐ otro(s) (especifíque) [ ]
+[100] texto   support_area_other_detail
+        fila previa: Señale á reas y á mbitos generales en los que el/la estudiante requi rió apoyos especializados:
+        fila previa: III EVALUACIÓN DE LOS APOYOS RUN estudiante:
+        antes: [ ] Curricular general[ ] Asignaturas específicas [ ] Afectivo social [ ] otro(s) (especifíque)
+        despues: 
+[101] texto   support_personal_specific
+        fila previa: SI NO
+        fila previa: APOYO ESPECÍFICO EFECTIVIDAD CONTINUIDAD OBSERVACIONES (señale intensidad de apoyos, modificaciones u otros)
+        antes: PERSONAL
+        despues: 
+[102] texto   support_personal_effectiveness
+        antes: 
+        despues: 
+[103] casilla support_personal_continuity__si
+        antes: 
+        despues: 
+[104] casilla support_personal_continuity__no
+        antes: 
+        despues: 
+[105] texto   support_personal_observations
+        antes: 
+        despues: 
+[106] texto   support_curricular_specific
+        fila previa: PERSONAL ☐ ☐
+        fila previa: SI NO
+        fila previa: APOYO ESPECÍFICO EFECTIVIDAD CONTINUIDAD OBSERVACIONES (señale intensidad de apoyos, modificaciones u otros)
+        antes: CURRICULAR
+        despues: 
+[107] texto   support_curricular_effectiveness
+        antes: 
+        despues: 
+[108] casilla support_curricular_continuity__si
+        antes: 
+        despues: 
+[109] casilla support_curricular_continuity__no
+        antes: 
+        despues: 
+[110] texto   support_curricular_observations
+        antes: 
+        despues: 
+[111] texto   support_materials_specific
+        fila previa: CURRICULAR ☐ ☐
+        fila previa: PERSONAL ☐ ☐
+        fila previa: SI NO
+        antes: MEDIOS Y RECURSOS MATERIALES
+        despues: 
+[112] texto   support_materials_effectiveness
+        antes: 
+        despues: 
+[113] casilla support_materials_continuity__si
+        antes: 
+        despues: 
+[114] casilla support_materials_continuity__no
+        antes: 
+        despues: 
+[115] texto   support_materials_observations
+        antes: 
+        despues: 
+[116] texto   support_organizational_specific
+        fila previa: MEDIOS Y RECURSOS MATERIALES ☐ ☐
+        fila previa: CURRICULAR ☐ ☐
+        fila previa: PERSONAL ☐ ☐
+        antes: ORGANIZATIVO
+        despues: 
+[117] texto   support_organizational_effectiveness
+        antes: 
+        despues: 
+[118] casilla support_organizational_continuity__si
+        antes: 
+        despues: 
+[119] casilla support_organizational_continuity__no
+        antes: 
+        despues: 
+[120] texto   support_organizational_observations
+        antes: 
+        despues: 
+[121] texto   support_family_specific
+        fila previa: ORGANIZATIVO ☐ ☐
+        fila previa: MEDIOS Y RECURSOS MATERIALES ☐ ☐
+        fila previa: CURRICULAR ☐ ☐
+        antes: FAMILIAR
+        despues: 
+[122] texto   support_family_effectiveness
+        antes: 
+        despues: 
+[123] casilla support_family_continuity__si
+        antes: 
+        despues: 
+[124] casilla support_family_continuity__no
+        antes: 
+        despues: 
+[125] texto   support_family_observations
+        antes: 
+        despues: 
+[126] texto   support_social_specific
+        fila previa: FAMILIAR ☐ ☐
+        fila previa: ORGANIZATIVO ☐ ☐
+        fila previa: MEDIOS Y RECURSOS MATERIALES ☐ ☐
+        antes: SOCIAL
+        despues: 
+[127] texto   support_social_effectiveness
+        antes: 
+        despues: 
+[128] casilla support_social_continuity__si
+        antes: 
+        despues: 
+[129] casilla support_social_continuity__no
+        antes: 
+        despues: 
+[130] texto   support_social_observations
+        antes: 
+        despues: 
+[131] texto   support_other_specific
+        fila previa: SOCIAL ☐ ☐
+        fila previa: FAMILIAR ☐ ☐
+        fila previa: ORGANIZATIVO ☐ ☐
+        antes: OTROS APOYOS (Señale cuál(es):
+        despues: 
+[132] texto   support_other_effectiveness
+        antes: 
+        despues: 
+[133] casilla support_other_continuity__si
+        antes: 
+        despues: 
+[134] casilla support_other_continuity__no
+        antes: 
+        despues: 
+[135] texto   support_other_observations
+        antes: 
+        despues: 
+[136] texto   support_work_strategies
+        fila previa: 2. ESTRATEGIAS
+        fila previa: OTROS APOYOS (Señale cuál(es): ☐ ☐
+        fila previa: SOCIAL ☐ ☐
+        antes:  profesionales y personas de la comunidad escolar que han resultado efectivas para proporcionar los apoyos y ajustar la respuesta educativa a las NEE del alumno o alumna.
+        despues: 
+[137] texto   support_family_strategies_effectiveness
+        fila previa: Describa brevemente las estrategias de trabajo utilizadas por el equipo de aula y otros profesionales y personas de la comunidad escolar que han resul
+        fila previa: 2. ESTRATEGIAS
+        fila previa: OTROS APOYOS (Señale cuál(es): ☐ ☐
+        antes: Describa brevemente la efectividad de las estrategias de apoyo implementadas hacia la familia y las recomendaciones para período escolar siguiente
+        despues: 
+[138] texto   support_new_needs_required
+        antes: 
+        despues: 
+[139] texto   support_next_period_comments
+        antes: 
+        despues: 
