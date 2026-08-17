@@ -318,6 +318,35 @@ def _justify_paragraphs(sdt) -> None:
             p_pr.remove(indent)
 
 
+def _align_cell_top(sdt) -> None:
+    """Deja el texto de la celda arriba.
+
+    Algunos controles envuelven la celda completa (`sdtContent/tc`). Si Word
+    hereda alineación vertical al centro o abajo, un párrafo largo parece
+    'colgado' a media altura.
+    """
+    cell = sdt.find(qn("w:sdtContent"))
+    wrapped = cell.find(qn("w:tc")) if cell is not None else None
+    node = wrapped
+    current = sdt
+    while node is None and current is not None:
+        if current.tag == qn("w:tc"):
+            node = current
+            break
+        current = current.getparent()
+    if node is None:
+        return
+    tc_pr = node.find(qn("w:tcPr"))
+    if tc_pr is None:
+        tc_pr = OxmlElement("w:tcPr")
+        node.insert(0, tc_pr)
+    align = tc_pr.find(qn("w:vAlign"))
+    if align is None:
+        align = OxmlElement("w:vAlign")
+        tc_pr.append(align)
+    align.set(qn("w:val"), "top")
+
+
 def _set_control_text(sdt, sdt_pr, text: str) -> None:
     for placeholder in sdt_pr.findall(qn("w:showingPlcHdr")):
         sdt_pr.remove(placeholder)
@@ -329,24 +358,39 @@ def _set_control_text(sdt, sdt_pr, text: str) -> None:
     _write_run_text(run, text)
     for extra in runs[1:]:
         extra.getparent().remove(extra)
+    if text:
+        _align_cell_top(sdt)
     if len(text) >= FUR_JUSTIFY_MIN_CHARS or "\n" in text:
         _justify_paragraphs(sdt)
 
 
 def relax_fixed_row_heights(document: Document) -> int:
-    """Convierte las alturas de fila fijas en alturas mínimas.
+    """Relaja la altura fija solo en filas que tienen campos.
 
-    Las plantillas ministeriales traen filas con `hRule="exact"`, que recortan el
-    texto que no cabe (RUN, correos y registros profesionales quedaban a medias).
-    Con `atLeast` la fila conserva su alto original cuando está vacía y crece si
-    el contenido lo necesita.
+    Las plantillas ministeriales usan `hRule="exact"` para dos cosas distintas:
+    recortar el texto que no cabe (problema en RUN y correos) y mantener
+    encabezados de sección como una franja delgada. Esos encabezados traen
+    varios párrafos vacíos; si se pasa a `atLeast`, Word agranda la fila y el
+    título queda pegado arriba de un recuadro vacío (p. ej. AVANCES EDUCATIVOS).
     """
     relaxed = 0
-    for height in document.element.body.iter(qn("w:trHeight")):
-        if (height.get(qn("w:hRule")) or "").lower() == "exact":
+    restored = 0
+    for row in document.element.body.iter(qn("w:tr")):
+        tr_pr = row.find(qn("w:trPr"))
+        if tr_pr is None:
+            continue
+        height = tr_pr.find(qn("w:trHeight"))
+        if height is None:
+            continue
+        rule = (height.get(qn("w:hRule")) or "").lower()
+        has_field = next(row.iter(qn("w:sdt")), None) is not None
+        if has_field and rule == "exact":
             height.set(qn("w:hRule"), "atLeast")
             relaxed += 1
-    return relaxed
+        elif not has_field and rule == "atleast":
+            height.set(qn("w:hRule"), "exact")
+            restored += 1
+    return relaxed + restored
 
 
 def iter_content_controls(document: Document):

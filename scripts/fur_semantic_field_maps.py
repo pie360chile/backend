@@ -1256,6 +1256,11 @@ _CORRECTIONS: dict[str, dict[int, dict[str, Any]]] = {
         86: _t("specialized_next_period_other"),
         87: _t("specialized_tab_observations"),
         88: _t("identification_number"),
+        # Quinta fila de la tabla de profesionales, no el recuadro de evaluación.
+        155: _t("exit_revaluation_professionals[4].professional_id"),
+        156: _t("exit_revaluation_professionals[4].profession_id"),
+        157: _t("exit_revaluation_professionals[4].phone_email"),
+        158: _t("exit_revaluation_professionals[4].professional_registration"),
     },
     "fur2_dep.doc": {
         70: _t("identification_number"),
@@ -1270,6 +1275,10 @@ _CORRECTIONS: dict[str, dict[int, dict[str, Any]]] = {
         81: _t("specialized_next_period_other"),
         82: _t("specialized_tab_observations"),
         83: _t("identification_number"),
+        148: _t("exit_revaluation_professionals[4].professional_id"),
+        149: _t("exit_revaluation_professionals[4].profession_id"),
+        150: _t("exit_revaluation_professionals[4].phone_email"),
+        151: _t("exit_revaluation_professionals[4].professional_registration"),
     },
     "fur3_tda.doc": {
         70: _t("identification_number"),
@@ -1284,6 +1293,10 @@ _CORRECTIONS: dict[str, dict[int, dict[str, Any]]] = {
         81: _t("specialized_next_period_other"),
         82: _t("specialized_tab_observations"),
         83: _t("identification_number"),
+        148: _t("exit_revaluation_professionals[4].professional_id"),
+        149: _t("exit_revaluation_professionals[4].profession_id"),
+        150: _t("exit_revaluation_professionals[4].phone_email"),
+        151: _t("exit_revaluation_professionals[4].professional_registration"),
     },
     "fur4_ci_t.doc": {
         69: _t("identification_number"),
@@ -1295,6 +1308,10 @@ _CORRECTIONS: dict[str, dict[int, dict[str, Any]]] = {
         77: _t("specialized_next_period_other"),
         78: _t("specialized_tab_observations"),
         79: _t("identification_number"),
+        149: _t("exit_revaluation_professionals[4].professional_id"),
+        150: _t("exit_revaluation_professionals[4].profession_id"),
+        151: _t("exit_revaluation_professionals[4].phone_email"),
+        152: _t("exit_revaluation_professionals[4].professional_registration"),
     },
     "fur5_ci_p.doc": {
         63: _c("evidence_learning_evaluation"),

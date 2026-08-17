@@ -6,7 +6,7 @@
       "output": "fur1_tel_formulario.docx",
       "controls": 169,
       "renamed": 169,
-      "changed": 12,
+      "changed": 4,
       "failures": [],
       "fields": [
         {
@@ -677,12 +677,12 @@
         },
         {
           "ordinal": 75,
-          "old_tag": "specialized_curriculum_participation_evolution",
+          "old_tag": "identification_number",
           "tag": "identification_number",
           "key": "identification_number",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 76,
@@ -704,102 +704,102 @@
         },
         {
           "ordinal": 78,
-          "old_tag": "specialized_learning_participation_progress",
+          "old_tag": "specialized_context_participation",
           "tag": "specialized_context_participation",
           "key": "specialized_context_participation",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 79,
-          "old_tag": "specialized_context_participation",
+          "old_tag": "specialized_barriers_reduction",
           "tag": "specialized_barriers_reduction",
           "key": "specialized_barriers_reduction",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 80,
-          "old_tag": "specialized_barriers_reduction",
+          "old_tag": "specialized_family_participation",
           "tag": "specialized_family_participation",
           "key": "specialized_family_participation",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 81,
-          "old_tag": "specialized_family_participation",
+          "old_tag": "specialized_next_period_emphasis",
           "tag": "specialized_next_period_emphasis",
           "key": "specialized_next_period_emphasis",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 82,
-          "old_tag": "specialized_next_period_emphasis",
+          "old_tag": "specialized_dea_literacy_math_progress",
           "tag": "specialized_dea_literacy_math_progress",
           "key": "specialized_dea_literacy_math_progress",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 83,
-          "old_tag": "specialized_dea_literacy_math_progress",
+          "old_tag": "specialized_next_period_reading",
           "tag": "specialized_next_period_reading",
           "key": "specialized_next_period_reading",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 84,
-          "old_tag": "specialized_next_period_reading",
+          "old_tag": "specialized_next_period_writing",
           "tag": "specialized_next_period_writing",
           "key": "specialized_next_period_writing",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 85,
-          "old_tag": "specialized_next_period_writing",
+          "old_tag": "specialized_next_period_math",
           "tag": "specialized_next_period_math",
           "key": "specialized_next_period_math",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 86,
-          "old_tag": "specialized_next_period_math",
+          "old_tag": "specialized_next_period_other",
           "tag": "specialized_next_period_other",
           "key": "specialized_next_period_other",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 87,
-          "old_tag": "specialized_next_period_other",
+          "old_tag": "specialized_tab_observations",
           "tag": "specialized_tab_observations",
           "key": "specialized_tab_observations",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 88,
-          "old_tag": "specialized_tab_observations",
+          "old_tag": "identification_number",
           "tag": "identification_number",
           "key": "identification_number",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 89,
@@ -1398,38 +1398,38 @@
         {
           "ordinal": 155,
           "old_tag": "exit_dea_deficit_evaluation",
-          "tag": "exit_dea_deficit_evaluation",
-          "key": "exit_dea_deficit_evaluation",
+          "tag": "exit_revaluation_professionals[4].professional_id",
+          "key": "exit_revaluation_professionals[4].professional_id",
           "kind": "text",
           "value": null,
-          "changed": false
+          "changed": true
         },
         {
           "ordinal": 156,
           "old_tag": "exit_dea_deficit_evaluation",
-          "tag": "exit_dea_deficit_evaluation",
-          "key": "exit_dea_deficit_evaluation",
+          "tag": "exit_revaluation_professionals[4].profession_id",
+          "key": "exit_revaluation_professionals[4].profession_id",
           "kind": "text",
           "value": null,
-          "changed": false
+          "changed": true
         },
         {
           "ordinal": 157,
           "old_tag": "exit_dea_deficit_evaluation",
-          "tag": "exit_dea_deficit_evaluation",
-          "key": "exit_dea_deficit_evaluation",
+          "tag": "exit_revaluation_professionals[4].phone_email",
+          "key": "exit_revaluation_professionals[4].phone_email",
           "kind": "text",
           "value": null,
-          "changed": false
+          "changed": true
         },
         {
           "ordinal": 158,
           "old_tag": "exit_dea_deficit_evaluation",
-          "tag": "exit_dea_deficit_evaluation",
-          "key": "exit_dea_deficit_evaluation",
+          "tag": "exit_revaluation_professionals[4].professional_registration",
+          "key": "exit_revaluation_professionals[4].professional_registration",
           "kind": "text",
           "value": null,
-          "changed": false
+          "changed": true
         },
         {
           "ordinal": 159,
@@ -1537,7 +1537,7 @@
       "output": "fur2_dep_formulario.docx",
       "controls": 160,
       "renamed": 160,
-      "changed": 12,
+      "changed": 4,
       "failures": [],
       "fields": [
         {
@@ -2163,12 +2163,12 @@
         },
         {
           "ordinal": 70,
-          "old_tag": "specialized_curriculum_participation_evolution",
+          "old_tag": "identification_number",
           "tag": "identification_number",
           "key": "identification_number",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 71,
@@ -2190,102 +2190,102 @@
         },
         {
           "ordinal": 73,
-          "old_tag": "specialized_learning_participation_progress",
+          "old_tag": "specialized_context_participation",
           "tag": "specialized_context_participation",
           "key": "specialized_context_participation",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 74,
-          "old_tag": "specialized_context_participation",
+          "old_tag": "specialized_barriers_reduction",
           "tag": "specialized_barriers_reduction",
           "key": "specialized_barriers_reduction",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 75,
-          "old_tag": "specialized_barriers_reduction",
+          "old_tag": "specialized_family_participation",
           "tag": "specialized_family_participation",
           "key": "specialized_family_participation",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 76,
-          "old_tag": "specialized_family_participation",
+          "old_tag": "specialized_next_period_emphasis",
           "tag": "specialized_next_period_emphasis",
           "key": "specialized_next_period_emphasis",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 77,
-          "old_tag": "specialized_next_period_emphasis",
+          "old_tag": "specialized_dea_literacy_math_progress",
           "tag": "specialized_dea_literacy_math_progress",
           "key": "specialized_dea_literacy_math_progress",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 78,
-          "old_tag": "specialized_dea_literacy_math_progress",
+          "old_tag": "specialized_next_period_reading",
           "tag": "specialized_next_period_reading",
           "key": "specialized_next_period_reading",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 79,
-          "old_tag": "specialized_next_period_reading",
+          "old_tag": "specialized_next_period_writing",
           "tag": "specialized_next_period_writing",
           "key": "specialized_next_period_writing",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 80,
-          "old_tag": "specialized_next_period_writing",
+          "old_tag": "specialized_next_period_math",
           "tag": "specialized_next_period_math",
           "key": "specialized_next_period_math",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 81,
-          "old_tag": "specialized_next_period_math",
+          "old_tag": "specialized_next_period_other",
           "tag": "specialized_next_period_other",
           "key": "specialized_next_period_other",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 82,
-          "old_tag": "specialized_next_period_other",
+          "old_tag": "specialized_tab_observations",
           "tag": "specialized_tab_observations",
           "key": "specialized_tab_observations",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 83,
-          "old_tag": "specialized_tab_observations",
+          "old_tag": "identification_number",
           "tag": "identification_number",
           "key": "identification_number",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 84,
@@ -2866,38 +2866,38 @@
         {
           "ordinal": 148,
           "old_tag": "exit_dea_deficit_evaluation",
-          "tag": "exit_dea_deficit_evaluation",
-          "key": "exit_dea_deficit_evaluation",
+          "tag": "exit_revaluation_professionals[4].professional_id",
+          "key": "exit_revaluation_professionals[4].professional_id",
           "kind": "text",
           "value": null,
-          "changed": false
+          "changed": true
         },
         {
           "ordinal": 149,
           "old_tag": "exit_dea_deficit_evaluation",
-          "tag": "exit_dea_deficit_evaluation",
-          "key": "exit_dea_deficit_evaluation",
+          "tag": "exit_revaluation_professionals[4].profession_id",
+          "key": "exit_revaluation_professionals[4].profession_id",
           "kind": "text",
           "value": null,
-          "changed": false
+          "changed": true
         },
         {
           "ordinal": 150,
           "old_tag": "exit_dea_deficit_evaluation",
-          "tag": "exit_dea_deficit_evaluation",
-          "key": "exit_dea_deficit_evaluation",
+          "tag": "exit_revaluation_professionals[4].phone_email",
+          "key": "exit_revaluation_professionals[4].phone_email",
           "kind": "text",
           "value": null,
-          "changed": false
+          "changed": true
         },
         {
           "ordinal": 151,
           "old_tag": "exit_dea_deficit_evaluation",
-          "tag": "exit_dea_deficit_evaluation",
-          "key": "exit_dea_deficit_evaluation",
+          "tag": "exit_revaluation_professionals[4].professional_registration",
+          "key": "exit_revaluation_professionals[4].professional_registration",
           "kind": "text",
           "value": null,
-          "changed": false
+          "changed": true
         },
         {
           "ordinal": 152,
@@ -2987,7 +2987,7 @@
       "output": "fur3_tda_formulario.docx",
       "controls": 158,
       "renamed": 158,
-      "changed": 12,
+      "changed": 4,
       "failures": [],
       "fields": [
         {
@@ -3613,12 +3613,12 @@
         },
         {
           "ordinal": 70,
-          "old_tag": "specialized_curriculum_participation_evolution",
+          "old_tag": "identification_number",
           "tag": "identification_number",
           "key": "identification_number",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 71,
@@ -3640,102 +3640,102 @@
         },
         {
           "ordinal": 73,
-          "old_tag": "specialized_learning_participation_progress",
+          "old_tag": "specialized_context_participation",
           "tag": "specialized_context_participation",
           "key": "specialized_context_participation",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 74,
-          "old_tag": "specialized_context_participation",
+          "old_tag": "specialized_barriers_reduction",
           "tag": "specialized_barriers_reduction",
           "key": "specialized_barriers_reduction",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 75,
-          "old_tag": "specialized_barriers_reduction",
+          "old_tag": "specialized_family_participation",
           "tag": "specialized_family_participation",
           "key": "specialized_family_participation",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 76,
-          "old_tag": "specialized_family_participation",
+          "old_tag": "specialized_next_period_emphasis",
           "tag": "specialized_next_period_emphasis",
           "key": "specialized_next_period_emphasis",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 77,
-          "old_tag": "specialized_next_period_emphasis",
+          "old_tag": "specialized_dea_literacy_math_progress",
           "tag": "specialized_dea_literacy_math_progress",
           "key": "specialized_dea_literacy_math_progress",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 78,
-          "old_tag": "specialized_dea_literacy_math_progress",
+          "old_tag": "specialized_next_period_reading",
           "tag": "specialized_next_period_reading",
           "key": "specialized_next_period_reading",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 79,
-          "old_tag": "specialized_next_period_reading",
+          "old_tag": "specialized_next_period_writing",
           "tag": "specialized_next_period_writing",
           "key": "specialized_next_period_writing",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 80,
-          "old_tag": "specialized_next_period_writing",
+          "old_tag": "specialized_next_period_math",
           "tag": "specialized_next_period_math",
           "key": "specialized_next_period_math",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 81,
-          "old_tag": "specialized_next_period_math",
+          "old_tag": "specialized_next_period_other",
           "tag": "specialized_next_period_other",
           "key": "specialized_next_period_other",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 82,
-          "old_tag": "specialized_next_period_other",
+          "old_tag": "specialized_tab_observations",
           "tag": "specialized_tab_observations",
           "key": "specialized_tab_observations",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 83,
-          "old_tag": "specialized_tab_observations",
+          "old_tag": "identification_number",
           "tag": "identification_number",
           "key": "identification_number",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 84,
@@ -4316,38 +4316,38 @@
         {
           "ordinal": 148,
           "old_tag": "exit_dea_deficit_evaluation",
-          "tag": "exit_dea_deficit_evaluation",
-          "key": "exit_dea_deficit_evaluation",
+          "tag": "exit_revaluation_professionals[4].professional_id",
+          "key": "exit_revaluation_professionals[4].professional_id",
           "kind": "text",
           "value": null,
-          "changed": false
+          "changed": true
         },
         {
           "ordinal": 149,
           "old_tag": "exit_dea_deficit_evaluation",
-          "tag": "exit_dea_deficit_evaluation",
-          "key": "exit_dea_deficit_evaluation",
+          "tag": "exit_revaluation_professionals[4].profession_id",
+          "key": "exit_revaluation_professionals[4].profession_id",
           "kind": "text",
           "value": null,
-          "changed": false
+          "changed": true
         },
         {
           "ordinal": 150,
           "old_tag": "exit_dea_deficit_evaluation",
-          "tag": "exit_dea_deficit_evaluation",
-          "key": "exit_dea_deficit_evaluation",
+          "tag": "exit_revaluation_professionals[4].phone_email",
+          "key": "exit_revaluation_professionals[4].phone_email",
           "kind": "text",
           "value": null,
-          "changed": false
+          "changed": true
         },
         {
           "ordinal": 151,
           "old_tag": "exit_dea_deficit_evaluation",
-          "tag": "exit_dea_deficit_evaluation",
-          "key": "exit_dea_deficit_evaluation",
+          "tag": "exit_revaluation_professionals[4].professional_registration",
+          "key": "exit_revaluation_professionals[4].professional_registration",
           "kind": "text",
           "value": null,
-          "changed": false
+          "changed": true
         },
         {
           "ordinal": 152,
@@ -4419,7 +4419,7 @@
       "output": "fur4_ci_t_formulario.docx",
       "controls": 159,
       "renamed": 159,
-      "changed": 9,
+      "changed": 4,
       "failures": [],
       "fields": [
         {
@@ -5036,12 +5036,12 @@
         },
         {
           "ordinal": 69,
-          "old_tag": "specialized_curriculum_participation_evolution",
+          "old_tag": "identification_number",
           "tag": "identification_number",
           "key": "identification_number",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 70,
@@ -5063,75 +5063,75 @@
         },
         {
           "ordinal": 72,
-          "old_tag": "specialized_learning_participation_progress",
+          "old_tag": "specialized_context_participation",
           "tag": "specialized_context_participation",
           "key": "specialized_context_participation",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 73,
-          "old_tag": "specialized_context_participation",
+          "old_tag": "specialized_barriers_reduction",
           "tag": "specialized_barriers_reduction",
           "key": "specialized_barriers_reduction",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 74,
-          "old_tag": "specialized_barriers_reduction",
+          "old_tag": "specialized_family_participation",
           "tag": "specialized_family_participation",
           "key": "specialized_family_participation",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 75,
-          "old_tag": "specialized_family_participation",
+          "old_tag": "specialized_next_period_emphasis",
           "tag": "specialized_next_period_emphasis",
           "key": "specialized_next_period_emphasis",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 76,
-          "old_tag": "specialized_next_period_emphasis",
+          "old_tag": "specialized_dea_literacy_math_progress",
           "tag": "specialized_dea_literacy_math_progress",
           "key": "specialized_dea_literacy_math_progress",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 77,
-          "old_tag": "specialized_dea_literacy_math_progress",
+          "old_tag": "specialized_next_period_other",
           "tag": "specialized_next_period_other",
           "key": "specialized_next_period_other",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 78,
-          "old_tag": "specialized_next_period_other",
+          "old_tag": "specialized_tab_observations",
           "tag": "specialized_tab_observations",
           "key": "specialized_tab_observations",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 79,
-          "old_tag": "specialized_tab_observations",
+          "old_tag": "identification_number",
           "tag": "identification_number",
           "key": "identification_number",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 80,
@@ -5757,38 +5757,38 @@
         {
           "ordinal": 149,
           "old_tag": "exit_dea_deficit_evaluation",
-          "tag": "exit_dea_deficit_evaluation",
-          "key": "exit_dea_deficit_evaluation",
+          "tag": "exit_revaluation_professionals[4].professional_id",
+          "key": "exit_revaluation_professionals[4].professional_id",
           "kind": "text",
           "value": null,
-          "changed": false
+          "changed": true
         },
         {
           "ordinal": 150,
           "old_tag": "exit_dea_deficit_evaluation",
-          "tag": "exit_dea_deficit_evaluation",
-          "key": "exit_dea_deficit_evaluation",
+          "tag": "exit_revaluation_professionals[4].profession_id",
+          "key": "exit_revaluation_professionals[4].profession_id",
           "kind": "text",
           "value": null,
-          "changed": false
+          "changed": true
         },
         {
           "ordinal": 151,
           "old_tag": "exit_dea_deficit_evaluation",
-          "tag": "exit_dea_deficit_evaluation",
-          "key": "exit_dea_deficit_evaluation",
+          "tag": "exit_revaluation_professionals[4].phone_email",
+          "key": "exit_revaluation_professionals[4].phone_email",
           "kind": "text",
           "value": null,
-          "changed": false
+          "changed": true
         },
         {
           "ordinal": 152,
           "old_tag": "exit_dea_deficit_evaluation",
-          "tag": "exit_dea_deficit_evaluation",
-          "key": "exit_dea_deficit_evaluation",
+          "tag": "exit_revaluation_professionals[4].professional_registration",
+          "key": "exit_revaluation_professionals[4].professional_registration",
           "kind": "text",
           "value": null,
-          "changed": false
+          "changed": true
         },
         {
           "ordinal": 153,
@@ -5860,7 +5860,7 @@
       "output": "fur5_ci_p_formulario.docx",
       "controls": 139,
       "renamed": 139,
-      "changed": 7,
+      "changed": 0,
       "failures": [],
       "fields": [
         {
@@ -6423,66 +6423,66 @@
         },
         {
           "ordinal": 63,
-          "old_tag": "evidence_report_school",
+          "old_tag": "evidence_learning_evaluation",
           "tag": "evidence_learning_evaluation",
           "key": "evidence_learning_evaluation",
           "kind": "checkbox",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 64,
-          "old_tag": "evidence_report_social",
+          "old_tag": "evidence_report_school",
           "tag": "evidence_report_school",
           "key": "evidence_report_school",
           "kind": "checkbox",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 65,
-          "old_tag": "evidence_report_psychological",
+          "old_tag": "evidence_report_social",
           "tag": "evidence_report_social",
           "key": "evidence_report_social",
           "kind": "checkbox",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 66,
-          "old_tag": "evidence_report_fonoaudiological",
+          "old_tag": "evidence_report_psychological",
           "tag": "evidence_report_psychological",
           "key": "evidence_report_psychological",
           "kind": "checkbox",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 67,
-          "old_tag": "evidence_report_pedagogical",
+          "old_tag": "evidence_report_fonoaudiological",
           "tag": "evidence_report_fonoaudiological",
           "key": "evidence_report_fonoaudiological",
           "kind": "checkbox",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 68,
-          "old_tag": "evidence_report_psychopedagogical",
+          "old_tag": "evidence_report_pedagogical",
           "tag": "evidence_report_pedagogical",
           "key": "evidence_report_pedagogical",
           "kind": "checkbox",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 69,
-          "old_tag": "evidence_learning_evaluation",
+          "old_tag": "evidence_report_psychopedagogical",
           "tag": "evidence_report_psychopedagogical",
           "key": "evidence_report_psychopedagogical",
           "kind": "checkbox",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 70,
@@ -7121,7 +7121,7 @@
       "output": "fur6_dm_formulario.docx",
       "controls": 127,
       "renamed": 127,
-      "changed": 2,
+      "changed": 0,
       "failures": [],
       "fields": [
         {
@@ -7999,21 +7999,21 @@
         },
         {
           "ordinal": 98,
-          "old_tag": "motora_area_motor_instrument_detail",
+          "old_tag": "motora_area_motor_progress",
           "tag": "motora_area_motor_progress",
           "key": "motora_area_motor_progress",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 99,
-          "old_tag": "motora_area_motor_progress",
+          "old_tag": "motora_area_motor_emphasis",
           "tag": "motora_area_motor_emphasis",
           "key": "motora_area_motor_emphasis",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 100,
@@ -10616,7 +10616,7 @@
       "output": "fur9_dmu_formulario.docx",
       "controls": 160,
       "renamed": 160,
-      "changed": 2,
+      "changed": 0,
       "failures": [],
       "fields": [
         {
@@ -10675,21 +10675,21 @@
         },
         {
           "ordinal": 7,
-          "old_tag": "educational_option_other_detail",
+          "old_tag": "current_course",
           "tag": "current_course",
           "key": "current_course",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 8,
-          "old_tag": "current_course",
+          "old_tag": "educational_option_other_detail",
           "tag": "educational_option_other_detail",
           "key": "educational_option_other_detail",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 9,
@@ -12066,7 +12066,7 @@
       "output": "fur10_tea_formulario.docx",
       "controls": 154,
       "renamed": 154,
-      "changed": 2,
+      "changed": 0,
       "failures": [],
       "fields": [
         {
@@ -12125,21 +12125,21 @@
         },
         {
           "ordinal": 7,
-          "old_tag": "educational_option_other_detail",
+          "old_tag": "current_course",
           "tag": "current_course",
           "key": "current_course",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 8,
-          "old_tag": "current_course",
+          "old_tag": "educational_option_other_detail",
           "tag": "educational_option_other_detail",
           "key": "educational_option_other_detail",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 9,
@@ -13462,7 +13462,7 @@
       "output": "fur11_dstc_formulario.docx",
       "controls": 157,
       "renamed": 157,
-      "changed": 2,
+      "changed": 0,
       "failures": [],
       "fields": [
         {
@@ -13521,21 +13521,21 @@
         },
         {
           "ordinal": 7,
-          "old_tag": "educational_option_other_detail",
+          "old_tag": "current_course",
           "tag": "current_course",
           "key": "current_course",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 8,
-          "old_tag": "current_course",
+          "old_tag": "educational_option_other_detail",
           "tag": "educational_option_other_detail",
           "key": "educational_option_other_detail",
           "kind": "text",
           "value": null,
-          "changed": true
+          "changed": false
         },
         {
           "ordinal": 9,
@@ -14882,6 +14882,6 @@
     }
   ],
   "total_renamed": 1641,
-  "total_changed": 60,
+  "total_changed": 16,
   "total_failures": 0
 }

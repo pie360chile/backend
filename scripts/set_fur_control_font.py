@@ -3,7 +3,8 @@
 - Campos de texto en Arial 9 negro (también lo que se escriba después en Word).
 - Casillas: cuadro vacío sin marcar y cuadro negro relleno al marcarlas, todas
   del mismo tamaño.
-- Filas de altura fija convertidas en altura mínima, para que no recorten texto.
+- Filas con campos: altura mínima para que no recorten texto. Encabezados de
+  sección se dejan con altura fija, para que no se abran en un recuadro vacío.
 
     python scripts/set_fur_control_font.py
     python scripts/set_fur_control_font.py --only fur5_ci_p.doc
