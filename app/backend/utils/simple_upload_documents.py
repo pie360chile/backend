@@ -13,6 +13,12 @@ SIMPLE_UPLOAD_DOCUMENT_IDS: tuple[int, ...] = (
     51,  # TO Evaluación Informal
     52,  # TO Perfil Sensorial
     53,  # TO SPM-2
+    54,  # Área fonoaudiológica
+    55,  # Área kinesiológica
+    56,  # Área psicológica
+    57,  # Área psicopedagógica
+    58,  # Área terapia ocupacional
+    59,  # Otras pautas
 )
 
 # Preferred display order (names as stored in `documents.document`)

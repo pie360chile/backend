@@ -92,6 +92,7 @@ class FolderClass:
                     "period_year": getattr(doc_file, "period_year", None),
                     "added_date": doc_file.added_date.strftime("%Y-%m-%d %H:%M:%S") if doc_file.added_date else None,
                     "updated_date": doc_file.updated_date.strftime("%Y-%m-%d %H:%M:%S") if doc_file.updated_date else None,
+                    "deleted_date": doc_file.deleted_date.strftime("%Y-%m-%d %H:%M:%S") if getattr(doc_file, "deleted_date", None) else None,
                 }
                 for doc_file in document_files
             ]
@@ -596,6 +597,7 @@ class FolderClass:
                     ).filter(
                         FolderModel.student_id == student_id,
                         FolderModel.document_id == document_id,
+                        FolderModel.deleted_date.is_(None),
                         _document_not_deleted_filter(),
                         FolderModel.file.isnot(None),  # Solo documentos con archivo
                     )
@@ -718,6 +720,7 @@ class FolderClass:
             row.deleted_date = datetime.now()
             row.updated_date = datetime.now()
             self.db.commit()
+            self.db.refresh(row)
             return {"status": "success", "message": "Documento eliminado", "id": folder_id}
         except Exception as e:
             self.db.rollback()
