@@ -29,7 +29,8 @@ class FolderClass:
         """
         try:
             document_file = self.db.query(FolderModel).filter(
-                FolderModel.id == id
+                FolderModel.id == id,
+                FolderModel.deleted_date.is_(None),
             ).first()
 
             if document_file:
@@ -70,6 +71,7 @@ class FolderClass:
                 FolderModel.student_id == student_id,
                 FolderModel.document_id == document_id,
                 FolderModel.file.isnot(None),  # Solo documentos con archivo
+                FolderModel.deleted_date.is_(None),
             )
             py = _folder_period_str(period_year)
             if py is not None:
@@ -105,7 +107,7 @@ class FolderClass:
         Obtiene la lista de archivos de documentos almacenados.
         """
         try:
-            query = self.db.query(FolderModel)
+            query = self.db.query(FolderModel).filter(FolderModel.deleted_date.is_(None))
 
             if student_id is not None:
                 query = query.filter(FolderModel.student_id == student_id)
