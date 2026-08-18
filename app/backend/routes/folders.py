@@ -4,6 +4,9 @@ from app.backend.classes.student_document_file_class import FolderClass
 from app.backend.classes.student_class import StudentClass
 from app.backend.classes.files_class import FileClass
 from app.backend.db.database import get_db
+from app.backend.auth.auth_user import get_current_active_user
+from app.backend.schemas import UserLogin
+from app.backend.core.responses import api_response, api_error
 from typing import Optional
 from sqlalchemy.orm import Session
 from pathlib import Path
@@ -358,3 +361,38 @@ async def download_document(
                 "data": None
             }
         )
+
+
+@folders.get("/by-type/{student_id}/{document_type_id}")
+async def list_folders_by_document_type(
+    student_id: int,
+    document_type_id: int,
+    period_year: Optional[int] = Query(None, ge=2000, le=2100),
+    session_user: UserLogin = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Lista archivos de carpeta del estudiante para una sección de catálogo (2 = informes por área)."""
+    folder_service = FolderClass(db)
+    result = folder_service.list_by_document_type(
+        student_id,
+        document_type_id,
+        period_year=str(period_year) if period_year is not None else None,
+    )
+    if isinstance(result, dict) and result.get("status") == "error":
+        return api_error(status_code=500, message=result.get("message", "Error listando documentos"))
+    return api_response(message=f"Se encontraron {len(result)} documento(s)", data=result)
+
+
+@folders.delete("/{folder_id}")
+async def delete_folder_document(
+    folder_id: int,
+    student_id: Optional[int] = Query(None),
+    session_user: UserLogin = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Elimina (soft delete) un archivo de la carpeta del estudiante."""
+    folder_service = FolderClass(db)
+    result = folder_service.soft_delete(folder_id, student_id=student_id)
+    if isinstance(result, dict) and result.get("status") == "error":
+        return api_error(status_code=404, message=result.get("message", "Documento no encontrado"))
+    return api_response(message=result.get("message", "Documento eliminado"), data={"id": folder_id})

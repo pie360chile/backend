@@ -654,3 +654,69 @@ class FolderClass:
                 "total": 0,
                 "data": None
             }
+
+    def list_by_document_type(
+        self,
+        student_id: int,
+        document_type_id: int,
+        period_year: Optional[Union[int, str]] = None,
+    ) -> Any:
+        """Lista cargas en folders del estudiante para documentos de una sección (p. ej. evaluación=2)."""
+        try:
+            py = _folder_period_str(period_year)
+            q = (
+                self.db.query(FolderModel, DocumentModel)
+                .join(DocumentModel, FolderModel.document_id == DocumentModel.id)
+                .filter(
+                    FolderModel.student_id == student_id,
+                    DocumentModel.document_type_id == document_type_id,
+                    FolderModel.file.isnot(None),
+                    FolderModel.deleted_date.is_(None),
+                    _document_not_deleted_filter(),
+                )
+            )
+            if py is not None:
+                q = q.filter(FolderModel.period_year == py)
+            rows = q.order_by(
+                DocumentModel.career_type_id.asc(),
+                DocumentModel.document.asc(),
+                FolderModel.version_id.desc(),
+            ).all()
+            return [
+                {
+                    "id": folder.id,
+                    "student_id": folder.student_id,
+                    "document_id": folder.document_id,
+                    "document_type_id": document.document_type_id,
+                    "career_type_id": document.career_type_id,
+                    "document_name": document.document,
+                    "version_id": folder.version_id,
+                    "file": folder.file,
+                    "period_year": getattr(folder, "period_year", None),
+                    "added_date": folder.added_date.strftime("%Y-%m-%d %H:%M:%S") if folder.added_date else None,
+                    "updated_date": folder.updated_date.strftime("%Y-%m-%d %H:%M:%S") if folder.updated_date else None,
+                }
+                for folder, document in rows
+            ]
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def soft_delete(self, folder_id: int, student_id: Optional[int] = None) -> Any:
+        """Marca deleted_date en un registro de folders."""
+        try:
+            q = self.db.query(FolderModel).filter(
+                FolderModel.id == folder_id,
+                FolderModel.deleted_date.is_(None),
+            )
+            if student_id is not None:
+                q = q.filter(FolderModel.student_id == student_id)
+            row = q.first()
+            if not row:
+                return {"status": "error", "message": "Documento no encontrado"}
+            row.deleted_date = datetime.now()
+            row.updated_date = datetime.now()
+            self.db.commit()
+            return {"status": "success", "message": "Documento eliminado", "id": folder_id}
+        except Exception as e:
+            self.db.rollback()
+            return {"status": "error", "message": str(e)}
