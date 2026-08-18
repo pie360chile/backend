@@ -131,11 +131,15 @@ async def upload_document(
 
         # Obtener document_type_id desde document_id (solo documentos no eliminados)
         from app.backend.db.models import DocumentModel
+        from app.backend.utils.evaluation_area_documents import ensure_evaluation_area_catalog_document
+
         document_info = db.query(DocumentModel).filter(
             DocumentModel.id == document_id,
             DocumentModel.deleted_date.is_(None)
         ).first()
-        
+        if not document_info:
+            document_info = ensure_evaluation_area_catalog_document(db, document_id)
+
         if not document_info:
             return JSONResponse(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -145,6 +149,7 @@ async def upload_document(
                     "data": None
                 }
             )
+        document_id = int(document_info.id)
         
         document_type_id = document_info.document_type_id
         

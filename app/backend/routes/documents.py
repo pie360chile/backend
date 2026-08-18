@@ -150,6 +150,10 @@ import logging
 from datetime import datetime, date
 from collections import defaultdict
 from app.backend.utils.professional_display import professional_display_fields, map_professional_id_to_display_name
+from app.backend.utils.evaluation_area_documents import (
+    EVALUATION_AREA_DOCUMENT_IDS,
+    ensure_evaluation_area_catalog_document,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -230,7 +234,13 @@ def _upsert_folder_student_document(
     )
     if period_str is not None:
         lv_q = lv_q.filter(FolderModel.period_year == period_str)
-    last = lv_q.order_by(FolderModel.version_id.desc()).first()
+    last = (
+        lv_q.filter(FolderModel.deleted_date.is_(None))
+        .order_by(FolderModel.version_id.desc())
+        .first()
+    )
+    if last is None:
+        last = lv_q.order_by(FolderModel.version_id.desc()).first()
 
     if always_new_version:
         max_ver_q = db.query(func.coalesce(func.max(FolderModel.version_id), 0)).filter(
@@ -276,6 +286,7 @@ def _upsert_folder_student_document(
         if detail_id is not None:
             last.detail_id = detail_id
         last.period_year = period_str
+        last.deleted_date = None
         last.updated_date = datetime.now()
         db.commit()
         db.refresh(last)
@@ -606,7 +617,9 @@ async def upload_document(
             DocumentModel.id == document_id,
             DocumentModel.deleted_date.is_(None)
         ).first()
-        
+        if not document:
+            document = ensure_evaluation_area_catalog_document(db, document_id)
+
         if not document:
             return JSONResponse(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -616,7 +629,8 @@ async def upload_document(
                     "data": None
                 }
             )
-        
+
+        catalog_document_id = int(document.id)
         # Obtener document_type_id del documento
         document_type_id = document.document_type_id
 
@@ -637,7 +651,7 @@ async def upload_document(
 
         # Nombre canónico (misma ruta al resubir el mismo documento → sobrescribe en disco)
         unique_filename = _canonical_student_document_filename(
-            student_id, document_id, document_type_id, file_extension, period_year
+            student_id, catalog_document_id, document_type_id, file_extension, period_year
         )
 
         upload_dir = Path("files/system/students")
@@ -709,14 +723,17 @@ async def upload_document(
         new_folder = _upsert_folder_student_document(
             db,
             student_id,
-            document_id,
+            catalog_document_id,
             period_str,
             unique_filename,
             school_id=resolved_school_id,
             course_id=resolved_course_id,
             professional_id=resolved_professional_id,
             detail_id=detail_id_value,
-            always_new_version=(int(document_id) == 42),
+            always_new_version=(
+                int(catalog_document_id) == 42
+                or int(catalog_document_id) in EVALUATION_AREA_DOCUMENT_IDS
+            ),
         )
         new_version_id = new_folder.version_id
 
@@ -746,7 +763,7 @@ async def upload_document(
             ProfessionalDocumentAssignmentClass(db).mark_completed_after_folder_upload(
                 period_year=period_year,
                 student_id=student_id,
-                document_catalog_id=int(document_id),
+                document_catalog_id=int(catalog_document_id),
                 document_type_id=int(document_type_id),
                 professional_id=int(professional_id) if professional_id is not None else None,
                 course_id=resolved_course,
@@ -761,7 +778,7 @@ async def upload_document(
                 "message": "Documento subido exitosamente",
                 "data": {
                     "id": new_folder.id,
-                    "document_id": document_id,
+                    "document_id": catalog_document_id,
                     "version_id": new_version_id,
                     "student_id": student_id,
                     "document_type_id": document_type_id,
