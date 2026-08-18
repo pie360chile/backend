@@ -122,8 +122,8 @@ def _student_has_report_sources(
             student_rut=student_rut,
             student_name=student_name,
             customer_id=int(customer_id),
-            )
-        except Exception:
+        )
+    except Exception:
         files_block = ""
 
     if files_mention_student(files_block, student_name or "", student_rut):
@@ -175,18 +175,18 @@ def _drive_path_block(*, customer_id: int, agent_name: str) -> str:
     )
 
 
-    def _build_system_prompt(
+def _build_system_prompt(
     *,
     db: Session,
-        agent: AgentModel,
+    agent: AgentModel,
     customer_id: int,
     student_id: int | None,
     student_rut: str | None,
-        document_id: int | None,
+    document_id: int | None,
     message: str = "",
     school_id: int | None = None,
     period_year: int | None = None,
-    ) -> str:
+) -> str:
     parts: list[str] = []
     instructions = (agent.role_instructions or "").strip()
     if instructions:
@@ -335,24 +335,24 @@ def _drive_path_block(*, customer_id: int, agent_name: str) -> str:
     return "\n\n".join(parts).strip()
 
 
-    def _build_messages(
+def _build_messages(
     *,
     system_prompt: str,
-        message: str,
-        history: list[dict[str, str]] | None,
-    ) -> list[dict[str, str]]:
+    message: str,
+    history: list[dict[str, str]] | None,
+) -> list[dict[str, str]]:
     messages: list[dict[str, str]] = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
 
-        for item in history or []:
+    for item in history or []:
         role = (item.get("role") or "").strip()
-            content = (item.get("content") or "").strip()
-            if role in {"user", "assistant"} and content:
-                messages.append({"role": role, "content": content})
+        content = (item.get("content") or "").strip()
+        if role in {"user", "assistant"} and content:
+            messages.append({"role": role, "content": content})
 
     messages.append({"role": "user", "content": (message or "").strip()})
-        return messages
+    return messages
 
 
 class AgentsChatClass:
@@ -614,7 +614,7 @@ class AgentsChatClass:
                 )
             elif event.get("type") == "error":
                 yield event
-            return
+                return
             else:
                 yield event
 
@@ -699,9 +699,9 @@ class AgentsChatClass:
         if want_doc or fields:
             if not resolved_student_id:
                 # No reemplazar la respuesta del modelo pidiendo RUT.
-            warning = None
+                warning = None
             elif not resolved_document_id:
-            warning = (
+                warning = (
                     "Falta document_id / plantilla del agente. "
                     "Sube el modelo en Documentos del agente."
                 )
