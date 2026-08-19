@@ -9,6 +9,7 @@ from app.backend.db.models import (
     EvaluaResultReportModel,
 )
 from app.backend.classes.documents_class import _document_not_deleted_filter
+from app.backend.utils.simple_upload_documents import EVALUATION_AREA_BUCKET_DOCUMENT_IDS
 
 
 def _folder_period_str(period_year: Optional[Union[int, str]]) -> Optional[str]:
@@ -376,6 +377,10 @@ class FolderClass:
 
             # Para cada document_id, buscar en su tabla correspondiente
             for document_id in document_id_list:
+                # Carpetas de área: no cuentan como documento cargado del estudiante.
+                if int(document_id) in EVALUATION_AREA_BUCKET_DOCUMENT_IDS:
+                    continue
+
                 doc_info = document_info_dict.get(document_id)
                 document_name = doc_info.document if doc_info else None
                 found = False
@@ -677,6 +682,7 @@ class FolderClass:
                     FolderModel.file.isnot(None),
                     FolderModel.deleted_date.is_(None),
                     _document_not_deleted_filter(),
+                    FolderModel.document_id.notin_(list(EVALUATION_AREA_BUCKET_DOCUMENT_IDS)),
                 )
             )
             if py is not None:

@@ -21,6 +21,10 @@ SIMPLE_UPLOAD_DOCUMENT_IDS: tuple[int, ...] = (
     59,  # Otras pautas
 )
 
+# Carpetas de área: agrupan informes; no son un documento del estudiante.
+EVALUATION_AREA_BUCKET_DOCUMENT_IDS: tuple[int, ...] = (54, 55, 56, 57, 58, 59)
+
+
 # Preferred display order (names as stored in `documents.document`)
 SIMPLE_UPLOAD_DOC_ORDER: tuple[str, ...] = (
     "Informe Fonoaudiológico - PEFE",
