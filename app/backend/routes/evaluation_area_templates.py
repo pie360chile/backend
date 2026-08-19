@@ -131,3 +131,23 @@ def download_template(
         filename=row.original_filename or path.name,
         media_type=row.content_type or "application/octet-stream",
     )
+
+
+@evaluation_area_templates.delete("/{template_id}")
+def delete_template(
+    template_id: int,
+    db: Session = Depends(get_db),
+    session_user: UserModel = Depends(get_current_active_user),
+):
+    if not _can_manage_templates(session_user, db):
+        return api_error(
+            status_code=status.HTTP_403_FORBIDDEN,
+            message="No tienes permiso para eliminar plantillas.",
+        )
+    result = EvaluationAreaTemplatesClass(db).delete(template_id, _customer_id(session_user))
+    if result.get("status") == "error":
+        return api_error(
+            status_code=result.get("http_status", status.HTTP_404_NOT_FOUND),
+            message=result.get("message", "Error"),
+        )
+    return api_response(message=result.get("message", "OK"))

@@ -194,6 +194,18 @@ class EvaluationAreaTemplatesClass:
         self.db.refresh(row)
         return {"status": "success", "message": "Plantilla actualizada.", "data": _serialize(row)}
 
+    def delete(self, template_id: int, customer_id: int | None) -> dict[str, Any]:
+        cid = self._customer_id(customer_id)
+        row = self._get(template_id, cid)
+        if not row:
+            return {"status": "error", "message": "Plantilla no encontrada.", "http_status": 404}
+        folder = _templates_root() / f"c{cid}" / f"t{int(row.id)}"
+        if folder.exists():
+            shutil.rmtree(folder, ignore_errors=True)
+        self.db.delete(row)
+        self.db.commit()
+        return {"status": "success", "message": "Plantilla eliminada."}
+
     def get_row(self, template_id: int, customer_id: int | None) -> EvaluationAreaTemplateModel | None:
         return self._get(template_id, self._customer_id(customer_id))
 
