@@ -140,6 +140,7 @@ from app.backend.routes.events import events
 from app.backend.routes.workspace_agent import workspace_agent
 from app.backend.routes.agents import agents
 from app.backend.routes.document_format_models import document_format_models
+from app.backend.routes.evaluation_area_templates import evaluation_area_templates
 
 
 def register_routers(app: FastAPI) -> None:
@@ -239,6 +240,7 @@ def register_routers(app: FastAPI) -> None:
         workspace_agent,
         agents,
         document_format_models,
+        evaluation_area_templates,
         pedagogical_evaluation_classroom_first_grade,
         pedagogical_evaluation_classroom_second_grade,
         pedagogical_evaluation_classroom_third_grade,
@@ -263,3 +265,4 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(workspace_agent, prefix="/api")
     app.include_router(agents, prefix="/api")
     app.include_router(document_format_models, prefix="/api")
+    app.include_router(evaluation_area_templates, prefix="/api")
