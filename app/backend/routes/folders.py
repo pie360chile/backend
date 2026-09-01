@@ -1,6 +1,7 @@
 from fastapi import APIRouter, status, Depends, Query, UploadFile, File
 from fastapi.responses import JSONResponse, FileResponse
 from app.backend.classes.student_document_file_class import FolderClass
+from app.backend.classes.student_drive_sync_class import student_files_dir
 from app.backend.classes.student_class import StudentClass
 from app.backend.classes.files_class import FileClass
 from app.backend.db.database import get_db
@@ -164,7 +165,7 @@ async def upload_document(
         
         # Usar FileClass para subir el archivo
         file_service = FileClass(db)
-        remote_path = f"system/folders/{unique_filename}"
+        remote_path = f"system/students/{unique_filename}"
         
         try:
             # Subir el archivo usando FileClass
@@ -324,12 +325,12 @@ async def download_document(
         # Asegurar que el filename solo contenga el nombre del archivo, sin rutas
         filename = Path(filename).name
         
-        # Ruta del archivo en files/system/students
-        file_path = Path("files/system/students") / filename
+        # Ruta canónica de documentos nuevos de estudiantes.
+        file_path = student_files_dir() / filename
         
         if not file_path.exists():
             # Intentar también con el nombre completo tal como está en la BD
-            file_path_alt = Path("files/system/students") / result.get("file")
+            file_path_alt = student_files_dir() / result.get("file")
             if file_path_alt.exists():
                 file_path = file_path_alt
             else:

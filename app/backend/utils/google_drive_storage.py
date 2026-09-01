@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import mimetypes
 import re
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -560,9 +561,9 @@ def upload_student_document_tree(
     liceo = _drive_folder_label(school_name, fallback="Liceo")
     curso = _drive_folder_label(course_name, fallback="Curso")
     doc_type = _drive_folder_label(document_type_name, fallback="Documento")
-    ext = (file_extension or "docx").lower().lstrip(".")
-    if ext not in {"docx", "pdf", "doc"}:
-        ext = "docx"
+    ext = re.sub(r"[^a-z0-9]", "", (file_extension or "bin").lower().lstrip("."))[:12]
+    if not ext:
+        ext = "bin"
     filename = _safe_filename(f"{rut_num}_{doc_type}.{ext}")
 
     try:
@@ -577,13 +578,7 @@ def upload_student_document_tree(
         except ImportError as exc:
             raise ValueError("googleapiclient no está instalado.") from exc
 
-        mime = mime_type or (
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            if ext == "docx"
-            else "application/pdf"
-            if ext == "pdf"
-            else "application/octet-stream"
-        )
+        mime = mime_type or mimetypes.guess_type(filename)[0] or "application/octet-stream"
         resumable = len(data) >= 5 * 1024 * 1024
         media = MediaIoBaseUpload(io.BytesIO(data), mimetype=mime, resumable=resumable)
 

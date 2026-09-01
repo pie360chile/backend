@@ -1,4 +1,6 @@
 from typing import Optional, Any
+from functools import wraps
+import mimetypes
 import unicodedata
 from fastapi import APIRouter, status, UploadFile, File, Form, Depends, Body, Query
 from fastapi.responses import JSONResponse, FileResponse, Response
@@ -26,6 +28,11 @@ from app.backend.classes.course_activity_record_class import (
     attendees_rafcnit_line,
 )
 from app.backend.classes.student_class import StudentClass
+from app.backend.classes.student_document_file_class import FolderClass
+from app.backend.classes.student_drive_sync_class import (
+    StudentDriveSyncClass,
+    student_files_dir,
+)
 from app.backend.classes.health_evaluation_class import HealthEvaluationClass
 from app.backend.classes.progress_status_student_class import ProgressStatusStudentClass
 from app.backend.classes.progress_status_individual_support_class import ProgressStatusIndividualSupportClass
@@ -191,7 +198,7 @@ def _coerce_pdf_to_stable_storage(
     src = Path(result["file_path"])
     if not src.is_file() or src.suffix.lower() != ".pdf":
         return
-    dest = Path("files/system/students") / _canonical_student_document_filename(
+    dest = student_files_dir() / _canonical_student_document_filename(
         student_id, catalog_document_id, document_type_id, ".pdf", period_year
     )
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -227,7 +234,7 @@ def _upsert_folder_student_document(
     Si always_new_version=True (p. ej. catálogo 42 Evalua): siempre INSERT con version_id
     incrementado; no sobrescribe la última versión ni borra el fichero anterior.
     """
-    upload_dir = Path("files/system/students")
+    upload_dir = student_files_dir()
     lv_q = db.query(FolderModel).filter(
         FolderModel.student_id == student_id,
         FolderModel.document_id == catalog_document_id,
@@ -268,6 +275,7 @@ def _upsert_folder_student_document(
         db.add(rec)
         db.commit()
         db.refresh(rec)
+        _enqueue_folder_drive(db, rec)
         return rec
 
     if last:
@@ -290,6 +298,7 @@ def _upsert_folder_student_document(
         last.updated_date = datetime.now()
         db.commit()
         db.refresh(last)
+        _enqueue_folder_drive(db, last)
         return last
     rec = FolderModel(
         school_id=school_id,
@@ -308,7 +317,98 @@ def _upsert_folder_student_document(
     db.add(rec)
     db.commit()
     db.refresh(rec)
+    _enqueue_folder_drive(db, rec)
     return rec
+
+
+def _enqueue_folder_drive(db: Session, row: FolderModel) -> None:
+    try:
+        StudentDriveSyncClass(db).enqueue(
+            folder_id=int(row.id),
+            student_id=int(row.student_id),
+            document_id=int(row.document_id),
+            file_path=f"system/students/{Path(row.file).name}",
+            mime_type=mimetypes.guess_type(str(row.file))[0],
+        )
+    except Exception:
+        db.rollback()
+        logger.exception(
+            "Documento %s guardado localmente, pero no pudo encolarse para Drive.",
+            row.id,
+        )
+
+
+def _persist_generated_student_file(
+    db: Session,
+    student_id: int,
+    document_id: int,
+    source_path: str | Path,
+) -> Path:
+    """Copia la salida final al storage estable y la registra para Drive."""
+    source = Path(source_path)
+    if not source.is_file():
+        raise FileNotFoundError(f"Archivo generado no encontrado: {source}")
+    destination = student_files_dir() / source.name
+    if source.resolve() != destination.resolve():
+        shutil_copy(str(source), str(destination))
+
+    latest = (
+        db.query(FolderModel)
+        .filter(
+            FolderModel.student_id == int(student_id),
+            FolderModel.document_id == int(document_id),
+            FolderModel.deleted_date.is_(None),
+        )
+        .order_by(FolderModel.version_id.desc())
+        .first()
+    )
+    if latest and Path(latest.file or "").name == destination.name:
+        _enqueue_folder_drive(db, latest)
+    else:
+        result = FolderClass(db).store(
+            student_id=int(student_id),
+            document_id=int(document_id),
+            file_path=destination.name,
+        )
+        if isinstance(result, dict) and result.get("status") == "error":
+            raise RuntimeError(result.get("message") or "No se pudo registrar el informe generado")
+    return destination
+
+
+def _persist_generated_student_document(fixed_document_id: int | None = None):
+    """Decora endpoints de generación sin bloquear la descarga si falla el registro."""
+    def decorator(endpoint):
+        @wraps(endpoint)
+        async def wrapped(*args, **kwargs):
+            response = await endpoint(*args, **kwargs)
+            if not isinstance(response, FileResponse):
+                return response
+            db = kwargs.get("db")
+            student_id = kwargs.get("student_id")
+            document_id = fixed_document_id or kwargs.get("document_id")
+            if db is None or student_id is None or document_id is None:
+                return response
+            try:
+                stable_path = _persist_generated_student_file(
+                    db,
+                    int(student_id),
+                    int(document_id),
+                    response.path,
+                )
+                response.path = str(stable_path)
+                response.stat_result = None
+            except Exception:
+                db.rollback()
+                logger.exception(
+                    "Informe generado para estudiante %s, documento %s, sin registro Drive.",
+                    student_id,
+                    document_id,
+                )
+            return response
+
+        return wrapped
+
+    return decorator
 
 
 def _catalog_row_is_informe_evaluacion_psicomotriz(document_id: int, db: Session) -> bool:
@@ -327,7 +427,7 @@ def _psychoped_doc27_cognitive_image_path(db: Session, student_id: int) -> Optio
     si no hay o el archivo falta, la última imagen en `folders` para documento 27.
     """
     image_exts = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
-    base = Path("files/system/students")
+    base = student_files_dir()
     info = (
         db.query(PsychopedagogicalEvaluationInfoModel)
         .filter(PsychopedagogicalEvaluationInfoModel.student_id == student_id)
@@ -654,8 +754,7 @@ async def upload_document(
             student_id, catalog_document_id, document_type_id, file_extension, period_year
         )
 
-        upload_dir = Path("files/system/students")
-        upload_dir.mkdir(parents=True, exist_ok=True)
+        upload_dir = student_files_dir()
         file_path = upload_dir / unique_filename
 
         content = await file.read()
@@ -3132,6 +3231,7 @@ def _resolve_paci_signature_rut(
 
 
 @documents.post("/generate/{student_id}/21/full")
+@_persist_generated_student_document(21)
 async def generate_paci_full_pdf(
     student_id: int,
     body: PaciFullPdfRequest,
@@ -3288,6 +3388,7 @@ async def generate_paci_full_pdf(
 
 
 @documents.post("/generate/{student_id}/21/progress-state")
+@_persist_generated_student_document(21)
 async def generate_paci_progress_state_pdf(
     student_id: int,
     body: PaciProgressStatePdfRequest,
@@ -3406,6 +3507,7 @@ async def generate_paci_progress_state_pdf(
 
 
 @documents.post("/generate/{student_id}/21/progress-state/integral")
+@_persist_generated_student_document(21)
 async def generate_paci_integral_progress_state_pdf(
     student_id: int,
     body: PaciIntegralProgressStatePdfRequest,
@@ -3553,6 +3655,7 @@ async def generate_paci_integral_progress_state_pdf(
 
 
 @documents.get("/generate/{student_id}/{document_id}")
+@_persist_generated_student_document()
 async def generate_document(
     student_id: int,
     document_id: int,
@@ -3661,6 +3764,14 @@ async def generate_document(
                     },
                 )
             fn = data.get("filename") or "informal_test.pdf"
+            try:
+                _persist_generated_student_file(db, student_id, document_id, pdf_path)
+            except Exception:
+                db.rollback()
+                logger.exception(
+                    "Prueba informal generada para estudiante %s sin registro Drive.",
+                    student_id,
+                )
             return Response(
                 content=pdf_bytes,
                 media_type="application/pdf",
@@ -6658,7 +6769,7 @@ async def download_document(
     filename: str
 ):
     try:
-        file_path = Path("files/system/students") / filename
+        file_path = student_files_dir() / Path(filename).name
         
         if not file_path.exists():
             return JSONResponse(

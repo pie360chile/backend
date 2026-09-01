@@ -524,31 +524,12 @@ class AgentsMcpClass:
             return generated
         data = generated.get("data") or {}
         save = data.get("save") or {}
-        drive_info: dict[str, Any] | None = None
-        drive_error: str | None = None
-        try:
-            drive_result = self.save_document_to_google_drive(
-                agent_id=agent_id,
-                customer_id=customer_id,
-                student_id=student_id,
-                document_id=document_id,
-                save_id=int(save_id),
-            )
-            if drive_result.get("status") == "error":
-                drive_error = drive_result.get("message")
-            else:
-                drive_info = drive_result.get("data")
-        except Exception as exc:
-            drive_error = str(exc)
 
         msg = (
             f"Documento «{template.document_name}» (document_id={template.document_id}) "
-            "generado con su plantilla, guardado en el estudiante y formulario actualizado."
+            "generado con su plantilla, guardado en el estudiante y pendiente de sincronización "
+            "automática con Google Drive."
         )
-        if drive_info and drive_info.get("drive_path"):
-            msg += f" Subido a Google Drive: {drive_info.get('drive_path')}."
-        elif drive_error:
-            msg += f" (Drive no subido: {drive_error})"
 
         return {
             "status": "success",
@@ -566,8 +547,8 @@ class AgentsMcpClass:
                 "documentName": template.document_name,
                 "familyReportId": data.get("familyReportId"),
                 "psychopedEvaluationId": data.get("psychopedEvaluationId"),
-                "googleDrive": drive_info,
-                "googleDriveError": drive_error,
+                "googleDrive": {"status": "pending"},
+                "googleDriveError": None,
             },
         }
 
@@ -585,19 +566,11 @@ class AgentsMcpClass:
         Sube el documento generado a Drive:
         Liceo > Año > Curso > RUT numérico > RUT_Tipo de documento.ext
         """
-        from datetime import datetime, timezone
         from pathlib import Path
 
         from app.backend.core.config import settings
-        from app.backend.db.models.pie_core import (
-            CourseModel,
-            DocumentModel,
-            SchoolModel,
-            StudentAcademicInfoModel,
-            StudentModel,
-            StudentPersonalInfoModel,
-        )
-        from app.backend.utils import google_drive_storage as gdrive
+        from app.backend.classes.student_drive_sync_class import StudentDriveSyncClass
+        from app.backend.db.models import FolderModel
 
         aid = (agent_id or "").strip()
         if not aid or int(customer_id) < 1 or int(student_id) < 1 or int(document_id) < 1:
@@ -657,87 +630,42 @@ class AgentsMcpClass:
                 "http_status": 404,
             }
 
-        student = self.db.query(StudentModel).filter(StudentModel.id == int(student_id)).first()
-        personal = (
-            self.db.query(StudentPersonalInfoModel)
-            .filter(StudentPersonalInfoModel.student_id == int(student_id))
-            .first()
-        )
-        academic = (
-            self.db.query(StudentAcademicInfoModel)
-            .filter(StudentAcademicInfoModel.student_id == int(student_id))
-            .order_by(StudentAcademicInfoModel.id.desc())
-            .first()
-        )
-        rut = ""
-        if personal and (personal.identification_number or "").strip():
-            rut = (personal.identification_number or "").strip()
-        elif student and (student.identification_number or "").strip():
-            rut = (student.identification_number or "").strip()
-
-        school_id = getattr(student, "school_id", None) if student else None
-        course_id = getattr(academic, "course_id", None) if academic else None
-        school_name = "Liceo"
-        if school_id:
-            school = self.db.query(SchoolModel).filter(SchoolModel.id == int(school_id)).first()
-            if school and (school.school_name or "").strip():
-                school_name = (school.school_name or "").strip()
-
-        course_name = "Curso"
-        period_year = None
-        if course_id:
-            course = self.db.query(CourseModel).filter(CourseModel.id == int(course_id)).first()
-            if course:
-                if (course.course_name or "").strip():
-                    course_name = (course.course_name or "").strip()
-                period_year = getattr(course, "period_year", None)
-        if period_year is None and student is not None:
-            period_year = getattr(student, "period_year", None)
-        try:
-            period_year = int(str(period_year).strip()[:4]) if period_year is not None else None
-        except (TypeError, ValueError):
-            period_year = None
-        if period_year is None or period_year < 2000 or period_year > 2100:
-            period_year = datetime.now(timezone.utc).year
-
-        doc_row = (
-            self.db.query(DocumentModel)
-            .filter(DocumentModel.id == int(document_id))
-            .first()
-        )
-        document_type_name = (
-            (doc_row.document or "").strip()
-            if doc_row and (doc_row.document or "").strip()
-            else f"Documento_{int(document_id)}"
-        )
-
-        template = (
-            self.db.query(AgentDocumentTemplateModel)
+        folder = (
+            self.db.query(FolderModel)
             .filter(
-                AgentDocumentTemplateModel.agent_id == aid,
-                AgentDocumentTemplateModel.document_id == int(document_id),
+                FolderModel.student_id == int(student_id),
+                FolderModel.document_id == int(document_id),
+                FolderModel.file == local_path.name,
+                FolderModel.deleted_date.is_(None),
             )
+            .order_by(FolderModel.version_id.desc())
             .first()
         )
-        ext = (getattr(template, "format_type", None) or local_path.suffix.lstrip(".") or "docx").lower()
+        if not folder:
+            return {
+                "status": "error",
+                "message": "El archivo generado no está registrado en la carpeta del estudiante.",
+                "http_status": 409,
+            }
 
-        try:
-            payload = gdrive.upload_student_document_tree(
-                db=self.db,
-                customer_id=int(customer_id),
-                school_name=school_name,
-                year=int(period_year),
-                course_name=course_name,
-                student_rut=rut,
-                document_type_name=document_type_name,
-                data=local_path.read_bytes(),
-                file_extension=ext,
-            )
-        except ValueError as exc:
-            return {"status": "error", "message": str(exc), "http_status": 400}
-        except Exception as exc:
-            return {"status": "error", "message": str(exc), "http_status": 500}
-
+        sync = StudentDriveSyncClass(self.db)
+        job = sync.enqueue(
+            folder_id=int(folder.id),
+            student_id=int(student_id),
+            document_id=int(document_id),
+            file_path=f"system/students/{local_path.name}",
+        )
+        result = sync.process(int(job.id))
+        if not result.get("ok"):
+            return {
+                "status": "error",
+                "message": (
+                    "El documento quedó guardado y pendiente de reintento en Google Drive: "
+                    f"{result.get('message')}"
+                ),
+                "http_status": 503,
+            }
+        payload = result.get("data") or {}
         return {
             "status": "success",
             "message": f"Documento subido a Google Drive: {payload.get('drive_path')}",

@@ -1,3 +1,6 @@
+import logging
+import mimetypes
+from pathlib import Path
 from typing import Optional, Any, List, Dict, Union
 from sqlalchemy.orm import Session
 from datetime import datetime
@@ -7,9 +10,15 @@ from app.backend.db.models import (
     BirthCertificateDocumentModel,
     HealthEvaluationModel,
     EvaluaResultReportModel,
+    CourseModel,
+    StudentAcademicInfoModel,
+    StudentModel,
 )
 from app.backend.classes.documents_class import _document_not_deleted_filter
 from app.backend.utils.simple_upload_documents import EVALUATION_AREA_BUCKET_DOCUMENT_IDS
+
+
+logger = logging.getLogger(__name__)
 
 
 def _folder_period_str(period_year: Optional[Union[int, str]]) -> Optional[str]:
@@ -23,6 +32,26 @@ def _folder_period_str(period_year: Optional[Union[int, str]]) -> Optional[str]:
 class FolderClass:
     def __init__(self, db: Session):
         self.db = db
+
+    def _enqueue_drive(self, row: FolderModel) -> None:
+        if not row.file:
+            return
+        try:
+            from app.backend.classes.student_drive_sync_class import StudentDriveSyncClass
+
+            StudentDriveSyncClass(self.db).enqueue(
+                folder_id=int(row.id),
+                student_id=int(row.student_id),
+                document_id=int(row.document_id),
+                file_path=f"system/students/{Path(row.file).name}",
+                mime_type=mimetypes.guess_type(str(row.file))[0],
+            )
+        except Exception:
+            self.db.rollback()
+            logger.exception(
+                "Documento %s guardado localmente, pero no pudo encolarse para Drive.",
+                row.id,
+            )
 
     def get(self, id: int) -> Any:
         """
@@ -162,6 +191,22 @@ class FolderClass:
         pro_id = 0 if professional_id is None else int(professional_id)
         py = _folder_period_str(period_year)
         try:
+            student = self.db.query(StudentModel).filter(StudentModel.id == student_id).first()
+            if student:
+                school_id = school_id or getattr(student, "school_id", None)
+                py = py or _folder_period_str(getattr(student, "period_year", None))
+            if not course_id:
+                academic = (
+                    self.db.query(StudentAcademicInfoModel)
+                    .filter(StudentAcademicInfoModel.student_id == student_id)
+                    .order_by(StudentAcademicInfoModel.id.desc())
+                    .first()
+                )
+                course_id = getattr(academic, "course_id", None) if academic else None
+            if course_id and py is None:
+                course = self.db.query(CourseModel).filter(CourseModel.id == course_id).first()
+                py = _folder_period_str(getattr(course, "period_year", None)) if course else None
+
             # Si es health evaluation (document_id = 4), buscar registro con file vacío para actualizar
             if document_id == 4:
                 # Buscar registro con file vacío (null) para este estudiante y documento
@@ -183,6 +228,7 @@ class FolderClass:
                     
                     self.db.commit()
                     self.db.refresh(folder_without_file)
+                    self._enqueue_drive(folder_without_file)
                     
                     return {
                         "status": "success",
@@ -209,6 +255,7 @@ class FolderClass:
                         
                         self.db.commit()
                         self.db.refresh(last_version)
+                        self._enqueue_drive(last_version)
                         
                         return {
                             "status": "success",
@@ -236,6 +283,7 @@ class FolderClass:
                         self.db.add(new_document_file)
                         self.db.commit()
                         self.db.refresh(new_document_file)
+                        self._enqueue_drive(new_document_file)
                         
                         return {
                             "status": "success",
@@ -279,6 +327,7 @@ class FolderClass:
                 self.db.add(new_document_file)
                 self.db.commit()
                 self.db.refresh(new_document_file)
+                self._enqueue_drive(new_document_file)
                 
                 return {
                     "status": "success",

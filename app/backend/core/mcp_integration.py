@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from starlette.routing import Route
 
 from app.backend.mcp import MCP_HTTP_PATH, agents_mcp, get_mcp_asgi_app
+from app.backend.utils.student_drive_sync_worker import run_student_drive_sync_worker
 
 # Ruta interna (con root_path=/api la URL pública es /api/mcp)
 MCP_PUBLIC_PATH = MCP_HTTP_PATH
@@ -21,8 +23,20 @@ def workspace_mcp_lifespan():
 
 @asynccontextmanager
 async def combined_app_lifespan(app: FastAPI):
+    stop_drive_worker = asyncio.Event()
+    drive_worker = asyncio.create_task(
+        run_student_drive_sync_worker(stop_drive_worker),
+        name="student-drive-sync-worker",
+    )
     async with workspace_mcp_lifespan():
-        yield
+        try:
+            yield
+        finally:
+            stop_drive_worker.set()
+            try:
+                await asyncio.wait_for(drive_worker, timeout=10)
+            except asyncio.TimeoutError:
+                drive_worker.cancel()
 
 
 def mount_workspace_mcp(app: FastAPI) -> None:

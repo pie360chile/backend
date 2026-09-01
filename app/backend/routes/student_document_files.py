@@ -1,6 +1,7 @@
 from fastapi import APIRouter, status, UploadFile, File, Depends, Query
 from fastapi.responses import JSONResponse
 from app.backend.classes.student_document_file_class import FolderClass
+from app.backend.classes.student_drive_sync_class import student_files_dir
 from app.backend.classes.student_class import StudentClass
 from app.backend.db.database import get_db
 from app.backend.auth.auth_user import get_current_active_user
@@ -56,8 +57,7 @@ async def upload_document_file(
         unique_filename = f"student_{student_id}_doc_{document_id}_{unique_id}{file_extension}"
         
         # Crear directorio si no existe
-        upload_dir = Path("files/system/student_document_files")
-        upload_dir.mkdir(parents=True, exist_ok=True)
+        upload_dir = student_files_dir()
         
         file_path = upload_dir / unique_filename
         

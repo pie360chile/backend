@@ -17,3 +17,4 @@ from app.backend.db.models.agents_usage import (  # noqa: F401
 from app.backend.db.models.document_format_models import DocumentFormatModel  # noqa: F401
 from app.backend.db.models.evaluation_area_templates import EvaluationAreaTemplateModel  # noqa: F401
 from app.backend.db.models.customer_drive_settings import CustomerDriveSettingModel  # noqa: F401
+from app.backend.db.models.student_drive_sync_jobs import StudentDriveSyncJobModel  # noqa: F401
