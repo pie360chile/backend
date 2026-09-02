@@ -22,7 +22,11 @@ from app.backend.db.models import (
     StudentModel,
     StudentPersonalInfoModel,
 )
-from app.backend.utils.google_drive_storage import upload_student_document_tree
+from app.backend.utils.google_drive_storage import (
+    download_drive_file,
+    find_student_document_file_id,
+    upload_student_document_tree,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -213,20 +217,112 @@ class StudentDriveSyncClass:
                 return candidate.resolve()
         raise FileNotFoundError(f"Archivo local no encontrado: {file_path}")
 
+    def download_for_folder(self, folder_id: int) -> dict[str, Any]:
+        """
+        Obtiene el archivo de una versión (folder) desde Google Drive.
+        1) Job de sync completado con drive_file_id
+        2) Búsqueda en el árbol Liceo/Año/Curso/RUT
+        Opcionalmente deja copia local en files/system/students.
+        """
+        folder = (
+            self.db.query(FolderModel)
+            .filter(FolderModel.id == int(folder_id))
+            .first()
+        )
+        if not folder:
+            raise FileNotFoundError("Documento no encontrado")
+
+        job = (
+            self.db.query(StudentDriveSyncJobModel)
+            .filter(
+                StudentDriveSyncJobModel.folder_id == int(folder_id),
+                StudentDriveSyncJobModel.drive_file_id.isnot(None),
+                StudentDriveSyncJobModel.status == "completed",
+            )
+            .order_by(StudentDriveSyncJobModel.id.desc())
+            .first()
+        )
+
+        metadata = self._metadata_for_folder(folder)
+        drive_file_id = (job.drive_file_id if job else None) or None
+        if not drive_file_id:
+            local_name = Path(folder.file or "").name
+            ext = Path(local_name).suffix.lstrip(".") if local_name else "bin"
+            drive_file_id = find_student_document_file_id(
+                db=self.db,
+                customer_id=metadata["customer_id"],
+                school_name=metadata["school_name"],
+                year=metadata["year"],
+                course_name=metadata["course_name"],
+                student_rut=metadata["student_rut"],
+                document_type_name=metadata["document_type_name"],
+                file_extension=ext or "bin",
+            )
+        if not drive_file_id:
+            raise FileNotFoundError(
+                "Archivo no encontrado en el servidor ni en Google Drive"
+            )
+
+        payload = download_drive_file(
+            db=self.db,
+            customer_id=metadata["customer_id"],
+            file_id=str(drive_file_id),
+        )
+        data: bytes = payload["data"]
+        filename = Path(folder.file or payload.get("filename") or f"documento_{folder_id}").name
+        mime = payload.get("mime_type") or mimetypes.guess_type(filename)[0] or "application/octet-stream"
+
+        # Cache local para próximas descargas
+        try:
+            cache_path = student_files_dir() / filename
+            if not cache_path.is_file():
+                cache_path.write_bytes(data)
+        except Exception as exc:
+            logger.warning(
+                "No se pudo cachear localmente folder %s desde Drive: %s",
+                folder_id,
+                exc,
+            )
+
+        return {
+            "data": data,
+            "filename": filename,
+            "mime_type": mime,
+            "drive_file_id": str(drive_file_id),
+            "source": "google_drive",
+        }
+
     def _metadata(self, job: StudentDriveSyncJobModel) -> dict[str, Any]:
         folder = (
             self.db.query(FolderModel)
             .filter(FolderModel.id == int(job.folder_id))
             .first()
         )
+        if not folder:
+            raise ValueError("Faltan datos del documento, estudiante o carpeta.")
+        return self._metadata_for_folder(
+            folder,
+            student_id=int(job.student_id),
+            document_id=int(job.document_id),
+        )
+
+    def _metadata_for_folder(
+        self,
+        folder: FolderModel,
+        *,
+        student_id: int | None = None,
+        document_id: int | None = None,
+    ) -> dict[str, Any]:
+        sid = int(student_id or folder.student_id or 0)
+        did = int(document_id or folder.document_id or 0)
         student = (
             self.db.query(StudentModel)
-            .filter(StudentModel.id == int(job.student_id))
+            .filter(StudentModel.id == sid)
             .first()
         )
         document = (
             self.db.query(DocumentModel)
-            .filter(DocumentModel.id == int(job.document_id))
+            .filter(DocumentModel.id == did)
             .first()
         )
         if not folder or not student or not document:

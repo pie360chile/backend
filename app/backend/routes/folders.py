@@ -1,7 +1,7 @@
 from fastapi import APIRouter, status, Depends, Query, UploadFile, File
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, Response
 from app.backend.classes.student_document_file_class import FolderClass
-from app.backend.classes.student_drive_sync_class import student_files_dir
+from app.backend.classes.student_drive_sync_class import StudentDriveSyncClass, student_files_dir
 from app.backend.classes.student_class import StudentClass
 from app.backend.classes.files_class import FileClass
 from app.backend.db.database import get_db
@@ -12,8 +12,11 @@ from typing import Optional
 from sqlalchemy.orm import Session
 from pathlib import Path
 from datetime import datetime
+import logging
 import uuid
 import mimetypes
+
+logger = logging.getLogger(__name__)
 
 folders = APIRouter(
     prefix="/folders",
@@ -295,7 +298,7 @@ async def download_document(
 ):
     """
     Descarga un documento de folders por su ID.
-    El archivo debe estar en files/system/students/
+    Prioridad: archivo local en files/system/students/; si no existe, Google Drive.
     """
     try:
         folder_service = FolderClass(db)
@@ -334,14 +337,42 @@ async def download_document(
             if file_path_alt.exists():
                 file_path = file_path_alt
             else:
-                return JSONResponse(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    content={
-                        "status": 404,
-                        "message": f"Archivo no encontrado: {filename}. Buscando en: {file_path}",
-                        "data": None
-                    }
-                )
+                # Fallback: Google Drive (job sync o árbol del customer)
+                try:
+                    drive_payload = StudentDriveSyncClass(db).download_for_folder(id)
+                    cached = student_files_dir() / Path(drive_payload["filename"]).name
+                    if cached.is_file():
+                        media_type = (
+                            drive_payload.get("mime_type")
+                            or mimetypes.guess_type(str(cached))[0]
+                            or "application/octet-stream"
+                        )
+                        return FileResponse(
+                            path=str(cached),
+                            filename=drive_payload["filename"],
+                            media_type=media_type,
+                        )
+                    return Response(
+                        content=drive_payload["data"],
+                        media_type=drive_payload.get("mime_type") or "application/octet-stream",
+                        headers={
+                            "Content-Disposition": f'attachment; filename="{drive_payload["filename"]}"'
+                        },
+                    )
+                except Exception as drive_exc:
+                    logger.warning(
+                        "Fallback Drive falló para folder %s: %s", id, drive_exc
+                    )
+                    return JSONResponse(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        content={
+                            "status": 404,
+                            "message": (
+                                f"Archivo no encontrado en el servidor ni en Google Drive: {filename}"
+                            ),
+                            "data": None
+                        }
+                    )
         
         # Determinar el tipo MIME basado en la extensión
         media_type, _ = mimetypes.guess_type(str(file_path))

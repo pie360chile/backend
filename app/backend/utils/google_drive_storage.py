@@ -632,6 +632,121 @@ def upload_student_document_tree(
     }
 
 
+def download_drive_file(
+    *,
+    db: Any,
+    customer_id: int,
+    file_id: str,
+) -> dict[str, Any]:
+    """Descarga el contenido de un archivo de Drive del customer."""
+    from app.backend.utils.customer_drive_config import (
+        customer_drive_configured,
+        load_customer_drive_config,
+    )
+
+    fid = (file_id or "").strip()
+    if not fid:
+        raise ValueError("file_id de Drive vacío.")
+    if int(customer_id) < 1:
+        raise ValueError("customer_id inválido.")
+    if not customer_drive_configured(db, int(customer_id)):
+        raise ValueError(
+            "Google Drive no está configurado para este cliente. "
+            "Conéctalo en Configuración → Google Drive."
+        )
+
+    config = load_customer_drive_config(db, int(customer_id))
+    service = _service_for_config(config)
+    try:
+        from googleapiclient.http import MediaIoBaseDownload
+    except ImportError as exc:
+        raise ValueError("googleapiclient no está instalado.") from exc
+
+    try:
+        meta = (
+            service.files()
+            .get(
+                fileId=fid,
+                fields="id,name,mimeType,size",
+                supportsAllDrives=True,
+            )
+            .execute()
+        )
+        request = service.files().get_media(fileId=fid, supportsAllDrives=True)
+        buffer = io.BytesIO()
+        downloader = MediaIoBaseDownload(buffer, request)
+        done = False
+        while not done:
+            _, done = downloader.next_chunk()
+    except Exception as exc:
+        raise ValueError(_drive_api_error_message(exc)) from exc
+
+    data = buffer.getvalue()
+    if not data:
+        raise ValueError("El archivo de Drive está vacío.")
+    name = meta.get("name") or f"drive_{fid}"
+    mime = meta.get("mimeType") or mimetypes.guess_type(name)[0] or "application/octet-stream"
+    return {
+        "ok": True,
+        "file_id": fid,
+        "filename": name,
+        "mime_type": mime,
+        "size_bytes": len(data),
+        "data": data,
+        "customer_id": int(customer_id),
+    }
+
+
+def find_student_document_file_id(
+    *,
+    db: Any,
+    customer_id: int,
+    school_name: str,
+    year: int,
+    course_name: str,
+    student_rut: str,
+    document_type_name: str,
+    file_extension: str,
+) -> str | None:
+    """Busca en el árbol Drive el archivo RUT_TipoDocumento.ext sin subirlo."""
+    from app.backend.utils.customer_drive_config import (
+        customer_drive_configured,
+        load_customer_drive_config,
+    )
+
+    if int(customer_id) < 1:
+        raise ValueError("customer_id inválido.")
+    if not customer_drive_configured(db, int(customer_id)):
+        return None
+
+    config = load_customer_drive_config(db, int(customer_id))
+    root_id = config.root_folder_id.strip()
+    rut_num = _numeric_rut(student_rut)
+    year_label = str(int(year))
+    liceo = _drive_folder_label(school_name, fallback="Liceo")
+    curso = _drive_folder_label(course_name, fallback="Curso")
+    doc_type = _drive_folder_label(document_type_name, fallback="Documento")
+    ext = re.sub(r"[^a-z0-9]", "", (file_extension or "bin").lower().lstrip("."))[:12] or "bin"
+    filename = _safe_filename(f"{rut_num}_{doc_type}.{ext}")
+
+    try:
+        liceo_id = _find_child_folder(config, root_id, liceo)
+        if not liceo_id:
+            return None
+        year_id = _find_child_folder(config, liceo_id, year_label)
+        if not year_id:
+            return None
+        course_id = _find_child_folder(config, year_id, curso)
+        if not course_id:
+            return None
+        student_folder_id = _find_child_folder(config, course_id, rut_num)
+        if not student_folder_id:
+            return None
+        return _find_child_file(config, student_folder_id, filename)
+    except Exception as exc:
+        raise ValueError(_drive_api_error_message(exc)) from exc
+
+
 def upload_bytes(
     *,
     config: DriveSchoolConfig,
