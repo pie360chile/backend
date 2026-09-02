@@ -1,4 +1,4 @@
-"""Ensure agents_openai_models + agents_app_settings and seed DeepSeek-V4-Pro/Flash.
+"""Ensure agents_openai_models + agents_app_settings and seed DeepSeek-V4-Flash.
 
 Run from backend/:
   python migrations/apply_agents_llm_models.py

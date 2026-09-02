@@ -1,0 +1,6 @@
+imported_total=262
+imported_verdicts={'ok': 197, 'rut_doc_no_en_pie360': 26, 'mal_asignado': 30, 'sin_rut_en_doc': 9}
+unmatched_total=186
+unmatched_verdicts={'existe_por_rut': 34, 'rut_no_en_pie360': 148, 'sin_rut_en_doc': 4}
+imported_csv=C:\Users\jesus\Desktop\proyecto_pie360\backend\scripts\output\audit_imported_identity.csv
+unmatched_csv=C:\Users\jesus\Desktop\proyecto_pie360\backend\scripts\output\audit_unmatched_identity.csv

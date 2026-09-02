@@ -14,27 +14,19 @@ from app.backend.db.models.agents_openai_models import AgentsOpenAIModel
 
 # DeepSeek V4 — precios off-peak oficiales (desde 2026-08-16 16:00 UTC).
 # Peak = 2× (01:00–04:00 y 06:00–10:00 UTC). Ver agents_deepseek_pricing.py
-_DEFAULT_MODEL_CODE = "deepseek-v4-pro"
-_DEFAULT_MODEL_NAME = "DeepSeek-V4-Pro"
+# Fuente: https://api-docs.deepseek.com/quick_start/pricing/
+_DEFAULT_MODEL_CODE = "deepseek-v4-flash"
+_DEFAULT_MODEL_NAME = "DeepSeek-V4-Flash"
 
 _SEED_MODELS: list[dict[str, Any]] = [
-    {
-        "model_code": "deepseek-v4-pro",
-        "display_name": "DeepSeek-V4-Pro",
-        "input_per_1m_usd": Decimal("0.660000"),
-        "output_per_1m_usd": Decimal("1.980000"),
-        "cached_input_per_1m_usd": Decimal("0.022000"),
-        "sort_order": 10,
-        "is_selected": True,
-    },
     {
         "model_code": "deepseek-v4-flash",
         "display_name": "DeepSeek-V4-Flash",
         "input_per_1m_usd": Decimal("0.220000"),
         "output_per_1m_usd": Decimal("0.660000"),
         "cached_input_per_1m_usd": Decimal("0.007000"),
-        "sort_order": 20,
-        "is_selected": False,
+        "sort_order": 10,
+        "is_selected": True,
     },
 ]
 
@@ -151,7 +143,7 @@ class AgentsLlmModelsClass:
         self.db.commit()
 
     def force_select_default_model(self) -> None:
-        """Usado por la migración: deja DeepSeek-V4-Pro como modelo global."""
+        """Usado por la migración: deja DeepSeek-V4-Flash como modelo global."""
         self.ensure_seeded()
         now = _now()
         default_row = (

@@ -613,6 +613,18 @@ class AgentsChatClass:
                     data.get("usage") if isinstance(data.get("usage"), dict) else None
                 )
             elif event.get("type") == "error":
+                # Si ya hubo tokens parciales, igual registramos el uso estimado.
+                if self.customer_id and (reply_text or usage):
+                    self._record_llm_usage(
+                        agent_id=agent_id,
+                        model_code=model_code,
+                        usage=usage,
+                        messages=messages,
+                        reply_text=reply_text,
+                        input_text=text,
+                        output_text=reply_text,
+                        request_kind="chat",
+                    )
                 yield event
                 return
             else:
@@ -790,37 +802,16 @@ class AgentsChatClass:
         if not self.customer_id:
             return
 
-        if not usage:
-            prompt_chars = "\n".join(
-                str(m.get("content") or "") for m in messages if isinstance(m, dict)
-            )
-            pt = estimate_tokens_from_text(prompt_chars)
-            ct = estimate_tokens_from_text(reply_text)
-            usage = {
-                "prompt_tokens": pt,
-                "completion_tokens": ct,
-                "total_tokens": pt + ct,
-                "prompt_cache_hit_tokens": 0,
-                "prompt_cache_miss_tokens": pt,
-            }
-
-        try:
-            AgentsUsageClass(self.db).record_chat(
-                customer_id=int(self.customer_id),
-                school_id=int(self.school_id) if self.school_id else None,
-                user_id=int(self.user_id) if self.user_id else None,
-                agent_id=agent_id,
-                model=model_code,
-                prompt_tokens=int(usage.get("prompt_tokens") or 0),
-                completion_tokens=int(usage.get("completion_tokens") or 0),
-                total_tokens=int(usage.get("total_tokens") or 0),
-                prompt_cache_hit_tokens=int(usage.get("prompt_cache_hit_tokens") or 0),
-                prompt_cache_miss_tokens=int(usage.get("prompt_cache_miss_tokens") or 0),
-                input_text=text,
-                output_text=visible_reply,
-            )
-        except Exception:
-            self.db.rollback()
+        self._record_llm_usage(
+            agent_id=agent_id,
+            model_code=model_code,
+            usage=usage,
+            messages=messages,
+            reply_text=reply_text,
+            input_text=text,
+            output_text=visible_reply,
+            request_kind="chat",
+        )
 
     def _stream_bulk_reports(
         self,
@@ -985,6 +976,8 @@ class AgentsChatClass:
                     usage=usage_acc,
                     input_text=text,
                     output_text=header + "\n" + ask,
+                    messages_hint=None,
+                    reply_hint=ask,
                 )
                 return
             if result.get("ok"):
@@ -1136,7 +1129,7 @@ class AgentsChatClass:
                 )
             elif event.get("type") == "error":
                 empty["reason"] = event.get("message") or "error del modelo"
-                empty["usage"] = usage
+                empty["usage"] = _usage_or_estimate(usage, messages, reply_text)
                 return empty
 
         fields = extract_fields_from_reply(reply_text)
@@ -1189,12 +1182,16 @@ class AgentsChatClass:
                         usage = retry_usage
                 elif event.get("type") == "error":
                     empty["reason"] = event.get("message") or "error del modelo"
-                    empty["usage"] = usage
+                    empty["usage"] = _usage_or_estimate(
+                        usage, retry_messages, reply_text + "\n" + retry_reply
+                    )
                     return empty
             fields = extract_fields_from_reply(retry_reply)
+            if retry_reply:
+                reply_text = retry_reply
         if not fields:
             empty["reason"] = "el modelo no entregó los campos del informe"
-            empty["usage"] = usage
+            empty["usage"] = _usage_or_estimate(usage, messages, reply_text)
             return empty
 
         try:
@@ -1210,13 +1207,13 @@ class AgentsChatClass:
             )
         except Exception as exc:
             empty["reason"] = f"error al guardar: {exc}"
-            empty["usage"] = usage
+            empty["usage"] = _usage_or_estimate(usage, messages, reply_text)
             return empty
 
         if created.get("status") == "error":
             msg = created.get("message") or "no se pudo generar el documento"
             empty["reason"] = msg
-            empty["usage"] = usage
+            empty["usage"] = _usage_or_estimate(usage, messages, reply_text)
             if "plantilla" in msg.lower():
                 empty["template_missing"] = True
             return empty
@@ -1230,9 +1227,45 @@ class AgentsChatClass:
             "ok": True,
             "filename": filename,
             "reason": None,
-            "usage": usage,
+            "usage": _usage_or_estimate(usage, messages, reply_text),
             "template_missing": False,
         }
+
+    def _record_llm_usage(
+        self,
+        *,
+        agent_id: str,
+        model_code: str,
+        usage: dict[str, Any] | None,
+        messages: list[dict[str, Any]] | None,
+        reply_text: str,
+        input_text: str,
+        output_text: str,
+        request_kind: str = "chat",
+    ) -> None:
+        if not self.customer_id:
+            return
+        ensured = _usage_or_estimate(usage, messages, reply_text)
+        if not ensured:
+            return
+        try:
+            AgentsUsageClass(self.db).record_chat(
+                customer_id=int(self.customer_id),
+                school_id=int(self.school_id) if self.school_id else None,
+                user_id=int(self.user_id) if self.user_id else None,
+                agent_id=agent_id,
+                model=model_code,
+                prompt_tokens=int(ensured.get("prompt_tokens") or 0),
+                completion_tokens=int(ensured.get("completion_tokens") or 0),
+                total_tokens=int(ensured.get("total_tokens") or 0),
+                prompt_cache_hit_tokens=int(ensured.get("prompt_cache_hit_tokens") or 0),
+                prompt_cache_miss_tokens=int(ensured.get("prompt_cache_miss_tokens") or 0),
+                input_text=input_text,
+                output_text=output_text,
+                request_kind=request_kind,
+            )
+        except Exception:
+            self.db.rollback()
 
     def _record_bulk_usage(
         self,
@@ -1242,26 +1275,51 @@ class AgentsChatClass:
         usage: dict[str, Any] | None,
         input_text: str,
         output_text: str,
+        messages_hint: list[dict[str, Any]] | None = None,
+        reply_hint: str | None = None,
     ) -> None:
-        if not self.customer_id or not usage:
-            return
-        try:
-            AgentsUsageClass(self.db).record_chat(
-                customer_id=int(self.customer_id),
-                school_id=int(self.school_id) if self.school_id else None,
-                user_id=int(self.user_id) if self.user_id else None,
-                agent_id=agent_id,
-                model=model_code,
-                prompt_tokens=int(usage.get("prompt_tokens") or 0),
-                completion_tokens=int(usage.get("completion_tokens") or 0),
-                total_tokens=int(usage.get("total_tokens") or 0),
-                prompt_cache_hit_tokens=int(usage.get("prompt_cache_hit_tokens") or 0),
-                prompt_cache_miss_tokens=int(usage.get("prompt_cache_miss_tokens") or 0),
-                input_text=input_text,
-                output_text=output_text,
-            )
-        except Exception:
-            self.db.rollback()
+        ensured = _usage_or_estimate(usage, messages_hint, reply_hint or output_text)
+        self._record_llm_usage(
+            agent_id=agent_id,
+            model_code=model_code,
+            usage=ensured,
+            messages=messages_hint,
+            reply_text=reply_hint or output_text or "",
+            input_text=input_text,
+            output_text=output_text,
+            request_kind="bulk",
+        )
+
+
+def _usage_or_estimate(
+    usage: dict[str, Any] | None,
+    messages: list[dict[str, Any]] | None,
+    reply_text: str | None,
+) -> dict[str, Any] | None:
+    """Usa usage del proveedor; si falta, estima para no perder el gasto."""
+    if usage and (
+        int(usage.get("prompt_tokens") or 0) > 0
+        or int(usage.get("completion_tokens") or 0) > 0
+        or int(usage.get("total_tokens") or 0) > 0
+    ):
+        return usage
+    prompt_chars = "\n".join(
+        str(m.get("content") or "") for m in (messages or []) if isinstance(m, dict)
+    )
+    reply = reply_text or ""
+    if not prompt_chars and not reply:
+        return usage
+    pt = estimate_tokens_from_text(prompt_chars) if prompt_chars else 0
+    ct = estimate_tokens_from_text(reply) if reply else 0
+    if pt <= 0 and ct <= 0:
+        return usage
+    return {
+        "prompt_tokens": pt,
+        "completion_tokens": ct,
+        "total_tokens": pt + ct,
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": pt,
+    }
 
 
 def _merge_usage(

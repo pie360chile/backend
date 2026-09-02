@@ -12,13 +12,8 @@ from decimal import Decimal
 from typing import Any
 from zoneinfo import ZoneInfo
 
-# Off-peak oficiales (USD / 1M tokens)
+# Off-peak oficiales (USD / 1M tokens) — solo Flash (default actual)
 DEEPSEEK_OFF_PEAK: dict[str, dict[str, Decimal]] = {
-    "deepseek-v4-pro": {
-        "input": Decimal("0.660000"),
-        "cached_input": Decimal("0.022000"),
-        "output": Decimal("1.980000"),
-    },
     "deepseek-v4-flash": {
         "input": Decimal("0.220000"),
         "cached_input": Decimal("0.007000"),

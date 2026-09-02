@@ -1,0 +1,20 @@
+imported=19 skipped=4710 errors=0
+nationalities: imported=0 skipped=175 errors=26
+regions: imported=0 skipped=52 errors=0
+provinces: imported=0 skipped=52 errors=0
+communes: imported=0 skipped=346 errors=0
+teachings school 1: imported=0 skipped=4 errors=0
+courses school 1: imported=0 skipped=23 errors=0
+students school 1: imported=1 skipped=665 errors=0
+teachings school 2: imported=0 skipped=4 errors=0
+courses school 2: imported=0 skipped=20 errors=0
+students school 2: imported=1 skipped=711 errors=0
+teachings school 3: imported=0 skipped=4 errors=0
+courses school 3: imported=0 skipped=37 errors=0
+students school 3: imported=3 skipped=1363 errors=0
+teachings school 4: imported=0 skipped=4 errors=0
+courses school 4: imported=0 skipped=33 errors=0
+students school 4: imported=5 skipped=1017 errors=0
+teachings school 5: imported=0 skipped=4 errors=0
+courses school 5: imported=0 skipped=27 errors=0
+students school 5: imported=9 skipped=954 errors=0

@@ -19,8 +19,14 @@ def _now() -> datetime:
 
 
 def _day_bounds(day: date) -> tuple[datetime, datetime]:
-    start = datetime.combine(day, time.min)
-    end = datetime.combine(day, time.max)
+    """Límites del día calendario en Chile → UTC naive (como created_at)."""
+    from zoneinfo import ZoneInfo
+
+    tz = ZoneInfo("America/Santiago")
+    start_local = datetime.combine(day, time.min, tzinfo=tz)
+    end_local = datetime.combine(day, time.max, tzinfo=tz)
+    start = start_local.astimezone(timezone.utc).replace(tzinfo=None)
+    end = end_local.astimezone(timezone.utc).replace(tzinfo=None)
     return start, end
 
 
@@ -44,12 +50,12 @@ def _estimate_cost_usd(
         is_deepseek_peak,
     )
 
-    in_price = Decimal(str(row.input_per_1m_usd)) if row else Decimal("0.660")
-    out_price = Decimal(str(row.output_per_1m_usd)) if row else Decimal("1.980")
+    in_price = Decimal(str(row.input_per_1m_usd)) if row else Decimal("0.220")
+    out_price = Decimal(str(row.output_per_1m_usd)) if row else Decimal("0.660")
     cached_price = (
         Decimal(str(row.cached_input_per_1m_usd))
         if row and row.cached_input_per_1m_usd is not None
-        else None
+        else (Decimal("0.007") if row is None else None)
     )
     if is_deepseek_peak():
         in_price = apply_period_multiplier(in_price)
@@ -107,6 +113,7 @@ class AgentsUsageClass:
         prompt_cache_miss_tokens: int = 0,
         input_text: str | None = None,
         output_text: str | None = None,
+        request_kind: str = "chat",
     ) -> dict[str, Any]:
         pt = max(0, int(prompt_tokens or 0))
         ct = max(0, int(completion_tokens or 0))
@@ -125,12 +132,13 @@ class AgentsUsageClass:
             prompt_cache_miss_tokens=miss,
             db=self.db,
         )
+        kind = (request_kind or "chat").strip()[:32] or "chat"
         row = AgentsTokenUsageModel(
             customer_id=int(customer_id),
             school_id=int(school_id) if school_id else None,
             user_id=int(user_id) if user_id else None,
             agent_id=agent_id,
-            request_kind="chat",
+            request_kind=kind,
             model=(model or "").strip() or "unknown",
             prompt_tokens=pt,
             prompt_cache_hit_tokens=hit,

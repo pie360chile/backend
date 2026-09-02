@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.backend.core.config import settings
 
-DEFAULT_MODEL_CODE = "deepseek-v4-pro"
+DEFAULT_MODEL_CODE = "deepseek-v4-flash"
 
 
 def resolve_llm_api_key(db: Session | None = None) -> str:
