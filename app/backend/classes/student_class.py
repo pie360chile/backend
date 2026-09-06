@@ -13,7 +13,7 @@ from app.backend.db.models import (
     CommuneModel,
     FolderModel,
 )
-from sqlalchemy import and_, or_, func
+from sqlalchemy import String, and_, or_, func
 from sqlalchemy.orm import aliased
 
 
@@ -197,10 +197,34 @@ def _row_colegio_id_for_inspection(row: Dict[str, Any]) -> Optional[int]:
     return None
 
 
+def _normalize_rut(v) -> Optional[str]:
+    """RUT canónico para comparar: solo alfanumérico en minúsculas (sin puntos/guiones/espacios)."""
+    if v is None:
+        return None
+    s = "".join(c for c in str(v).strip().lower() if c.isalnum())
+    return s if s else None
+
+
+def _format_rut_display(raw: str) -> str:
+    """Guardar RUT sin puntos; con guion antes del DV (ej. 12345678-9)."""
+    n = _normalize_rut(raw)
+    if not n or len(n) < 2:
+        return (raw or "").strip()
+    return f"{n[:-1]}-{n[-1].upper()}"
+
+
+def _rut_normalized_sql(column):
+    """Expresión SQL: RUT sin puntos, guiones ni espacios (minúsculas)."""
+    c = func.lower(func.cast(column, String))
+    c = func.replace(c, ".", "")
+    c = func.replace(c, "-", "")
+    c = func.replace(c, " ", "")
+    return c
+
+
 def _identification_key_for_dedupe(raw: str) -> str:
-    """Clave estable para detectar el mismo RUT repetido en el JSON (puntos/guiones/espacios)."""
-    s = (raw or "").strip().upper().replace(".", "").replace("-", "").replace(" ", "")
-    return s
+    """Clave estable para detectar el mismo RUT (puntos/guiones/espacios/mayúsculas)."""
+    return _normalize_rut(raw) or ""
 
 
 class StudentClass:
@@ -954,7 +978,8 @@ class StudentClass:
     def store(self, student_inputs):
         try:
             school_id = student_inputs.get('school_id')
-            identification_number = (student_inputs.get('identification_number') or '').strip()
+            identification_number = _format_rut_display(student_inputs.get('identification_number') or '')
+            rut_norm = _normalize_rut(identification_number)
             period_year = student_inputs.get('period_year')
             if period_year is not None and not isinstance(period_year, str):
                 period_year = str(period_year).strip() if period_year else None
@@ -962,8 +987,10 @@ class StudentClass:
                 period_year = (period_year or '').strip() or None
             course_id = student_inputs.get('course_id')
 
-            if not identification_number:
+            if not rut_norm:
                 return {"status": "error", "message": "El RUT/número de identificación es requerido."}
+
+            student_inputs['identification_number'] = identification_number
 
             forced_id_int = None
             raw_id = student_inputs.get("id")
@@ -973,26 +1000,15 @@ class StudentClass:
                 except (TypeError, ValueError):
                     return {"status": "error", "message": "Invalid student id"}
 
-            # Validar que no exista ya un estudiante con el mismo RUT, curso y periodo en el mismo colegio
+            # Un RUT activo por colegio (formato ignorado: puntos/guiones/mayúsculas).
             duplicate_query = self.db.query(StudentModel).filter(
                 StudentModel.school_id == school_id,
-                StudentModel.identification_number == identification_number,
+                _rut_normalized_sql(StudentModel.identification_number) == rut_norm,
                 StudentModel.deleted_status_id == 0,
             )
-            if period_year is not None and str(period_year):
-                duplicate_query = duplicate_query.filter(StudentModel.period_year == str(period_year))
-            else:
-                duplicate_query = duplicate_query.filter(StudentModel.period_year.is_(None))
-
-            if course_id:
-                duplicate_query = duplicate_query.join(
-                    StudentAcademicInfoModel,
-                    (StudentAcademicInfoModel.student_id == StudentModel.id)
-                    & (StudentAcademicInfoModel.course_id == course_id),
-                )
             existing = duplicate_query.first()
 
-            dup_msg = "Ya existe un estudiante con ese RUT en el mismo curso y período."
+            dup_msg = "Ya existe un estudiante con ese RUT en el mismo colegio."
             if existing:
                 if forced_id_int is not None and int(existing.id) != int(forced_id_int):
                     return {
@@ -1017,7 +1033,7 @@ class StudentClass:
                             "status": "error",
                             "message": "Student id already belongs to another school",
                         }
-                    if (by_id.identification_number or "").strip() != identification_number:
+                    if _normalize_rut(by_id.identification_number) != rut_norm:
                         return {
                             "status": "error",
                             "message": "Student id already assigned to a different identification number",
@@ -1030,7 +1046,7 @@ class StudentClass:
             row_kwargs = dict(
                 deleted_status_id=0,
                 school_id=student_inputs.get('school_id'),
-                identification_number=student_inputs.get('identification_number'),
+                identification_number=identification_number,
                 period_year=period_year_db,
                 added_date=datetime.now(),
                 updated_date=datetime.now(),
@@ -1052,7 +1068,7 @@ class StudentClass:
             new_personal = StudentPersonalInfoModel(
                 student_id=new_student.id,
                 region_id=region_id,
-                identification_number=student_inputs.get('identification_number'),
+                identification_number=identification_number,
                 names=student_inputs.get('names'),
                 father_lastname=student_inputs.get('father_lastname'),
                 mother_lastname=student_inputs.get('mother_lastname'),
@@ -1128,44 +1144,26 @@ class StudentClass:
                 return {"status": "error", "message": "No data found"}
 
             # Valores efectivos tras la actualización (para validar duplicado)
-            eff_rut = (student_inputs.get('identification_number') or existing_student.identification_number or '').strip()
-            eff_period = student_inputs.get('period_year') if 'period_year' in student_inputs else existing_student.period_year
-            if eff_period is not None and not isinstance(eff_period, str):
-                eff_period = str(eff_period).strip() or None
-            elif eff_period is not None:
-                eff_period = (eff_period or '').strip() or None
-            eff_school = student_inputs.get('school_id') or existing_student.school_id
-            eff_course_id = None
-            if 'academic_info' in student_inputs and student_inputs['academic_info'] and student_inputs['academic_info'].get('course_id') is not None:
-                eff_course_id = student_inputs['academic_info']['course_id']
+            raw_eff_rut = student_inputs.get('identification_number') or existing_student.identification_number or ''
+            if 'identification_number' in student_inputs and student_inputs.get('identification_number'):
+                eff_rut = _format_rut_display(student_inputs.get('identification_number'))
+                student_inputs['identification_number'] = eff_rut
             else:
-                existing_academic_for_check = self.db.query(StudentAcademicInfoModel).filter(
-                    StudentAcademicInfoModel.student_id == id
-                ).first()
-                if existing_academic_for_check:
-                    eff_course_id = existing_academic_for_check.course_id
+                eff_rut = _format_rut_display(raw_eff_rut)
+            eff_rut_norm = _normalize_rut(eff_rut)
+            eff_school = student_inputs.get('school_id') or existing_student.school_id
 
-            if eff_rut:
+            if eff_rut_norm:
                 dup_query = self.db.query(StudentModel).filter(
                     StudentModel.id != id,
                     StudentModel.school_id == eff_school,
-                    StudentModel.identification_number == eff_rut,
+                    _rut_normalized_sql(StudentModel.identification_number) == eff_rut_norm,
                     StudentModel.deleted_status_id == 0,
                 )
-                if eff_period:
-                    dup_query = dup_query.filter(StudentModel.period_year == eff_period)
-                else:
-                    dup_query = dup_query.filter(StudentModel.period_year.is_(None))
-                if eff_course_id:
-                    dup_query = dup_query.join(
-                        StudentAcademicInfoModel,
-                        (StudentAcademicInfoModel.student_id == StudentModel.id)
-                        & (StudentAcademicInfoModel.course_id == eff_course_id),
-                    )
                 if dup_query.first():
                     return {
                         "status": "error",
-                        "message": "Ya existe un estudiante con ese RUT en el mismo curso y período.",
+                        "message": "Ya existe un estudiante con ese RUT en el mismo colegio.",
                     }
 
             # Actualizar school_id si está presente
@@ -1174,7 +1172,7 @@ class StudentClass:
 
             # Actualizar identification_number si está presente
             if 'identification_number' in student_inputs and student_inputs['identification_number']:
-                existing_student.identification_number = student_inputs['identification_number']
+                existing_student.identification_number = eff_rut
 
             # Actualizar period_year si está presente (en BD es string)
             if 'period_year' in student_inputs:
@@ -1252,7 +1250,9 @@ class StudentClass:
                     if 'proficiency_language_used_id' in personal_data:
                         existing_personal.proficiency_language_used_id = personal_data['proficiency_language_used_id']
                     if 'identification_number' in personal_data:
-                        existing_personal.identification_number = personal_data['identification_number']
+                        existing_personal.identification_number = _format_rut_display(
+                            personal_data['identification_number']
+                        )
                     if 'names' in personal_data:
                         existing_personal.names = personal_data['names']
                     if 'father_lastname' in personal_data:
@@ -1284,7 +1284,7 @@ class StudentClass:
                         gender_id=personal_data.get('gender_id'),
                         proficiency_native_language_id=personal_data.get('proficiency_native_language_id'),
                         proficiency_language_used_id=personal_data.get('proficiency_language_used_id'),
-                        identification_number=personal_data.get('identification_number'),
+                        identification_number=_format_rut_display(personal_data.get('identification_number') or ''),
                         names=personal_data.get('names'),
                         father_lastname=personal_data.get('father_lastname'),
                         mother_lastname=personal_data.get('mother_lastname'),
@@ -1389,17 +1389,29 @@ class StudentClass:
                     continue
 
                 id_key = _identification_key_for_dedupe(rut_raw)
+                if not id_key:
+                    errors.append({"name": rut_raw, "message": "Row missing RUT"})
+                    continue
                 if id_key in seen_identification_keys:
                     skipped += 1
                     continue
                 seen_identification_keys.add(id_key)
 
+                rut_stored = _format_rut_display(rut_raw)
+
                 already = (
                     self.db.query(StudentModel.id)
+                    .outerjoin(
+                        StudentPersonalInfoModel,
+                        StudentPersonalInfoModel.student_id == StudentModel.id,
+                    )
                     .filter(
                         StudentModel.school_id == session_school_id,
-                        StudentModel.identification_number == rut_raw,
                         StudentModel.deleted_status_id == 0,
+                        or_(
+                            _rut_normalized_sql(StudentModel.identification_number) == id_key,
+                            _rut_normalized_sql(StudentPersonalInfoModel.identification_number) == id_key,
+                        ),
                     )
                     .first()
                 )
@@ -1416,8 +1428,7 @@ class StudentClass:
 
                 student_inputs: Dict[str, Any] = {
                     "school_id": school_id,
-                    "identification_number": rut_raw,
-                    "period_year": period_year,
+                    "identification_number": rut_stored,                    "period_year": period_year,
                     "course_id": course_remote,
                     "names": nombres or "—",
                     "father_lastname": paterno or "",
