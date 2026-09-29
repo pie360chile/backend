@@ -536,12 +536,11 @@ def update(
         # Si el campo va a personal_data
         if field_key in personal_data_fields:
             personal_data[field_key] = value
+            if field_key == 'identification_number':
+                mapped_inputs['identification_number'] = value
         # Si el campo va a academic_info
         elif field_key in academic_fields:
             academic_info[field_key] = value
-        # Campos que van directo a la tabla students
-        elif field_key == 'identification_number':
-            mapped_inputs['identification_number'] = value
         elif field_key == 'period_year':
             mapped_inputs['period_year'] = value
     

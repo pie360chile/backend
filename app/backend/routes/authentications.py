@@ -660,6 +660,26 @@ def select_school(school_id: int, session_user: UserLogin = Depends(get_current_
         )
 
 
+@authentications.get("/available-roles")
+def available_roles(session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
+    """Roles activos asignados al usuario (uno por nombre). No incluye equivalentes no asignados."""
+    try:
+        roles = _active_user_roles(
+            db,
+            int(session_user.id),
+            getattr(session_user, "period_year", None),
+        )
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"status": 200, "message": "OK", "data": roles},
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"status": 500, "message": str(e), "data": []},
+        )
+
+
 @authentications.get("/available-schools")
 def available_schools(session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
     try:

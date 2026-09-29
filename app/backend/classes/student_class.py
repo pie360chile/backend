@@ -1206,9 +1206,10 @@ class StudentClass:
                         existing_academic.psychopedagogical_evaluation_status = academic_info['psychopedagogical_evaluation_status']
                     if 'psychopedagogical_evaluation_year' in academic_info:
                         existing_academic.psychopedagogical_evaluation_year = academic_info['psychopedagogical_evaluation_year']
-                    status_value = getattr(existing_academic, "psychopedagogical_evaluation_status", None)
-                    if status_value != 'realizada':
-                        existing_academic.psychopedagogical_evaluation_year = None
+                    if 'psychopedagogical_evaluation_status' in academic_info:
+                        status_value = academic_info.get('psychopedagogical_evaluation_status')
+                        if status_value != 'realizada':
+                            existing_academic.psychopedagogical_evaluation_year = None
                     existing_academic.updated_date = datetime.now()
                 else:
                     # Crear nuevo registro
