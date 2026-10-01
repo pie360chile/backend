@@ -657,6 +657,7 @@ class StudentClass:
                     StudentAcademicInfoModel.student_id,
                     StudentAcademicInfoModel.course_id,
                     StudentAcademicInfoModel.sip_admission_year,
+                    StudentAcademicInfoModel.special_educational_need_id,
                     SpecialEducationalNeedModel.special_educational_need_type_id,
                     CourseModel.course_name,
                 )
@@ -697,6 +698,7 @@ class StudentClass:
                     by_course[course_id] = {
                         "course_name": course_name,
                         "by_type": {},
+                        "by_need": {},
                         "total_one_year": 0,
                         "total_more_than_one_year": 0,
                     }
@@ -705,11 +707,15 @@ class StudentClass:
                 sip_year = row.sip_admission_year
                 years_in_pie = (current_year - sip_year) if sip_year else 0
                 t = by_course[course_id]["by_type"].setdefault(type_id, {"one_year": 0, "more_than_one_year": 0})
+                need_id = row.special_educational_need_id
+                n = by_course[course_id]["by_need"].setdefault(need_id, {"one_year": 0, "more_than_one_year": 0})
                 if years_in_pie == 0:
                     t["one_year"] += 1
+                    n["one_year"] += 1
                     by_course[course_id]["total_one_year"] += 1
                 else:
                     t["more_than_one_year"] += 1
+                    n["more_than_one_year"] += 1
                     by_course[course_id]["total_more_than_one_year"] += 1
 
             by_course_list = []
@@ -724,10 +730,20 @@ class StudentClass:
                     }
                     for tid, data in sorted(info["by_type"].items())
                 ]
+                by_need_list = [
+                    {
+                        "special_educational_need_id": nid,
+                        "one_year": data["one_year"],
+                        "more_than_one_year": data["more_than_one_year"],
+                        "total": data["one_year"] + data["more_than_one_year"],
+                    }
+                    for nid, data in sorted(info["by_need"].items(), key=lambda item: item[0] or 0)
+                ]
                 by_course_list.append({
                     "course_id": cid if cid else None,
                     "course_name": info["course_name"],
                     "by_type": by_type_list,
+                    "by_need": by_need_list,
                     "total_one_year": info["total_one_year"],
                     "total_more_than_one_year": info["total_more_than_one_year"],
                 })
@@ -754,6 +770,7 @@ class StudentClass:
                     StudentAcademicInfoModel.student_id,
                     StudentAcademicInfoModel.course_id,
                     StudentAcademicInfoModel.sip_admission_year,
+                    StudentAcademicInfoModel.special_educational_need_id,
                     SpecialEducationalNeedModel.special_educational_need_type_id,
                     CourseModel.course_name,
                 )
@@ -809,6 +826,7 @@ class StudentClass:
                     by_school[school_id]["by_course"][course_id] = {
                         "course_name": course_name,
                         "by_type": {},
+                        "by_need": {},
                         "total_one_year": 0,
                         "total_more_than_one_year": 0,
                     }
@@ -818,12 +836,16 @@ class StudentClass:
                 years_in_pie = (current_year - sip_year) if sip_year else 0
                 c = by_school[school_id]["by_course"][course_id]
                 t = c["by_type"].setdefault(type_id, {"one_year": 0, "more_than_one_year": 0})
+                need_id = row.special_educational_need_id
+                n = c["by_need"].setdefault(need_id, {"one_year": 0, "more_than_one_year": 0})
                 if years_in_pie == 0:
                     t["one_year"] += 1
+                    n["one_year"] += 1
                     c["total_one_year"] += 1
                     by_school[school_id]["total_one_year"] += 1
                 else:
                     t["more_than_one_year"] += 1
+                    n["more_than_one_year"] += 1
                     c["total_more_than_one_year"] += 1
                     by_school[school_id]["total_more_than_one_year"] += 1
 
@@ -842,10 +864,20 @@ class StudentClass:
                         }
                         for tid, data in sorted(cinfo["by_type"].items())
                     ]
+                    by_need_list = [
+                        {
+                            "special_educational_need_id": nid,
+                            "one_year": data["one_year"],
+                            "more_than_one_year": data["more_than_one_year"],
+                            "total": data["one_year"] + data["more_than_one_year"],
+                        }
+                        for nid, data in sorted(cinfo["by_need"].items(), key=lambda item: item[0] or 0)
+                    ]
                     by_course_list.append({
                         "course_id": cid if cid else None,
                         "course_name": cinfo["course_name"],
                         "by_type": by_type_list,
+                        "by_need": by_need_list,
                         "total_one_year": cinfo["total_one_year"],
                         "total_more_than_one_year": cinfo["total_more_than_one_year"],
                     })
