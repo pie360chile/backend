@@ -3,7 +3,8 @@ from fastapi.responses import JSONResponse
 from typing import Optional
 from app.backend.db.database import get_db
 from sqlalchemy.orm import Session
-from app.backend.schemas import UserLogin, StudentList, StoreStudent, UpdateStudent
+from app.backend.schemas import UserLogin, StudentList, StoreStudent, UpdateStudent, ReorderStudents
+from app.backend.core.responses import api_response, api_error
 from app.backend.classes.student_class import StudentClass
 from app.backend.auth.auth_user import get_current_active_user
 from app.backend.classes.school_class import SchoolClass
@@ -387,6 +388,37 @@ def import_from_inspection(
             "data": result,
         },
     )
+
+
+def _allowed_school_ids(db: Session, session_user: UserLogin):
+    school_id = getattr(session_user, "school_id", None)
+    if school_id:
+        return [int(school_id)]
+    customer_id = getattr(session_user, "customer_id", None)
+    if not customer_id:
+        return []
+    schools_list = SchoolClass(db).get_all(page=0, customer_id=customer_id)
+    if not isinstance(schools_list, list):
+        return []
+    return [int(item.get("id")) for item in schools_list if item.get("id") is not None]
+
+
+@students.put("/reorder")
+def reorder_students(
+    payload: ReorderStudents,
+    period_year: Optional[int] = Query(None, ge=2000, le=2100),
+    session_user: UserLogin = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    result = StudentClass(db).reorder(
+        payload.ids,
+        allowed_school_ids=_allowed_school_ids(db, session_user),
+        period_year=period_year,
+        course_id=payload.course_id,
+    )
+    if isinstance(result, dict) and result.get("status") == "error":
+        return api_error(status_code=status.HTTP_400_BAD_REQUEST, message=result.get("message", "No se pudo guardar el orden"))
+    return api_response(message=result.get("message", "Orden de estudiantes guardado"), data=None)
 
 
 @students.post("/store")

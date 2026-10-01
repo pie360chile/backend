@@ -107,6 +107,13 @@ def course_sort_key(name: str, course_id: int = 0):
     return (99 if grade is None else grade, letter, label, int(course_id or 0))
 
 
+def _course_display_sort_key(course):
+    """Orden guardado en courses.sort_order; si está vacío, nivel y letra."""
+    custom = getattr(course, "sort_order", None)
+    unset = 1 if custom is None else 0
+    return (unset, 0 if custom is None else int(custom), *course_sort_key(course.course_name, course.id))
+
+
 def _course_name_from_row(row: Dict[str, Any]) -> str:
     """Inspection listado/cursos: `nombre`; alternativas y fallback nivel + letra."""
     for key in ("nombre", "name", "curso", "course_name"):
@@ -137,6 +144,7 @@ class CourseClass:
                 CourseModel.teaching_id,
                 CourseModel.course_name,
                 CourseModel.period_year,
+                CourseModel.sort_order,
                 CourseModel.added_date,
                 CourseModel.updated_date,
                 TeachingModel.teaching_name,
@@ -192,13 +200,14 @@ class CourseClass:
                 CourseModel.teaching_id,
                 CourseModel.course_name,
                 CourseModel.period_year,
+                CourseModel.sort_order,
                 CourseModel.added_date,
                 CourseModel.updated_date,
                 TeachingModel.teaching_name
             )
 
             data = query.all()
-            data.sort(key=lambda course: course_sort_key(course.course_name, course.id))
+            data.sort(key=_course_display_sort_key)
 
             if page > 0:
                 total_items = len(data)
@@ -221,6 +230,7 @@ class CourseClass:
                     "teaching_id": course.teaching_id,
                     "course_name": course.course_name,
                     "periodYear": getattr(course, "period_year", None),
+                    "sort_order": getattr(course, "sort_order", None),
                     "teaching_name": course.teaching_name,
                     "total_students": course.total_students,
                     "total_students_sen": getattr(course, "total_students_sen", 0) or 0,
@@ -244,6 +254,7 @@ class CourseClass:
                     "teaching_id": course.teaching_id,
                     "course_name": course.course_name,
                     "periodYear": getattr(course, "period_year", None),
+                    "sort_order": getattr(course, "sort_order", None),
                     "teaching_name": course.teaching_name,
                     "total_students": course.total_students,
                     "total_students_sen": getattr(course, "total_students_sen", 0) or 0,
@@ -267,6 +278,7 @@ class CourseClass:
                 CourseModel.teaching_id,
                 CourseModel.course_name,
                 CourseModel.period_year,
+                CourseModel.sort_order,
                 CourseModel.added_date,
                 CourseModel.updated_date,
                 TeachingModel.teaching_name
@@ -288,7 +300,7 @@ class CourseClass:
                 query = query.filter(CourseModel.period_year == int(period_year))
 
             data = query.all()
-            data.sort(key=lambda course: course_sort_key(course.course_name, course.id))
+            data.sort(key=_course_display_sort_key)
 
             serialized_data = [{
                 "id": course.id,
@@ -296,6 +308,7 @@ class CourseClass:
                 "teaching_id": course.teaching_id,
                 "course_name": course.course_name,
                 "periodYear": getattr(course, "period_year", None),
+                "sort_order": getattr(course, "sort_order", None),
                 "teaching_name": course.teaching_name,
                 "added_date": course.added_date.strftime("%Y-%m-%d %H:%M:%S") if course.added_date else None,
                 "updated_date": course.updated_date.strftime("%Y-%m-%d %H:%M:%S") if course.updated_date else None
@@ -383,6 +396,52 @@ class CourseClass:
             self.db.rollback()
             return {"status": "error", "message": str(e)}
     
+    def reorder(self, ordered_ids, allowed_school_ids=None, period_year=None):
+        """Guarda el orden de la lista. `ordered_ids` es la secuencia completa visible."""
+        try:
+            ids = []
+            seen = set()
+            for raw in ordered_ids or []:
+                try:
+                    value = int(raw)
+                except (TypeError, ValueError):
+                    return {"status": "error", "message": "Identificador de curso inválido"}
+                if value in seen:
+                    continue
+                seen.add(value)
+                ids.append(value)
+            if not ids:
+                return {"status": "error", "message": "No hay cursos para ordenar"}
+
+            schools = [int(school_id) for school_id in (allowed_school_ids or []) if school_id is not None]
+            rows = (
+                self.db.query(CourseModel)
+                .filter(CourseModel.id.in_(ids), CourseModel.deleted_status_id == 0)
+                .all()
+            )
+            by_id = {row.id: row for row in rows}
+            if len(by_id) != len(ids):
+                return {"status": "error", "message": "Hay cursos que no se pueden ordenar"}
+            for row in rows:
+                if schools and int(row.school_id or 0) not in schools:
+                    return {"status": "error", "message": "Hay cursos de otro colegio"}
+                if (
+                    period_year is not None
+                    and row.period_year is not None
+                    and int(row.period_year) != int(period_year)
+                ):
+                    return {"status": "error", "message": "Hay cursos de otro año"}
+            now = datetime.now()
+            for index, course_id in enumerate(ids, start=1):
+                row = by_id[course_id]
+                row.sort_order = index
+                row.updated_date = now
+            self.db.commit()
+            return {"status": "success", "message": "Orden de cursos guardado"}
+        except Exception as e:
+            self.db.rollback()
+            return {"status": "error", "message": str(e)}
+
     def delete(self, id):
         try:
             data = (

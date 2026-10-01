@@ -160,6 +160,13 @@ class UpdateCourse(BaseModel):
     course_name: str = None
     period_year: Optional[int] = Field(None, ge=2000, le=2100)
 
+class ReorderCourses(BaseModel):
+    ids: List[int]
+
+class ReorderStudents(BaseModel):
+    ids: List[int]
+    course_id: Optional[int] = None
+
 # Commune schemas
 
 class CommuneList(BaseModel):

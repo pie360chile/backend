@@ -118,6 +118,7 @@ class CourseModel(Base):
     teaching_id = Column(Integer)
     course_name = Column(String(255))
     period_year = Column(Integer, nullable=True)
+    sort_order = Column(Integer, nullable=True)
     added_date = Column(DateTime())
     updated_date = Column(DateTime())
     deleted_status_id = Column(Integer)
@@ -199,6 +200,7 @@ class StudentModel(Base):
     school_id = Column(Integer)
     identification_number = Column(String(255))
     period_year = Column(String(10), nullable=True)
+    sort_order = Column(Integer, nullable=True)
     added_date = Column(DateTime())
     updated_date = Column(DateTime())
 
@@ -209,6 +211,7 @@ class StudentAcademicInfoModel(Base):
     student_id = Column(Integer)
     special_educational_need_id = Column(Integer)
     course_id = Column(Integer)
+    sort_order = Column(Integer, nullable=True)
     platform_status_id = Column(Integer, nullable=True)
     resolution_number = Column(String(255), nullable=True)
     sip_admission_year = Column(Integer)

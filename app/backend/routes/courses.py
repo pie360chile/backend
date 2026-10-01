@@ -5,7 +5,8 @@ from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import JSONResponse
 from app.backend.db.database import get_db
 from sqlalchemy.orm import Session
-from app.backend.schemas import UserLogin, CourseList, StoreCourse, UpdateCourse
+from app.backend.schemas import UserLogin, CourseList, StoreCourse, UpdateCourse, ReorderCourses
+from app.backend.core.responses import api_response, api_error
 from app.backend.classes.course_class import CourseClass
 from app.backend.classes.inspection_api_client import InspectionApiClient
 from app.backend.classes.school_class import SchoolClass
@@ -414,6 +415,36 @@ def update(id: int, course: UpdateCourse, session_user: UserLogin = Depends(get_
             "data": result
         }
     )
+
+def _allowed_school_ids(db: Session, session_user: UserLogin):
+    school_id = getattr(session_user, "school_id", None)
+    if school_id:
+        return [int(school_id)]
+    customer_id = getattr(session_user, "customer_id", None)
+    if not customer_id:
+        return []
+    schools_list = SchoolClass(db).get_all(page=0, customer_id=customer_id)
+    if not isinstance(schools_list, list):
+        return []
+    return [int(item.get("id")) for item in schools_list if item.get("id") is not None]
+
+
+@courses.put("/reorder")
+def reorder_courses(
+    payload: ReorderCourses,
+    period_year: Optional[int] = Query(None, ge=2000, le=2100),
+    session_user: UserLogin = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    result = CourseClass(db).reorder(
+        payload.ids,
+        allowed_school_ids=_allowed_school_ids(db, session_user),
+        period_year=period_year,
+    )
+    if isinstance(result, dict) and result.get("status") == "error":
+        return api_error(status_code=status.HTTP_400_BAD_REQUEST, message=result.get("message", "No se pudo guardar el orden"))
+    return api_response(message=result.get("message", "Orden de cursos guardado"), data=None)
+
 
 @courses.delete("/delete/{id}")
 def delete(id: int, session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):

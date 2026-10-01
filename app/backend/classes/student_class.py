@@ -13,7 +13,7 @@ from app.backend.db.models import (
     CommuneModel,
     FolderModel,
 )
-from sqlalchemy import String, and_, or_, func
+from sqlalchemy import String, and_, case, or_, func
 from sqlalchemy.orm import aliased
 
 
@@ -323,11 +323,13 @@ class StudentClass:
                 StudentModel.school_id,
                 StudentModel.identification_number.label('student_identification_number'),
                 StudentModel.period_year,
+                StudentModel.sort_order,
                 StudentModel.added_date,
                 StudentModel.updated_date,
                 StudentAcademicInfoModel.id.label('academic_id'),
                 StudentAcademicInfoModel.special_educational_need_id,
                 StudentAcademicInfoModel.course_id,
+                StudentAcademicInfoModel.sort_order.label('academic_sort_order'),
                 StudentAcademicInfoModel.platform_status_id,
                 StudentAcademicInfoModel.resolution_number,
                 StudentAcademicInfoModel.sip_admission_year,
@@ -389,7 +391,18 @@ class StudentClass:
             if period_year is not None and str(period_year).strip():
                 query = query.filter(StudentModel.period_year == str(period_year).strip())
 
-            query = query.order_by(StudentModel.id.desc())
+            if course_id:
+                query = query.order_by(
+                    case((StudentAcademicInfoModel.sort_order.is_(None), 1), else_=0),
+                    StudentAcademicInfoModel.sort_order.asc(),
+                    StudentModel.id.asc(),
+                )
+            else:
+                query = query.order_by(
+                    case((StudentModel.sort_order.is_(None), 1), else_=0),
+                    StudentModel.sort_order.asc(),
+                    StudentModel.id.desc(),
+                )
 
             if page > 0:
                 if page < 1:
@@ -415,6 +428,7 @@ class StudentClass:
                     "school_id": student.school_id,
                     "identification_number": student.student_identification_number,
                     "period_year": _period_year_int(getattr(student, "period_year", None)),
+                    "sort_order": getattr(student, "sort_order", None),
                     "added_date": student.added_date.strftime("%Y-%m-%d %H:%M:%S") if student.added_date else None,
                     "updated_date": student.updated_date.strftime("%Y-%m-%d %H:%M:%S") if student.updated_date else None,
                     "academic_info": {
@@ -422,6 +436,7 @@ class StudentClass:
                         "special_educational_need_id": student.special_educational_need_id,
                         "special_educational_need_name": (getattr(student, "special_educational_need_name", None) or "").strip() or None,
                         "course_id": student.course_id,
+                        "sort_order": getattr(student, "academic_sort_order", None),
                         "platform_status_id": getattr(student, "platform_status_id", None),
                         "resolution_number": getattr(student, "resolution_number", None),
                         "sip_admission_year": student.sip_admission_year,
@@ -468,6 +483,7 @@ class StudentClass:
                     "school_id": student.school_id,
                     "identification_number": student.student_identification_number,
                     "period_year": _period_year_int(getattr(student, "period_year", None)),
+                    "sort_order": getattr(student, "sort_order", None),
                     "added_date": student.added_date.strftime("%Y-%m-%d %H:%M:%S") if student.added_date else None,
                     "updated_date": student.updated_date.strftime("%Y-%m-%d %H:%M:%S") if student.updated_date else None,
                     "academic_info": {
@@ -475,6 +491,7 @@ class StudentClass:
                         "special_educational_need_id": student.special_educational_need_id,
                         "special_educational_need_name": (getattr(student, "special_educational_need_name", None) or "").strip() or None,
                         "course_id": student.course_id,
+                        "sort_order": getattr(student, "academic_sort_order", None),
                         "platform_status_id": getattr(student, "platform_status_id", None),
                         "resolution_number": getattr(student, "resolution_number", None),
                         "sip_admission_year": student.sip_admission_year,
@@ -510,6 +527,94 @@ class StudentClass:
             error_message = str(e)
             return {"status": "error", "message": error_message}
 
+    def reorder(self, ordered_ids, allowed_school_ids=None, period_year=None, course_id=None):
+        """Guarda el orden. Con course_id queda en la ficha académica de ese curso; si no, en el estudiante."""
+        try:
+            ids = []
+            seen = set()
+            for raw in ordered_ids or []:
+                try:
+                    value = int(raw)
+                except (TypeError, ValueError):
+                    return {"status": "error", "message": "Identificador de estudiante inválido"}
+                if value in seen:
+                    continue
+                seen.add(value)
+                ids.append(value)
+            if not ids:
+                return {"status": "error", "message": "No hay estudiantes para ordenar"}
+
+            schools = [int(school_id) for school_id in (allowed_school_ids or []) if school_id is not None]
+            now = datetime.now()
+
+            if course_id is not None:
+                course = (
+                    self.db.query(CourseModel)
+                    .filter(CourseModel.id == int(course_id), CourseModel.deleted_status_id == 0)
+                    .first()
+                )
+                if course is None:
+                    return {"status": "error", "message": "Curso no encontrado"}
+                if schools and int(course.school_id or 0) not in schools:
+                    return {"status": "error", "message": "El curso es de otro colegio"}
+
+                academic_rows = (
+                    self.db.query(StudentAcademicInfoModel)
+                    .join(StudentModel, StudentModel.id == StudentAcademicInfoModel.student_id)
+                    .filter(
+                        StudentAcademicInfoModel.course_id == int(course_id),
+                        StudentAcademicInfoModel.student_id.in_(ids),
+                        StudentModel.deleted_status_id == 0,
+                    )
+                    .all()
+                )
+                if period_year is not None:
+                    year = str(period_year).strip()
+                    student_ids_ok = {
+                        row.id
+                        for row in self.db.query(StudentModel.id)
+                        .filter(
+                            StudentModel.id.in_(ids),
+                            StudentModel.deleted_status_id == 0,
+                            or_(StudentModel.period_year == year, StudentModel.period_year.is_(None), StudentModel.period_year == ""),
+                        )
+                        .all()
+                    }
+                    academic_rows = [row for row in academic_rows if row.student_id in student_ids_ok]
+
+                found = {row.student_id for row in academic_rows}
+                if found != set(ids):
+                    return {"status": "error", "message": "Hay estudiantes que no están en ese curso"}
+                position = {student_id: index for index, student_id in enumerate(ids, start=1)}
+                for row in academic_rows:
+                    row.sort_order = position[row.student_id]
+                    row.updated_date = now
+            else:
+                query = self.db.query(StudentModel).filter(
+                    StudentModel.id.in_(ids),
+                    StudentModel.deleted_status_id == 0,
+                )
+                if schools:
+                    query = query.filter(StudentModel.school_id.in_(schools))
+                if period_year is not None:
+                    year = str(period_year).strip()
+                    query = query.filter(
+                        or_(StudentModel.period_year == year, StudentModel.period_year.is_(None), StudentModel.period_year == "")
+                    )
+                rows = query.all()
+                if {row.id for row in rows} != set(ids):
+                    return {"status": "error", "message": "Hay estudiantes que no se pueden ordenar"}
+                position = {student_id: index for index, student_id in enumerate(ids, start=1)}
+                for row in rows:
+                    row.sort_order = position[row.id]
+                    row.updated_date = now
+
+            self.db.commit()
+            return {"status": "success", "message": "Orden de estudiantes guardado"}
+        except Exception as e:
+            self.db.rollback()
+            return {"status": "error", "message": str(e)}
+
     def get_by_school_course_with_sen(self, school_id, course_id, page=0, items_per_page=100):
         """Lista estudiantes filtrados por school_id, course_id y con special_educational_need_id no nulo."""
         try:
@@ -521,11 +626,13 @@ class StudentClass:
                 StudentModel.school_id,
                 StudentModel.identification_number.label('student_identification_number'),
                 StudentModel.period_year,
+                StudentModel.sort_order,
                 StudentModel.added_date,
                 StudentModel.updated_date,
                 StudentAcademicInfoModel.id.label('academic_id'),
                 StudentAcademicInfoModel.special_educational_need_id,
                 StudentAcademicInfoModel.course_id,
+                StudentAcademicInfoModel.sort_order.label('academic_sort_order'),
                 StudentAcademicInfoModel.platform_status_id,
                 StudentAcademicInfoModel.resolution_number,
                 StudentAcademicInfoModel.sip_admission_year,
@@ -603,6 +710,7 @@ class StudentClass:
                         "special_educational_need_id": student.special_educational_need_id,
                         "special_educational_need_name": (getattr(student, "special_educational_need_name", None) or "").strip() or None,
                         "course_id": student.course_id,
+                        "sort_order": getattr(student, "academic_sort_order", None),
                         "platform_status_id": getattr(student, "platform_status_id", None),
                         "resolution_number": getattr(student, "resolution_number", None),
                         "sip_admission_year": student.sip_admission_year,
@@ -903,11 +1011,13 @@ class StudentClass:
                 StudentModel.school_id,
                 StudentModel.identification_number.label('student_identification_number'),
                 StudentModel.period_year,
+                StudentModel.sort_order,
                 StudentModel.added_date,
                 StudentModel.updated_date,
                 StudentAcademicInfoModel.id.label('academic_id'),
                 StudentAcademicInfoModel.special_educational_need_id,
                 StudentAcademicInfoModel.course_id,
+                StudentAcademicInfoModel.sort_order.label('academic_sort_order'),
                 StudentAcademicInfoModel.platform_status_id,
                 StudentAcademicInfoModel.resolution_number,
                 StudentAcademicInfoModel.sip_admission_year,
