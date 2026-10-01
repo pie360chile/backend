@@ -1,7 +1,9 @@
+import re
+import unicodedata
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import func, case
+from sqlalchemy import String, and_, case, cast, func, or_
 
 from app.backend.classes.teaching_class import _normalize_school_id
 from app.backend.db.models import CourseModel, TeachingModel, ProfessionalTeachingCourseModel, StudentModel, StudentAcademicInfoModel, SpecialEducationalNeedModel
@@ -59,6 +61,52 @@ def _row_int_optional(row: Dict[str, Any], keys: tuple) -> Optional[int]:
     return None
 
 
+_GRADE_WORDS = (
+    ("PRE KINDER", -2),
+    ("PREKINDER", -2),
+    ("KINDER", -1),
+    ("PRIMERO", 1),
+    ("SEGUNDO", 2),
+    ("TERCERO", 3),
+    ("CUARTO", 4),
+    ("QUINTO", 5),
+    ("SEXTO", 6),
+    ("SEPTIMO", 7),
+    ("OCTAVO", 8),
+)
+
+
+def _normalize_course_label(name: str) -> str:
+    text = unicodedata.normalize("NFD", name or "")
+    text = "".join(ch for ch in text if unicodedata.category(ch) != "Mn")
+    text = text.upper().replace("°", " ").replace("º", " ").replace("ª", " ")
+    text = text.replace("-", " ")
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def course_sort_key(name: str, course_id: int = 0):
+    """Nivel y letra: Prekínder, Kínder, 1°A…1°G, 2°, 3° y después 4°."""
+    label = _normalize_course_label(name)
+    grade = None
+    rest = label
+    for word, number in _GRADE_WORDS:
+        if label == word or label.startswith(word + " "):
+            grade = number
+            rest = label[len(word):].strip()
+            break
+    letter = ""
+    if grade is None:
+        match = re.match(r"^(\d+)\s*([A-Z])?\b", label)
+        if match:
+            grade = int(match.group(1))
+            letter = match.group(2) or ""
+    else:
+        letter_match = re.match(r"^([A-Z])\b", rest)
+        if letter_match:
+            letter = letter_match.group(1)
+    return (99 if grade is None else grade, letter, label, int(course_id or 0))
+
+
 def _course_name_from_row(row: Dict[str, Any]) -> str:
     """Inspection listado/cursos: `nombre`; alternativas y fallback nivel + letra."""
     for key in ("nombre", "name", "curso", "course_name"):
@@ -79,6 +127,10 @@ class CourseClass:
 
     def get_all(self, page=0, items_per_page=10, school_id=None, course=None, teaching_id=None, period_year=None):
         try:
+            latest_academic_id = (
+                self.db.query(func.max(StudentAcademicInfoModel.id))
+                .group_by(StudentAcademicInfoModel.student_id)
+            )
             query = self.db.query(
                 CourseModel.id,
                 CourseModel.school_id,
@@ -88,16 +140,29 @@ class CourseClass:
                 CourseModel.added_date,
                 CourseModel.updated_date,
                 TeachingModel.teaching_name,
-                func.count(StudentModel.id).label('total_students'),
-                func.count(case((SpecialEducationalNeedModel.special_educational_need_type_id == 1, 1))).label('total_students_sen'),
-                func.count(case((SpecialEducationalNeedModel.special_educational_need_type_id == 2, 1))).label('total_students_tsen'),
+                func.count(func.distinct(StudentModel.id)).label('total_students'),
+                func.count(func.distinct(case((SpecialEducationalNeedModel.special_educational_need_type_id == 1, StudentModel.id)))).label('total_students_sen'),
+                func.count(func.distinct(case((SpecialEducationalNeedModel.special_educational_need_type_id == 2, StudentModel.id)))).label('total_students_tsen'),
             ).join(
                 TeachingModel, CourseModel.teaching_id == TeachingModel.id
             ).outerjoin(
-                StudentAcademicInfoModel, CourseModel.id == StudentAcademicInfoModel.course_id
+                StudentAcademicInfoModel,
+                and_(
+                    CourseModel.id == StudentAcademicInfoModel.course_id,
+                    StudentAcademicInfoModel.id.in_(latest_academic_id),
+                ),
             ).outerjoin(
                 StudentModel,
-                (StudentAcademicInfoModel.student_id == StudentModel.id) & (StudentModel.deleted_status_id == 0)
+                and_(
+                    StudentAcademicInfoModel.student_id == StudentModel.id,
+                    StudentModel.deleted_status_id == 0,
+                    or_(
+                        CourseModel.period_year.is_(None),
+                        StudentModel.period_year == cast(CourseModel.period_year, String),
+                        StudentModel.period_year.is_(None),
+                        StudentModel.period_year == "",
+                    ),
+                ),
             ).outerjoin(
                 SpecialEducationalNeedModel,
                 (StudentAcademicInfoModel.special_educational_need_id == SpecialEducationalNeedModel.id)
@@ -130,22 +195,16 @@ class CourseClass:
                 CourseModel.added_date,
                 CourseModel.updated_date,
                 TeachingModel.teaching_name
-            ).order_by(CourseModel.id.asc())
+            )
+
+            data = query.all()
+            data.sort(key=lambda course: course_sort_key(course.course_name, course.id))
 
             if page > 0:
-                total_items = query.count()
+                total_items = len(data)
                 total_pages = (total_items + items_per_page - 1) // items_per_page if total_items > 0 else 0
 
-                if total_items == 0:
-                    return {
-                        "total_items": 0,
-                        "total_pages": 0,
-                        "current_page": page,
-                        "items_per_page": items_per_page,
-                        "data": []
-                    }
-
-                if page < 1 or page > total_pages:
+                if total_items == 0 or page < 1 or page > total_pages:
                     return {
                         "total_items": total_items,
                         "total_pages": total_pages,
@@ -154,7 +213,8 @@ class CourseClass:
                         "data": []
                     }
 
-                data = query.offset((page - 1) * items_per_page).limit(items_per_page).all()
+                start = (page - 1) * items_per_page
+                data = data[start:start + items_per_page]
 
                 serialized_data = [{
                     "id": course.id,
@@ -178,8 +238,6 @@ class CourseClass:
                 }
 
             else:
-                data = query.all()
-
                 serialized_data = [{
                     "id": course.id,
                     "school_id": course.school_id,
@@ -229,9 +287,8 @@ class CourseClass:
             if period_year is not None:
                 query = query.filter(CourseModel.period_year == int(period_year))
 
-            query = query.order_by(CourseModel.id.asc())
-
             data = query.all()
+            data.sort(key=lambda course: course_sort_key(course.course_name, course.id))
 
             serialized_data = [{
                 "id": course.id,
