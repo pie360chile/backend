@@ -156,7 +156,7 @@ class AnamnesisClass:
             rec = (
                 self.db.query(AnamnesisModel)
                 .filter(AnamnesisModel.student_id == student_id)
-                .order_by(AnamnesisModel.id.desc())
+                .order_by(AnamnesisModel.version.desc(), AnamnesisModel.id.desc())
                 .first()
             )
             if not rec:
@@ -209,31 +209,42 @@ class AnamnesisClass:
             else:
                 setattr(rec, key, value)
 
+    def list_versions(self, student_id: int) -> Any:
+        """Historial de anamnesis del estudiante, de la más nueva a la más antigua."""
+        try:
+            rows = (
+                self.db.query(AnamnesisModel)
+                .filter(AnamnesisModel.student_id == student_id)
+                .order_by(AnamnesisModel.version.desc(), AnamnesisModel.id.desc())
+                .all()
+            )
+            return [
+                {
+                    "id": row.id,
+                    "student_id": row.student_id,
+                    "version": row.version,
+                    "added_date": row.added_date.strftime("%Y-%m-%d %H:%M:%S") if row.added_date else None,
+                    "updated_date": row.updated_date.strftime("%Y-%m-%d %H:%M:%S") if row.updated_date else None,
+                }
+                for row in rows
+            ]
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
     def store(self, data: dict) -> Any:
-        """Crea o actualiza anamnesis: si ya existe para el estudiante, actualiza (borra y recarga informantes, entrevistadores, miembros del hogar); si no, crea nueva."""
+        """Guarda una versión nueva. La anamnesis anterior del estudiante se conserva."""
         try:
             student_id = data.get("student_id")
             if student_id is None:
                 return {"status": "error", "message": "student_id es requerido."}
 
-            # Si ya existe anamnesis para el estudiante, hacer UPDATE
-            existing = (
-                self.db.query(AnamnesisModel)
-                .filter(AnamnesisModel.student_id == student_id)
-                .order_by(AnamnesisModel.id.desc())
-                .first()
-            )
-            if existing:
-                return self.update(existing.id, data)
-
-            # Crear nueva anamnesis
             last = (
                 self.db.query(AnamnesisModel)
                 .filter(AnamnesisModel.student_id == student_id)
-                .order_by(AnamnesisModel.version.desc())
+                .order_by(AnamnesisModel.version.desc(), AnamnesisModel.id.desc())
                 .first()
             )
-            version = (last.version + 1) if last else 1
+            version = (int(last.version) + 1) if last and last.version else 1
             payload = {k: v for k, v in data.items() if k not in ("informants", "interviewers", "household_members")}
             if "first_year_conditions_other_specify" in data:
                 fyc = payload.get("first_year_conditions") or {}
@@ -241,7 +252,7 @@ class AnamnesisClass:
                     fyc = dict(fyc)
                     fyc["otras"] = data.get("first_year_conditions_other_specify") or ""
                     payload["first_year_conditions"] = fyc
-            payload["version"] = data.get("version") or version
+            payload["version"] = version
             payload["added_date"] = datetime.now()
             payload["updated_date"] = datetime.now()
 
@@ -312,7 +323,12 @@ class AnamnesisClass:
             self.db.add(folder)
             self.db.commit()
             self.db.refresh(rec)
-            return {"status": "success", "message": "Anamnesis creada correctamente.", "id": rec.id}
+            return {
+                "status": "success",
+                "message": f"Anamnesis guardada como versión {rec.version}.",
+                "id": rec.id,
+                "version": rec.version,
+            }
         except Exception as e:
             self.db.rollback()
             return {"status": "error", "message": str(e)}

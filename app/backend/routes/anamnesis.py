@@ -19,7 +19,7 @@ async def store_anamnesis(
     session_user: UserLogin = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
-    """Crea una nueva anamnesis (documento tipo 3) para un estudiante."""
+    """Guarda una versión nueva de la anamnesis. No borra las anteriores."""
     try:
         service = AnamnesisClass(db)
         payload = data.model_dump() if hasattr(data, "model_dump") else data.dict()
@@ -40,7 +40,7 @@ async def store_anamnesis(
             content={
                 "status": 201,
                 "message": result.get("message", "Anamnesis creada correctamente"),
-                "data": {"id": result.get("id")},
+                "data": {"id": result.get("id"), "version": result.get("version")},
             },
         )
     except Exception as e:
@@ -93,6 +93,70 @@ async def update_anamnesis(
                 "message": str(e),
                 "data": None,
             },
+        )
+
+
+@anamnesis.get("/history/{student_id}")
+async def list_anamnesis_history(
+    student_id: int,
+    session_user: UserLogin = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Lista las versiones de anamnesis de un estudiante, sin borrar ninguna."""
+    try:
+        service = AnamnesisClass(db)
+        result = service.list_versions(student_id)
+        if isinstance(result, dict) and result.get("status") == "error":
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={
+                    "status": 500,
+                    "message": result.get("message", "Error al listar el historial"),
+                    "data": None,
+                },
+            )
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "status": 200,
+                "message": "Historial de anamnesis",
+                "data": result,
+            },
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"status": 500, "message": str(e), "data": None},
+        )
+
+
+@anamnesis.get("/record/{anamnesis_id}")
+async def get_anamnesis_record(
+    anamnesis_id: int,
+    session_user: UserLogin = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Obtiene una versión concreta de la anamnesis."""
+    try:
+        service = AnamnesisClass(db)
+        result = service.get(anamnesis_id)
+        if isinstance(result, dict) and result.get("status") == "error":
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={
+                    "status": 404,
+                    "message": result.get("message", "Anamnesis no encontrada"),
+                    "data": None,
+                },
+            )
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"status": 200, "message": "Anamnesis encontrada", "data": result},
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"status": 500, "message": str(e), "data": None},
         )
 
 

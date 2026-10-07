@@ -21,6 +21,17 @@ _SCALE_HINT = (
     "tradúcelas a prosa profesional sobre el desempeño del estudiante."
 )
 
+_RESPONDENT_LABELS = {1: "Apoderado", 2: "Profesional"}
+
+
+def _who_answers(form: Any) -> str:
+    raw = getattr(form, "respondent_type_id", None)
+    try:
+        code = int(raw) if raw is not None and raw != "" else 0
+    except (TypeError, ValueError):
+        code = 0
+    return _RESPONDENT_LABELS.get(code, "")
+
 
 def _parse_question(field: dict[str, Any]) -> tuple[str, str]:
     section = str(field.get("section") or "").strip()
@@ -119,6 +130,8 @@ def collect_dynamic_form_answers_payload(
             {
                 "formId": form.id,
                 "formName": (form.name or "").strip() or f"Formulario #{form.id}",
+                "respondentTypeId": getattr(form, "respondent_type_id", None),
+                "whoAnswers": _who_answers(form) or None,
                 "submissionId": sub.id,
                 "periodYear": sub.period_year or form.period_year,
                 "answers": answers,
@@ -144,6 +157,8 @@ def build_dynamic_form_answers_block(
     student_rut: str | None = None,
     school_id: int | None = None,
     period_year: int | None = None,
+    respondent_type_id: int | None = None,
+    intro: str | None = None,
 ) -> str:
     """
     Bloque de contexto con respuestas del formulario (Inf. Eval. Psicopedagógica → Formularios).
@@ -174,20 +189,35 @@ def build_dynamic_form_answers_block(
         q = q.filter(DynamicFormModel.school_id == int(resolved_school))
 
     rows = q.order_by(DynamicFormSubmissionModel.id.desc()).all()
+    if respondent_type_id is not None:
+        wanted = int(respondent_type_id)
+        rows = [
+            pair
+            for pair in rows
+            if int(getattr(pair[1], "respondent_type_id", 0) or 0) == wanted
+        ]
     if not rows:
         return ""
 
     who = (student_name or "").strip() or (student_rut or "").strip() or f"student_id={sid}"
+    if intro is None:
+        intro = (
+            "RESPUESTAS DEL FORMULARIO PIE360 (Inf. Eval. Psicopedagógica / Formularios). "
+            "Fuente MCP: get_student_psychopedagogical_form_answers. "
+            "Cada envío indica quién contesta: Apoderado (respondent_type_id=1) o "
+            "Profesional (respondent_type_id=2). "
+            "Si hay VARIOS envíos del mismo estudiante, DEBES integrar TODOS: "
+            "lo observado por el apoderado y lo observado por cada profesional, "
+            "coincidencias y diferencias. "
+            "PROHIBIDO nombrar estas fuentes como Fonoaudiología, Terapia Ocupacional "
+            "u otra especialidad clínica. Si hay varios profesionales, distínguelos "
+            "por el nombre de quien respondió. "
+            f"{_SCALE_HINT}"
+        )
     sections: list[str] = [
-        "RESPUESTAS DEL FORMULARIO PIE360 (Inf. Eval. Psicopedagógica / Formularios). "
-        "Fuente MCP: get_student_psychopedagogical_form_answers. "
-        "Si hay VARIOS envíos del mismo estudiante (distinta área/especialidad), "
-        "DEBES integrar TODOS en el informe psicopedagógico: detalla por área "
-        "(p. ej. Fonoaudiología vs Terapia Ocupacional), coincidencias y diferencias; "
-        "no ignores ninguna. "
-        f"{_SCALE_HINT}",
+        intro,
         f"Estudiante: {who} (student_id={sid})",
-        f"Cantidad de respuestas/áreas en formulario: {len(rows)}",
+        f"Cantidad de respuestas de formulario: {len(rows)}",
     ]
 
     for sub, form in rows:
@@ -206,13 +236,11 @@ def build_dynamic_form_answers_block(
 
         form_name = (form.name or "").strip() or f"Formulario #{form.id}"
         period = sub.period_year or form.period_year or "—"
-        area = (getattr(sub, "specialty", None) or "").strip()
+        who_answers = _who_answers(form) or "no indicado"
         who_resp = (getattr(sub, "respondent_name", None) or "").strip()
-        meta = f"id={form.id}, período {period}"
-        if area:
-            meta += f", área={area}"
-        if who_resp:
-            meta += f", responde={who_resp}"
+        meta = f"id={form.id}, período {period}, quién contesta={who_answers}"
+        if who_resp and who_answers == "Profesional":
+            meta += f", nombre del profesional={who_resp}"
         sections.append(f"### Formulario: {form_name} ({meta})")
 
         field_by_id = {

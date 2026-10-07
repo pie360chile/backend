@@ -293,6 +293,23 @@ def _build_system_prompt(
             except Exception:
                 pass
 
+            try:
+                mcp_history = AgentsMcpClass(db).get_student_school_history(
+                    agent_id=str(agent.id),
+                    customer_id=int(customer_id),
+                    student_id=int(student_id),
+                    school_id=int(school_id) if school_id else None,
+                    period_year=int(period_year) if period_year else None,
+                    student_name=student_name,
+                    student_rut=student_rut,
+                )
+                if mcp_history.get("status") == "success":
+                    hist_ctx = (mcp_history.get("data") or {}).get("context") or ""
+                    if str(hist_ctx).strip():
+                        parts.append(str(hist_ctx).strip())
+            except Exception:
+                pass
+
         # Si Files no trae el psicopedagógico del caso → leer ficha del estudiante (doc 27)
         try:
             from app.backend.utils.agents_student_folder_context import (
@@ -1081,9 +1098,29 @@ class AgentsChatClass:
                     )
                 except Exception:
                     has_form = False
+            has_history = False
             if not has_files and not has_form:
+                try:
+                    from app.backend.utils.agents_school_history_context import (
+                        build_school_history_context,
+                    )
+
+                    has_history = (
+                        build_school_history_context(
+                            self.db,
+                            student_id=int(student_id),
+                            student_name=student_name,
+                            student_rut=student_rut,
+                            school_id=int(self.school_id) if self.school_id else None,
+                            period_year=int(self.period_year) if self.period_year else None,
+                        )
+                        is not None
+                    )
+                except Exception:
+                    has_history = False
+            if not has_files and not has_form and not has_history:
                 empty["reason"] = (
-                    "sin antecedentes en Files ni respuestas de formulario; no se emite el informe"
+                    "sin antecedentes en Files, formulario ni anamnesis; no se emite el informe"
                 )
                 return empty
 
@@ -1103,7 +1140,7 @@ class AgentsChatClass:
             f"{f' (RUT {student_rut})' if student_rut else ''} "
             f"(student_id={student_id}). "
             "Incluye el bloque JSON con \"fields\" para rellenar la plantilla. "
-            "Usa Files, formulario MCP y ficha; no inventes datos."
+            "Usa Files, formulario MCP, anamnesis (historia escolar) y ficha; no inventes datos."
         )
         messages = _build_messages(
             system_prompt=system_prompt,

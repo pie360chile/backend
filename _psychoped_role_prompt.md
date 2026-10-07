@@ -48,7 +48,7 @@ Usa solo:
 
 Si el cuestionario/Excel de Files no trae la fila del estudiante, usa la tool MCP **`get_student_psychopedagogical_form_answers`** (respuestas en Inf. Eval. Psicopedagógica → Formularios). Cuando PIE360 inyecte el bloque «RESPUESTAS DEL FORMULARIO PIE360», úsalo como fuente de observación (traduce escalas a prosa; no copies LOGRADO/EN PROCESO/REQUIERE APOYO).
 
-**Varias áreas / especialidades:** si el Excel o el formulario tienen más de una observación del mismo estudiante (p. ej. Fonoaudiología y Terapia Ocupacional), el informe **debe incluir todas**: detalla hallazgos por área, coincidencias y diferencias; no redactes como si hubiera una sola pauta.
+**Apoderado y profesional:** si el formulario tiene más de una observación del mismo estudiante, cada una es de quien contesta: **Apoderado** o **Profesional**. El informe **debe incluir todas**: hallazgos del apoderado y del profesional, coincidencias y diferencias. No las llames Fonoaudiología, Terapia Ocupacional ni otra especialidad. Si hay varios profesionales, distínguelos por su nombre.
 
 **PROHIBIDO** HTML y código de programación (CSS, JavaScript, Python, SQL, etc.). Solo prosa en español. El único JSON permitido es el bloque `fields` para el servidor.
 
@@ -136,7 +136,7 @@ Si un dato no está en los archivos → `""`.
 ### Antecedentes e instrumentos
 
 - `instruments_applied`: lista con guion (`-`), **un instrumento por línea**. Solo los que figuren en los archivos.
-- `school_history_background`: antecedentes relevantes de historia escolar (párrafos detallados).
+- `school_history_background`: uno o dos párrafos. Fuente: bloque «HISTORIA ESCOLAR Y ANTECEDENTES FAMILIARES» (MCP `get_student_school_history`: anamnesis y formulario del apoderado). Empieza con nombre, curso y establecimiento si constan, y sigue con «De acuerdo con los antecedentes aportados por su familia, …». Solo hechos de ese bloque. Si no hay trayectoria ni antecedentes familiares, `""`. Las escalas de observación en aula no van aquí.
 
 ### Análisis (narrativos extensos)
 

@@ -448,6 +448,74 @@ class AgentsMcpClass:
             },
         }
 
+    def get_student_school_history(
+        self,
+        *,
+        agent_id: str,
+        customer_id: int,
+        student_id: int,
+        school_id: int | None = None,
+        period_year: int | None = None,
+        student_name: str | None = None,
+        student_rut: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Lee la anamnesis (historia escolar y apoyo familiar) y el formulario del apoderado.
+
+        Esa evidencia es la fuente de `school_history_background`.
+        """
+        aid = (agent_id or "").strip()
+        if not aid:
+            return {"status": "error", "message": "agent_id es requerido.", "http_status": 400}
+        if int(customer_id) < 1:
+            return {"status": "error", "message": "customer_id inválido.", "http_status": 400}
+        if int(student_id) < 1:
+            return {"status": "error", "message": "student_id inválido.", "http_status": 400}
+
+        agent = (
+            self.db.query(AgentModel)
+            .filter(
+                AgentModel.id == aid,
+                AgentModel.customer_id == int(customer_id),
+            )
+            .first()
+        )
+        if not agent:
+            return {"status": "error", "message": "Agente no encontrado.", "http_status": 404}
+
+        from app.backend.utils.agents_school_history_context import (
+            build_school_history_context,
+        )
+
+        payload = build_school_history_context(
+            self.db,
+            student_id=int(student_id),
+            student_name=student_name,
+            student_rut=student_rut,
+            school_id=int(school_id) if school_id else None,
+            period_year=int(period_year) if period_year else None,
+        )
+        if not payload:
+            return {
+                "status": "error",
+                "message": "No hay anamnesis ni formulario del apoderado para este estudiante.",
+                "http_status": 404,
+                "data": {
+                    "agentId": agent.id,
+                    "studentId": int(student_id),
+                    "source": "anamnesis_and_guardian_form",
+                },
+            }
+        return {
+            "status": "success",
+            "message": "Historia escolar y antecedentes familiares obtenidos.",
+            "data": {
+                "agentId": agent.id,
+                "agentName": agent.name,
+                **payload,
+            },
+        }
+
     def create_document(
         self,
         *,
@@ -699,13 +767,16 @@ class AgentsMcpClass:
                 "  socioemocional, motricidad, autonomía, sensorial). Evita textos genéricos",
                 "  que servirían para cualquier alumno. No copies los títulos largos del",
                 "  cuestionario (listas entre paréntesis) como relleno.",
-                "- VARIAS ÁREAS / ESPECIALIDADES (obligatorio si hay más de una fuente):",
-                "  Si el Excel o el formulario traen VARIAS observaciones del mismo estudiante",
-                "  (p. ej. Fonoaudiología y Terapia Ocupacional, o docente + especialista),",
-                "  el informe DEBE integrar TODAS: en análisis/síntesis/conclusión menciona",
-                "  explícitamente lo observado desde cada área (quién/especialidad), qué",
-                "  coincide y qué difiere. Prohibido redactar como si hubiera una sola pauta.",
-                "  En `instruments_applied` lista cada cuestionario/área usada.",
+                "- APODERADO Y PROFESIONAL (obligatorio si hay más de una fuente):",
+                "  Las respuestas de formulario se distinguen por quién contesta:",
+                "  Apoderado o Profesional. No las llames Fonoaudiología, Terapia",
+                "  Ocupacional ni otra especialidad clínica.",
+                "  El informe DEBE integrar TODAS: en análisis/síntesis/conclusión di",
+                "  qué observó el apoderado y qué observó el profesional (si hay varios",
+                "  profesionales, nómbralos por su nombre), qué coincide y qué difiere.",
+                "  Prohibido redactar como si hubiera una sola pauta.",
+                "  En `instruments_applied` lista el cuestionario del apoderado y el del",
+                "  profesional por separado.",
                 "- EXTENSIÓN: cada narrativo DETALLADO (aprox. 120–220 palabras; 3 a 6 oraciones).",
                 "  Prohibido una sola frase corta si hay evidencia en los archivos.",
                 "- INSTRUMENTOS: si el campo existe en la plantilla, lista con guion (-), un ítem",
@@ -736,8 +807,20 @@ class AgentsMcpClass:
                 "  Inf. Eval. Psicopedagógica → Formularios) e inyecta el bloque",
                 "  «RESPUESTAS DEL FORMULARIO PIE360». Si aparece, úsalo como fuente de",
                 "  observación en aula (traduce LOGRADO/EN PROCESO/REQUIERE APOYO a prosa).",
-                "  Si hay Excel Y formulario, o varias áreas en cualquiera de los dos,",
-                "  integra TODAS las áreas/especialidades en el narrativo.",
+                "  Si hay Excel Y formulario, o respuestas de apoderado y de profesional,",
+                "  integra ambas fuentes en el narrativo. No las renombres como especialidad.",
+                "- HISTORIA ESCOLAR (`school_history_background`): usa el bloque",
+                "  «HISTORIA ESCOLAR Y ANTECEDENTES FAMILIARES»",
+                "  (MCP get_student_school_history: anamnesis + formulario del apoderado).",
+                "  Redacta uno o dos párrafos. Empieza con el nombre, el curso y el",
+                "  establecimiento si constan. Sigue con «De acuerdo con los antecedentes",
+                "  aportados por su familia, …» e integra solo hechos de ese bloque:",
+                "  jardín, escuela de lenguaje, repitencia, colegios, apoyos, tareas en casa,",
+                "  intereses, descripción familiar y medicación.",
+                "  Prohibido inventar cualquiera de esos hechos si el bloque no los trae.",
+                "  Las escalas LOGRADO / EN PROCESO / REQUIERE APOYO / NO OBSERVADO",
+                "  no son historia escolar: no las uses en este campo.",
+                "  Si el bloque no trae trayectoria ni antecedentes familiares, el campo va \"\".",
                 "- NO dejes el informe solo con datos personales (nombre, RUT, curso, fechas).",
                 "- No inventes evaluaciones que no estén en Files, formulario MCP ni ficha PIE360.",
                 "- FIDELIDAD DOCUMENTAL: nunca presentes como hecho algo que no esté en los archivos;",
@@ -894,7 +977,8 @@ class AgentsMcpClass:
                 "Fuentes (regla dura):",
                 "- PROHIBIDO buscar en internet, navegar la web o usar buscadores.",
                 "- Solo archivos del agente / texto derivado, el chat, datos PIE360 del contexto",
-                "  y tools MCP (p. ej. get_student_psychopedagogical_form_answers).",
+                "  y tools MCP (get_student_psychopedagogical_form_answers,",
+                "  get_student_school_history).",
                 "- PROHIBIDO HTML y código (CSS, JS, Python, SQL, etc.). Solo prosa en español.",
                 "  El único JSON permitido es el bloque fields para generar el documento.",
                 "- Solo atiendes PIE Chile (informes, estudiantes, NEE, Decreto 170, PIE360).",
@@ -902,7 +986,7 @@ class AgentsMcpClass:
                 "  contestas consultas de PIE Chile.",
                 "",
                 "Flujo:",
-                "1) Lee tu ROL y los ARCHIVOS/JSON del agente / formulario MCP / ficha.",
+                "1) Lee tu ROL y los ARCHIVOS/JSON del agente / formulario MCP / anamnesis / ficha.",
                 "2) Si el usuario pide generar el informe/documento:",
                 "   a) PRIORIDAD ABSOLUTA: entrega YA el bloque JSON completo con TODOS los",
                 "      campos de la plantilla (mismos nombres EXACTOS; narrativos incluidos).",

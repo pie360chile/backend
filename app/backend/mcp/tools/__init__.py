@@ -20,6 +20,7 @@ def register_tools(mcp: "FastMCP") -> None:
         create_document,
         get_student_psychopedagogical_evaluation,
         get_student_psychopedagogical_form_answers,
+        get_student_school_history,
         save_document_to_google_drive,
         search_agent_files,
         store_data,
@@ -30,6 +31,7 @@ def register_tools(mcp: "FastMCP") -> None:
     search_agent_files.register(mcp)
     get_student_psychopedagogical_evaluation.register(mcp)
     get_student_psychopedagogical_form_answers.register(mcp)
+    get_student_school_history.register(mcp)
     save_document_to_google_drive.register(mcp)
 
     _registered = True

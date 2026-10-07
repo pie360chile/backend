@@ -26,7 +26,10 @@ agents_mcp = FastMCP(
         "5) get_student_psychopedagogical_form_answers — lee respuestas del "
         "formulario de observación (Formularios PIE360) si el cuestionario/Excel "
         "de Files no trae al estudiante.\n"
-        "6) save_document_to_google_drive — re-sube un documento ya generado al árbol Drive.\n"
+        "6) get_student_school_history — lee la anamnesis (historia escolar y "
+        "apoyo familiar) y el formulario del apoderado para redactar los "
+        "antecedentes de historia escolar.\n"
+        "7) save_document_to_google_drive — re-sube un documento ya generado al árbol Drive.\n"
         "Auth: parámetro secret = MCP_SECRET.\n"
         "Agregar tools en app/backend/mcp/tools/ (una por archivo)."
     ),
