@@ -41,6 +41,7 @@ def _row_to_api(row: DynamicFormModel) -> dict:
         "description": (row.description or "").strip(),
         "fields": fields,
         "courseId": row.course_id,
+        "respondentTypeId": getattr(row, "respondent_type_id", None),
         "periodYear": row.period_year,
         "createdAt": _iso_dt(row.added_date),
         "updatedAt": _iso_dt(row.updated_date),
@@ -120,6 +121,20 @@ class DynamicFormClass:
             return int(cid)
         except (TypeError, ValueError):
             return None
+
+    def _parse_respondent_type_id(self, data: dict) -> Optional[int]:
+        v = data.get("respondentTypeId")
+        if v is None:
+            v = data.get("respondent_type_id")
+        if v is None or v == "":
+            return None
+        try:
+            n = int(v)
+        except (TypeError, ValueError):
+            return None
+        if n in (1, 2):
+            return n
+        return None
 
     def _parse_period_year(self, data: dict) -> Optional[int]:
         v = data.get("periodYear")
@@ -301,12 +316,16 @@ class DynamicFormClass:
             period_year = self._parse_period_year(data)
             if period_year is None:
                 return {"status": "error", "message": "Debe indicar el período escolar (periodYear)."}
+            respondent_type_id = self._parse_respondent_type_id(data)
+            if respondent_type_id is None:
+                return {"status": "error", "message": "Indique si responde el apoderado o el profesional."}
             row = DynamicFormModel(
                 school_id=school_id,
                 course_id=course_id,
                 period_year=period_year,
                 name=name,
                 description=desc,
+                respondent_type_id=respondent_type_id,
                 fields_json=fields_json,
                 added_date=now,
                 updated_date=now,
@@ -350,6 +369,11 @@ class DynamicFormClass:
                 row.fields_json = self._fields_to_json(fields)
             if "courseId" in data or "course_id" in data:
                 row.course_id = self._parse_course_id(data)
+            if "respondentTypeId" in data or "respondent_type_id" in data:
+                respondent_type_id = self._parse_respondent_type_id(data)
+                if respondent_type_id is None:
+                    return {"status": "error", "message": "Indique si responde el apoderado o el profesional."}
+                row.respondent_type_id = respondent_type_id
             row.updated_date = datetime.now()
             self.db.commit()
             self.db.refresh(row)
@@ -378,6 +402,8 @@ class DynamicFormClass:
                 return {"status": "error", "message": "Formulario no encontrado."}
             if not form_row.course_id:
                 return {"status": "error", "message": "El formulario no tiene curso asociado."}
+            if int(getattr(form_row, "respondent_type_id", None) or 0) == 2
+                return {"status": "error", "message": "Este formulario es para el profesional. No se envía WhatsApp."}
             if not student_ids:
                 return {
                     "status": "error",
@@ -798,6 +824,8 @@ class DynamicFormClass:
                 return {"status": "error", "message": "Formulario no encontrado."}
             if not form_row.course_id:
                 return {"status": "error", "message": "El formulario no tiene curso asociado."}
+            if int(getattr(form_row, "respondent_type_id", None) or 0) == 2
+                return {"status": "error", "message": "Este formulario es para el profesional. No se envía WhatsApp."}
             allowed = self._course_student_ids(int(form_row.course_id), school_id, customer_id, period_year)
             if student_id not in allowed:
                 return {"status": "error", "message": "El estudiante no pertenece al curso de este formulario."}

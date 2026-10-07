@@ -887,6 +887,7 @@ class DynamicFormModel(Base):
     period_year = Column(Integer, nullable=True)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
+    respondent_type_id = Column(Integer, nullable=True)
     fields_json = Column(Text, nullable=False)
     added_date = Column(DateTime, nullable=True)
     updated_date = Column(DateTime, nullable=True)

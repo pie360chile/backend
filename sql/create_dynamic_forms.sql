@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS `dynamic_forms` (
   `period_year` int DEFAULT NULL COMMENT 'Año del período escolar (ej. 2025); obligatorio vía API al crear/editar',
   `name` varchar(255) NOT NULL,
   `description` text,
+  `respondent_type_id` int DEFAULT NULL COMMENT '1 = Apoderado, 2 = Profesional',
   `fields_json` longtext NOT NULL COMMENT 'JSON: array de campos {id, question, fieldType, options[], required}',
   `added_date` datetime DEFAULT NULL,
   `updated_date` datetime DEFAULT NULL,

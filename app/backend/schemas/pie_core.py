@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, EmailStr, validator, field_validator, ConfigDict, AliasChoices
-from typing import Union, List, Dict, Optional, Any
+from typing import Union, List, Dict, Optional, Any, Literal
 from datetime import datetime, date
 from decimal import Decimal
 from fastapi import Form
@@ -1590,6 +1590,11 @@ class StoreDynamicForm(BaseModel):
     fields: List[DynamicFormFieldSchema]
     periodYear: int = Field(..., ge=2000, le=2100, validation_alias=AliasChoices("periodYear", "period_year"))
     courseId: int = Field(..., ge=1, validation_alias=AliasChoices("courseId", "course_id"))
+    respondentTypeId: Literal[1, 2] = Field(
+        ...,
+        validation_alias=AliasChoices("respondentTypeId", "respondent_type_id"),
+        description="1 = Apoderado, 2 = Profesional",
+    )
     notifyStudentIds: Optional[List[int]] = Field(
         None, validation_alias=AliasChoices("notifyStudentIds", "notify_student_ids")
     )
@@ -1602,6 +1607,11 @@ class UpdateDynamicForm(BaseModel):
     fields: Optional[List[DynamicFormFieldSchema]] = None
     periodYear: int = Field(..., ge=2000, le=2100, validation_alias=AliasChoices("periodYear", "period_year"))
     courseId: int = Field(..., ge=1, validation_alias=AliasChoices("courseId", "course_id"))
+    respondentTypeId: Optional[Literal[1, 2]] = Field(
+        None,
+        validation_alias=AliasChoices("respondentTypeId", "respondent_type_id"),
+        description="1 = Apoderado, 2 = Profesional",
+    )
     notifyStudentIds: Optional[List[int]] = Field(
         None, validation_alias=AliasChoices("notifyStudentIds", "notify_student_ids")
     )
