@@ -606,6 +606,22 @@ class AgentsMcpClass:
                 clean_fields[str(key)] = val
         fields = clean_fields
 
+        if int(document_id) == 27:
+            from app.backend.utils.agents_dynamic_form_context import (
+                student_has_nonempty_form_answers,
+            )
+
+            if not student_has_nonempty_form_answers(self.db, student_id=int(student_id)):
+                return {
+                    "status": "error",
+                    "message": (
+                        "No es posible elaborar el Informe de Evaluación Psicopedagógica. "
+                        "El formulario de este estudiante no tiene respuestas registradas. "
+                        "Mientras el cuestionario no esté contestado, no se emite el informe."
+                    ),
+                    "http_status": 422,
+                }
+
         if int(document_id) == 7:
             from app.backend.utils.agents_saved_psychoped_context import (
                 student_has_usable_psychoped_report,
@@ -880,6 +896,11 @@ class AgentsMcpClass:
                 "  supports de hogar).",
                 "- Si en ESTE turno hay bloque ARCHIVOS / Excel / texto derivado del estudiante,",
                 "  ÚSALO: no digas que faltan cuestionarios si las respuestas están en el contexto.",
+                "- FORMULARIO VACÍO: si este estudiante no tiene respuestas en el",
+                "  formulario, NO envíes JSON fields y NO pidas generar el Word.",
+                "  Responde solo que no es posible elaborar el Informe de Evaluación",
+                "  Psicopedagógica mientras el cuestionario no esté contestado.",
+                "  La nómina y el reporte interactivo no reemplazan el formulario.",
                 "- Si aparece el bloque «RESPUESTAS DEL FORMULARIO PIE360», ESO es la",
                 "  evaluación de este RUT (MCP get_student_psychopedagogical_form_answers).",
                 "  Está filtrado por student_id. No importa que el Excel, el Reporte",
@@ -987,10 +1008,13 @@ class AgentsMcpClass:
             "  previamente con el Informe de Evaluación Psicopedagógica registrado",
             "  en su ficha; mientras no esté generado y guardado, no se emite el",
             "  documento para la familia.",
-            "  Si el bloque «INFORME PSICOPEDAGÓGICO GUARDADO EN PIE360» trae párrafos,",
-            "  esa ficha es la fuente de los narrativos. Prohibido ignorarla.",
-            "  Si Files, el Reporte Interactivo o la nómina traen otros RUT, no uses esas",
-            "  filas para este estudiante: manda el psicopedagógico de la ficha.",
+            "  Si el bloque «INFORME PSICOPEDAGÓGICO GUARDADO EN PIE360» trae conclusión",
+            "  o sugerencias, ESO es la evaluación de este estudiante. Redacta el",
+            "  informe a la familia desde esos párrafos y envía el JSON fields.",
+            "  Prohibido decir que no hay evaluación, que los campos quedan pendientes",
+            "  o que el reporte interactivo es de otros RUT. Esos archivos no reemplazan",
+            "  la ficha. Si un apartado de la ficha está vacío, no lo inventes, pero",
+            "  igual emite el documento con la conclusión y las sugerencias que sí están.",
             "- Si en ESTE turno hay bloque ARCHIVOS / texto derivado del estudiante, úsalo",
             "  solo como complemento y solo si el RUT coincide. No sustituye al",
             "  psicopedagógico de la ficha.",

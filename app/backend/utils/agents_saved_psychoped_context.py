@@ -55,16 +55,69 @@ def _text(value: Any) -> str:
     return str(value).strip()
 
 
-def student_has_usable_psychoped_report(db: Session, student_id: int) -> bool:
-    """True solo si la ficha guardada trae análisis, síntesis, conclusión o sugerencias."""
+def _latest_psychoped_row(db: Session, student_id: int):
     if int(student_id) < 1:
-        return False
-    row = (
+        return None
+    return (
         db.query(PsychopedagogicalEvaluationInfoModel)
         .filter(PsychopedagogicalEvaluationInfoModel.student_id == int(student_id))
         .order_by(PsychopedagogicalEvaluationInfoModel.id.desc())
         .first()
     )
+
+
+def family_fields_from_saved_psychoped(db: Session, student_id: int) -> dict[str, str]:
+    """Pasa al informe a la familia solo el texto ya guardado en la ficha."""
+    row = _latest_psychoped_row(db, student_id)
+    if row is None:
+        return {}
+    diagnosis = _text(getattr(row, "diagnosis", None))
+    instruments = _text(getattr(row, "instruments_applied", None))
+    conclusion = _text(getattr(row, "conclusion", None))
+    school = _text(getattr(row, "suggestions_to_school", None))
+    classroom = _text(getattr(row, "suggestions_to_classroom_team", None))
+    to_student = _text(getattr(row, "suggestions_to_student", None))
+    to_family = _text(getattr(row, "suggestions_to_family", None))
+    cognitive = "\n\n".join(
+        part
+        for part in (
+            _text(getattr(row, "cognitive_analysis", None)),
+            _text(getattr(row, "cognitive_synthesis", None)),
+        )
+        if part
+    )
+    personal = "\n\n".join(
+        part
+        for part in (
+            _text(getattr(row, "personal_analysis", None)),
+            _text(getattr(row, "personal_synthesis", None)),
+        )
+        if part
+    )
+    out: dict[str, str] = {}
+    if diagnosis:
+        out["diagnostic"] = diagnosis
+        out["diagnosis"] = diagnosis
+    if instruments:
+        out["applied_instruments"] = instruments
+    if conclusion:
+        out["evaluation_reason"] = conclusion
+    if cognitive:
+        out["pedagogical_strengths"] = cognitive
+    if personal:
+        out["social_affective_strengths"] = personal
+    school_block = "\n\n".join(part for part in (school, classroom, to_student) if part)
+    if school_block:
+        out["collaborative_work"] = school_block
+    if to_family:
+        out["home_based_description"] = to_family
+        out["home_support"] = to_family
+    return out
+
+
+def student_has_usable_psychoped_report(db: Session, student_id: int) -> bool:
+    """True solo si la ficha guardada trae análisis, síntesis, conclusión o sugerencias."""
+    row = _latest_psychoped_row(db, student_id)
     if row is None:
         return False
     for key in _NARRATIVE_ATTRS:

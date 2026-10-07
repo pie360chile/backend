@@ -53,6 +53,51 @@ def _format_answer_value(value: Any) -> str:
     return str(value).strip()
 
 
+def _submission_has_answers(answers_json: Any) -> bool:
+    try:
+        answers = json.loads(answers_json) if answers_json else {}
+    except (json.JSONDecodeError, TypeError):
+        return False
+    if not isinstance(answers, dict):
+        return False
+    return any(_format_answer_value(value) for value in answers.values())
+
+
+def student_has_nonempty_form_answers(
+    db: Session,
+    *,
+    student_id: int,
+    school_id: int | None = None,
+    period_year: int | None = None,
+) -> bool:
+    """True solo si hay al menos una respuesta con texto en un formulario vigente."""
+    if not student_id or int(student_id) < 1:
+        return False
+    sid = int(student_id)
+    resolved_school = school_id
+    if resolved_school is None:
+        student = db.query(StudentModel).filter(StudentModel.id == sid).first()
+        if student and student.school_id:
+            resolved_school = int(student.school_id)
+    q = (
+        db.query(DynamicFormSubmissionModel.answers_json)
+        .join(
+            DynamicFormModel,
+            DynamicFormModel.id == DynamicFormSubmissionModel.dynamic_form_id,
+        )
+        .filter(DynamicFormSubmissionModel.student_id == sid)
+        .filter(DynamicFormModel.deleted_date.is_(None))
+    )
+    if period_year is not None:
+        q = q.filter(DynamicFormSubmissionModel.period_year == int(period_year))
+    if resolved_school is not None:
+        q = q.filter(DynamicFormModel.school_id == int(resolved_school))
+    for (answers_json,) in q.all():
+        if _submission_has_answers(answers_json):
+            return True
+    return False
+
+
 def student_has_dynamic_form_answers(
     db: Session,
     *,

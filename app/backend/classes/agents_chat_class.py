@@ -54,6 +54,44 @@ from app.backend.utils.agents_mcp_fields import (
     strip_fields_json_from_reply,
 )
 
+def _missing_form_answers_reply() -> str:
+    return (
+        "No es posible elaborar el Informe de Evaluación Psicopedagógica. "
+        "El formulario de este estudiante no tiene respuestas registradas. "
+        "Mientras el cuestionario no esté contestado, no se emite el informe."
+    )
+
+
+def _is_psychoped_report(document_id: int | None, agent_name: str | None) -> bool:
+    if document_id is not None and int(document_id) == _PSYCHOPED_DOCUMENT_ID:
+        return True
+    name = (agent_name or "").lower()
+    return "psicoped" in name and "familia" not in name
+
+
+def _psychoped_blocked_without_form(
+    db: Session,
+    *,
+    document_id: int | None,
+    agent_name: str | None,
+    student_id: int | None,
+    school_id: int | None = None,
+    period_year: int | None = None,
+) -> bool:
+    if not student_id or not _is_psychoped_report(document_id, agent_name):
+        return False
+    from app.backend.utils.agents_dynamic_form_context import (
+        student_has_nonempty_form_answers,
+    )
+
+    return not student_has_nonempty_form_answers(
+        db,
+        student_id=int(student_id),
+        school_id=int(school_id) if school_id else None,
+        period_year=int(period_year) if period_year else None,
+    )
+
+
 def _missing_psychoped_files_reply() -> str:
     return (
         "No es posible elaborar el Informe de Evaluación Psicopedagógica: "
@@ -82,6 +120,26 @@ def _is_family_report(document_id: int | None, agent_name: str | None) -> bool:
     if document_id is not None and int(document_id) == _FAMILIA_DOCUMENT_ID:
         return True
     return "familia" in (agent_name or "").lower()
+
+
+_PSYCHOPED_DODGE_MARKERS = (
+    "quedan pendientes",
+    "queda pendiente",
+    "quedan vacíos",
+    "quedan vacios",
+    "no figuran",
+    "no hay antecedentes",
+    "otros estudiantes",
+    "rut distinto",
+    "no trae el formulario",
+    "campos narrativos",
+    "quedan en blanco",
+)
+
+
+def _reply_dodges_saved_psychoped(text: str) -> bool:
+    low = (text or "").lower()
+    return any(marker in low for marker in _PSYCHOPED_DODGE_MARKERS)
 
 
 def _family_blocked_without_psychoped(
@@ -568,6 +626,33 @@ class AgentsChatClass:
             }
             return
 
+        # Psicopedagógico: formulario vacío → no se llama al modelo ni se arma el Word.
+        if (
+            want_doc_early
+            and resolved_student_id
+            and _psychoped_blocked_without_form(
+                self.db,
+                document_id=resolved_document_id,
+                agent_name=agent_row.name or "",
+                student_id=int(resolved_student_id),
+                school_id=int(self.school_id) if self.school_id else None,
+                period_year=int(self.period_year) if self.period_year else None,
+            )
+        ):
+            ask = _missing_form_answers_reply()
+            yield {"type": "text_delta", "delta": ask}
+            yield {
+                "type": "done",
+                "data": {
+                    "reply": ask,
+                    "usage": None,
+                    "model": None,
+                    "responseFiles": [],
+                    "warning": None,
+                },
+            }
+            return
+
         # Estudiante identificado pero sin fuentes: rechazar. No pedir RUT.
         has_report_sources = False
         if want_doc_early and resolved_student_id:
@@ -724,26 +809,48 @@ class AgentsChatClass:
         warning: str | None = None
         fields = extract_fields_from_reply(reply_text)
 
+        family_has_psychoped = bool(
+            resolved_student_id
+            and _is_family_report(resolved_document_id, agent_row.name or "")
+            and not _family_blocked_without_psychoped(
+                self.db,
+                document_id=resolved_document_id,
+                agent_name=agent_row.name or "",
+                student_id=int(resolved_student_id),
+            )
+        )
+        dodged_psychoped = family_has_psychoped and _reply_dodges_saved_psychoped(reply_text)
+
         # Si pidió el informe y el modelo se quedó en la intro sin JSON → 1 reintento forzado.
         if (
             want_doc
-            and not fields
             and resolved_student_id
             and resolved_document_id
             and has_report_sources
+            and (not fields or dodged_psychoped)
         ):
             yield {
                 "type": "step",
                 "message": "Completando campos del documento (reintento)…",
             }
-            retry_msg = (
-                "Tu respuesta anterior NO incluyó el bloque JSON `fields` y por eso "
-                "NO se generó el documento. Responde AHORA solo con el bloque "
-                '```json\n{"fields": {...}}\n``` completo (todos los campos de la '
-                "plantilla, narrativos detallados). Prohibido intro larga; máximo "
-                "1 oración antes del JSON. Usa Files, formulario MCP y ficha; "
-                "no inventes datos."
-            )
+            if family_has_psychoped:
+                retry_msg = (
+                    "La ficha PIE360 de este estudiante SÍ tiene Informe de Evaluación "
+                    "Psicopedagógica (conclusión y sugerencias). Eso es la evaluación. "
+                    "Ignora el reporte interactivo y la nómina de otros RUT. "
+                    "Responde AHORA solo con ```json\n{\"fields\": {...}}\n``` del Informe "
+                    "a la Familia, redactado desde esa ficha. Prohibido decir que no hay "
+                    "evaluación o que los campos quedan pendientes."
+                )
+            else:
+                retry_msg = (
+                    "Tu respuesta anterior NO incluyó el bloque JSON `fields` y por eso "
+                    "NO se generó el documento. Responde AHORA solo con el bloque "
+                    '```json\n{"fields": {...}}\n``` completo (todos los campos de la '
+                    "plantilla, narrativos detallados). Prohibido intro larga; máximo "
+                    "1 oración antes del JSON. Usa Files, formulario MCP y ficha; "
+                    "no inventes datos."
+                )
             retry_messages = list(messages) + [
                 {"role": "assistant", "content": reply_text or "(sin JSON)"},
                 {"role": "user", "content": retry_msg},
@@ -791,11 +898,39 @@ class AgentsChatClass:
                     yield event
                     return
             if retry_reply:
-                reply_text = ((reply_text or "").rstrip() + "\n\n" + retry_reply).strip()
-                visible_reply = reply_text
                 fields = extract_fields_from_reply(retry_reply) or extract_fields_from_reply(
                     reply_text
                 )
+                if family_has_psychoped and _reply_dodges_saved_psychoped(reply_text):
+                    visible_reply = retry_reply
+                    reply_text = retry_reply
+                else:
+                    reply_text = ((reply_text or "").rstrip() + "\n\n" + retry_reply).strip()
+                    visible_reply = reply_text
+
+        if family_has_psychoped and resolved_student_id:
+            from app.backend.utils.agents_saved_psychoped_context import (
+                family_fields_from_saved_psychoped,
+            )
+
+            saved_fields = family_fields_from_saved_psychoped(
+                self.db, int(resolved_student_id)
+            )
+            if saved_fields:
+                merged_fields = dict(fields or {})
+                for key, value in saved_fields.items():
+                    if not str(merged_fields.get(key) or "").strip():
+                        merged_fields[key] = value
+                if merged_fields:
+                    fields = merged_fields
+                    if _reply_dodges_saved_psychoped(visible_reply):
+                        visible_reply = (
+                            "El Informe a la Familia se elaboró con el Informe de "
+                            "Evaluación Psicopedagógica guardado en la ficha. "
+                            "Se usaron la conclusión y las sugerencias que están "
+                            "registradas. No se completaron los apartados que esa "
+                            "ficha tiene vacíos."
+                        )
 
         if want_doc or fields:
             if not resolved_student_id:
@@ -811,6 +946,16 @@ class AgentsChatClass:
                 and not has_report_sources
             ):
                 visible_reply = _missing_psychoped_files_reply()
+                warning = None
+            elif _psychoped_blocked_without_form(
+                self.db,
+                document_id=resolved_document_id,
+                agent_name=agent_row.name or "",
+                student_id=int(resolved_student_id),
+                school_id=int(self.school_id) if self.school_id else None,
+                period_year=int(self.period_year) if self.period_year else None,
+            ):
+                visible_reply = _missing_form_answers_reply()
                 warning = None
             elif _family_blocked_without_psychoped(
                 self.db,
@@ -1155,6 +1300,17 @@ class AgentsChatClass:
             student_id=int(student_id),
         ):
             empty["reason"] = _missing_psychoped_for_family_reply()
+            return empty
+
+        if document_id == _PSYCHOPED_DOCUMENT_ID and _psychoped_blocked_without_form(
+            self.db,
+            document_id=document_id,
+            agent_name=agent_row.name or "",
+            student_id=int(student_id),
+            school_id=int(self.school_id) if self.school_id else None,
+            period_year=int(self.period_year) if self.period_year else None,
+        ):
+            empty["reason"] = _missing_form_answers_reply()
             return empty
 
         if document_id == _PSYCHOPED_DOCUMENT_ID:
