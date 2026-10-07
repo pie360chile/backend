@@ -147,15 +147,35 @@ def family_fields_from_saved_psychoped(
         out["evaluation_reason"] = conclusion
     if cognitive:
         out["pedagogical_strengths"] = cognitive
+        out["strengths_1"] = cognitive
+    elif conclusion:
+        out["pedagogical_strengths"] = conclusion
+        out["strengths_1"] = conclusion
     if personal:
         out["social_affective_strengths"] = personal
     school_block = "\n\n".join(part for part in (school, classroom, to_student) if part)
     if school_block:
         out["collaborative_work"] = school_block
+        out["school_family_agreements"] = school_block
+        out["agreements_commitments"] = school_block
     if to_family:
         out["home_based_description"] = to_family
         out["home_support"] = to_family
     return out
+
+
+def apply_saved_psychoped_to_family_replacements(
+    db: Session,
+    student_id: int,
+    replacements: dict[str, str],
+    period_year: int | None = None,
+) -> dict[str, str]:
+    """Rellena los huecos del informe a la familia con el psicopedagógico del período."""
+    saved = family_fields_from_saved_psychoped(db, int(student_id), period_year)
+    for key, value in saved.items():
+        if value and not str(replacements.get(key) or "").strip():
+            replacements[key] = value
+    return replacements
 
 
 def student_has_usable_psychoped_report(

@@ -169,7 +169,17 @@ def generate_and_save_document(
     if is_familia_document(int(template.document_id)):
         from app.backend.utils.agents_familia_fill import apply_family_progress_dates
 
+        from app.backend.utils.agents_saved_psychoped_context import (
+            apply_saved_psychoped_to_family_replacements,
+        )
+
         replacements = merge_pie360_fallback_into_replacements(replacements, student_ctx)
+        replacements = apply_saved_psychoped_to_family_replacements(
+            db,
+            int(student_id),
+            replacements,
+            student_ctx.get("period_year"),
+        )
         replacements = apply_family_progress_dates(replacements)
     elif int(template.document_id) == PSYCHOPED_DOCUMENT_ID:
         replacements = normalize_psychoped_replacements(replacements, student_ctx)
