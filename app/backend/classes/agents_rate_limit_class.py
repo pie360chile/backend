@@ -112,7 +112,7 @@ class AgentsRateLimitClass:
         window_start = now - timedelta(minutes=1)
         req_user = max(1, int(settings.agents_rate_requests_per_min_user or 10))
         req_customer = max(1, int(settings.agents_rate_requests_per_min_customer or 30))
-        tok_user = max(1000, int(settings.agents_rate_tokens_per_day_user or 200000))
+        tok_user = max(1000, int(settings.agents_rate_tokens_per_day_user or 400000))
         tok_customer = max(1000, int(settings.agents_rate_tokens_per_day_customer or 2000000))
 
         try:

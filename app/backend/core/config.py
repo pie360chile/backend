@@ -166,7 +166,7 @@ class Settings:
     )
     agents_rate_tokens_per_day_user: int = field(
         default_factory=lambda: int(
-            os.getenv("AGENTS_RATE_TOKENS_PER_DAY_USER", "200000") or "200000"
+            os.getenv("AGENTS_RATE_TOKENS_PER_DAY_USER", "400000") or "400000"
         )
     )
     agents_rate_tokens_per_day_customer: int = field(
