@@ -44,43 +44,33 @@ def _estimate_cost_usd(
         .filter(AgentsOpenAIModel.model_code == model_code)
         .first()
     )
-    # BD guarda off-peak; en hora punta DeepSeek cobra 2×.
     from app.backend.utils.agents_deepseek_pricing import (
-        apply_period_multiplier,
-        is_deepseek_peak,
+        DEEPSEEK_OFF_PEAK,
+        estimate_token_cost_usd,
     )
 
-    in_price = Decimal(str(row.input_per_1m_usd)) if row else Decimal("0.220")
-    out_price = Decimal(str(row.output_per_1m_usd)) if row else Decimal("0.660")
-    cached_price = (
-        Decimal(str(row.cached_input_per_1m_usd))
-        if row and row.cached_input_per_1m_usd is not None
-        else (Decimal("0.007") if row is None else None)
-    )
-    if is_deepseek_peak():
-        in_price = apply_period_multiplier(in_price)
-        out_price = apply_period_multiplier(out_price)
-        if cached_price is not None:
-            cached_price = apply_period_multiplier(cached_price)
-
-    hit = max(0, int(prompt_cache_hit_tokens or 0))
-    miss = max(0, int(prompt_cache_miss_tokens or 0))
-    prompt = max(0, int(prompt_tokens or 0))
-    if hit + miss <= 0 and prompt > 0:
-        miss = prompt
-    elif hit + miss > 0 and hit + miss != prompt and prompt > 0:
-        # Preferir desglose del proveedor; ajustar miss al resto del prompt
-        miss = max(0, prompt - hit)
-
-    if cached_price is not None and (hit > 0 or miss > 0):
-        input_cost = (Decimal(hit) / Decimal(1_000_000)) * cached_price + (
-            Decimal(miss) / Decimal(1_000_000)
-        ) * in_price
+    catalog = DEEPSEEK_OFF_PEAK.get((model_code or "").strip()) or DEEPSEEK_OFF_PEAK["deepseek-flash"]
+    if row is not None:
+        in_price = Decimal(str(row.input_per_1m_usd or 0))
+        out_price = Decimal(str(row.output_per_1m_usd or 0))
+        cached_price = (
+            Decimal(str(row.cached_input_per_1m_usd))
+            if row.cached_input_per_1m_usd is not None
+            else catalog["cached_input"]
+        )
     else:
-        input_cost = (Decimal(prompt) / Decimal(1_000_000)) * in_price
-
-    cost = input_cost + (Decimal(completion_tokens) / Decimal(1_000_000)) * out_price
-    return cost.quantize(Decimal("0.000001"))
+        in_price = catalog["input"]
+        out_price = catalog["output"]
+        cached_price = catalog["cached_input"]
+    return estimate_token_cost_usd(
+        off_peak_input=in_price,
+        off_peak_output=out_price,
+        off_peak_cached=cached_price,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        cache_hit_tokens=prompt_cache_hit_tokens,
+        cache_miss_tokens=prompt_cache_miss_tokens,
+    )
 
 
 def _clip(text: str | None, max_len: int = 20000) -> str | None:
@@ -115,14 +105,11 @@ class AgentsUsageClass:
         output_text: str | None = None,
         request_kind: str = "chat",
     ) -> dict[str, Any]:
+        from app.backend.utils.agents_deepseek_pricing import split_prompt_cache
+
         pt = max(0, int(prompt_tokens or 0))
         ct = max(0, int(completion_tokens or 0))
-        hit = max(0, int(prompt_cache_hit_tokens or 0))
-        miss = max(0, int(prompt_cache_miss_tokens or 0))
-        if hit + miss <= 0 and pt > 0:
-            miss = pt
-        elif pt > 0 and hit > 0 and miss <= 0:
-            miss = max(0, pt - hit)
+        hit, miss = split_prompt_cache(pt, prompt_cache_hit_tokens, prompt_cache_miss_tokens)
         tt = int(total_tokens) if total_tokens is not None else pt + ct
         cost = _estimate_cost_usd(
             model_code=model,

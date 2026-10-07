@@ -1,4 +1,4 @@
-"""Cambia default a DeepSeek-V4-Flash, desactiva Pro y limpia estadísticas de uso.
+"""Deja DeepSeek-V4.1-Flash (deepseek-flash), borra modelos viejos y limpia uso.
 
 Run from backend/:
   python migrations/apply_agents_flash_default_and_reset_usage.py
@@ -33,26 +33,26 @@ def main() -> None:
         # Soft-delete / desactivar Pro y cualquier otro no-Flash
         now_sql = "UTC_TIMESTAMP()"
         with engine.begin() as conn:
-            conn.execute(
+            deleted_models = conn.execute(
                 text(
-                    f"""
-                    UPDATE agents_openai_models
-                    SET is_active = 0, is_selected = 0, updated_at = {now_sql}
-                    WHERE model_code <> 'deepseek-v4-flash'
+                    """
+                    DELETE FROM agents_openai_models
+                    WHERE model_code <> 'deepseek-flash'
                     """
                 )
             )
+            print(f"ok: deleted old models rows={deleted_models.rowcount}")
             conn.execute(
                 text(
                     f"""
                     UPDATE agents_openai_models
                     SET is_active = 1, is_selected = 1,
-                        display_name = 'DeepSeek-V4-Flash',
-                        input_per_1m_usd = 0.220000,
-                        output_per_1m_usd = 0.660000,
-                        cached_input_per_1m_usd = 0.007000,
+                        display_name = 'DeepSeek-V4.1-Flash',
+                        input_per_1m_usd = 0.150000,
+                        output_per_1m_usd = 0.600000,
+                        cached_input_per_1m_usd = 0.003000,
                         updated_at = {now_sql}
-                    WHERE model_code = 'deepseek-v4-flash'
+                    WHERE model_code = 'deepseek-flash'
                     """
                 )
             )
