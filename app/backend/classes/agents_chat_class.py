@@ -310,7 +310,7 @@ def _build_system_prompt(
             except Exception:
                 pass
 
-        # Si Files no trae el psicopedagógico del caso → leer ficha del estudiante (doc 27)
+        # Informe a la familia: siempre el último psicopedagógico de la carpeta (doc 27).
         try:
             from app.backend.utils.agents_student_folder_context import (
                 maybe_build_ficha_psychoped_block,

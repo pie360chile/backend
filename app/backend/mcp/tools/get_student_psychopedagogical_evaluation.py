@@ -23,10 +23,9 @@ def register(mcp: "FastMCP") -> None:
     ) -> dict:
         """Obtiene el ÚLTIMO informe psicopedagógico desde la ficha del estudiante.
 
-        Cuando Files del agente no tiene el psicopedagógico del caso, usa esta tool
-        para leer el archivo más reciente subido en la carpeta/ficha del estudiante
-        (document_id=27 por defecto). Si hay varias versiones, toma la última
-        (por fecha de carga/actualización y version_id).
+        El Informe a la Familia debe llamarla siempre. Lee el archivo más reciente
+        de la carpeta (document_id=27). Si hay varias versiones, toma la última
+        por fecha y version_id. No se omite porque Files traigan otro reporte.
 
         Args:
             agent_id: UUID del agente PIE360.

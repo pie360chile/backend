@@ -313,8 +313,8 @@ class AgentsMcpClass:
         document_id: int | None = None,
     ) -> dict[str, Any]:
         """
-        Lee el informe psicopedagógico (u otro document_id) desde la ficha/carpeta
-        del estudiante (tabla folders → files/system/students), no desde Files del agente.
+        Lee el último informe psicopedagógico de la carpeta del estudiante
+        (tabla folders, document_id 27). El informe a la familia lo usa siempre.
         """
         aid = (agent_id or "").strip()
         if not aid:
@@ -894,12 +894,18 @@ class AgentsMcpClass:
             "  (p. ej. no pases 3.012.603-8 a 23.012.603-8). Si no coincide, el RUT es",
             "  incorrecto: no identifiques a nadie ni envíes JSON fields.",
             "  Curso y RUT de plantilla: usa ficha PIE360 si el estudiante ya está identificado.",
-            "- Si en ESTE turno hay bloque ARCHIVOS / texto derivado del estudiante, ÚSALO:",
-            "  no digas que «no se adjuntó» el documento de evaluación ni que faltan antecedentes.",
-            "- Si NO hay psicopedagógico usable en Files del agente, PIE360 busca en la ficha",
-            "  del estudiante (document_id=27) e inyecta el bloque",
-            "  «INFORME PSICOPEDAGÓGICO DESDE FICHA DEL ESTUDIANTE». Si aparece, úsalo como",
-            "  fuente principal de narrativos. Tool MCP: get_student_psychopedagogical_evaluation.",
+            "- PSICOPEDAGÓGICO OBLIGATORIO: PIE360 inyecta siempre el ÚLTIMO informe",
+            "  psicopedagógico de la carpeta del estudiante (document_id=27), bloque",
+            "  «INFORME PSICOPEDAGÓGICO DESDE FICHA DEL ESTUDIANTE».",
+            "  Tool MCP: get_student_psychopedagogical_evaluation.",
+            "  Ese bloque es la fuente principal de los narrativos del Informe a la Familia.",
+            "  Prohibido ignorarlo, decir que no está cargado o pedir que lo confirmen",
+            "  si el bloque está en el contexto.",
+            "  Si Files, el Reporte Interactivo o la nómina traen otros RUT, no uses esas",
+            "  filas para este estudiante: manda el psicopedagógico de la ficha.",
+            "- Si en ESTE turno hay bloque ARCHIVOS / texto derivado del estudiante, úsalo",
+            "  solo como complemento y solo si el RUT coincide. No sustituye al",
+            "  psicopedagógico de la ficha.",
             "- NO dejes el informe solo con datos personales (nombre, RUT, curso, fechas).",
             "  Eso no es un informe completo.",
             "- Si un dato no está en los archivos, ese campo va \"\" (vacío). No inventes.",

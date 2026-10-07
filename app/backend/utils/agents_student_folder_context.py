@@ -200,9 +200,10 @@ def extract_student_catalog_document_text(
         "INFORME PSICOPEDAGÓGICO DESDE FICHA DEL ESTUDIANTE "
         f"(document_id={int(document_id)}, archivo={filename}, "
         f"versión={row.version_id}, último_cargado={when_s or 'n/d'}). "
-        "Es la ÚLTIMA versión en la ficha (si había varias). "
-        "No estaba (o no era usable) en Files del agente; usa ESTE texto como fuente principal "
-        "de los campos narrativos del Informe a la Familia.\n\n"
+        "Es la ÚLTIMA versión guardada en la carpeta del estudiante. "
+        "OBLIGATORIO para el Informe a la Familia: esta es la fuente principal de los "
+        "campos narrativos. No la ignores. No digas que el psicopedagógico no está cargado. "
+        "No la reemplaces por filas de otros RUT del Reporte Interactivo ni de la nómina.\n\n"
     )
     return {
         "ok": True,
@@ -234,28 +235,17 @@ def maybe_build_ficha_psychoped_block(
     force: bool = False,
 ) -> str:
     """
-    Si Files no trae psicopedagógico del estudiante, inyecta el de la ficha (doc 27).
+    Para el Informe a la Familia, inyecta siempre el último psicopedagógico de la ficha (doc 27).
 
-    Se usa cuando:
-    - force=True, o
-    - document_id es Informe a la Familia (7), o
-    - document_id aún no está definido (None) — típico del agente Familia.
+    No se omite aunque Files del agente traigan un reporte interactivo u otra nómina.
+    El agente psicopedagógico (doc 27) no recibe este bloque como entrada.
     """
     if not student_id or int(student_id) < 1:
         return ""
 
     doc = int(document_id) if document_id is not None else None
-    # Solo para Informe a la Familia: el psicopedagógico se lee desde ficha como fuente.
-    # Si el agente ES el psicopedagógico (doc 27), no inyectar la ficha como input.
     allow = force or doc == 7
     if not allow:
-        return ""
-
-    if files_context_has_student_psychoped(
-        files_block,
-        student_name=student_name,
-        student_rut=student_rut,
-    ):
         return ""
 
     result = extract_student_catalog_document_text(
