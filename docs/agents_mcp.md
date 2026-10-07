@@ -21,7 +21,7 @@ app/backend/mcp/
 Negocio: `classes/agents_mcp_class.py`  
 Generación física: `classes/agents_document_service.py` (`generate_and_save_document`)  
 Chat auto: `classes/agents_chat_class.py`  
-El informe a la familia siempre recibe el último psicopedagógico de la carpeta del estudiante (document_id=27), aunque Files traigan otro reporte.  
+El informe a la familia recibe la ficha psicopedagógica guardada en la base (`get_saved_psychopedagogical_evaluation`) y el último Word de la carpeta (document_id=27).  
 Si el cuestionario/Excel de Files no trae la fila del estudiante, el chat llama MCP `get_student_psychopedagogical_form_answers` e inyecta las respuestas de Formularios.  
 Para el apartado de historia escolar, el chat inyecta MCP `get_student_school_history` (anamnesis y formulario del apoderado).
 
@@ -60,6 +60,7 @@ Las carpetas se crean si no existen. Si el archivo ya está, se reemplaza.
 | `create_document` | `POST /api/agents/mcp/create_document` |
 | `save_document_to_google_drive` | `POST /api/agents/mcp/save_document_to_google_drive` |
 | `get_student_psychopedagogical_evaluation` | `POST /api/agents/mcp/get_student_psychopedagogical_evaluation` |
+| `get_saved_psychopedagogical_evaluation` | `POST /api/agents/mcp/get_saved_psychopedagogical_evaluation` |
 | `get_student_psychopedagogical_form_answers` | `POST /api/agents/mcp/get_student_psychopedagogical_form_answers` |
 | `get_student_school_history` | `POST /api/agents/mcp/get_student_school_history` |
 | `store_data` | `POST /api/agents/mcp/store_data` |

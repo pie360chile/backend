@@ -516,6 +516,66 @@ class AgentsMcpClass:
             },
         }
 
+    def get_saved_psychopedagogical_evaluation(
+        self,
+        *,
+        agent_id: str,
+        customer_id: int,
+        student_id: int,
+        student_name: str | None = None,
+        student_rut: str | None = None,
+    ) -> dict[str, Any]:
+        """Lee la ficha psychopedagogical_evaluation_info guardada al generar el informe."""
+        aid = (agent_id or "").strip()
+        if not aid:
+            return {"status": "error", "message": "agent_id es requerido.", "http_status": 400}
+        if int(customer_id) < 1:
+            return {"status": "error", "message": "customer_id inválido.", "http_status": 400}
+        if int(student_id) < 1:
+            return {"status": "error", "message": "student_id inválido.", "http_status": 400}
+
+        agent = (
+            self.db.query(AgentModel)
+            .filter(
+                AgentModel.id == aid,
+                AgentModel.customer_id == int(customer_id),
+            )
+            .first()
+        )
+        if not agent:
+            return {"status": "error", "message": "Agente no encontrado.", "http_status": 404}
+
+        from app.backend.utils.agents_saved_psychoped_context import (
+            build_saved_psychoped_context,
+        )
+
+        payload = build_saved_psychoped_context(
+            self.db,
+            student_id=int(student_id),
+            student_name=student_name,
+            student_rut=student_rut,
+        )
+        if not payload:
+            return {
+                "status": "error",
+                "message": "No hay informe psicopedagógico guardado en la ficha de este estudiante.",
+                "http_status": 404,
+                "data": {
+                    "agentId": agent.id,
+                    "studentId": int(student_id),
+                    "source": "psychopedagogical_evaluation_info",
+                },
+            }
+        return {
+            "status": "success",
+            "message": "Informe psicopedagógico guardado en la ficha.",
+            "data": {
+                "agentId": agent.id,
+                "agentName": agent.name,
+                **payload,
+            },
+        }
+
     def create_document(
         self,
         *,
@@ -802,11 +862,14 @@ class AgentsMcpClass:
                 "  supports de hogar).",
                 "- Si en ESTE turno hay bloque ARCHIVOS / Excel / texto derivado del estudiante,",
                 "  ÚSALO: no digas que faltan cuestionarios si las respuestas están en el contexto.",
-                "- Si el cuestionario/Excel de Files NO trae la fila de ESTE estudiante, PIE360",
-                "  consulta MCP get_student_psychopedagogical_form_answers (respuestas en",
-                "  Inf. Eval. Psicopedagógica → Formularios) e inyecta el bloque",
-                "  «RESPUESTAS DEL FORMULARIO PIE360». Si aparece, úsalo como fuente de",
-                "  observación en aula (traduce LOGRADO/EN PROCESO/REQUIERE APOYO a prosa).",
+                "- Si aparece el bloque «RESPUESTAS DEL FORMULARIO PIE360», ESO es la",
+                "  evaluación de este RUT (MCP get_student_psychopedagogical_form_answers).",
+                "  Está filtrado por student_id. No importa que el Excel, el Reporte",
+                "  Interactivo o la nómina no traigan este RUT o traigan otros.",
+                "  Prohibido decir que no hay antecedentes de evaluación.",
+                "  Prohibido dejar los campos narrativos en blanco: redacta análisis,",
+                "  síntesis, instrumentos y sugerencias desde esas respuestas",
+                "  (traduce LOGRADO/EN PROCESO/REQUIERE APOYO a prosa).",
                 "  Si hay Excel Y formulario, o respuestas de apoderado y de profesional,",
                 "  integra ambas fuentes en el narrativo. No las renombres como especialidad.",
                 "- HISTORIA ESCOLAR (`school_history_background`): usa el bloque",
@@ -894,13 +957,13 @@ class AgentsMcpClass:
             "  (p. ej. no pases 3.012.603-8 a 23.012.603-8). Si no coincide, el RUT es",
             "  incorrecto: no identifiques a nadie ni envíes JSON fields.",
             "  Curso y RUT de plantilla: usa ficha PIE360 si el estudiante ya está identificado.",
-            "- PSICOPEDAGÓGICO OBLIGATORIO: PIE360 inyecta siempre el ÚLTIMO informe",
-            "  psicopedagógico de la carpeta del estudiante (document_id=27), bloque",
-            "  «INFORME PSICOPEDAGÓGICO DESDE FICHA DEL ESTUDIANTE».",
-            "  Tool MCP: get_student_psychopedagogical_evaluation.",
-            "  Ese bloque es la fuente principal de los narrativos del Informe a la Familia.",
-            "  Prohibido ignorarlo, decir que no está cargado o pedir que lo confirmen",
-            "  si el bloque está en el contexto.",
+            "- PSICOPEDAGÓGICO OBLIGATORIO: PIE360 inyecta la ficha guardada en la base",
+            "  (bloque «INFORME PSICOPEDAGÓGICO GUARDADO EN PIE360»,",
+            "  MCP get_saved_psychopedagogical_evaluation) y el último Word de la",
+            "  carpeta (MCP get_student_psychopedagogical_evaluation).",
+            "  Esa ficha es la fuente principal de los narrativos del Informe a la Familia.",
+            "  Prohibido ignorarla o decir que no hay antecedentes de evaluación",
+            "  si el bloque trae párrafos.",
             "  Si Files, el Reporte Interactivo o la nómina traen otros RUT, no uses esas",
             "  filas para este estudiante: manda el psicopedagógico de la ficha.",
             "- Si en ESTE turno hay bloque ARCHIVOS / texto derivado del estudiante, úsalo",

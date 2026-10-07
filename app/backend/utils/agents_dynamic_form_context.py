@@ -203,6 +203,11 @@ def build_dynamic_form_answers_block(
     if intro is None:
         intro = (
             "RESPUESTAS DEL FORMULARIO PIE360 (Inf. Eval. Psicopedagógica / Formularios). "
+            "ESTE BLOQUE ES LA EVALUACIÓN DE ESTE student_id. "
+            "Ya está filtrado por la ficha: no exige que el RUT aparezca en el Excel, "
+            "el Reporte Interactivo ni la nómina. "
+            "Prohibido decir que no hay antecedentes de evaluación para este RUT. "
+            "Prohibido dejar en blanco los campos narrativos si estas respuestas existen. "
             "Fuente MCP: get_student_psychopedagogical_form_answers. "
             "Cada envío indica quién contesta: Apoderado (respondent_type_id=1) o "
             "Profesional (respondent_type_id=2). "

@@ -18,6 +18,7 @@ def register_tools(mcp: "FastMCP") -> None:
 
     from app.backend.mcp.tools import (
         create_document,
+        get_saved_psychopedagogical_evaluation,
         get_student_psychopedagogical_evaluation,
         get_student_psychopedagogical_form_answers,
         get_student_school_history,
@@ -30,6 +31,7 @@ def register_tools(mcp: "FastMCP") -> None:
     store_data.register(mcp)
     search_agent_files.register(mcp)
     get_student_psychopedagogical_evaluation.register(mcp)
+    get_saved_psychopedagogical_evaluation.register(mcp)
     get_student_psychopedagogical_form_answers.register(mcp)
     get_student_school_history.register(mcp)
     save_document_to_google_drive.register(mcp)

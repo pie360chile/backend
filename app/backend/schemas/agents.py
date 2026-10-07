@@ -118,6 +118,12 @@ class AgentsMcpGetStudentFormAnswersRequest(BaseModel):
     period_year: int | None = Field(default=None, ge=2000, le=2100)
 
 
+class AgentsMcpGetSavedPsychopedRequest(BaseModel):
+    agent_id: str = Field(..., min_length=1)
+    customer_id: int = Field(..., ge=1)
+    student_id: int = Field(..., ge=1)
+
+
 class AgentsMcpGetStudentSchoolHistoryRequest(BaseModel):
     agent_id: str = Field(..., min_length=1)
     customer_id: int = Field(..., ge=1)

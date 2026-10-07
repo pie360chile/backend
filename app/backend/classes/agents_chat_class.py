@@ -272,10 +272,13 @@ def _build_system_prompt(
         if files_block:
             parts.append(files_block)
 
-        # Psicopedagógico: MCP get_student_psychopedagogical_form_answers.
-        # Se inyecta siempre que haya respuestas (complementa Excel si también hay filas).
+        # Formularios PIE360: evaluación de este student_id aunque el Excel no traiga el RUT.
         doc_int = int(document_id) if document_id is not None else None
-        if student_id and doc_int == _PSYCHOPED_DOCUMENT_ID:
+        agent_name_l = (agent.name or "").lower()
+        wants_form_answers = doc_int in (_PSYCHOPED_DOCUMENT_ID, _FAMILIA_DOCUMENT_ID) or (
+            "psicoped" in agent_name_l or "familia" in agent_name_l
+        )
+        if student_id and wants_form_answers:
             try:
                 mcp_form = AgentsMcpClass(db).get_student_psychopedagogical_form_answers(
                     agent_id=str(agent.id),
@@ -307,6 +310,23 @@ def _build_system_prompt(
                     hist_ctx = (mcp_history.get("data") or {}).get("context") or ""
                     if str(hist_ctx).strip():
                         parts.append(str(hist_ctx).strip())
+            except Exception:
+                pass
+
+        wants_family = doc_int == _FAMILIA_DOCUMENT_ID or "familia" in agent_name_l
+        if student_id and wants_family:
+            try:
+                saved = AgentsMcpClass(db).get_saved_psychopedagogical_evaluation(
+                    agent_id=str(agent.id),
+                    customer_id=int(customer_id),
+                    student_id=int(student_id),
+                    student_name=student_name,
+                    student_rut=student_rut,
+                )
+                if saved.get("status") == "success":
+                    saved_ctx = (saved.get("data") or {}).get("context") or ""
+                    if str(saved_ctx).strip():
+                        parts.append(str(saved_ctx).strip())
             except Exception:
                 pass
 
