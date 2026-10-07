@@ -606,6 +606,24 @@ class AgentsMcpClass:
                 clean_fields[str(key)] = val
         fields = clean_fields
 
+        if int(document_id) == 7:
+            from app.backend.utils.agents_saved_psychoped_context import (
+                student_has_usable_psychoped_report,
+            )
+
+            if not student_has_usable_psychoped_report(self.db, int(student_id)):
+                return {
+                    "status": "error",
+                    "message": (
+                        "No es posible elaborar el Informe a la Familia. "
+                        "El estudiante debe contar previamente con el Informe de "
+                        "Evaluación Psicopedagógica, con el análisis y las sugerencias "
+                        "registrados en su ficha. Mientras ese informe no esté generado "
+                        "y guardado, no se emite el documento para la familia."
+                    ),
+                    "http_status": 422,
+                }
+
         aid = (agent_id or "").strip()
         template = (
             self.db.query(AgentDocumentTemplateModel)
@@ -944,10 +962,15 @@ class AgentsMcpClass:
             "- INFORME DE FAMILIA: Contrasta con la normativa del agente",
             "  («Normativa Informe para la familia.pdf») si está en el contexto derivado.",
             "  PIE360 aplica la plantilla: no inventes secciones ni omitas campos.",
-            "- FECHAS DE AVANCES (`evaluation_date_1`…): solo la fecha, sin notas. Si el informe",
-            "  es antes de julio → 4 fechas: Junio año actual, Dic. año actual, Junio año+1,",
-            "  Dic. año+1. Si es después de julio → Junio año+1 y Dic. año+1. Fecha de",
-            "  evaluación del informe = fecha del psicopedagógico del mismo estudiante si existe.",
+            "- FECHAS DE AVANCES (`evaluation_date_1`…): solo la fecha, sin notas.",
+            "  La fecha que manda es HOY, día de emisión del Informe a la Familia en Chile.",
+            "  Prohibido usar la fecha del informe psicopedagógico para armar esta lista.",
+            "  Enero a junio: cuatro fechas, en orden: Junio año actual, Dic. año actual,",
+            "  Junio año+1, Dic. año+1. Julio a diciembre: solo dos: Junio año+1 y Dic. año+1.",
+            "  Diciembre se escribe «Dic.», nunca «Diciembre». Ejemplo en octubre 2026:",
+            "  Junio 2027 y Dic. 2027. PIE360 reemplaza estas fechas si no coinciden.",
+            "  La fecha de evaluación del informe (otro campo) sí puede ser la del",
+            "  psicopedagógico del mismo estudiante, si existe.",
             "- DATOS COMPLEMENTARIOS: las fuentes son el TEXTO DERIVADO / JSON del contexto",
             "  (no se «abre» el Excel). Educadora que entrega (`professional_*`) = nómina PIE",
             "  del estudiante; si no está, déjala en blanco. Apoderado que recibe",
@@ -957,13 +980,15 @@ class AgentsMcpClass:
             "  (p. ej. no pases 3.012.603-8 a 23.012.603-8). Si no coincide, el RUT es",
             "  incorrecto: no identifiques a nadie ni envíes JSON fields.",
             "  Curso y RUT de plantilla: usa ficha PIE360 si el estudiante ya está identificado.",
-            "- PSICOPEDAGÓGICO OBLIGATORIO: PIE360 inyecta la ficha guardada en la base",
-            "  (bloque «INFORME PSICOPEDAGÓGICO GUARDADO EN PIE360»,",
-            "  MCP get_saved_psychopedagogical_evaluation) y el último Word de la",
-            "  carpeta (MCP get_student_psychopedagogical_evaluation).",
-            "  Esa ficha es la fuente principal de los narrativos del Informe a la Familia.",
-            "  Prohibido ignorarla o decir que no hay antecedentes de evaluación",
-            "  si el bloque trae párrafos.",
+            "- PSICOPEDAGÓGICO OBLIGATORIO: sin Informe de Evaluación Psicopedagógica",
+            "  guardado (análisis, síntesis, conclusión o sugerencias en la ficha)",
+            "  NO se elabora el Informe a la Familia y NO se envía el JSON fields.",
+            "  Responde solo esto, en tono profesional: el estudiante debe contar",
+            "  previamente con el Informe de Evaluación Psicopedagógica registrado",
+            "  en su ficha; mientras no esté generado y guardado, no se emite el",
+            "  documento para la familia.",
+            "  Si el bloque «INFORME PSICOPEDAGÓGICO GUARDADO EN PIE360» trae párrafos,",
+            "  esa ficha es la fuente de los narrativos. Prohibido ignorarla.",
             "  Si Files, el Reporte Interactivo o la nómina traen otros RUT, no uses esas",
             "  filas para este estudiante: manda el psicopedagógico de la ficha.",
             "- Si en ESTE turno hay bloque ARCHIVOS / texto derivado del estudiante, úsalo",

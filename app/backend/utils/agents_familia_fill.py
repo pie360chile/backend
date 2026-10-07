@@ -52,6 +52,40 @@ def _normalize_key(key: str) -> str:
     return re.sub(r"_+", "_", t).strip("_")
 
 
+def family_progress_date_labels(on: Any | None = None) -> list[str]:
+    """
+    Fechas de avances del Informe a la Familia según el día de emisión (Chile).
+
+    Enero a junio: Junio y Dic. del año en curso, y Junio y Dic. del siguiente.
+    Julio a diciembre: solo Junio y Dic. del año siguiente.
+    """
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    if on is None:
+        issued = datetime.now(ZoneInfo("America/Santiago")).date()
+    else:
+        issued = on
+    year = int(issued.year)
+    if int(issued.month) < 7:
+        return [
+            f"Junio {year}",
+            f"Dic. {year}",
+            f"Junio {year + 1}",
+            f"Dic. {year + 1}",
+        ]
+    return [f"Junio {year + 1}", f"Dic. {year + 1}"]
+
+
+def apply_family_progress_dates(replacements: dict[str, str]) -> dict[str, str]:
+    """Pisa las fechas que haya escrito el modelo: manda la norma, no el psicopedagógico."""
+    labels = family_progress_date_labels()
+    for index in range(1, 9):
+        key = f"evaluation_date_{index}"
+        replacements[key] = labels[index - 1] if index <= len(labels) else ""
+    return replacements
+
+
 def merge_familia_replacements(
     llm_fields: dict[str, str],
     student_ctx: dict[str, Any],
@@ -88,7 +122,8 @@ def merge_familia_replacements(
     for key, value in defaults.items():
         merged.setdefault(key, value)
 
-    return merge_pie360_fallback_into_replacements(merged, student_ctx)
+    merged = merge_pie360_fallback_into_replacements(merged, student_ctx)
+    return apply_family_progress_dates(merged)
 
 
 def _all_familia_field_keys() -> set[str]:

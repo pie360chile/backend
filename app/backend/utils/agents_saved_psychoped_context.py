@@ -8,6 +8,23 @@ from sqlalchemy.orm import Session
 
 from app.backend.db.models.pie_core import PsychopedagogicalEvaluationInfoModel
 
+# Sin alguno de estos textos no hay informe utilizable para la familia.
+_NARRATIVE_ATTRS: tuple[str, ...] = (
+    "school_history_background",
+    "cognitive_analysis",
+    "personal_analysis",
+    "motor_analysis",
+    "cognitive_synthesis",
+    "personal_synthesis",
+    "motor_synthesis",
+    "conclusion",
+    "suggestions_to_school",
+    "suggestions_to_classroom_team",
+    "suggestions_to_student",
+    "suggestions_to_family",
+    "other_suggestions",
+)
+
 _FIELDS: tuple[tuple[str, str], ...] = (
     ("diagnosis", "Diagnóstico"),
     ("diagnosis_issue_date", "Fecha de emisión del diagnóstico"),
@@ -36,6 +53,24 @@ def _text(value: Any) -> str:
     if value is None:
         return ""
     return str(value).strip()
+
+
+def student_has_usable_psychoped_report(db: Session, student_id: int) -> bool:
+    """True solo si la ficha guardada trae análisis, síntesis, conclusión o sugerencias."""
+    if int(student_id) < 1:
+        return False
+    row = (
+        db.query(PsychopedagogicalEvaluationInfoModel)
+        .filter(PsychopedagogicalEvaluationInfoModel.student_id == int(student_id))
+        .order_by(PsychopedagogicalEvaluationInfoModel.id.desc())
+        .first()
+    )
+    if row is None:
+        return False
+    for key in _NARRATIVE_ATTRS:
+        if len(_text(getattr(row, key, None))) >= 40:
+            return True
+    return False
 
 
 def build_saved_psychoped_context(

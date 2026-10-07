@@ -58,6 +58,10 @@ def _parse_born_date_iso(value: str | None) -> str | None:
     m = re.search(r"(\d{4})-(\d{2})-(\d{2})", raw)
     if m:
         return f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+    label = re.match(r"(junio|dic\.?|diciembre)\s+(\d{4})", raw, flags=re.IGNORECASE)
+    if label:
+        month = 6 if label.group(1).lower().startswith("jun") else 12
+        return f"{int(label.group(2)):04d}-{month:02d}-01"
     return None
 
 

@@ -65,12 +65,39 @@ def _missing_psychoped_files_reply() -> str:
 
 
 def _missing_family_sources_reply() -> str:
+    return _missing_psychoped_for_family_reply()
+
+
+def _missing_psychoped_for_family_reply() -> str:
     return (
-        "No es posible elaborar el Informe a la Familia: "
-        "no dispongo de antecedentes documentales del estudiante en Files "
-        "ni de un informe psicopedagógico en su ficha.\n\n"
-        "Sin esa información no puedo redactar ni emitir el informe."
+        "No es posible elaborar el Informe a la Familia. "
+        "El estudiante debe contar previamente con el Informe de Evaluación "
+        "Psicopedagógica, con el análisis y las sugerencias registrados en su ficha. "
+        "Mientras ese informe no esté generado y guardado, no se emite el documento "
+        "para la familia."
     )
+
+
+def _is_family_report(document_id: int | None, agent_name: str | None) -> bool:
+    if document_id is not None and int(document_id) == _FAMILIA_DOCUMENT_ID:
+        return True
+    return "familia" in (agent_name or "").lower()
+
+
+def _family_blocked_without_psychoped(
+    db: Session,
+    *,
+    document_id: int | None,
+    agent_name: str | None,
+    student_id: int | None,
+) -> bool:
+    if not student_id or not _is_family_report(document_id, agent_name):
+        return False
+    from app.backend.utils.agents_saved_psychoped_context import (
+        student_has_usable_psychoped_report,
+    )
+
+    return not student_has_usable_psychoped_report(db, int(student_id))
 
 
 def _load_student_name_rut(db: Session, student_id: int) -> tuple[str | None, str | None]:
@@ -516,6 +543,31 @@ class AgentsChatClass:
             )
             effective_rut = effective_rut or personal_rut
 
+        # Informe a la familia: sin psicopedagógico usable no se llama al modelo ni se arma el Word.
+        if (
+            want_doc_early
+            and resolved_student_id
+            and _family_blocked_without_psychoped(
+                self.db,
+                document_id=resolved_document_id,
+                agent_name=agent_row.name or "",
+                student_id=int(resolved_student_id),
+            )
+        ):
+            ask = _missing_psychoped_for_family_reply()
+            yield {"type": "text_delta", "delta": ask}
+            yield {
+                "type": "done",
+                "data": {
+                    "reply": ask,
+                    "usage": None,
+                    "model": None,
+                    "responseFiles": [],
+                    "warning": None,
+                },
+            }
+            return
+
         # Estudiante identificado pero sin fuentes: rechazar. No pedir RUT.
         has_report_sources = False
         if want_doc_early and resolved_student_id:
@@ -759,6 +811,14 @@ class AgentsChatClass:
                 and not has_report_sources
             ):
                 visible_reply = _missing_psychoped_files_reply()
+                warning = None
+            elif _family_blocked_without_psychoped(
+                self.db,
+                document_id=resolved_document_id,
+                agent_name=agent_row.name or "",
+                student_id=int(resolved_student_id),
+            ):
+                visible_reply = _missing_psychoped_for_family_reply()
                 warning = None
             elif not fields:
                 warning = (
@@ -1088,6 +1148,15 @@ class AgentsChatClass:
             "usage": None,
             "template_missing": False,
         }
+        if document_id == _FAMILIA_DOCUMENT_ID and _family_blocked_without_psychoped(
+            self.db,
+            document_id=document_id,
+            agent_name=agent_row.name or "",
+            student_id=int(student_id),
+        ):
+            empty["reason"] = _missing_psychoped_for_family_reply()
+            return empty
+
         if document_id == _PSYCHOPED_DOCUMENT_ID:
             files_block = ""
             try:

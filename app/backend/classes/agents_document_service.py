@@ -167,7 +167,10 @@ def generate_and_save_document(
 
     student_ctx = _student_context(db, student_id, int(template.document_id))
     if is_familia_document(int(template.document_id)):
+        from app.backend.utils.agents_familia_fill import apply_family_progress_dates
+
         replacements = merge_pie360_fallback_into_replacements(replacements, student_ctx)
+        replacements = apply_family_progress_dates(replacements)
     elif int(template.document_id) == PSYCHOPED_DOCUMENT_ID:
         replacements = normalize_psychoped_replacements(replacements, student_ctx)
     output_dir = Path(settings.files_dir) / "system" / "students"
