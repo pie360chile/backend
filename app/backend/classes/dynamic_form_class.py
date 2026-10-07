@@ -402,7 +402,7 @@ class DynamicFormClass:
                 return {"status": "error", "message": "Formulario no encontrado."}
             if not form_row.course_id:
                 return {"status": "error", "message": "El formulario no tiene curso asociado."}
-            if int(getattr(form_row, "respondent_type_id", None) or 0) == 2
+            if int(getattr(form_row, "respondent_type_id", None) or 0) == 2:
                 return {"status": "error", "message": "Este formulario es para el profesional. No se envía WhatsApp."}
             if not student_ids:
                 return {
@@ -824,7 +824,7 @@ class DynamicFormClass:
                 return {"status": "error", "message": "Formulario no encontrado."}
             if not form_row.course_id:
                 return {"status": "error", "message": "El formulario no tiene curso asociado."}
-            if int(getattr(form_row, "respondent_type_id", None) or 0) == 2
+            if int(getattr(form_row, "respondent_type_id", None) or 0) == 2:
                 return {"status": "error", "message": "Este formulario es para el profesional. No se envía WhatsApp."}
             allowed = self._course_student_ids(int(form_row.course_id), school_id, customer_id, period_year)
             if student_id not in allowed:
