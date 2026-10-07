@@ -524,8 +524,9 @@ class AgentsMcpClass:
         student_id: int,
         student_name: str | None = None,
         student_rut: str | None = None,
+        period_year: int | None = None,
     ) -> dict[str, Any]:
-        """Lee la ficha psychopedagogical_evaluation_info guardada al generar el informe."""
+        """Lee la ficha psychopedagogical_evaluation_info del período."""
         aid = (agent_id or "").strip()
         if not aid:
             return {"status": "error", "message": "agent_id es requerido.", "http_status": 400}
@@ -554,6 +555,7 @@ class AgentsMcpClass:
             student_id=int(student_id),
             student_name=student_name,
             student_rut=student_rut,
+            period_year=int(period_year) if period_year else None,
         )
         if not payload:
             return {
@@ -585,6 +587,7 @@ class AgentsMcpClass:
         document_id: int,
         fields: dict[str, Any],
         meta: dict[str, Any] | None = None,
+        period_year: int | None = None,
     ) -> dict[str, Any]:
         """
         Genera con la plantilla cargada en Documentos del agente.
@@ -611,7 +614,11 @@ class AgentsMcpClass:
                 student_has_nonempty_form_answers,
             )
 
-            if not student_has_nonempty_form_answers(self.db, student_id=int(student_id)):
+            if not student_has_nonempty_form_answers(
+                self.db,
+                student_id=int(student_id),
+                period_year=int(period_year) if period_year else None,
+            ):
                 return {
                     "status": "error",
                     "message": (
@@ -627,15 +634,19 @@ class AgentsMcpClass:
                 student_has_usable_psychoped_report,
             )
 
-            if not student_has_usable_psychoped_report(self.db, int(student_id)):
+            if not student_has_usable_psychoped_report(
+                self.db,
+                int(student_id),
+                int(period_year) if period_year else None,
+            ):
                 return {
                     "status": "error",
                     "message": (
                         "No es posible elaborar el Informe a la Familia. "
-                        "El estudiante debe contar previamente con el Informe de "
-                        "Evaluación Psicopedagógica, con el análisis y las sugerencias "
-                        "registrados en su ficha. Mientras ese informe no esté generado "
-                        "y guardado, no se emite el documento para la familia."
+                        "En este período el estudiante no tiene un Informe de Evaluación "
+                        "Psicopedagógica con los campos de análisis o sugerencias guardados. "
+                        "Mientras ese informe no esté registrado en la ficha de este período, "
+                        "no se emite el documento para la familia."
                     ),
                     "http_status": 422,
                 }

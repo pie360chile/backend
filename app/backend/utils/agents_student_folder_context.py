@@ -101,6 +101,7 @@ def get_latest_folder_file(
     *,
     student_id: int,
     document_id: int = PSYCHOPED_CATALOG_DOCUMENT_ID,
+    period_year: int | None = None,
 ) -> FolderModel | None:
     """
     Devuelve el ÚLTIMO archivo de la ficha para ese estudiante + document_id.
@@ -120,6 +121,8 @@ def get_latest_folder_file(
         q = q.filter(FolderModel.deleted_date.is_(None))
     except Exception:
         pass
+    if period_year is not None:
+        q = q.filter(FolderModel.period_year == str(int(period_year)))
 
     # Último cargado/creado: fecha de actualización o alta; desempate por versión e id
     last_touch = func.coalesce(FolderModel.updated_date, FolderModel.added_date)
@@ -136,6 +139,7 @@ def extract_student_catalog_document_text(
     student_id: int,
     document_id: int = PSYCHOPED_CATALOG_DOCUMENT_ID,
     max_chars: int = _MAX_CHARS,
+    period_year: int | None = None,
 ) -> dict[str, Any]:
     """
     Lee el ÚLTIMO archivo de la ficha (folders) para student_id + document_id.
@@ -145,7 +149,12 @@ def extract_student_catalog_document_text(
     if int(student_id) < 1:
         return {"ok": False, "message": "student_id inválido.", "http_status": 400}
 
-    row = get_latest_folder_file(db, student_id=int(student_id), document_id=int(document_id))
+    row = get_latest_folder_file(
+        db,
+        student_id=int(student_id),
+        document_id=int(document_id),
+        period_year=int(period_year) if period_year else None,
+    )
     if not row or not (row.file or "").strip():
         return {
             "ok": False,
@@ -233,6 +242,7 @@ def maybe_build_ficha_psychoped_block(
     student_name: str | None = None,
     student_rut: str | None = None,
     force: bool = False,
+    period_year: int | None = None,
 ) -> str:
     """
     Para el Informe a la Familia, inyecta siempre el último psicopedagógico de la ficha (doc 27).
@@ -252,6 +262,7 @@ def maybe_build_ficha_psychoped_block(
         db,
         student_id=int(student_id),
         document_id=PSYCHOPED_CATALOG_DOCUMENT_ID,
+        period_year=int(period_year) if period_year else None,
     )
     if not result.get("ok"):
         return ""

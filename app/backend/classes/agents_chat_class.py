@@ -109,10 +109,10 @@ def _missing_family_sources_reply() -> str:
 def _missing_psychoped_for_family_reply() -> str:
     return (
         "No es posible elaborar el Informe a la Familia. "
-        "El estudiante debe contar previamente con el Informe de Evaluación "
-        "Psicopedagógica, con el análisis y las sugerencias registrados en su ficha. "
-        "Mientras ese informe no esté generado y guardado, no se emite el documento "
-        "para la familia."
+        "En este período el estudiante no tiene un Informe de Evaluación "
+        "Psicopedagógica con los campos de análisis o sugerencias guardados. "
+        "Mientras ese informe no esté registrado en la ficha de este período, "
+        "no se emite el documento para la familia."
     )
 
 
@@ -148,6 +148,7 @@ def _family_blocked_without_psychoped(
     document_id: int | None,
     agent_name: str | None,
     student_id: int | None,
+    period_year: int | None = None,
 ) -> bool:
     if not student_id or not _is_family_report(document_id, agent_name):
         return False
@@ -155,7 +156,11 @@ def _family_blocked_without_psychoped(
         student_has_usable_psychoped_report,
     )
 
-    return not student_has_usable_psychoped_report(db, int(student_id))
+    return not student_has_usable_psychoped_report(
+        db,
+        int(student_id),
+        int(period_year) if period_year else None,
+    )
 
 
 def _load_student_name_rut(db: Session, student_id: int) -> tuple[str | None, str | None]:
@@ -407,6 +412,7 @@ def _build_system_prompt(
                     student_id=int(student_id),
                     student_name=student_name,
                     student_rut=student_rut,
+                    period_year=int(period_year) if period_year else None,
                 )
                 if saved.get("status") == "success":
                     saved_ctx = (saved.get("data") or {}).get("context") or ""
@@ -428,6 +434,7 @@ def _build_system_prompt(
                 files_block=files_block or "",
                 student_name=student_name,
                 student_rut=student_rut,
+                period_year=int(period_year) if period_year else None,
             )
             if ficha_block:
                 parts.append(ficha_block)
@@ -610,6 +617,7 @@ class AgentsChatClass:
                 document_id=resolved_document_id,
                 agent_name=agent_row.name or "",
                 student_id=int(resolved_student_id),
+                period_year=int(self.period_year) if self.period_year else None,
             )
         ):
             ask = _missing_psychoped_for_family_reply()
@@ -817,6 +825,7 @@ class AgentsChatClass:
                 document_id=resolved_document_id,
                 agent_name=agent_row.name or "",
                 student_id=int(resolved_student_id),
+                period_year=int(self.period_year) if self.period_year else None,
             )
         )
         dodged_psychoped = family_has_psychoped and _reply_dodges_saved_psychoped(reply_text)
@@ -914,7 +923,9 @@ class AgentsChatClass:
             )
 
             saved_fields = family_fields_from_saved_psychoped(
-                self.db, int(resolved_student_id)
+                self.db,
+                int(resolved_student_id),
+                int(self.period_year) if self.period_year else None,
             )
             if saved_fields:
                 merged_fields = dict(fields or {})
@@ -962,6 +973,7 @@ class AgentsChatClass:
                 document_id=resolved_document_id,
                 agent_name=agent_row.name or "",
                 student_id=int(resolved_student_id),
+                period_year=int(self.period_year) if self.period_year else None,
             ):
                 visible_reply = _missing_psychoped_for_family_reply()
                 warning = None
@@ -986,6 +998,7 @@ class AgentsChatClass:
                         student_id=int(resolved_student_id),
                         document_id=int(resolved_document_id),
                         fields=payload_fields,
+                        period_year=int(self.period_year) if self.period_year else None,
                     )
                     if created.get("status") == "error":
                         warning = created.get("message") or "No se pudo generar el documento."
@@ -1298,6 +1311,7 @@ class AgentsChatClass:
             document_id=document_id,
             agent_name=agent_row.name or "",
             student_id=int(student_id),
+            period_year=int(self.period_year) if self.period_year else None,
         ):
             empty["reason"] = _missing_psychoped_for_family_reply()
             return empty
@@ -1486,6 +1500,7 @@ class AgentsChatClass:
                 student_id=int(student_id),
                 document_id=int(document_id),
                 fields=payload_fields,
+                period_year=int(self.period_year) if self.period_year else None,
             )
         except Exception as exc:
             empty["reason"] = f"error al guardar: {exc}"

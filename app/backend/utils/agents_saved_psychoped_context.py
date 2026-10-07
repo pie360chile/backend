@@ -55,9 +55,48 @@ def _text(value: Any) -> str:
     return str(value).strip()
 
 
-def _latest_psychoped_row(db: Session, student_id: int):
+def _latest_period_folder(db: Session, student_id: int, period_year: int | None):
+    """Última carpeta del informe psicopedagógico (doc 27) del período."""
+    from app.backend.db.models.pie_core import FolderModel
+
+    rows = (
+        db.query(FolderModel)
+        .filter(FolderModel.student_id == int(student_id))
+        .filter(FolderModel.document_id == 27)
+        .filter(FolderModel.deleted_date.is_(None))
+        .all()
+    )
+    if period_year is not None:
+        wanted = str(int(period_year))
+        rows = [row for row in rows if str(row.period_year or "").strip() == wanted]
+    if not rows:
+        return None
+
+    def _year(row: Any) -> int:
+        try:
+            return int(str(row.period_year or "").strip() or 0)
+        except ValueError:
+            return 0
+
+    return max(rows, key=lambda row: (_year(row), int(row.version_id or 0), int(row.id or 0)))
+
+
+def _latest_psychoped_row(db: Session, student_id: int, period_year: int | None = None):
+    """Ficha del período. Sin carpeta de ese año, no sirve un informe de otro período."""
     if int(student_id) < 1:
         return None
+    folder = _latest_period_folder(db, int(student_id), period_year)
+    if folder is None:
+        return None
+    if folder.detail_id:
+        linked = (
+            db.query(PsychopedagogicalEvaluationInfoModel)
+            .filter(PsychopedagogicalEvaluationInfoModel.id == int(folder.detail_id))
+            .filter(PsychopedagogicalEvaluationInfoModel.student_id == int(student_id))
+            .first()
+        )
+        if linked is not None:
+            return linked
     return (
         db.query(PsychopedagogicalEvaluationInfoModel)
         .filter(PsychopedagogicalEvaluationInfoModel.student_id == int(student_id))
@@ -66,9 +105,13 @@ def _latest_psychoped_row(db: Session, student_id: int):
     )
 
 
-def family_fields_from_saved_psychoped(db: Session, student_id: int) -> dict[str, str]:
-    """Pasa al informe a la familia solo el texto ya guardado en la ficha."""
-    row = _latest_psychoped_row(db, student_id)
+def family_fields_from_saved_psychoped(
+    db: Session,
+    student_id: int,
+    period_year: int | None = None,
+) -> dict[str, str]:
+    """Pasa al informe a la familia solo el texto ya guardado en la ficha del período."""
+    row = _latest_psychoped_row(db, student_id, period_year)
     if row is None:
         return {}
     diagnosis = _text(getattr(row, "diagnosis", None))
@@ -115,9 +158,13 @@ def family_fields_from_saved_psychoped(db: Session, student_id: int) -> dict[str
     return out
 
 
-def student_has_usable_psychoped_report(db: Session, student_id: int) -> bool:
-    """True solo si la ficha guardada trae análisis, síntesis, conclusión o sugerencias."""
-    row = _latest_psychoped_row(db, student_id)
+def student_has_usable_psychoped_report(
+    db: Session,
+    student_id: int,
+    period_year: int | None = None,
+) -> bool:
+    """True solo si la ficha del período trae análisis, síntesis, conclusión o sugerencias."""
+    row = _latest_psychoped_row(db, student_id, period_year)
     if row is None:
         return False
     for key in _NARRATIVE_ATTRS:
@@ -132,6 +179,7 @@ def build_saved_psychoped_context(
     student_id: int,
     student_name: str | None = None,
     student_rut: str | None = None,
+    period_year: int | None = None,
 ) -> dict[str, Any] | None:
     """
     Última ficha psychopedagogical_evaluation_info del estudiante.
@@ -141,12 +189,7 @@ def build_saved_psychoped_context(
     if not student_id or int(student_id) < 1:
         return None
 
-    row = (
-        db.query(PsychopedagogicalEvaluationInfoModel)
-        .filter(PsychopedagogicalEvaluationInfoModel.student_id == int(student_id))
-        .order_by(PsychopedagogicalEvaluationInfoModel.id.desc())
-        .first()
-    )
+    row = _latest_psychoped_row(db, int(student_id), period_year)
     if row is None:
         return None
 

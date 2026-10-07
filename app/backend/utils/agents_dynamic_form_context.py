@@ -88,10 +88,20 @@ def student_has_nonempty_form_answers(
         .filter(DynamicFormSubmissionModel.student_id == sid)
         .filter(DynamicFormModel.deleted_date.is_(None))
     )
-    if period_year is not None:
-        q = q.filter(DynamicFormSubmissionModel.period_year == int(period_year))
     if resolved_school is not None:
         q = q.filter(DynamicFormModel.school_id == int(resolved_school))
+    if period_year is None and resolved_school is not None:
+        latest = (
+            db.query(DynamicFormModel.period_year)
+            .filter(DynamicFormModel.deleted_date.is_(None))
+            .filter(DynamicFormModel.school_id == int(resolved_school))
+            .order_by(DynamicFormModel.period_year.desc())
+            .first()
+        )
+        if latest and latest[0]:
+            period_year = int(latest[0])
+    if period_year is not None:
+        q = q.filter(DynamicFormSubmissionModel.period_year == int(period_year))
     for (answers_json,) in q.all():
         if _submission_has_answers(answers_json):
             return True
