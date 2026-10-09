@@ -15,7 +15,7 @@ DEFAULT_MODEL_CODE = "deepseek-flash"
 
 
 def resolve_llm_api_key(db: Session | None = None) -> str:
-    """Prioridad: clave en BD (DeepSeek Token) → AGENTS_LLM_API_KEY en .env."""
+    """Prioridad: clave en BD (DeepSeek Token) → DEEPSEEK_API_KEY en .env."""
     if db is not None:
         try:
             from app.backend.classes.agents_llm_models_class import AgentsLlmModelsClass
@@ -114,7 +114,7 @@ def stream_chat_completion(
         yield {
             "type": "error",
             "message": (
-                "Falta AGENTS_LLM_API_KEY en el .env del servidor. "
+                "Falta DEEPSEEK_API_KEY en el .env del servidor. "
                 "La API key ya no se configura desde la web."
             ),
             "code": "missing_api_key",

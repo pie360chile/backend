@@ -9,8 +9,16 @@ from typing import List
 
 
 def backend_env_path() -> Path:
-    """Ruta absoluta a backend/.env (independiente del cwd al arrancar uvicorn)."""
-    return Path(__file__).resolve().parents[3] / ".env"
+    """`.env` un nivel arriba del proyecto si existe; si no, `backend/.env`.
+
+    En el servidor el proyecto vive en `public_html/`, así que el archivo queda
+    en `/var/www/pie360backend.cl/.env` y la web no lo entrega.
+    """
+    root = Path(__file__).resolve().parents[3]
+    outside = root.parent / ".env"
+    if outside.is_file():
+        return outside
+    return root / ".env"
 
 
 def load_backend_env() -> None:
@@ -175,7 +183,7 @@ class Settings:
         )
     )
     agents_llm_api_key: str = field(
-        default_factory=lambda: os.getenv("AGENTS_LLM_API_KEY", "")
+        default_factory=lambda: os.getenv("DEEPSEEK_API_KEY", "")
     )
     agents_llm_api_base: str = field(
         default_factory=lambda: os.getenv(

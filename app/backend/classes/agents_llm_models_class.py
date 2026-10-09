@@ -181,7 +181,7 @@ class AgentsLlmModelsClass:
         return self.get_llm_api_key()
 
     def get_llm_api_key(self) -> str:
-        """API key DeepSeek: solo AGENTS_LLM_API_KEY del .env (nunca desde BD/UI)."""
+        """API key DeepSeek: solo DEEPSEEK_API_KEY del .env (nunca desde BD/UI)."""
         from app.backend.core.config import settings
 
         # Limpia restos antiguos en BD para que no queden secretos guardados.
@@ -358,7 +358,7 @@ class AgentsLlmModelsClass:
                     "status": "error",
                     "message": (
                         "La API key ya no se guarda en Configuraciones. "
-                        "Configúrala en el servidor con AGENTS_LLM_API_KEY en el .env."
+                        "Configúrala en el servidor con DEEPSEEK_API_KEY en el .env."
                     ),
                 }
 
