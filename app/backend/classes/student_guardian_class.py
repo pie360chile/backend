@@ -1,5 +1,47 @@
+import unicodedata
 from datetime import datetime
+
 from app.backend.db.models import StudentGuardianModel
+
+_PARENTESCO_TO_FAMILY_MEMBER = {
+    "madre": 1,
+    "mama": 1,
+    "padre": 2,
+    "papa": 2,
+    "hermana": 3,
+    "hermano": 4,
+    "tio": 5,
+    "tia": 6,
+    "tutor": 7,
+    "tutora": 8,
+}
+
+
+def _fold(value) -> str:
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return text.strip().lower()
+
+
+def _norm_rut(value) -> str:
+    return "".join(ch for ch in str(value or "").strip().lower() if ch.isalnum())
+
+
+def _display_rut(value) -> str:
+    key = _norm_rut(value)
+    if len(key) < 2:
+        return str(value or "").strip()
+    return f"{key[:-1]}-{key[-1].upper()}"
+
+
+def _nonempty(value):
+    if value is None:
+        return None
+    if isinstance(value, str):
+        text = value.strip()
+        return text or None
+    return value
+
 
 class StudentGuardianClass:
     def __init__(self, db):
@@ -117,6 +159,102 @@ class StudentGuardianClass:
         except Exception as e:
             error_message = str(e)
             return {"error": error_message}
+
+    def upsert_from_inspection(self, student_id: int, apoderado: dict) -> str:
+        """Agrega o actualiza el apoderado que viene en getDatosAlumno / listado/alumnos.
+
+        Mismo estudiante y mismo RUT: actualiza. Si el estudiante tiene un solo
+        apoderado y Inspection cambió el RUT, actualiza esa fila. Si no hay
+        ninguno, lo crea. No crea al estudiante.
+        """
+        if not isinstance(apoderado, dict):
+            return "skipped"
+        rut_raw = _nonempty(apoderado.get("rut"))
+        names = _nonempty(apoderado.get("nombres"))
+        if not rut_raw and not names:
+            return "skipped"
+
+        rut_key = _norm_rut(rut_raw)
+        rows = (
+            self.db.query(StudentGuardianModel)
+            .filter(StudentGuardianModel.student_id == int(student_id))
+            .order_by(StudentGuardianModel.id.asc())
+            .all()
+        )
+        match = None
+        if rut_key:
+            for row in rows:
+                if _norm_rut(row.identification_number) == rut_key:
+                    match = row
+                    break
+        if match is None and len(rows) == 1:
+            match = rows[0]
+
+        family_member_id = _PARENTESCO_TO_FAMILY_MEMBER.get(_fold(apoderado.get("parentesco")))
+        gender_id = apoderado.get("sexo")
+        try:
+            gender_id = int(gender_id) if gender_id is not None and str(gender_id).strip() != "" else None
+        except (TypeError, ValueError):
+            gender_id = None
+        city = None
+        comuna_id = apoderado.get("comuna_id")
+        try:
+            if comuna_id is not None and str(comuna_id).strip() != "":
+                from app.backend.db.models.pie_core import CommuneModel
+
+                commune = (
+                    self.db.query(CommuneModel)
+                    .filter(CommuneModel.id == int(comuna_id))
+                    .first()
+                )
+                if commune is not None and _nonempty(commune.commune):
+                    city = str(commune.commune).strip()
+        except (TypeError, ValueError):
+            city = None
+
+        payload = {
+            "identification_number": _display_rut(rut_raw) if rut_raw else None,
+            "names": names,
+            "father_lastname": _nonempty(apoderado.get("paterno")),
+            "mother_lastname": _nonempty(apoderado.get("materno")),
+            "email": _nonempty(apoderado.get("email")),
+            "celphone": _nonempty(apoderado.get("celular") or apoderado.get("telefono")),
+            "gender_id": gender_id,
+            "family_member_id": family_member_id,
+            "city": city,
+        }
+
+        if match is None:
+            created = StudentGuardianModel(
+                student_id=int(student_id),
+                family_member_id=payload["family_member_id"],
+                gender_id=payload["gender_id"],
+                identification_number=payload["identification_number"],
+                names=payload["names"],
+                father_lastname=payload["father_lastname"],
+                mother_lastname=payload["mother_lastname"],
+                email=payload["email"],
+                celphone=payload["celphone"],
+                city=payload["city"],
+                added_date=datetime.now(),
+                updated_date=datetime.now(),
+            )
+            self.db.add(created)
+            self.db.commit()
+            return "added"
+
+        changed = False
+        for key, value in payload.items():
+            if value is None:
+                continue
+            if getattr(match, key) != value:
+                setattr(match, key, value)
+                changed = True
+        if not changed:
+            return "unchanged"
+        match.updated_date = datetime.now()
+        self.db.commit()
+        return "updated"
 
     def store(self, guardian_inputs):
         try:

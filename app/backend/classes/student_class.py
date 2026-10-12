@@ -1475,6 +1475,8 @@ class StudentClass:
 
             imported = 0
             skipped = 0
+            guardians_added = 0
+            guardians_updated = 0
             errors: List[Dict[str, str]] = []
             seen_identification_keys: set = set()
 
@@ -1560,6 +1562,16 @@ class StudentClass:
                 )
                 if already is not None:
                     skipped += 1
+                    action = self._sync_inspection_guardian(
+                        int(getattr(already, "id", None) or already[0]),
+                        row,
+                        errors,
+                        rut_raw,
+                    )
+                    if action == "added":
+                        guardians_added += 1
+                    elif action == "updated":
+                        guardians_updated += 1
                     continue
 
                 born = row.get("fecha_nacimiento")
@@ -1589,6 +1601,16 @@ class StudentClass:
                 if isinstance(result, dict) and result.get("status") == "success":
                     new_student_id = result.get("student_id")
                     if new_student_id is not None:
+                        action = self._sync_inspection_guardian(
+                            int(new_student_id),
+                            row,
+                            errors,
+                            rut_raw,
+                        )
+                        if action == "added":
+                            guardians_added += 1
+                        elif action == "updated":
+                            guardians_updated += 1
                         try:
                             self._provision_inspection_import_extras(
                                 int(new_student_id),
@@ -1623,12 +1645,31 @@ class StudentClass:
                 "status": "success",
                 "imported": imported,
                 "skipped": skipped,
+                "guardians_added": guardians_added,
+                "guardians_updated": guardians_updated,
                 "excluded_other_school": excluded_other_school,
                 "errors": errors,
             }
         except Exception as e:
             self.db.rollback()
             return {"status": "error", "message": str(e)}
+
+    def _sync_inspection_guardian(self, student_id: int, row: Dict[str, Any], errors: List[Dict[str, str]], rut_raw: str) -> str:
+        """Crea o actualiza el apoderado de la fila Inspection. No crea al estudiante."""
+        raw = row.get("apoderado")
+        if raw is None:
+            raw = row.get("apoderados")
+        if isinstance(raw, list):
+            raw = raw[0] if raw else None
+        if not isinstance(raw, dict):
+            return "skipped"
+        try:
+            from app.backend.classes.student_guardian_class import StudentGuardianClass
+
+            return StudentGuardianClass(self.db).upsert_from_inspection(int(student_id), raw)
+        except Exception as exc:
+            errors.append({"name": rut_raw, "message": f"Apoderado no se pudo guardar: {exc}"})
+            return "skipped"
 
     def get_totals(self, customer_id=None, school_id=None, rol_id=None):
         try:
