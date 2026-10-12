@@ -1,3 +1,5 @@
+import secrets
+import unicodedata
 from datetime import datetime
 from sqlalchemy import Integer, String, and_, case, func, or_
 from app.backend.db.models import (
@@ -831,6 +833,149 @@ class ProfessionalClass:
 
         except Exception as e:
             return {"status": "error", "message": str(e)}
+
+    def _profesional_rol_id(self, school_id: int):
+        rows = (
+            self.db.query(RolModel)
+            .filter(
+                RolModel.school_id == int(school_id),
+                or_(RolModel.deleted_status_id == 0, RolModel.deleted_status_id.is_(None)),
+            )
+            .all()
+        )
+        for row in rows:
+            name = unicodedata.normalize("NFKD", str(row.rol or ""))
+            name = "".join(ch for ch in name if not unicodedata.combining(ch)).strip().lower()
+            if name == "profesional":
+                return int(row.id)
+        return None
+
+    def import_from_inspection(self, school_id: int, inspection_body: dict, period_year=None) -> dict:
+        """Alta o actualización desde POST listado/funcionarios. El rol siempre es Profesional."""
+        try:
+            rol_id = self._profesional_rol_id(school_id)
+            if rol_id is None:
+                return {"status": "error", "message": "No existe el rol Profesional en este colegio."}
+
+            raw = inspection_body.get("data")
+            rows = raw if isinstance(raw, list) else []
+            if isinstance(raw, dict) and isinstance(raw.get("data"), list):
+                rows = raw.get("data")
+
+            imported = 0
+            updated = 0
+            skipped = 0
+            errors = []
+            seen = set()
+            school = (
+                self.db.query(SchoolModel)
+                .filter(SchoolModel.id == int(school_id), SchoolModel.deleted_status_id == 0)
+                .first()
+            )
+            if not school:
+                return {"status": "error", "message": "Colegio no encontrado."}
+
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                rut_raw = str(row.get("rut") or "").strip()
+                names = str(row.get("nombres") or "").strip()
+                lastnames = " ".join(
+                    part
+                    for part in (
+                        str(row.get("paterno") or "").strip(),
+                        str(row.get("materno") or "").strip(),
+                    )
+                    if part
+                )
+                rut_norm = _normalize_rut(rut_raw)
+                if not rut_norm or not names:
+                    errors.append({"name": rut_raw or "(sin RUT)", "message": "Falta RUT o nombre"})
+                    continue
+                if rut_norm in seen:
+                    skipped += 1
+                    continue
+                seen.add(rut_norm)
+
+                email = str(row.get("email") or "").strip() or None
+                phone = str(row.get("celular") or row.get("telefono") or "").strip() or None
+                if self._duplicate_rut_for_school(
+                    rut_norm, school.customer_id, int(school_id), period_year
+                ):
+                    action = self._update_inspection_professional(
+                        rut_norm, school.customer_id, names, lastnames, email, phone
+                    )
+                    if action == "updated":
+                        updated += 1
+                    else:
+                        skipped += 1
+                    continue
+
+                result = self.store(
+                    {
+                        "identification_number": rut_raw,
+                        "names": names,
+                        "lastnames": lastnames,
+                        "email": email,
+                        "phone": phone or "",
+                        "birth_date": "",
+                        "address": "",
+                        "rol_id": rol_id,
+                        "password": secrets.token_urlsafe(18),
+                        "period_year": period_year,
+                    },
+                    school_id=int(school_id),
+                )
+                if isinstance(result, dict) and result.get("status") == "success":
+                    imported += 1
+                    continue
+                msg = str((result or {}).get("message") or "Error al guardar")
+                if "Ya existe un usuario" in msg:
+                    skipped += 1
+                    continue
+                errors.append({"name": rut_raw, "message": msg})
+
+            return {
+                "status": "success",
+                "imported": imported,
+                "updated": updated,
+                "skipped": skipped,
+                "errors": errors,
+            }
+        except Exception as e:
+            self.db.rollback()
+            return {"status": "error", "message": str(e)}
+
+    def _update_inspection_professional(
+        self, rut_norm: str, customer_id: int, names: str, lastnames: str, email, phone
+    ) -> str:
+        user = (
+            self.db.query(UserModel)
+            .filter(
+                UserModel.customer_id == customer_id,
+                _rut_normalized_sql(UserModel.rut) == rut_norm,
+                _active_user_filter(),
+            )
+            .first()
+        )
+        if user is None:
+            return "skipped"
+        full_name = f"{names} {lastnames}".strip()
+        changed = False
+        if full_name and user.full_name != full_name:
+            user.full_name = full_name
+            changed = True
+        if email and user.email != email:
+            user.email = email
+            changed = True
+        if phone and user.phone != phone:
+            user.phone = phone
+            changed = True
+        if not changed:
+            return "skipped"
+        user.updated_date = datetime.now()
+        self.db.commit()
+        return "updated"
 
 
 # Alias usado por ``routes/professionals.py``

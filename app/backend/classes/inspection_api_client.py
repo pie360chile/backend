@@ -317,6 +317,11 @@ class InspectionApiClient:
         path = (_env("INSPECTION_API_COURSES_PATH") or "listado/cursos").lstrip("/")
         return self._post_multipart_form(path, {"colegio": int(colegio_id), "anio": int(anio)})
 
+    def fetch_funcionarios_list(self, colegio_id: int) -> Dict[str, Any]:
+        """POST listado/funcionarios. colegio es opcional en Inspection; aquí se envía el del colegio de sesión."""
+        path = (_env("INSPECTION_API_STAFF_PATH") or "listado/funcionarios").lstrip("/")
+        return self._post_multipart_form(path, {"colegio": int(colegio_id)})
+
     def fetch_students_list(self, colegio_id: int, anio: int) -> Dict[str, Any]:
         """
         POST `{base}/listado/alumnos` — multipart/form-data, Bearer.

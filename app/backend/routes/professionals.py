@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse
@@ -8,6 +9,7 @@ from app.backend.classes.professional_class import (
     ProfessionalClass,
     session_restricted_user_id,
 )
+from app.backend.classes.inspection_api_client import InspectionApiClient
 from app.backend.classes.school_class import SchoolClass
 from app.backend.auth.auth_user import get_current_active_user
 from app.backend.utils.users_rol_period import resolve_period_year_for_session
@@ -231,6 +233,65 @@ def store(professional: StoreProfessional, session_user: UserLogin = Depends(get
             "message": "Professional and user created successfully",
             "data": result
         }
+    )
+
+
+@professionals.post("/import_from_inspection")
+def import_from_inspection(
+    period_year: Optional[int] = Query(None, ge=2000, le=2100),
+    session_user: UserLogin = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    if session_restricted_user_id(db, session_user, period_year) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo coordinadores o administradores pueden importar profesionales.",
+        )
+    school_id = _session_school_id_with_fallback(db, session_user)
+    if school_id is None:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "status": 400,
+                "message": "No se pudo determinar el colegio (school_id) de la sesión",
+                "data": None,
+            },
+        )
+    client = InspectionApiClient()
+    if not client.is_configured():
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "status": 503,
+                "message": "Inspection API not configured (INSPECTION_API_USERNAME / INSPECTION_API_PASSWORD)",
+                "data": None,
+            },
+        )
+    remote = client.fetch_funcionarios_list(int(school_id))
+    if not remote.get("ok"):
+        return JSONResponse(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            content={
+                "status": 502,
+                "message": remote.get("message") or "Error al obtener funcionarios desde Inspection",
+                "data": remote,
+            },
+        )
+    year = int(period_year) if period_year is not None else datetime.now().year
+    result = ProfessionalClass(db).import_from_inspection(int(school_id), remote, year)
+    if isinstance(result, dict) and result.get("status") == "error":
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"status": 500, "message": result.get("message", "Error al importar profesionales"), "data": None},
+        )
+    msg = (
+        f"Importación de profesionales finalizada: {result.get('imported', 0)} nuevos, "
+        f"{result.get('updated', 0)} actualizados, {result.get('skipped', 0)} sin cambios. "
+        "El rol asignado es Profesional."
+    )
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={"status": 200, "message": msg, "data": result},
     )
 
 @professionals.get("/coordinators/{school_id}")
