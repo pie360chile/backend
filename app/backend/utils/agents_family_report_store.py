@@ -149,9 +149,23 @@ def build_family_report_store_payload(
         "receiver_email": _pick_text(replacements, "receiver_email", "person_email")
         or str(ctx.get("receiver_email") or ctx.get("person_email") or "").strip(),
         "receiver_relationship": _pick_text(
-            replacements, "receiver_relationship", "person_relation_student"
+            replacements,
+            "receiver_relationship",
+            "person_relation_student",
+            "relacion_con_el_estudiante",
         )
         or str(ctx.get("receiver_relationship") or ctx.get("person_relation_student") or "").strip(),
+        "guardian_type": (
+            "primary"
+            if str(ctx.get("guardian_type") or replacements.get("guardian_type") or "").strip().lower()
+            in ("primary", "titular", "1")
+            else (
+                "substitute"
+                if str(ctx.get("guardian_type") or replacements.get("guardian_type") or "").strip().lower()
+                in ("substitute", "suplente", "2")
+                else None
+            )
+        ),
         "receiver_presence_of": _pick_text(
             replacements, "receiver_presence_of", "person_presence"
         )

@@ -475,10 +475,14 @@ def _familia_checkbox_should_check(tag: str | None, context: dict[str, Any]) -> 
         return is_reeval
 
     guardian_type = str(ctx.get("guardian_type") or "").strip().lower()
-    if tag_n in _GUARDIAN_PRIMARY_TAGS:
-        return guardian_type in ("primary", "titular", "1")
-    if tag_n in _GUARDIAN_SUBSTITUTE_TAGS:
-        return guardian_type in ("substitute", "suplente", "2")
+    if tag_n in _GUARDIAN_PRIMARY_TAGS or "titular" in tag_n:
+        if guardian_type in ("primary", "titular", "1"):
+            return True
+        return _truthy_checkbox_value(str(ctx.get("primary") or ctx.get("titular") or ""))
+    if tag_n in _GUARDIAN_SUBSTITUTE_TAGS or "suplente" in tag_n:
+        if guardian_type in ("substitute", "suplente", "2"):
+            return True
+        return _truthy_checkbox_value(str(ctx.get("substitute") or ctx.get("suplente") or ""))
 
     poa = str(ctx.get("has_power_of_attorney") or "").strip().lower()
     if tag_n in _POWER_YES_TAGS:
@@ -505,6 +509,8 @@ def _is_familia_checkbox_tag(tag: str | None) -> bool:
     if not tag:
         return False
     tag_n = _normalize_cc_tag(tag)
+    if "titular" in tag_n or "suplente" in tag_n:
+        return True
     return tag_n in (
         _EVALUATION_CHECK_TAGS
         | _REEVALUATION_CHECK_TAGS

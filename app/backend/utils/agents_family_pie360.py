@@ -95,6 +95,10 @@ def _guardian_from_row(db: Session, g: StudentGuardianModel) -> dict[str, str]:
         "receiver_email": (g.email or "").strip(),
         "person_relation_student": relation,
         "receiver_relationship": relation,
+        "relacion_con_el_estudiante": relation,
+        "guardian_type": "primary" if (full or relation) else "",
+        "primary": "1" if (full or relation) else "",
+        "titular": "1" if (full or relation) else "",
     }
 
 
@@ -236,13 +240,24 @@ def build_family_pie360_context(db: Session, student_id: int) -> dict[str, Any]:
     guardian = (
         db.query(StudentGuardianModel)
         .filter(StudentGuardianModel.student_id == student_id)
-        .order_by(StudentGuardianModel.id.desc())
+        .order_by(StudentGuardianModel.id.asc())
         .first()
     )
     if guardian:
         g_data = _guardian_from_row(db, guardian)
         for key, val in g_data.items():
-            if val and not ctx.get(key):
+            if not val:
+                continue
+            if key in (
+                "person_relation_student",
+                "receiver_relationship",
+                "relacion_con_el_estudiante",
+                "guardian_type",
+                "primary",
+                "titular",
+            ):
+                ctx[key] = val
+            elif not ctx.get(key):
                 ctx[key] = val
 
     prof_id: int | None = ctx.get("professional_id")
@@ -320,8 +335,24 @@ _FAMILY_PIE360_FALLBACK: dict[str, tuple[str, ...]] = {
     "receiver_phone": ("receiver_phone", "person_phone"),
     "person_email": ("person_email", "receiver_email"),
     "receiver_email": ("receiver_email", "person_email"),
-    "person_relation_student": ("person_relation_student", "receiver_relationship"),
-    "receiver_relationship": ("receiver_relationship", "person_relation_student"),
+    "person_relation_student": (
+        "person_relation_student",
+        "receiver_relationship",
+        "relacion_con_el_estudiante",
+    ),
+    "receiver_relationship": (
+        "receiver_relationship",
+        "person_relation_student",
+        "relacion_con_el_estudiante",
+    ),
+    "relacion_con_el_estudiante": (
+        "relacion_con_el_estudiante",
+        "person_relation_student",
+        "receiver_relationship",
+    ),
+    "guardian_type": ("guardian_type",),
+    "primary": ("primary", "titular"),
+    "titular": ("titular", "primary"),
     "person_presence": ("person_presence", "receiver_presence_of"),
     "receiver_presence_of": ("receiver_presence_of", "person_presence"),
     "evaluation_type": ("evaluation_type",),

@@ -51,6 +51,12 @@ FAMILIA_CONTENT_CONTROL_ALIASES: dict[str, str] = {
     "professional_name": "professional_full_name",
     "person_name": "person_full_name",
     "receiver_full_name": "person_full_name",
+    "relacion_con_el_estudiante": "person_relation_student",
+    "relacion_con_el_la_estudiante": "person_relation_student",
+    "relacion_con_la_estudiante": "person_relation_student",
+    "relacion": "person_relation_student",
+    "parentesco": "person_relation_student",
+    "receiver_relationship": "person_relation_student",
 }
 
 
@@ -158,6 +164,25 @@ def merge_familia_replacements(
     if age and not str(merged.get("student_age") or "").strip():
         merged["student_age"] = age
         merged["age"] = age
+    relation = str(
+        student_ctx.get("person_relation_student")
+        or student_ctx.get("receiver_relationship")
+        or ""
+    ).strip()
+    if relation:
+        for key in (
+            "person_relation_student",
+            "receiver_relationship",
+            "relacion_con_el_estudiante",
+            "relacion_con_el_la_estudiante",
+            "parentesco",
+        ):
+            merged[key] = relation
+    if str(student_ctx.get("guardian_type") or "").strip().lower() == "primary":
+        merged["guardian_type"] = "primary"
+        merged["primary"] = "1"
+        merged["titular"] = "1"
+        merged["apoderado_titular"] = "1"
     return apply_family_progress_dates(merged)
 
 
