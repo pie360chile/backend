@@ -73,8 +73,8 @@ def family_progress_date_labels(on: Any | None = None) -> list[str]:
     """
     Fechas de avances del Informe a la Familia según el día de emisión (Chile).
 
-    Enero a junio: Junio y Dic. del año en curso, y Junio y Dic. del siguiente.
-    Julio a diciembre: solo Junio y Dic. del año siguiente.
+    Enero a junio: Jun. y Dic. del año en curso, y Jun. y Dic. del siguiente.
+    Julio a diciembre: solo Jun. y Dic. del año siguiente.
     """
     from datetime import datetime
     from zoneinfo import ZoneInfo
@@ -86,12 +86,12 @@ def family_progress_date_labels(on: Any | None = None) -> list[str]:
     year = int(issued.year)
     if int(issued.month) < 7:
         return [
-            f"Junio {year}",
+            f"Jun. {year}",
             f"Dic. {year}",
-            f"Junio {year + 1}",
+            f"Jun. {year + 1}",
             f"Dic. {year + 1}",
         ]
-    return [f"Junio {year + 1}", f"Dic. {year + 1}"]
+    return [f"Jun. {year + 1}", f"Dic. {year + 1}"]
 
 
 def apply_family_progress_dates(replacements: dict[str, str]) -> dict[str, str]:
