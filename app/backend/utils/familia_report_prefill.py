@@ -665,6 +665,159 @@ def ensure_familia_checkbox_boxes_visible(docx_path: Path) -> None:
         doc.save(str(docx_path))
 
 
+def _fold_label(value: str) -> str:
+    text = unicodedata.normalize("NFKD", value or "")
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return " ".join(text.lower().split())
+
+
+def _tc_grid_span(tc: Any, qn: Any) -> int:
+    tc_pr = tc.find(qn("w:tcPr"))
+    if tc_pr is None:
+        return 1
+    span = tc_pr.find(qn("w:gridSpan"))
+    if span is None:
+        return 1
+    try:
+        return max(1, int(span.get(qn("w:val")) or "1"))
+    except (TypeError, ValueError):
+        return 1
+
+
+def _set_tc_span_width(tc: Any, qn: Any, OxmlElement: Any, span: int, width: str | None) -> None:
+    tc_pr = tc.find(qn("w:tcPr"))
+    if tc_pr is None:
+        tc_pr = OxmlElement("w:tcPr")
+        tc.insert(0, tc_pr)
+    grid = tc_pr.find(qn("w:gridSpan"))
+    if grid is None:
+        grid = OxmlElement("w:gridSpan")
+        tc_pr.append(grid)
+    grid.set(qn("w:val"), str(span))
+    if not width:
+        return
+    tc_w = tc_pr.find(qn("w:tcW"))
+    if tc_w is None:
+        tc_w = OxmlElement("w:tcW")
+        tc_pr.insert(0, tc_w)
+    tc_w.set(qn("w:w"), width)
+    tc_w.set(qn("w:type"), "dxa")
+
+
+def _tc_width(tc: Any, qn: Any) -> str | None:
+    tc_pr = tc.find(qn("w:tcPr"))
+    if tc_pr is None:
+        return None
+    tc_w = tc_pr.find(qn("w:tcW"))
+    if tc_w is None:
+        return None
+    return tc_w.get(qn("w:w"))
+
+
+def _write_date_cell(tc: Any, qn: Any, OxmlElement: Any, date_text: str) -> None:
+    for child in list(tc):
+        if child.tag != qn("w:tcPr"):
+            tc.remove(child)
+    p = OxmlElement("w:p")
+    p_pr = OxmlElement("w:pPr")
+    jc = OxmlElement("w:jc")
+    jc.set(qn("w:val"), "center")
+    p_pr.append(jc)
+    p.append(p_pr)
+    r = OxmlElement("w:r")
+    r_pr = OxmlElement("w:rPr")
+    fonts = OxmlElement("w:rFonts")
+    for attr in ("w:ascii", "w:hAnsi", "w:cs"):
+        fonts.set(qn(attr), "Arial")
+    r_pr.append(fonts)
+    sz = OxmlElement("w:sz")
+    sz.set(qn("w:val"), "20")
+    r_pr.append(sz)
+    sz_cs = OxmlElement("w:szCs")
+    sz_cs.set(qn("w:val"), "20")
+    r_pr.append(sz_cs)
+    r.append(r_pr)
+    t = OxmlElement("w:t")
+    t.set(qn("xml:space"), "preserve")
+    t.text = date_text
+    r.append(t)
+    p.append(r)
+    tc.append(p)
+    tc_pr = tc.find(qn("w:tcPr"))
+    if tc_pr is None:
+        tc_pr = OxmlElement("w:tcPr")
+        tc.insert(0, tc_pr)
+    valign = tc_pr.find(qn("w:vAlign"))
+    if valign is None:
+        valign = OxmlElement("w:vAlign")
+        tc_pr.append(valign)
+    valign.set(qn("w:val"), "center")
+
+
+def place_familia_psychoped_evaluation_date(docx_path: Path, evaluation_date: str) -> None:
+    """Escribe la fecha del informe psicopedagógico bajo su encabezado.
+
+    En la plantilla del agente esa columna no tiene control: la fila de
+    instrumentos ocupa las 10 columnas. Se recorta a las 6 del rótulo y se
+    agrega la celda de la fecha.
+    """
+    date_text = (evaluation_date or "").strip()
+    if not date_text or not docx_path.is_file():
+        return
+    if len(date_text) >= 10 and date_text[4] == "-" and date_text[7] == "-":
+        from app.backend.utils.agents_family_pie360 import _fmt_birth_date
+
+        date_text = _fmt_birth_date(date_text) or date_text
+
+    from docx import Document
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    doc = Document(str(docx_path))
+    placed = False
+    for tbl in doc.element.body.findall(qn("w:tbl")):
+        rows = tbl.findall(qn("w:tr"))
+        for index, header in enumerate(rows[:-1]):
+            header_text = _fold_label("".join(t.text or "" for t in header.iter(qn("w:t"))))
+            if "fecha informe psicopedagog" not in header_text:
+                continue
+            header_cells = header.findall(qn("w:tc"))
+            if len(header_cells) < 2:
+                continue
+            label_span = _tc_grid_span(header_cells[0], qn)
+            date_span = _tc_grid_span(header_cells[1], qn)
+            label_width = _tc_width(header_cells[0], qn)
+            date_width = _tc_width(header_cells[1], qn)
+            value_row = rows[index + 1]
+            value_cells = list(value_row.iter(qn("w:tc")))
+            if len(value_cells) >= 2:
+                _set_tc_span_width(value_cells[0], qn, OxmlElement, label_span, label_width)
+                _set_tc_span_width(value_cells[-1], qn, OxmlElement, date_span, date_width)
+                _write_date_cell(value_cells[-1], qn, OxmlElement, date_text)
+                placed = True
+                break
+            if not value_cells:
+                continue
+            instruments = value_cells[0]
+            _set_tc_span_width(instruments, qn, OxmlElement, label_span, label_width)
+            date_cell = OxmlElement("w:tc")
+            _set_tc_span_width(date_cell, qn, OxmlElement, date_span, date_width)
+            _write_date_cell(date_cell, qn, OxmlElement, date_text)
+            anchor = instruments
+            while anchor is not None and anchor.getparent() is not value_row:
+                anchor = anchor.getparent()
+            if anchor is None:
+                value_row.append(date_cell)
+            else:
+                anchor.addnext(date_cell)
+            placed = True
+            break
+        if placed:
+            break
+    if placed:
+        doc.save(str(docx_path))
+
+
 def fix_familia_motivo_evaluacion_row(
     docx_path: Path,
     student_context: dict[str, Any] | None = None,

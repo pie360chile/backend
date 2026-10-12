@@ -4219,6 +4219,7 @@ async def generate_document(
             home_based_description = str(fr_data.get("home_based_description") or fr_data.get("home_support") or "").strip()
             collaborative_work = str(fr_data.get("collaborative_work") or "").strip()
             school_family_agreements = str(fr_data.get("school_family_agreements") or fr_data.get("agreements_commitments") or "").strip()
+            evaluation_date = _fmt_date(fr_data.get("evaluation_date"))
             eval_date_1 = _fmt_date(fr_data.get("evaluation_date_1"))
             eval_date_2 = _fmt_date(fr_data.get("evaluation_date_2"))
             eval_date_3 = _fmt_date(fr_data.get("evaluation_date_3"))
@@ -4303,6 +4304,9 @@ async def generate_document(
                 "school_family_agreements": school_family_agreements,
                 "agreements_commitments": school_family_agreements,
                 # Fechas en que se evaluarán los avances y logros
+                "evaluation_date": evaluation_date,
+                "fecha_de_evaluacion": evaluation_date,
+                "fecha_evaluacion": evaluation_date,
                 "evaluation_date_1": eval_date_1,
                 "evaluation_date_2": eval_date_2,
                 "evaluation_date_3": eval_date_3,
@@ -4324,6 +4328,7 @@ async def generate_document(
                     apply_familia_checkbox_states,
                     compact_familia_narrative_spacing,
                     fix_familia_motivo_evaluacion_row,
+                    place_familia_psychoped_evaluation_date,
                 )
 
                 checkbox_ctx = {
@@ -4338,6 +4343,10 @@ async def generate_document(
                 )
                 compact_familia_narrative_spacing(Path(result["file_path"]))
                 apply_familia_arial_10_font(Path(result["file_path"]))
+                if evaluation_date:
+                    place_familia_psychoped_evaluation_date(
+                        Path(result["file_path"]), evaluation_date
+                    )
 
             if result.get("status") == "error":
                 return JSONResponse(

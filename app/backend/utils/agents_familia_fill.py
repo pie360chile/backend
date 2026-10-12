@@ -385,6 +385,7 @@ def _apply_familia_postprocess(
             compact_familia_narrative_spacing,
             ensure_familia_checkbox_boxes_visible,
             fix_familia_motivo_evaluacion_row,
+            place_familia_psychoped_evaluation_date,
         )
     except ImportError:
         return
@@ -428,3 +429,10 @@ def _apply_familia_postprocess(
         ensure_familia_checkbox_boxes_visible(output_path)
     except Exception as exc:
         logger.warning("ensure_familia_checkbox_boxes_visible: %s", exc)
+
+    evaluation_date = str((replacements or {}).get("evaluation_date") or "").strip()
+    if evaluation_date:
+        try:
+            place_familia_psychoped_evaluation_date(output_path, evaluation_date)
+        except Exception as exc:
+            logger.warning("place_familia_psychoped_evaluation_date: %s", exc)

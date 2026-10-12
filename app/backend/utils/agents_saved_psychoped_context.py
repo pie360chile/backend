@@ -51,6 +51,15 @@ _FIELDS: tuple[tuple[str, str], ...] = (
 )
 
 
+def _fmt_family_evaluation_date(value: Any) -> str:
+    raw = _text(value)
+    if not raw:
+        return ""
+    from app.backend.utils.agents_family_pie360 import _fmt_birth_date
+
+    return _fmt_birth_date(raw) or raw
+
+
 def _text(value: Any) -> str:
     if value is None:
         return ""
@@ -252,6 +261,9 @@ def family_fields_from_saved_psychoped(
     elif motor:
         out["health_support_needs"] = motor
         out["support_needs_3"] = motor
+    evaluation_date = _fmt_family_evaluation_date(getattr(row, "evaluation_date", None))
+    if evaluation_date:
+        out["evaluation_date"] = evaluation_date
     return out
 
 
@@ -264,8 +276,15 @@ def apply_saved_psychoped_to_family_replacements(
     """Rellena los huecos del informe a la familia con el psicopedagógico del período."""
     saved = family_fields_from_saved_psychoped(db, int(student_id), period_year)
     for key, value in saved.items():
+        if key == "evaluation_date":
+            continue
         if value and not str(replacements.get(key) or "").strip():
             replacements[key] = value
+    evaluation_date = str(saved.get("evaluation_date") or "").strip()
+    if evaluation_date:
+        replacements["evaluation_date"] = evaluation_date
+        replacements["fecha_de_evaluacion"] = evaluation_date
+        replacements["fecha_evaluacion"] = evaluation_date
     return replacements
 
 
