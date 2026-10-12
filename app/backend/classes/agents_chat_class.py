@@ -142,6 +142,67 @@ def _reply_dodges_saved_psychoped(text: str) -> bool:
     return any(marker in low for marker in _PSYCHOPED_DODGE_MARKERS)
 
 
+# Cuadros del Informe a la Familia. Si alguno del grupo tiene texto, el cuadro no está vacío.
+_FAMILY_REVIEW_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("applied_instruments", ("applied_instruments", "evaluation_reason")),
+    ("diagnostic", ("diagnostic", "diagnosis")),
+    ("pedagogical_strengths", ("pedagogical_strengths", "strengths_1", "pedagogical_field_1")),
+    ("pedagogical_support_needs", ("pedagogical_support_needs", "support_needs_1")),
+    ("social_affective_strengths", ("social_affective_strengths", "strengths_2", "social_field_1")),
+    (
+        "social_affective_support_needs",
+        ("social_affective_support_needs", "support_needs_2"),
+    ),
+    ("collaborative_work", ("collaborative_work",)),
+    ("home_based_description", ("home_based_description", "home_support", "supports")),
+    (
+        "school_family_agreements",
+        ("school_family_agreements", "agreements_commitments", "agreements"),
+    ),
+)
+
+
+def _merge_field_gaps(
+    base: dict[str, Any] | None,
+    incoming: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Completa huecos. Un reintento con campos en blanco no borra lo ya escrito."""
+    out = dict(base or {})
+    for key, value in (incoming or {}).items():
+        if str(value or "").strip() and not str(out.get(key) or "").strip():
+            out[key] = value
+    return out or None
+
+
+def _empty_family_review_keys(fields: dict[str, Any] | None) -> list[str]:
+    data = fields or {}
+    empty: list[str] = []
+    for primary, aliases in _FAMILY_REVIEW_GROUPS:
+        if not any(str(data.get(key) or "").strip() for key in aliases):
+            empty.append(primary)
+    return empty
+
+
+def _add_usage(
+    usage: dict[str, Any] | None,
+    extra: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if not extra:
+        return usage
+    if not usage:
+        return extra
+    merged = dict(usage)
+    for key in (
+        "prompt_tokens",
+        "completion_tokens",
+        "total_tokens",
+        "prompt_cache_hit_tokens",
+        "prompt_cache_miss_tokens",
+    ):
+        merged[key] = int(usage.get(key) or 0) + int(extra.get(key) or 0)
+    return merged
+
+
 def _family_blocked_without_psychoped(
     db: Session,
     *,
@@ -907,9 +968,7 @@ class AgentsChatClass:
                     yield event
                     return
             if retry_reply:
-                fields = extract_fields_from_reply(retry_reply) or extract_fields_from_reply(
-                    reply_text
-                )
+                fields = _merge_field_gaps(fields, extract_fields_from_reply(retry_reply))
                 if family_has_psychoped and _reply_dodges_saved_psychoped(reply_text):
                     visible_reply = retry_reply
                     reply_text = retry_reply
@@ -922,25 +981,80 @@ class AgentsChatClass:
                 family_fields_from_saved_psychoped,
             )
 
+            empty_keys = _empty_family_review_keys(fields)
+            if (want_doc or fields) and empty_keys:
+                yield {
+                    "type": "step",
+                    "message": "Revisando campos vacíos del informe…",
+                }
+                review_msg = (
+                    "Última revisión del Informe a la Familia. Estos campos quedaron "
+                    "vacíos: "
+                    + ", ".join(empty_keys)
+                    + ". La ficha de este estudiante SÍ tiene Informe de Evaluación "
+                    "Psicopedagógica. Redacta cada uno de esos campos desde esa ficha "
+                    "(análisis, síntesis, conclusión, instrumentos o sugerencias). "
+                    "Si hay texto de donde sacarlo, el campo no puede quedar vacío. "
+                    "No inventes datos que no estén en la ficha de este estudiante. "
+                    "Responde solo con ```json\n{\"fields\": {...}}\n``` y incluye "
+                    "únicamente esos campos, con texto."
+                )
+                review_messages = list(messages) + [
+                    {"role": "assistant", "content": reply_text or "(informe incompleto)"},
+                    {"role": "user", "content": review_msg},
+                ]
+                review_reply = ""
+                for event in stream_chat_completion(
+                    review_messages,
+                    model=model_code,
+                    db=self.db,
+                    timeout=llm_timeout,
+                    max_tokens=llm_max_tokens,
+                ):
+                    if event.get("type") == "text_delta":
+                        review_reply += event.get("delta") or ""
+                    elif event.get("type") == "done":
+                        data = event.get("data") or {}
+                        review_reply = data.get("reply") or review_reply
+                        usage = _add_usage(
+                            usage,
+                            normalize_usage(
+                                data.get("usage")
+                                if isinstance(data.get("usage"), dict)
+                                else None
+                            ),
+                        )
+                    elif event.get("type") == "error":
+                        review_reply = ""
+                        break
+                if review_reply:
+                    fields = _merge_field_gaps(
+                        fields, extract_fields_from_reply(review_reply)
+                    )
+
             saved_fields = family_fields_from_saved_psychoped(
                 self.db,
                 int(resolved_student_id),
                 int(self.period_year) if self.period_year else None,
             )
             if saved_fields:
-                merged_fields = dict(fields or {})
-                for key, value in saved_fields.items():
-                    if not str(merged_fields.get(key) or "").strip():
-                        merged_fields[key] = value
-                if merged_fields:
-                    fields = merged_fields
-                    if _reply_dodges_saved_psychoped(visible_reply):
+                fields = _merge_field_gaps(fields, saved_fields)
+                still_empty = _empty_family_review_keys(fields)
+                if _reply_dodges_saved_psychoped(visible_reply) or still_empty != empty_keys:
+                    if still_empty:
                         visible_reply = (
                             "El Informe a la Familia se elaboró con el Informe de "
                             "Evaluación Psicopedagógica guardado en la ficha. "
                             "Se usaron la conclusión y las sugerencias que están "
-                            "registradas. No se completaron los apartados que esa "
-                            "ficha tiene vacíos."
+                            "registradas. Siguen vacíos solo los apartados que esa "
+                            "ficha no trae: " + ", ".join(still_empty) + "."
+                        )
+                    else:
+                        visible_reply = (
+                            "El Informe a la Familia se elaboró con el Informe de "
+                            "Evaluación Psicopedagógica guardado en la ficha. "
+                            "Se completaron los campos con la conclusión, el análisis "
+                            "y las sugerencias que están registradas."
                         )
 
         if want_doc or fields:

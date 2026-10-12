@@ -158,9 +158,15 @@ def family_fields_from_saved_psychoped(
         out["collaborative_work"] = school_block
         out["school_family_agreements"] = school_block
         out["agreements_commitments"] = school_block
+        out["agreements"] = school_block
+        out["pedagogical_support_needs"] = school_block
+        out["support_needs_1"] = school_block
     if to_family:
         out["home_based_description"] = to_family
         out["home_support"] = to_family
+        out["supports"] = to_family
+        out["social_affective_support_needs"] = to_family
+        out["support_needs_2"] = to_family
     return out
 
 
