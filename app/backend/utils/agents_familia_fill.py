@@ -57,6 +57,7 @@ FAMILIA_CONTENT_CONTROL_ALIASES: dict[str, str] = {
     "relacion": "person_relation_student",
     "parentesco": "person_relation_student",
     "receiver_relationship": "person_relation_student",
+    "received_person_relation": "person_relation_student",
 }
 
 
@@ -176,6 +177,7 @@ def merge_familia_replacements(
             "relacion_con_el_estudiante",
             "relacion_con_el_la_estudiante",
             "parentesco",
+            "received_person_relation",
         ):
             merged[key] = relation
     if str(student_ctx.get("guardian_type") or "").strip().lower() == "primary":

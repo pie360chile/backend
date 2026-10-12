@@ -4261,6 +4261,7 @@ async def generate_document(
                 "person_full_name": receiver_full,
                 "person_identification_number": receiver_id_num,
                 "person_relation_student": receiver_relation,
+                "received_person_relation": receiver_relation,
                 "person_presence": receiver_presence,
                 "person_presence_of": receiver_presence,
                 "receiver_full_name": receiver_full,

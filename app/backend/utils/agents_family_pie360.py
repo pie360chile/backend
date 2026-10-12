@@ -96,6 +96,7 @@ def _guardian_from_row(db: Session, g: StudentGuardianModel) -> dict[str, str]:
         "person_relation_student": relation,
         "receiver_relationship": relation,
         "relacion_con_el_estudiante": relation,
+        "received_person_relation": relation,
         "guardian_type": "primary" if (full or relation) else "",
         "primary": "1" if (full or relation) else "",
         "titular": "1" if (full or relation) else "",
@@ -252,6 +253,7 @@ def build_family_pie360_context(db: Session, student_id: int) -> dict[str, Any]:
                 "person_relation_student",
                 "receiver_relationship",
                 "relacion_con_el_estudiante",
+                "received_person_relation",
                 "guardian_type",
                 "primary",
                 "titular",
@@ -347,6 +349,11 @@ _FAMILY_PIE360_FALLBACK: dict[str, tuple[str, ...]] = {
     ),
     "relacion_con_el_estudiante": (
         "relacion_con_el_estudiante",
+        "person_relation_student",
+        "receiver_relationship",
+    ),
+    "received_person_relation": (
+        "received_person_relation",
         "person_relation_student",
         "receiver_relationship",
     ),
