@@ -80,6 +80,9 @@ def strip_fields_json_from_reply(reply: str) -> str:
         start = cleaned.rfind("{")
         if start >= 0 and _try_parse_fields(cleaned[start:]):
             cleaned = cleaned[:start].rstrip()
+    # {"fields": cortado, aunque no cierre la llave
+    cleaned = re.sub(r'(?is)\{\s*"fields"\s*:[\s\S]*', "", cleaned)
+    cleaned = re.sub(r'(?is)"fields"\s*:\s*', "", cleaned)
     # Frases residuales que anuncian el JSON
     cleaned = re.sub(
         r"(?i)\n*(?:a continuación[,:]?\s*)?(?:el\s+)?bloque\s+json[^\n]*:?\s*$",
@@ -91,7 +94,7 @@ def strip_fields_json_from_reply(reply: str) -> str:
         "",
         cleaned,
     ).strip()
-    return cleaned.strip() or (reply or "").strip()
+    return cleaned.strip()
 
 
 # Campos de identificación / cabecera (no cuentan como contenido del informe).

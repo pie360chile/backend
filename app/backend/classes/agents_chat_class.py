@@ -827,12 +827,12 @@ class AgentsChatClass:
             history=history,
         )
 
-        yield {"type": "step", "message": "Redactando respuesta…"}
-
         want_doc = wants_document_generation(text, history)
-        hide_family_draft = bool(
-            want_doc and _is_family_report(resolved_document_id, agent_row.name or "")
-        )
+        hide_family_draft = _is_family_report(resolved_document_id, agent_row.name or "")
+        if hide_family_draft:
+            yield {"type": "step", "message": "Elaborando el Informe a la Familia…"}
+        else:
+            yield {"type": "step", "message": "Redactando respuesta…"}
         llm_timeout = 240 if want_doc else 120
         llm_max_tokens = 8192 if want_doc else None
 
@@ -849,7 +849,8 @@ class AgentsChatClass:
             if event.get("type") == "text_delta":
                 if first_token:
                     first_token = False
-                    yield {"type": "step", "message": "Escribiendo respuesta…"}
+                    if not hide_family_draft:
+                        yield {"type": "step", "message": "Escribiendo respuesta…"}
                 reply_text += event.get("delta") or ""
                 if not hide_family_draft:
                     yield event
@@ -1168,6 +1169,15 @@ class AgentsChatClass:
         ):
             visible_reply = strip_fields_json_from_reply(visible_reply)
         visible_reply = strip_html_and_code_blocks(visible_reply)
+        if response_files and (
+            not (visible_reply or "").strip()
+            or '{"fields"' in (visible_reply or "").lower()
+            or (visible_reply or "").lstrip().lower().startswith('"fields"')
+        ):
+            visible_reply = (
+                "Documento generado y datos del formulario guardados "
+                "en la carpeta del estudiante."
+            )
         if hide_family_draft and response_files:
             visible_reply = (
                 "El Informe a la Familia quedó generado. "
