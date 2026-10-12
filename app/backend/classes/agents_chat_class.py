@@ -830,6 +830,9 @@ class AgentsChatClass:
         yield {"type": "step", "message": "Redactando respuesta…"}
 
         want_doc = wants_document_generation(text, history)
+        hide_family_draft = bool(
+            want_doc and _is_family_report(resolved_document_id, agent_row.name or "")
+        )
         llm_timeout = 240 if want_doc else 120
         llm_max_tokens = 8192 if want_doc else None
 
@@ -848,7 +851,8 @@ class AgentsChatClass:
                     first_token = False
                     yield {"type": "step", "message": "Escribiendo respuesta…"}
                 reply_text += event.get("delta") or ""
-                yield event
+                if not hide_family_draft:
+                    yield event
             elif event.get("type") == "done":
                 data = event.get("data") or {}
                 reply_text = data.get("reply") or reply_text
@@ -936,7 +940,8 @@ class AgentsChatClass:
                 if event.get("type") == "text_delta":
                     delta = event.get("delta") or ""
                     retry_reply += delta
-                    yield event
+                    if not hide_family_draft:
+                        yield event
                 elif event.get("type") == "done":
                     data = event.get("data") or {}
                     retry_reply = data.get("reply") or retry_reply
@@ -1119,7 +1124,13 @@ class AgentsChatClass:
                     else:
                         data = created.get("data") or {}
                         response_files = list(data.get("responseFiles") or [])
-                        visible_reply = strip_fields_json_from_reply(reply_text)
+                        if hide_family_draft:
+                            visible_reply = (
+                                "El Informe a la Familia quedó generado. "
+                                "Descárgalo en el archivo de este mensaje."
+                            )
+                        else:
+                            visible_reply = strip_fields_json_from_reply(reply_text)
                         if data.get("googleDrive") and data["googleDrive"].get("drive_path"):
                             yield {
                                 "type": "step",
@@ -1157,6 +1168,20 @@ class AgentsChatClass:
         ):
             visible_reply = strip_fields_json_from_reply(visible_reply)
         visible_reply = strip_html_and_code_blocks(visible_reply)
+        if hide_family_draft and response_files:
+            visible_reply = (
+                "El Informe a la Familia quedó generado. "
+                "Descárgalo en el archivo de este mensaje."
+            )
+        elif (
+            hide_family_draft
+            and fields
+            and not (visible_reply or "").startswith("No es posible")
+        ):
+            visible_reply = (
+                "El Informe a la Familia se elaboró con los datos de la ficha. "
+                "Los textos de los campos no se muestran en el chat."
+            )
 
         done_data: dict[str, Any] = {
             "reply": visible_reply,
