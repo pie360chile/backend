@@ -113,8 +113,10 @@ def build_psychoped_store_payload(
         "student_id": student_id,
         "social_name": _pick_text(
             replacements, "social_name", "student_social_name", "nombre_social"
-        ),
-        "age": _pick_text(replacements, "age", "student_age", "edad"),
+        )
+        or str(ctx.get("student_social_name") or ctx.get("social_name") or "").strip(),
+        "age": _pick_text(replacements, "age", "student_age", "edad")
+        or str(ctx.get("student_age") or ctx.get("age") or "").strip(),
         "evaluation_date": _parse_date_iso(
             _pick_text(replacements, "evaluation_date", "fecha_evaluacion")
         ),
@@ -181,15 +183,18 @@ def build_psychoped_store_payload(
             replacements,
             "professional_identification_number",
             "rut_profesional",
-        ),
+        )
+        or str(ctx.get("professional_identification_number") or "").strip(),
         "professional_registration_number": _pick_text(
             replacements,
             "professional_registration_number",
             "registro_profesional",
-        ),
+        )
+        or str(ctx.get("professional_registration_number") or "").strip(),
         "professional_specialty": _pick_text(
             replacements, "professional_specialty", "especialidad_profesional"
-        ),
+        )
+        or str(ctx.get("professional_specialty") or ctx.get("professional_role") or "").strip(),
     }
 
     # Escalas ya en formato form

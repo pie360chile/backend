@@ -50,9 +50,18 @@ def _student_context(db: Session, student_id: int, document_id: int | None = Non
 
 def _basic_student_context(db: Session, student_id: int) -> dict[str, Any]:
     from app.backend.db.models.pie_core import (
+        CourseModel,
+        ProfessionalTeachingCourseModel,
+        SchoolModel,
         StudentAcademicInfoModel,
         StudentModel,
         StudentPersonalInfoModel,
+        StudentProfessionalModel,
+    )
+    from app.backend.utils.agents_familia_pie360 import (
+        _calc_age,
+        _fmt_birth_date,
+        _professional_from_id,
     )
 
     student = db.query(StudentModel).filter(StudentModel.id == student_id).first()
@@ -71,14 +80,70 @@ def _basic_student_context(db: Session, student_id: int) -> dict[str, Any]:
     father = (personal.father_lastname or "").strip() if personal else ""
     mother = (personal.mother_lastname or "").strip() if personal else ""
     full_name = f"{names} {father} {mother}".strip()
+    social_name = (personal.social_name or "").strip() if personal else ""
+    born_raw = personal.born_date if personal else None
+    born = _fmt_birth_date(born_raw) if born_raw else ""
+    age = _calc_age(born_raw) if born_raw else ""
+    school_id = getattr(student, "school_id", None) if student else None
+    course_id = getattr(academic, "course_id", None) if academic else None
+    school_name = ""
+    if school_id:
+        school = db.query(SchoolModel).filter(SchoolModel.id == school_id).first()
+        if school and school.school_name:
+            school_name = (school.school_name or "").strip()
+    course_name = ""
+    if course_id:
+        course = (
+            db.query(CourseModel)
+            .filter(CourseModel.deleted_status_id == 0, CourseModel.id == course_id)
+            .first()
+        )
+        if course and course.course_name:
+            course_name = (course.course_name or "").strip()
+    prof_id = None
+    assigned = (
+        db.query(StudentProfessionalModel)
+        .filter(
+            StudentProfessionalModel.student_id == student_id,
+            StudentProfessionalModel.deleted_date.is_(None),
+        )
+        .order_by(StudentProfessionalModel.id.desc())
+        .first()
+    )
+    if assigned:
+        prof_id = assigned.professional_id
+    if not prof_id and course_id:
+        teaching = (
+            db.query(ProfessionalTeachingCourseModel)
+            .filter(
+                ProfessionalTeachingCourseModel.course_id == course_id,
+                ProfessionalTeachingCourseModel.deleted_status_id == 0,
+            )
+            .order_by(ProfessionalTeachingCourseModel.id.desc())
+            .first()
+        )
+        if teaching:
+            prof_id = teaching.professional_id
+    professional = _professional_from_id(db, prof_id) if prof_id else {}
     return {
         "student_id": student_id,
         "student_name": names,
         "student_fullname": full_name,
+        "student_full_name": full_name,
+        "student_social_name": social_name,
+        "social_name": social_name,
         "identification_number": (personal.identification_number or "").strip() if personal else "",
-        "school_id": getattr(student, "school_id", None) if student else None,
-        "course_id": getattr(academic, "course_id", None) if academic else None,
+        "student_identification_number": (personal.identification_number or "").strip() if personal else "",
+        "student_birth_date": born,
+        "student_born_date": born,
+        "birth_day": born,
+        "student_age": age,
+        "student_school": school_name,
+        "student_course": course_name,
+        "school_id": school_id,
+        "course_id": course_id,
         "period_year": getattr(student, "period_year", None) if student else None,
+        **professional,
     }
 
 
@@ -182,6 +247,16 @@ def generate_and_save_document(
         )
         replacements = apply_family_progress_dates(replacements)
     elif int(template.document_id) == PSYCHOPED_DOCUMENT_ID:
+        from app.backend.utils.agents_saved_psychoped_context import (
+            apply_saved_psychoped_to_report_replacements,
+        )
+
+        replacements = apply_saved_psychoped_to_report_replacements(
+            db,
+            int(student_id),
+            replacements,
+            student_ctx.get("period_year"),
+        )
         replacements = normalize_psychoped_replacements(replacements, student_ctx)
     output_dir = Path(settings.files_dir) / "system" / "students"
     output_dir.mkdir(parents=True, exist_ok=True)

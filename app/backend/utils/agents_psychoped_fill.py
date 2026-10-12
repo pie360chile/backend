@@ -229,13 +229,15 @@ def _apply_admission_type(merged: dict[str, str], raw: str) -> None:
         merged["admission_type_3"] = raw.strip() if raw.strip() else "X"
 
 
+def _scale_row_marked(merged: dict[str, str], row: int) -> bool:
+    return any(str(merged.get(f"scale_{row}_{col}") or "").strip() for col in range(1, 5))
+
+
 def _apply_form_scales(merged: dict[str, str], source: dict[str, str]) -> None:
-    """pedagogical_scale_N / social_communicative_scale_N → scale_row_col."""
-    if any(k.startswith("scale_") for k in merged):
-        return
+    """pedagogical_scale_N / social_communicative_scale_N → scale_row_col. No pisa una fila ya marcada."""
     for n in range(1, 11):
         ped = source.get(f"pedagogical_scale_{n}") or merged.get(f"pedagogical_scale_{n}")
-        if ped:
+        if ped and not _scale_row_marked(merged, n):
             col = _scale_value_to_col(str(ped))
             if col:
                 for c in range(1, 5):
@@ -243,10 +245,10 @@ def _apply_form_scales(merged: dict[str, str], source: dict[str, str]) -> None:
         soc = source.get(f"social_communicative_scale_{n}") or merged.get(
             f"social_communicative_scale_{n}"
         )
-        if soc:
+        row = n + 10
+        if soc and not _scale_row_marked(merged, row):
             col = _scale_value_to_col(str(soc))
             if col:
-                row = n + 10
                 for c in range(1, 5):
                     merged[f"scale_{row}_{c}"] = "X" if c == col else ""
 
@@ -290,9 +292,56 @@ def normalize_psychoped_replacements(
     _apply_form_scales(merged, raw)
 
     ctx = student_ctx or {}
-    full_name = (ctx.get("student_fullname") or "").strip()
+    full_name = (ctx.get("student_fullname") or ctx.get("student_full_name") or "").strip()
     if full_name:
         merged.setdefault("student_full_name", full_name)
+    social_name = (ctx.get("student_social_name") or ctx.get("social_name") or "").strip()
+    if social_name:
+        merged.setdefault("student_social_name", social_name)
+        merged.setdefault("social_name", social_name)
+    birth = (
+        ctx.get("birth_day")
+        or ctx.get("student_birth_date")
+        or ctx.get("student_born_date")
+        or ""
+    )
+    birth = str(birth).strip()
+    if birth:
+        birth = format_psychoped_date(birth)
+        merged.setdefault("birth_day", birth)
+        merged.setdefault("student_birth_date", birth)
+        merged.setdefault("fecha_de_nacimiento", birth)
+    age = (ctx.get("student_age") or ctx.get("age") or "").strip()
+    if age:
+        merged.setdefault("student_age", age)
+        merged.setdefault("age", age)
+    school = (ctx.get("student_school") or "").strip()
+    if school:
+        merged.setdefault("student_school", school)
+    course = (ctx.get("student_course") or "").strip()
+    if course:
+        merged.setdefault("student_course", course)
+    rut = (ctx.get("identification_number") or ctx.get("student_identification_number") or "").strip()
+    if rut:
+        merged.setdefault("student_identification_number", rut)
+    professional_name = (
+        ctx.get("professional_full_name") or ctx.get("professional_social_name") or ""
+    )
+    professional_name = str(professional_name).strip()
+    if professional_name:
+        merged.setdefault("professional_full_name", professional_name)
+        merged.setdefault("nombre_profesional", professional_name)
+    professional_rut = str(ctx.get("professional_identification_number") or "").strip()
+    if professional_rut:
+        merged.setdefault("professional_identification_number", professional_rut)
+    specialty = str(
+        ctx.get("professional_specialty") or ctx.get("professional_role") or ""
+    ).strip()
+    if specialty:
+        merged.setdefault("professional_specialty", specialty)
+    registration = str(ctx.get("professional_registration_number") or "").strip()
+    if registration:
+        merged.setdefault("professional_registration_number", registration)
 
     for key, text in list(merged.items()):
         if _is_date_field_key(key):

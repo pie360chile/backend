@@ -60,7 +60,12 @@ def _fmt_birth_date(born: Any) -> str:
         if hasattr(born, "strftime"):
             return born.strftime("%d/%m/%Y")
         raw = str(born).strip()[:10]
-        return datetime.strptime(raw, "%Y-%m-%d").strftime("%d/%m/%Y")
+        for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+            try:
+                return datetime.strptime(raw, fmt).strftime("%d/%m/%Y")
+            except ValueError:
+                continue
+        return str(born).strip()
     except Exception:
         return str(born).strip()
 
@@ -131,6 +136,8 @@ def _family_report_snapshot(db: Session, student_id: int) -> dict[str, str]:
     mapping = {
         "student_full_name": report.student_full_name,
         "student_identification_number": report.student_identification_number,
+        "student_social_name": report.student_social_name,
+        "student_age": report.student_age,
         "student_course": report.student_course,
         "student_school": report.student_school,
         "person_full_name": report.receiver_full_name,
@@ -157,6 +164,12 @@ def _family_report_snapshot(db: Session, student_id: int) -> dict[str, str]:
         text = str(val or "").strip()
         if text:
             out[key] = text
+    if report.student_born_date:
+        born = _fmt_birth_date(report.student_born_date)
+        if born:
+            out["student_birth_date"] = born
+            out["student_born_date"] = born
+            out["birth_day"] = born
     if report.professional_id:
         out["professional_id"] = int(report.professional_id)
     ph = out.get("professional_phone", "")
@@ -271,10 +284,14 @@ def build_familia_pie360_context(db: Session, student_id: int) -> dict[str, Any]
 # Clave plantilla → claves alternativas en contexto PIE360
 _FAMILIA_PIE360_FALLBACK: dict[str, tuple[str, ...]] = {
     "student_full_name": ("student_full_name", "student_fullname"),
-    "student_social_name": ("student_social_name",),
+    "student_social_name": ("student_social_name", "social_name"),
+    "social_name": ("social_name", "student_social_name"),
+    "nombre_social": ("student_social_name", "social_name"),
     "student_identification_number": ("student_identification_number", "identification_number"),
-    "student_birth_date": ("student_birth_date", "student_born_date"),
-    "student_born_date": ("student_born_date", "student_birth_date"),
+    "student_birth_date": ("student_birth_date", "student_born_date", "birth_day"),
+    "student_born_date": ("student_born_date", "student_birth_date", "birth_day"),
+    "birth_day": ("birth_day", "student_birth_date", "student_born_date"),
+    "fecha_de_nacimiento": ("student_birth_date", "student_born_date", "birth_day"),
     "student_age": ("student_age",),
     "student_course": ("student_course",),
     "student_school": ("student_school",),

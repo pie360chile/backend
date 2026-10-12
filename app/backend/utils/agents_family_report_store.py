@@ -76,9 +76,16 @@ def build_family_report_store_payload(
         replacements,
         "student_born_date",
         "student_birth_date",
+        "birth_day",
         "born_date",
         "birth_date",
-    )
+        "fecha_de_nacimiento",
+    ) or str(
+        ctx.get("student_birth_date")
+        or ctx.get("student_born_date")
+        or ctx.get("birth_day")
+        or ""
+    ).strip()
 
     payload: dict[str, Any] = {
         "student_id": student_id,
@@ -86,7 +93,7 @@ def build_family_report_store_payload(
         "student_full_name": _pick_text(
             replacements, "student_full_name", "full_name", "student_name"
         )
-        or str(ctx.get("student_fullname") or "").strip(),
+        or str(ctx.get("student_fullname") or ctx.get("student_full_name") or "").strip(),
         "student_identification_number": _pick_text(
             replacements,
             "student_identification_number",
@@ -94,23 +101,32 @@ def build_family_report_store_payload(
             "student_rut",
             "rut",
         )
-        or str(ctx.get("identification_number") or "").strip(),
-        "student_social_name": _pick_text(replacements, "student_social_name", "social_name"),
+        or str(ctx.get("identification_number") or ctx.get("student_identification_number") or "").strip(),
+        "student_social_name": _pick_text(replacements, "student_social_name", "social_name", "nombre_social")
+        or str(ctx.get("student_social_name") or ctx.get("social_name") or "").strip(),
         "student_born_date": _parse_born_date_iso(born_raw),
-        "student_age": _pick_text(replacements, "student_age", "age"),
-        "student_course": _pick_text(replacements, "student_course", "course"),
-        "student_school": _pick_text(replacements, "student_school", "school"),
+        "student_age": _pick_text(replacements, "student_age", "age", "edad")
+        or str(ctx.get("student_age") or "").strip(),
+        "student_course": _pick_text(replacements, "student_course", "course")
+        or str(ctx.get("student_course") or "").strip(),
+        "student_school": _pick_text(replacements, "student_school", "school")
+        or str(ctx.get("student_school") or "").strip(),
         "professional_identification_number": _pick_text(
             replacements, "professional_identification_number", "professional_rut"
-        ),
+        )
+        or str(ctx.get("professional_identification_number") or "").strip(),
         "professional_social_name": _pick_text(
             replacements, "professional_social_name", "professional_full_name", "professional_name"
-        ),
+        )
+        or str(ctx.get("professional_full_name") or ctx.get("professional_social_name") or "").strip(),
         "professional_role": _pick_text(
             replacements, "professional_role", "professional_job_position"
-        ),
-        "professional_phone": _pick_text(replacements, "professional_phone", "ph"),
-        "professional_email": _pick_text(replacements, "professional_email", "em"),
+        )
+        or str(ctx.get("professional_role") or ctx.get("professional_job_position") or "").strip(),
+        "professional_phone": _pick_text(replacements, "professional_phone", "ph")
+        or str(ctx.get("professional_phone") or "").strip(),
+        "professional_email": _pick_text(replacements, "professional_email", "em")
+        or str(ctx.get("professional_email") or "").strip(),
         "report_delivery_date": _parse_born_date_iso(
             _pick_text(
                 replacements,
@@ -120,19 +136,26 @@ def build_family_report_store_payload(
         ),
         "receiver_full_name": _pick_text(
             replacements, "receiver_full_name", "person_full_name", "person_name"
-        ),
+        )
+        or str(ctx.get("receiver_full_name") or ctx.get("person_full_name") or "").strip(),
         "receiver_identification_number": _pick_text(
             replacements, "person_identification_number", "receiver_identification_number"
-        ),
-        "receiver_social_name": _pick_text(replacements, "receiver_social_name", "person_social_name"),
-        "receiver_phone": _pick_text(replacements, "receiver_phone", "person_phone"),
-        "receiver_email": _pick_text(replacements, "receiver_email", "person_email"),
+        )
+        or str(ctx.get("receiver_identification_number") or ctx.get("person_identification_number") or "").strip(),
+        "receiver_social_name": _pick_text(replacements, "receiver_social_name", "person_social_name")
+        or str(ctx.get("receiver_social_name") or "").strip(),
+        "receiver_phone": _pick_text(replacements, "receiver_phone", "person_phone")
+        or str(ctx.get("receiver_phone") or ctx.get("person_phone") or "").strip(),
+        "receiver_email": _pick_text(replacements, "receiver_email", "person_email")
+        or str(ctx.get("receiver_email") or ctx.get("person_email") or "").strip(),
         "receiver_relationship": _pick_text(
             replacements, "receiver_relationship", "person_relation_student"
-        ),
+        )
+        or str(ctx.get("receiver_relationship") or ctx.get("person_relation_student") or "").strip(),
         "receiver_presence_of": _pick_text(
             replacements, "receiver_presence_of", "person_presence"
-        ),
+        )
+        or str(ctx.get("receiver_presence_of") or ctx.get("person_presence") or "").strip(),
         "evaluation_type": _normalize_evaluation_type(replacements, ctx),
         "evaluation_date": _parse_born_date_iso(_pick_text(replacements, "evaluation_date")),
         "applied_instruments": _pick_text(replacements, "applied_instruments"),

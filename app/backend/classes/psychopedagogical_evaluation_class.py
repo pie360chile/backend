@@ -138,6 +138,78 @@ def _scale_to_dict(row: PsychopedagogicalEvaluationScaleModel) -> dict:
     }
 
 
+def _iso_birth_date(born) -> str:
+    if not born:
+        return ""
+    if hasattr(born, "isoformat"):
+        return born.isoformat()[:10]
+    raw = str(born).strip()[:10]
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+        try:
+            return datetime.strptime(raw, fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    return ""
+
+
+def _attach_student_header(db: Session, data: dict) -> None:
+    """La ficha no guarda nacimiento, colegio ni curso. Se completan desde el estudiante."""
+    student_id = data.get("student_id")
+    if not student_id:
+        return
+    from app.backend.db.models.pie_core import (
+        CourseModel,
+        SchoolModel,
+        StudentAcademicInfoModel,
+        StudentModel,
+        StudentPersonalInfoModel,
+    )
+    from app.backend.utils.agents_familia_pie360 import _calc_age, _fmt_birth_date
+
+    personal = (
+        db.query(StudentPersonalInfoModel)
+        .filter(StudentPersonalInfoModel.student_id == int(student_id))
+        .first()
+    )
+    student = db.query(StudentModel).filter(StudentModel.id == int(student_id)).first()
+    academic = (
+        db.query(StudentAcademicInfoModel)
+        .filter(StudentAcademicInfoModel.student_id == int(student_id))
+        .order_by(StudentAcademicInfoModel.id.desc())
+        .first()
+    )
+    if personal:
+        full_name = " ".join(
+            part
+            for part in (
+                (personal.names or "").strip(),
+                (personal.father_lastname or "").strip(),
+                (personal.mother_lastname or "").strip(),
+            )
+            if part
+        )
+        if full_name and not str(data.get("identity_name") or "").strip():
+            data["identity_name"] = full_name
+        if not str(data.get("social_name") or "").strip() and (personal.social_name or "").strip():
+            data["social_name"] = (personal.social_name or "").strip()
+        if personal.born_date and not str(data.get("birth_date") or "").strip():
+            data["birth_date"] = _iso_birth_date(personal.born_date)
+        if not str(data.get("age") or "").strip() and personal.born_date:
+            data["age"] = _calc_age(personal.born_date)
+    if student and student.school_id and not str(data.get("establishment") or "").strip():
+        school = db.query(SchoolModel).filter(SchoolModel.id == student.school_id).first()
+        if school and (school.school_name or "").strip():
+            data["establishment"] = (school.school_name or "").strip()
+    if academic and academic.course_id and not str(data.get("course_level") or "").strip():
+        course = (
+            db.query(CourseModel)
+            .filter(CourseModel.deleted_status_id == 0, CourseModel.id == academic.course_id)
+            .first()
+        )
+        if course and (course.course_name or "").strip():
+            data["course_level"] = (course.course_name or "").strip()
+
+
 class PsychopedagogicalEvaluationClass:
     def __init__(self, db: Session):
         self.db = db
@@ -162,6 +234,7 @@ class PsychopedagogicalEvaluationClass:
                 return {"status": "error", "message": "Registro no encontrado.", "data": None}
             data = _info_to_dict(row)
             data["scales"] = self._get_scales(row.id)
+            _attach_student_header(self.db, data)
             return {"status": "success", "data": data}
         except Exception as e:
             return {"status": "error", "message": str(e), "data": None}
@@ -178,12 +251,14 @@ class PsychopedagogicalEvaluationClass:
                     return {"status": "success", "data": None}
                 data = _info_to_dict(row)
                 data["scales"] = self._get_scales(row.id)
+                _attach_student_header(self.db, data)
                 return {"status": "success", "data": data}
             rows = q.all()
             result = []
             for row in rows:
                 d = _info_to_dict(row)
                 d["scales"] = self._get_scales(row.id)
+                _attach_student_header(self.db, d)
                 result.append(d)
             return {"status": "success", "data": result}
         except Exception as e:

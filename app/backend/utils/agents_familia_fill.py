@@ -35,7 +35,17 @@ FAMILIA_CONTENT_CONTROL_ALIASES: dict[str, str] = {
     "ipe": "student_identification_number",
     "birth_date": "student_birth_date",
     "student_born_date": "student_birth_date",
+    "birth_day": "student_birth_date",
+    "born_date": "student_birth_date",
+    "fecha_de_nacimiento": "student_birth_date",
+    "fecha_nacimiento": "student_birth_date",
+    "social_name": "student_social_name",
+    "nombre_social": "student_social_name",
+    "nombre_social_del_estudiante": "student_social_name",
+    "nombre_social_estudiante": "student_social_name",
     "age": "student_age",
+    "edad": "student_age",
+    "edad_del_estudiante": "student_age",
     "course": "student_course",
     "school": "student_school",
     "professional_name": "professional_full_name",
@@ -123,6 +133,31 @@ def merge_familia_replacements(
         merged.setdefault(key, value)
 
     merged = merge_pie360_fallback_into_replacements(merged, student_ctx)
+    birth = str(merged.get("student_birth_date") or merged.get("student_born_date") or "").strip()
+    if birth:
+        for key in (
+            "student_birth_date",
+            "student_born_date",
+            "birth_day",
+            "birth_date",
+            "born_date",
+            "fecha_de_nacimiento",
+        ):
+            if not str(merged.get(key) or "").strip():
+                merged[key] = birth
+    social = str(merged.get("student_social_name") or student_ctx.get("student_social_name") or "").strip()
+    if social:
+        for key in (
+            "student_social_name",
+            "social_name",
+            "nombre_social",
+        ):
+            if not str(merged.get(key) or "").strip():
+                merged[key] = social
+    age = str(merged.get("student_age") or student_ctx.get("student_age") or "").strip()
+    if age and not str(merged.get("student_age") or "").strip():
+        merged["student_age"] = age
+        merged["age"] = age
     return apply_family_progress_dates(merged)
 
 

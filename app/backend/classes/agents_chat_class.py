@@ -153,6 +153,8 @@ _FAMILY_REVIEW_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
         "social_affective_support_needs",
         ("social_affective_support_needs", "support_needs_2"),
     ),
+    ("health_strengths", ("health_strengths", "strengths_3")),
+    ("health_support_needs", ("health_support_needs", "support_needs_3")),
     ("collaborative_work", ("collaborative_work",)),
     ("home_based_description", ("home_based_description", "home_support", "supports")),
     (

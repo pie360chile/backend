@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 FAMILIA_FORMTEXT_SLOTS: tuple[tuple[int, int, int, str], ...] = (
     (1, 3, 0, "student_full_name"),
     (1, 3, 3, "student_identification_number"),
+    (1, 5, 0, "student_social_name"),
     (1, 5, 3, "student_birth_date"),
     (2, 3, 0, "professional_full_name"),
     (2, 3, 4, "professional_identification_number"),

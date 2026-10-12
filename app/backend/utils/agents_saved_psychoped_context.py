@@ -46,13 +46,80 @@ _FIELDS: tuple[tuple[str, str], ...] = (
     ("suggestions_to_family", "Sugerencias a la familia"),
     ("other_suggestions", "Otras sugerencias"),
     ("professional_specialty", "Especialidad del profesional"),
+    ("social_name", "Nombre social"),
+    ("age", "Edad"),
 )
 
 
 def _text(value: Any) -> str:
     if value is None:
         return ""
+    if hasattr(value, "isoformat"):
+        return value.isoformat()[:10]
     return str(value).strip()
+
+
+def _join(*parts: str) -> str:
+    return "\n\n".join(part for part in parts if part)
+
+
+def _scale_rows(db: Session, evaluation_id: int):
+    from app.backend.db.models.pie_core import PsychopedagogicalEvaluationScaleModel
+
+    return (
+        db.query(PsychopedagogicalEvaluationScaleModel)
+        .filter(
+            PsychopedagogicalEvaluationScaleModel.psychopedagogical_evaluation_info_id
+            == int(evaluation_id)
+        )
+        .order_by(
+            PsychopedagogicalEvaluationScaleModel.scale_type,
+            PsychopedagogicalEvaluationScaleModel.indicator_number,
+        )
+        .all()
+    )
+
+
+def _scales_summary(rows: list[Any]) -> str:
+    pedagogical: list[str] = []
+    social: list[str] = []
+    for row in rows:
+        kind = str(getattr(row, "scale_type", "") or "").lower()
+        number = getattr(row, "indicator_number", None)
+        value = _text(getattr(row, "value", None))
+        if number is None or not value:
+            continue
+        item = f"{int(number)}={value}"
+        if "social" in kind or "comunica" in kind:
+            social.append(item)
+        else:
+            pedagogical.append(item)
+    lines: list[str] = []
+    if pedagogical:
+        lines.append("Escala pedagógica (indicador=valor): " + ", ".join(pedagogical))
+    if social:
+        lines.append("Escala social/comunicativa (indicador=valor): " + ", ".join(social))
+    return "\n".join(lines)
+
+
+def _quantitative_text(row: Any) -> str:
+    from app.backend.utils.psychoped_cognitive_quantitative import (
+        build_cognitive_quantitative_table_text,
+        parse_evalua_psychoped_matrices,
+    )
+
+    try:
+        parsed = parse_evalua_psychoped_matrices(
+            {
+                "cognitive_quantitative_matrix": getattr(row, "cognitive_quantitative_matrix", None),
+                "cognitive_general_scales": getattr(row, "cognitive_general_scales", None),
+            }
+        )
+    except (TypeError, ValueError):
+        return ""
+    if parsed is None:
+        return ""
+    return build_cognitive_quantitative_table_text(parsed)
 
 
 def _latest_period_folder(db: Session, student_id: int, period_year: int | None):
@@ -117,6 +184,7 @@ def family_fields_from_saved_psychoped(
     diagnosis = _text(getattr(row, "diagnosis", None))
     instruments = _text(getattr(row, "instruments_applied", None))
     conclusion = _text(getattr(row, "conclusion", None))
+    school_history = _text(getattr(row, "school_history_background", None))
     school = _text(getattr(row, "suggestions_to_school", None))
     classroom = _text(getattr(row, "suggestions_to_classroom_team", None))
     to_student = _text(getattr(row, "suggestions_to_student", None))
@@ -137,14 +205,20 @@ def family_fields_from_saved_psychoped(
         )
         if part
     )
+    motor = _join(
+        _text(getattr(row, "motor_analysis", None)),
+        _text(getattr(row, "motor_synthesis", None)),
+    )
+    other = _text(getattr(row, "other_suggestions", None))
     out: dict[str, str] = {}
     if diagnosis:
         out["diagnostic"] = diagnosis
         out["diagnosis"] = diagnosis
     if instruments:
         out["applied_instruments"] = instruments
-    if conclusion:
-        out["evaluation_reason"] = conclusion
+    reason = _join(school_history, conclusion)
+    if reason:
+        out["evaluation_reason"] = reason
     if cognitive:
         out["pedagogical_strengths"] = cognitive
         out["strengths_1"] = cognitive
@@ -153,6 +227,8 @@ def family_fields_from_saved_psychoped(
         out["strengths_1"] = conclusion
     if personal:
         out["social_affective_strengths"] = personal
+        out["strengths_2"] = personal
+        out["social_field_1"] = personal
     school_block = "\n\n".join(part for part in (school, classroom, to_student) if part)
     if school_block:
         out["collaborative_work"] = school_block
@@ -167,6 +243,15 @@ def family_fields_from_saved_psychoped(
         out["supports"] = to_family
         out["social_affective_support_needs"] = to_family
         out["support_needs_2"] = to_family
+    if motor:
+        out["health_strengths"] = motor
+        out["strengths_3"] = motor
+    if other:
+        out["health_support_needs"] = other
+        out["support_needs_3"] = other
+    elif motor:
+        out["health_support_needs"] = motor
+        out["support_needs_3"] = motor
     return out
 
 
@@ -178,6 +263,82 @@ def apply_saved_psychoped_to_family_replacements(
 ) -> dict[str, str]:
     """Rellena los huecos del informe a la familia con el psicopedagógico del período."""
     saved = family_fields_from_saved_psychoped(db, int(student_id), period_year)
+    for key, value in saved.items():
+        if value and not str(replacements.get(key) or "").strip():
+            replacements[key] = value
+    return replacements
+
+
+def apply_saved_psychoped_to_report_replacements(
+    db: Session,
+    student_id: int,
+    replacements: dict[str, str],
+    period_year: int | None = None,
+) -> dict[str, str]:
+    """Completa el Word del psicopedagógico con lo que ya está en la ficha."""
+    row = _latest_psychoped_row(db, int(student_id), period_year)
+    if row is None:
+        return replacements
+    saved: dict[str, str] = {}
+    for key in (
+        "instruments_applied",
+        "school_history_background",
+        "cognitive_analysis",
+        "personal_analysis",
+        "motor_analysis",
+        "cognitive_synthesis",
+        "personal_synthesis",
+        "motor_synthesis",
+        "conclusion",
+        "suggestions_to_school",
+        "suggestions_to_classroom_team",
+        "suggestions_to_student",
+        "suggestions_to_family",
+        "other_suggestions",
+        "professional_specialty",
+        "professional_identification_number",
+        "professional_registration_number",
+        "admission_type",
+        "admission_type_other",
+    ):
+        text = _text(getattr(row, key, None))
+        if text:
+            saved[key] = text
+    social_name = _text(getattr(row, "social_name", None))
+    age = _text(getattr(row, "age", None))
+    diagnosis = _text(getattr(row, "diagnosis", None))
+    if social_name:
+        saved["social_name"] = social_name
+        saved["student_social_name"] = social_name
+    if age:
+        saved["age"] = age
+        saved["student_age"] = age
+    if diagnosis:
+        saved["diagnosis"] = diagnosis
+        saved["diagnostic"] = diagnosis
+    evaluation_date = _text(getattr(row, "evaluation_date", None))
+    issue_date = _text(getattr(row, "diagnosis_issue_date", None))
+    if evaluation_date:
+        saved["evaluation_date"] = evaluation_date
+    if issue_date:
+        saved["issue_date"] = issue_date
+        saved["diagnosis_issue_date"] = issue_date
+    quantitative = _quantitative_text(row)
+    if quantitative:
+        saved["ac"] = quantitative
+    for scale in _scale_rows(db, int(row.id)):
+        number = getattr(scale, "indicator_number", None)
+        value = _text(getattr(scale, "value", None))
+        if number is None or not value:
+            continue
+        n = int(number)
+        if n < 1 or n > 10:
+            continue
+        kind = str(getattr(scale, "scale_type", "") or "").lower()
+        if "social" in kind or "comunica" in kind:
+            saved[f"social_communicative_scale_{n}"] = value
+        else:
+            saved[f"pedagogical_scale_{n}"] = value
     for key, value in saved.items():
         if value and not str(replacements.get(key) or "").strip():
             replacements[key] = value
@@ -224,6 +385,12 @@ def build_saved_psychoped_context(
         text = _text(getattr(row, key, None))
         if text:
             lines.append(f"- {label}: {text}")
+    quantitative = _quantitative_text(row)
+    if quantitative:
+        lines.append(f"- Cuadro cuantitativo y escalas generales:\n{quantitative}")
+    scales = _scales_summary(_scale_rows(db, int(row.id)))
+    if scales:
+        lines.append(f"- {scales}")
 
     who = (student_name or "").strip() or (student_rut or "").strip() or f"student_id={int(student_id)}"
     updated = getattr(row, "updated_at", None) or getattr(row, "created_at", None)
