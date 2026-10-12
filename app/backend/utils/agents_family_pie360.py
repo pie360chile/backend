@@ -21,11 +21,11 @@ from app.backend.db.models.pie_core import (
 )
 from app.backend.utils.professional_display import professional_display_fields
 
-FAMILIA_DOCUMENT_ID = 7
+FAMILY_DOCUMENT_ID = 7
 
 
-def is_familia_document(document_id: int | None) -> bool:
-    return document_id is not None and int(document_id) == FAMILIA_DOCUMENT_ID
+def is_family_document(document_id: int | None) -> bool:
+    return document_id is not None and int(document_id) == FAMILY_DOCUMENT_ID
 
 
 def _calc_age(born: Any) -> str:
@@ -179,7 +179,7 @@ def _family_report_snapshot(db: Session, student_id: int) -> dict[str, str]:
     return out
 
 
-def build_familia_pie360_context(db: Session, student_id: int) -> dict[str, Any]:
+def build_family_pie360_context(db: Session, student_id: int) -> dict[str, Any]:
     """
     Datos de ficha PIE360 para Informe Familia.
     Orden de respaldo: estudiante → apoderado (student_guardians) → profesional (students_professionals / curso).
@@ -282,7 +282,7 @@ def build_familia_pie360_context(db: Session, student_id: int) -> dict[str, Any]
 
 
 # Clave plantilla → claves alternativas en contexto PIE360
-_FAMILIA_PIE360_FALLBACK: dict[str, tuple[str, ...]] = {
+_FAMILY_PIE360_FALLBACK: dict[str, tuple[str, ...]] = {
     "student_full_name": ("student_full_name", "student_fullname"),
     "student_social_name": ("student_social_name", "social_name"),
     "social_name": ("social_name", "student_social_name"),
@@ -334,7 +334,7 @@ def merge_pie360_fallback_into_replacements(
 ) -> dict[str, str]:
     """Archivos/LLM primero; PIE360 solo completa campos vacíos."""
     out = dict(merged)
-    for target_key, sources in _FAMILIA_PIE360_FALLBACK.items():
+    for target_key, sources in _FAMILY_PIE360_FALLBACK.items():
         if (out.get(target_key) or "").strip():
             continue
         for src in sources:
@@ -345,7 +345,7 @@ def merge_pie360_fallback_into_replacements(
     return out
 
 
-def familia_pie360_hint_lines(pie360_ctx: dict[str, Any]) -> list[str]:
+def family_pie360_hint_lines(pie360_ctx: dict[str, Any]) -> list[str]:
     """Líneas breves para el system prompt del chat (solo informe familia)."""
     lines: list[str] = []
     if (pie360_ctx.get("person_full_name") or pie360_ctx.get("receiver_full_name") or "").strip():

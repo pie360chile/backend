@@ -164,7 +164,7 @@ def _attach_student_header(db: Session, data: dict) -> None:
         StudentModel,
         StudentPersonalInfoModel,
     )
-    from app.backend.utils.agents_familia_pie360 import _calc_age, _fmt_birth_date
+    from app.backend.utils.agents_family_pie360 import _calc_age, _fmt_birth_date
 
     personal = (
         db.query(StudentPersonalInfoModel)

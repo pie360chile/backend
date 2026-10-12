@@ -9,10 +9,10 @@ from sqlalchemy.orm import Session
 
 from app.backend.db.models.agents_documents import AgentDocumentTemplateModel
 from app.backend.db.models.pie_core import SchoolModel, StudentModel, StudentPersonalInfoModel
-from app.backend.utils.agents_familia_pie360 import (
-    FAMILIA_DOCUMENT_ID,
-    build_familia_pie360_context,
-    familia_pie360_hint_lines,
+from app.backend.utils.agents_family_pie360 import (
+    FAMILY_DOCUMENT_ID,
+    build_family_pie360_context,
+    family_pie360_hint_lines,
 )
 
 _RUT_RE = re.compile(
@@ -568,7 +568,7 @@ def infer_document_id(
     if any(h in blob for h in _FAMILY_HINTS) or ("familia" in blob and "informe" in blob):
         for row in rows:
             name = (row.document_name or "").lower()
-            if "familia" in name or int(row.document_id) == FAMILIA_DOCUMENT_ID:
+            if "familia" in name or int(row.document_id) == FAMILY_DOCUMENT_ID:
                 return int(row.document_id)
     if any(h in blob for h in _PSICOPED_HINTS):
         for row in rows:
@@ -633,7 +633,7 @@ def student_identification_hint(
     if rut:
         parts.append(f"RUT/IPE: {rut}")
 
-    pie = build_familia_pie360_context(db, student_id)
+    pie = build_family_pie360_context(db, student_id)
     school = (pie.get("student_school") or "").strip()
     course = (pie.get("student_course") or "").strip()
     age = (pie.get("student_age") or "").strip()
@@ -653,7 +653,7 @@ def student_identification_hint(
             parts.append(f"NEE (PIE360): {nee}")
     except Exception:
         pass
-    parts.extend(familia_pie360_hint_lines(pie))
+    parts.extend(family_pie360_hint_lines(pie))
     parts.append(
         "DATOS DEL SISTEMA PIE360: si el cuestionario o Files no traen identificación, "
         "curso, establecimiento, NEE, profesional o apoderado, usa estos datos "

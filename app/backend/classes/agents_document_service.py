@@ -13,10 +13,10 @@ from app.backend.classes.documents_class import DocumentsClass
 from app.backend.classes.student_document_file_class import FolderClass
 from app.backend.core.config import settings
 from app.backend.db.models.agents_documents import AgentDocumentTemplateModel
-from app.backend.utils.agents_familia_pie360 import (
-    FAMILIA_DOCUMENT_ID,
-    build_familia_pie360_context,
-    is_familia_document,
+from app.backend.utils.agents_family_pie360 import (
+    FAMILY_DOCUMENT_ID,
+    build_family_pie360_context,
+    is_family_document,
     merge_pie360_fallback_into_replacements,
 )
 from app.backend.utils import agents_storage as storage
@@ -35,7 +35,7 @@ from app.backend.utils.agents_psychoped_report_store import (
     persist_psychoped_from_agent,
 )
 
-_FAMILIA_DOCUMENT_ID = FAMILIA_DOCUMENT_ID
+_FAMILY_DOCUMENT_ID = FAMILY_DOCUMENT_ID
 _WORD_PLACEHOLDERS = (
     "Haz clic o pulse aquí para escribir texto.",
     "Click or tap here to enter text.",
@@ -43,8 +43,8 @@ _WORD_PLACEHOLDERS = (
 
 
 def _student_context(db: Session, student_id: int, document_id: int | None = None) -> dict[str, Any]:
-    if is_familia_document(document_id):
-        return build_familia_pie360_context(db, student_id)
+    if is_family_document(document_id):
+        return build_family_pie360_context(db, student_id)
     return _basic_student_context(db, student_id)
 
 
@@ -58,7 +58,7 @@ def _basic_student_context(db: Session, student_id: int) -> dict[str, Any]:
         StudentPersonalInfoModel,
         StudentProfessionalModel,
     )
-    from app.backend.utils.agents_familia_pie360 import (
+    from app.backend.utils.agents_family_pie360 import (
         _calc_age,
         _fmt_birth_date,
         _professional_from_id,
@@ -231,7 +231,7 @@ def generate_and_save_document(
         pass
 
     student_ctx = _student_context(db, student_id, int(template.document_id))
-    if is_familia_document(int(template.document_id)):
+    if is_family_document(int(template.document_id)):
         from app.backend.utils.agents_familia_fill import apply_family_progress_dates
 
         from app.backend.utils.agents_saved_psychoped_context import (
@@ -267,7 +267,7 @@ def generate_and_save_document(
     output_path = output_dir / filename
 
     if ext == "docx":
-        if int(template.document_id) == _FAMILIA_DOCUMENT_ID:
+        if int(template.document_id) == _FAMILY_DOCUMENT_ID:
             result = fill_familia_template(
                 template_abs,
                 output_path,
@@ -331,7 +331,7 @@ def generate_and_save_document(
 
     family_report_id: int | None = None
     psychoped_evaluation_id: int | None = None
-    if int(template.document_id) == _FAMILIA_DOCUMENT_ID:
+    if int(template.document_id) == _FAMILY_DOCUMENT_ID:
         fr_result = persist_family_report_from_agent(
             db,
             student_id,
