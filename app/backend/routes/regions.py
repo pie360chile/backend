@@ -14,7 +14,7 @@ regions = APIRouter(prefix="/regions", tags=["Regions"])
 @regions.get("/endpoint/list")
 def endpoint_list(session_user: UserLogin = Depends(get_current_active_user)):
     """
-    Catálogo remoto de provincias desde Inspection API (compat: mismo payload que `fetch_provinces_list`).
+    Catálogo remoto de regiones desde Inspection API (`listado/regiones`).
     """
     client = InspectionApiClient()
     if not client.is_configured():

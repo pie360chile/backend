@@ -93,7 +93,7 @@ class Settings:
     database_url: str = field(
         default_factory=lambda: os.getenv(
             "DATABASE_URL",
-            "mysql+pymysql://admin:pie360chile@103.138.188.160:3306/pie360",
+            "",  # Definir en backend/.env (ver .env.example)
         )
     )
     secret_key: str = field(

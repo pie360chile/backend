@@ -285,8 +285,8 @@ class InspectionApiClient:
         return self._get_with_bearer(path)
 
     def fetch_regions_list(self) -> Dict[str, Any]:
-        """Alias: mismo catálogo que provincias (compatibilidad con rutas `/regions/endpoint/list`)."""
-        return self.fetch_provinces_list()
+        """GET listado/regiones. Las provincias van en `fetch_provinces_list`."""
+        return self.fetch_regiones_list()
 
     def fetch_provinces_list(self) -> Dict[str, Any]:
         """GET listado/provincias — catálogo remoto de provincias."""
