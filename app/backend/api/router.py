@@ -141,6 +141,7 @@ from app.backend.routes.workspace_agent import workspace_agent
 from app.backend.routes.agents import agents
 from app.backend.routes.document_format_models import document_format_models
 from app.backend.routes.evaluation_area_templates import evaluation_area_templates
+from app.backend.routes.web_pages import web_pages
 
 
 def register_routers(app: FastAPI) -> None:
@@ -179,6 +180,7 @@ def register_routers(app: FastAPI) -> None:
         videos,
         career_types,
         faqs,
+        web_pages,
         contacts,
         student_document_files,
         folders,

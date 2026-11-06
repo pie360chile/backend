@@ -1,0 +1,219 @@
+{
+  "merged": {
+    "student_full_name": "Dafnika Sant-Fort Albert",
+    "interview_reason": "Ingreso al Programa PIE, 2026",
+    "diagnosis_has": 2,
+    "native_language": "Español",
+    "native_language_domain": [
+      "understand",
+      "speak"
+    ],
+    "language_used": "Español",
+    "language_used_domain": [
+      "understand",
+      "speak"
+    ],
+    "notes": "Solo se visualizan las secciones 5.3 Visión-Audición, 5.4 Desarrollo del Lenguaje y 5.5 Desarrollo Social. Observaciones manuscritas: 'Sin antecedentes'. No se visualizan datos de identificación, diagnóstico, salud general, familia ni desarrollo psicomotor."
+  },
+  "total_usage": {
+    "prompt_tokens": 16065,
+    "completion_tokens": 17881,
+    "total_tokens": 33946,
+    "prompt_cache_hit_tokens": 2048,
+    "prompt_cache_miss_tokens": 14017
+  },
+  "pages": [
+    {
+      "page": 1,
+      "raw": "{\n  \"student_full_name\": \"Dafnika Sant-Fort Albert\",\n  \"interview_reason\": \"Ingreso al Programa PIE, 2026\",\n  \"diagnosis_has\": 2,\n  \"diagnosis_detail\": null,\n  \"sm_head_control\": null,\n  \"sm_sits_alone\": null,\n  \"sm_walks_without_support\": null,\n  \"sm_first_words\": null,\n  \"sm_first_phrases\": null,\n  \"sm_dresses_alone\": null,\n  \"sm_bladder_day\": null,\n  \"sm_bladder_night\": null,\n  \"sm_bowel_day\": null,\n  \"sm_bowel_night\": null,\n  \"health_vaccines_up_to_date\": null,\n  \"health_epilepsy\": null,\n  \"health_heart_problems\": null,\n  \"health_paraplegia\": null,\n  \"health_hearing_loss\": null,\n  \"health_vision_loss\": null,\n  \"health_motor_disorder\": null,\n  \"health_bronchorespiratory\": null,\n  \"health_infectious_disease\": null,\n  \"health_emotional_disorder\": null,\n  \"health_behavioral_disorder\": null,\n  \"health_other_specify\": null,\n  \"health_problems_treatment\": null,\n  \"health_diet\": null,\n  \"health_weight\": null,\n  \"health_sleep_pattern\": null,\n  \"health_sleep_hours\": null,\n  \"health_sleeps_alone\": null,\n  \"health_mood_behavior\": null,\n  \"health_current_observations\": null,\n  \"family_health_history\": null,\n  \"household_members\": [],\n  \"native_language\": \"Español\",\n  \"native_language_domain\": [\n    \"understand\",\n    \"speak\"\n  ],\n  \"language_used\": \"Español\",\n  \"language_used_domain\": [\n    \"understand\",\n    \"speak\"\n  ],\n  \"notes\": null\n}",
+      "parsed": {
+        "student_full_name": "Dafnika Sant-Fort Albert",
+        "interview_reason": "Ingreso al Programa PIE, 2026",
+        "diagnosis_has": 2,
+        "diagnosis_detail": null,
+        "sm_head_control": null,
+        "sm_sits_alone": null,
+        "sm_walks_without_support": null,
+        "sm_first_words": null,
+        "sm_first_phrases": null,
+        "sm_dresses_alone": null,
+        "sm_bladder_day": null,
+        "sm_bladder_night": null,
+        "sm_bowel_day": null,
+        "sm_bowel_night": null,
+        "health_vaccines_up_to_date": null,
+        "health_epilepsy": null,
+        "health_heart_problems": null,
+        "health_paraplegia": null,
+        "health_hearing_loss": null,
+        "health_vision_loss": null,
+        "health_motor_disorder": null,
+        "health_bronchorespiratory": null,
+        "health_infectious_disease": null,
+        "health_emotional_disorder": null,
+        "health_behavioral_disorder": null,
+        "health_other_specify": null,
+        "health_problems_treatment": null,
+        "health_diet": null,
+        "health_weight": null,
+        "health_sleep_pattern": null,
+        "health_sleep_hours": null,
+        "health_sleeps_alone": null,
+        "health_mood_behavior": null,
+        "health_current_observations": null,
+        "family_health_history": null,
+        "household_members": [],
+        "native_language": "Español",
+        "native_language_domain": [
+          "understand",
+          "speak"
+        ],
+        "language_used": "Español",
+        "language_used_domain": [
+          "understand",
+          "speak"
+        ],
+        "notes": null
+      },
+      "usage": {
+        "prompt_tokens": 3213,
+        "completion_tokens": 2498,
+        "total_tokens": 5711,
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 3213
+      }
+    },
+    {
+      "page": 2,
+      "raw": "",
+      "parsed": {},
+      "usage": {
+        "prompt_tokens": 3213,
+        "completion_tokens": 4096,
+        "total_tokens": 7309,
+        "prompt_cache_hit_tokens": 512,
+        "prompt_cache_miss_tokens": 2701
+      }
+    },
+    {
+      "page": 3,
+      "raw": "{\n  \"student_full_name\": null,\n  \"interview_reason\": null,\n  \"diagnosis_has\": null,\n  \"diagnosis_detail\": null,\n  \"sm_head_control\": null,\n  \"sm_sits_alone\": null,\n  \"sm_walks_without_support\": null,\n  \"sm_first_words\": null,\n  \"sm_first_phrases\": null,\n  \"sm_dresses_alone\": null,\n  \"sm_bladder_day\": null,\n  \"sm_bladder_night\": null,\n  \"sm_bowel_day\": null,\n  \"sm_bowel_night\": null,\n  \"health_vaccines_up_to_date\": null,\n  \"health_epilepsy\": null,\n  \"health_heart_problems\": null,\n  \"health_paraplegia\": null,\n  \"health_hearing_loss\": null,\n  \"health_vision_loss\": null,\n  \"health_motor_disorder\": null,\n  \"health_bronchorespiratory\": null,\n  \"health_infectious_disease\": null,\n  \"health_emotional_disorder\": null,\n  \"health_behavioral_disorder\": null,\n  \"health_other_specify\": null,\n  \"health_problems_treatment\": null,\n  \"health_diet\": null,\n  \"health_weight\": null,\n  \"health_sleep_pattern\": null,\n  \"health_sleep_hours\": null,\n  \"health_sleeps_alone\": null,\n  \"health_mood_behavior\": null,\n  \"health_current_observations\": null,\n  \"family_health_history\": null,\n  \"household_members\": [],\n  \"native_language\": null,\n  \"native_language_domain\": [],\n  \"language_used\": null,\n  \"language_used_domain\": [],\n  \"notes\": \"Solo se visualizan las secciones 5.3 Visión-Audición, 5.4 Desarrollo del Lenguaje y 5.5 Desarrollo Social. Observaciones manuscritas: 'Sin antecedentes'. No se visualizan datos de identificación, diagnóstico, salud general, familia ni desarrollo psicomotor.\"\n}",
+      "parsed": {
+        "student_full_name": null,
+        "interview_reason": null,
+        "diagnosis_has": null,
+        "diagnosis_detail": null,
+        "sm_head_control": null,
+        "sm_sits_alone": null,
+        "sm_walks_without_support": null,
+        "sm_first_words": null,
+        "sm_first_phrases": null,
+        "sm_dresses_alone": null,
+        "sm_bladder_day": null,
+        "sm_bladder_night": null,
+        "sm_bowel_day": null,
+        "sm_bowel_night": null,
+        "health_vaccines_up_to_date": null,
+        "health_epilepsy": null,
+        "health_heart_problems": null,
+        "health_paraplegia": null,
+        "health_hearing_loss": null,
+        "health_vision_loss": null,
+        "health_motor_disorder": null,
+        "health_bronchorespiratory": null,
+        "health_infectious_disease": null,
+        "health_emotional_disorder": null,
+        "health_behavioral_disorder": null,
+        "health_other_specify": null,
+        "health_problems_treatment": null,
+        "health_diet": null,
+        "health_weight": null,
+        "health_sleep_pattern": null,
+        "health_sleep_hours": null,
+        "health_sleeps_alone": null,
+        "health_mood_behavior": null,
+        "health_current_observations": null,
+        "family_health_history": null,
+        "household_members": [],
+        "native_language": null,
+        "native_language_domain": [],
+        "language_used": null,
+        "language_used_domain": [],
+        "notes": "Solo se visualizan las secciones 5.3 Visión-Audición, 5.4 Desarrollo del Lenguaje y 5.5 Desarrollo Social. Observaciones manuscritas: 'Sin antecedentes'. No se visualizan datos de identificación, diagnóstico, salud general, familia ni desarrollo psicomotor."
+      },
+      "usage": {
+        "prompt_tokens": 3213,
+        "completion_tokens": 3586,
+        "total_tokens": 6799,
+        "prompt_cache_hit_tokens": 512,
+        "prompt_cache_miss_tokens": 2701
+      }
+    },
+    {
+      "page": 4,
+      "raw": "",
+      "parsed": {},
+      "usage": {
+        "prompt_tokens": 3213,
+        "completion_tokens": 4096,
+        "total_tokens": 7309,
+        "prompt_cache_hit_tokens": 512,
+        "prompt_cache_miss_tokens": 2701
+      }
+    },
+    {
+      "page": 5,
+      "raw": "{\n  \"student_full_name\": null,\n  \"interview_reason\": null,\n  \"diagnosis_has\": null,\n  \"diagnosis_detail\": null,\n  \"sm_head_control\": null,\n  \"sm_sits_alone\": null,\n  \"sm_walks_without_support\": null,\n  \"sm_first_words\": null,\n  \"sm_first_phrases\": null,\n  \"sm_dresses_alone\": null,\n  \"sm_bladder_day\": null,\n  \"sm_bladder_night\": null,\n  \"sm_bowel_day\": null,\n  \"sm_bowel_night\": null,\n  \"health_vaccines_up_to_date\": null,\n  \"health_epilepsy\": null,\n  \"health_heart_problems\": null,\n  \"health_paraplegia\": null,\n  \"health_hearing_loss\": null,\n  \"health_vision_loss\": null,\n  \"health_motor_disorder\": null,\n  \"health_bronchorespiratory\": null,\n  \"health_infectious_disease\": null,\n  \"health_emotional_disorder\": null,\n  \"health_behavioral_disorder\": null,\n  \"health_other_specify\": null,\n  \"health_problems_treatment\": null,\n  \"health_diet\": null,\n  \"health_weight\": null,\n  \"health_sleep_pattern\": null,\n  \"health_sleep_hours\": null,\n  \"health_sleeps_alone\": null,\n  \"health_mood_behavior\": null,\n  \"health_current_observations\": null,\n  \"family_health_history\": null,\n  \"household_members\": [],\n  \"native_language\": null,\n  \"native_language_domain\": [],\n  \"language_used\": null,\n  \"language_used_domain\": [],\n  \"notes\": \"Sin antecedentes.\"\n}",
+      "parsed": {
+        "student_full_name": null,
+        "interview_reason": null,
+        "diagnosis_has": null,
+        "diagnosis_detail": null,
+        "sm_head_control": null,
+        "sm_sits_alone": null,
+        "sm_walks_without_support": null,
+        "sm_first_words": null,
+        "sm_first_phrases": null,
+        "sm_dresses_alone": null,
+        "sm_bladder_day": null,
+        "sm_bladder_night": null,
+        "sm_bowel_day": null,
+        "sm_bowel_night": null,
+        "health_vaccines_up_to_date": null,
+        "health_epilepsy": null,
+        "health_heart_problems": null,
+        "health_paraplegia": null,
+        "health_hearing_loss": null,
+        "health_vision_loss": null,
+        "health_motor_disorder": null,
+        "health_bronchorespiratory": null,
+        "health_infectious_disease": null,
+        "health_emotional_disorder": null,
+        "health_behavioral_disorder": null,
+        "health_other_specify": null,
+        "health_problems_treatment": null,
+        "health_diet": null,
+        "health_weight": null,
+        "health_sleep_pattern": null,
+        "health_sleep_hours": null,
+        "health_sleeps_alone": null,
+        "health_mood_behavior": null,
+        "health_current_observations": null,
+        "family_health_history": null,
+        "household_members": [],
+        "native_language": null,
+        "native_language_domain": [],
+        "language_used": null,
+        "language_used_domain": [],
+        "notes": "Sin antecedentes."
+      },
+      "usage": {
+        "prompt_tokens": 3213,
+        "completion_tokens": 3605,
+        "total_tokens": 6818,
+        "prompt_cache_hit_tokens": 512,
+        "prompt_cache_miss_tokens": 2701
+      }
+    }
+  ]
+}

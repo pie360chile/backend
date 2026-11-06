@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.backend.classes.whatsapp_meta_class import notify_guardians_for_form
 from app.backend.db.models import (
+    CourseModel,
     DynamicFormModel,
     DynamicFormSubmissionModel,
     StudentGuardianModel,
@@ -28,7 +29,7 @@ def _iso_dt(v) -> str:
     return str(v)
 
 
-def _row_to_api(row: DynamicFormModel) -> dict:
+def _row_to_api(row: DynamicFormModel, course_name: Optional[str] = None) -> dict:
     try:
         fields = json.loads(row.fields_json) if row.fields_json else []
         if not isinstance(fields, list):
@@ -41,6 +42,7 @@ def _row_to_api(row: DynamicFormModel) -> dict:
         "description": (row.description or "").strip(),
         "fields": fields,
         "courseId": row.course_id,
+        "courseName": (course_name or "").strip() or None,
         "respondentTypeId": getattr(row, "respondent_type_id", None),
         "periodYear": row.period_year,
         "createdAt": _iso_dt(row.added_date),
@@ -59,6 +61,21 @@ class DynamicFormClass:
         if period_year is not None:
             q = q.filter(DynamicFormModel.period_year == period_year)
         return q
+
+    def _course_names_map(self, course_ids: set) -> dict:
+        ids = {int(c) for c in course_ids if c is not None}
+        if not ids:
+            return {}
+        rows = (
+            self.db.query(CourseModel.id, CourseModel.course_name)
+            .filter(CourseModel.id.in_(ids))
+            .all()
+        )
+        return {int(cid): (cname or "").strip() for cid, cname in rows}
+
+    def _rows_to_api(self, rows: List[DynamicFormModel]) -> List[dict]:
+        names = self._course_names_map({r.course_id for r in rows})
+        return [_row_to_api(r, names.get(int(r.course_id) if r.course_id else 0)) for r in rows]
 
     def _guardian_cell(self, student_id: int) -> Optional[str]:
         g = (
@@ -260,7 +277,7 @@ class DynamicFormClass:
                         "data": [],
                     }
                 rows = query.offset((page - 1) * items_per_page).limit(items_per_page).all()
-                data = [_row_to_api(r) for r in rows]
+                data = self._rows_to_api(rows)
                 return {
                     "total_items": total_items,
                     "total_pages": total_pages,
@@ -269,7 +286,7 @@ class DynamicFormClass:
                     "data": data,
                 }
             rows = query.all()
-            return [_row_to_api(r) for r in rows]
+            return self._rows_to_api(rows)
         except Exception as e:
             return {"status": "error", "message": str(e), "data": []}
 
@@ -286,7 +303,9 @@ class DynamicFormClass:
             row = q.first()
             if not row:
                 return {"status": "error", "message": "Registro no encontrado.", "data": None}
-            return {"status": "success", "data": _row_to_api(row)}
+            names = self._course_names_map({row.course_id} if row.course_id else set())
+            cname = names.get(int(row.course_id)) if row.course_id else None
+            return {"status": "success", "data": _row_to_api(row, cname)}
         except Exception as e:
             return {"status": "error", "message": str(e), "data": None}
 

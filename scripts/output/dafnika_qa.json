@@ -1,0 +1,1502 @@
+[
+ {
+  "pregunta": "Nombre",
+  "respuesta": "Dafnika Saint-Fort Albert",
+  "estado": "TRANSCRITO",
+  "seccion": "1. Identificación del estudiante"
+ },
+ {
+  "pregunta": "Sexo",
+  "respuesta": "F",
+  "estado": "TRANSCRITO",
+  "seccion": "1. Identificación del estudiante"
+ },
+ {
+  "pregunta": "Fecha Nacimiento",
+  "respuesta": "22/julio/2018",
+  "estado": "TRANSCRITO",
+  "seccion": "1. Identificación del estudiante"
+ },
+ {
+  "pregunta": "Edad actual - años",
+  "respuesta": "7",
+  "estado": "TRANSCRITO",
+  "seccion": "1. Identificación del estudiante"
+ },
+ {
+  "pregunta": "Edad actual - meses",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "1. Identificación del estudiante"
+ },
+ {
+  "pregunta": "País natal",
+  "respuesta": "Chilena",
+  "estado": "TRANSCRITO",
+  "seccion": "1. Identificación del estudiante"
+ },
+ {
+  "pregunta": "Domicilio actual",
+  "respuesta": "Villa Las Acacias pje. Juan 23 #125",
+  "estado": "TRANSCRITO",
+  "seccion": "1. Identificación del estudiante"
+ },
+ {
+  "pregunta": "Teléfono",
+  "respuesta": "961823388",
+  "estado": "TRANSCRITO",
+  "seccion": "1. Identificación del estudiante"
+ },
+ {
+  "pregunta": "Lengua materna",
+  "respuesta": "Español",
+  "estado": "TRANSCRITO",
+  "seccion": "1. Identificación del estudiante"
+ },
+ {
+  "pregunta": "Lengua materna - grado de dominio",
+  "respuesta": "Comprende; habla",
+  "estado": "TRANSCRITO",
+  "seccion": "1. Identificación del estudiante"
+ },
+ {
+  "pregunta": "Lengua de uso",
+  "respuesta": "Español",
+  "estado": "TRANSCRITO",
+  "seccion": "1. Identificación del estudiante"
+ },
+ {
+  "pregunta": "Lengua de uso - grado de dominio",
+  "respuesta": "Comprende; habla",
+  "estado": "TRANSCRITO",
+  "seccion": "1. Identificación del estudiante"
+ },
+ {
+  "pregunta": "Escolaridad actual",
+  "respuesta": "2do.",
+  "estado": "TRANSCRITO",
+  "seccion": "1. Identificación del estudiante"
+ },
+ {
+  "pregunta": "Establecimiento",
+  "respuesta": "Liceo mixto Básica San Felipe",
+  "estado": "TRANSCRITO",
+  "seccion": "1. Identificación del estudiante"
+ },
+ {
+  "pregunta": "Informante 1 - Fecha de la entrevista",
+  "respuesta": "16/03/2026",
+  "estado": "TRANSCRITO",
+  "seccion": "2. Identificación del o los informantes"
+ },
+ {
+  "pregunta": "Informante 1 - Nombre",
+  "respuesta": null,
+  "estado": "REVISAR",
+  "seccion": "2. Identificación del o los informantes"
+ },
+ {
+  "pregunta": "Informante 1 - Relación con el/la estudiante",
+  "respuesta": "Tía",
+  "estado": "TRANSCRITO",
+  "seccion": "2. Identificación del o los informantes"
+ },
+ {
+  "pregunta": "Informante 1 - En presencia de (miembro de la familia, intérprete, otro/a)",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "2. Identificación del o los informantes"
+ },
+ {
+  "pregunta": "Informante 2 - Fecha de la entrevista",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "2. Identificación del o los informantes"
+ },
+ {
+  "pregunta": "Informante 2 - Nombre",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "2. Identificación del o los informantes"
+ },
+ {
+  "pregunta": "Informante 2 - Relación con el/la estudiante",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "2. Identificación del o los informantes"
+ },
+ {
+  "pregunta": "Informante 2 - En presencia de (miembro de la familia, intérprete, otro/a)",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "2. Identificación del o los informantes"
+ },
+ {
+  "pregunta": "Informante 3 - Fecha de la entrevista",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "2. Identificación del o los informantes"
+ },
+ {
+  "pregunta": "Informante 3 - Nombre",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "2. Identificación del o los informantes"
+ },
+ {
+  "pregunta": "Informante 3 - Relación con el/la estudiante",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "2. Identificación del o los informantes"
+ },
+ {
+  "pregunta": "Informante 3 - En presencia de (miembro de la familia, intérprete, otro/a)",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "2. Identificación del o los informantes"
+ },
+ {
+  "pregunta": "Informante 4 - Fecha de la entrevista",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "2. Identificación del o los informantes"
+ },
+ {
+  "pregunta": "Informante 4 - Nombre",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "2. Identificación del o los informantes"
+ },
+ {
+  "pregunta": "Informante 4 - Relación con el/la estudiante",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "2. Identificación del o los informantes"
+ },
+ {
+  "pregunta": "Informante 4 - En presencia de (miembro de la familia, intérprete, otro/a)",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "2. Identificación del o los informantes"
+ },
+ {
+  "pregunta": "Entrevistador 1 - Fecha de la entrevista",
+  "respuesta": "16/03/2026",
+  "estado": "TRANSCRITO",
+  "seccion": "3. Identificación del o los entrevistadores"
+ },
+ {
+  "pregunta": "Entrevistador 1 - Nombre",
+  "respuesta": null,
+  "estado": "REVISAR",
+  "seccion": "3. Identificación del o los entrevistadores"
+ },
+ {
+  "pregunta": "Entrevistador 1 - Rol/cargo",
+  "respuesta": "Ed. diferencial",
+  "estado": "TRANSCRITO",
+  "seccion": "3. Identificación del o los entrevistadores"
+ },
+ {
+  "pregunta": "Entrevistador 2 - Fecha de la entrevista",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "3. Identificación del o los entrevistadores"
+ },
+ {
+  "pregunta": "Entrevistador 2 - Nombre",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "3. Identificación del o los entrevistadores"
+ },
+ {
+  "pregunta": "Entrevistador 2 - Rol/cargo",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "3. Identificación del o los entrevistadores"
+ },
+ {
+  "pregunta": "Entrevistador 3 - Fecha de la entrevista",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "3. Identificación del o los entrevistadores"
+ },
+ {
+  "pregunta": "Entrevistador 3 - Nombre",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "3. Identificación del o los entrevistadores"
+ },
+ {
+  "pregunta": "Entrevistador 3 - Rol/cargo",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "3. Identificación del o los entrevistadores"
+ },
+ {
+  "pregunta": "Entrevistador 4 - Fecha de la entrevista",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "3. Identificación del o los entrevistadores"
+ },
+ {
+  "pregunta": "Entrevistador 4 - Nombre",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "3. Identificación del o los entrevistadores"
+ },
+ {
+  "pregunta": "Entrevistador 4 - Rol/cargo",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "3. Identificación del o los entrevistadores"
+ },
+ {
+  "pregunta": "Definición del problema o situación que motiva la entrevista",
+  "respuesta": "Ingreso al Programa PIE, 2026.",
+  "estado": "TRANSCRITO",
+  "seccion": "4. Definición del problema o situación que motiva la entrevista"
+ },
+ {
+  "pregunta": "¿El o la estudiante tiene algún diagnóstico previo?",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5. Antecedentes relativos al desarrollo y a la salud del/la estudiante"
+ },
+ {
+  "pregunta": "Diagnóstico previo - Pediatría",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "5. Antecedentes relativos al desarrollo y a la salud del/la estudiante"
+ },
+ {
+  "pregunta": "Diagnóstico previo - Kinesiología",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "5. Antecedentes relativos al desarrollo y a la salud del/la estudiante"
+ },
+ {
+  "pregunta": "Diagnóstico previo - Genético",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "5. Antecedentes relativos al desarrollo y a la salud del/la estudiante"
+ },
+ {
+  "pregunta": "Diagnóstico previo - Fonoaudiología",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "5. Antecedentes relativos al desarrollo y a la salud del/la estudiante"
+ },
+ {
+  "pregunta": "Diagnóstico previo - Neurología",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "5. Antecedentes relativos al desarrollo y a la salud del/la estudiante"
+ },
+ {
+  "pregunta": "Diagnóstico previo - Psicología",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "5. Antecedentes relativos al desarrollo y a la salud del/la estudiante"
+ },
+ {
+  "pregunta": "Diagnóstico previo - Psiquiatría",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "5. Antecedentes relativos al desarrollo y a la salud del/la estudiante"
+ },
+ {
+  "pregunta": "Diagnóstico previo - Psicopedagogía",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "5. Antecedentes relativos al desarrollo y a la salud del/la estudiante"
+ },
+ {
+  "pregunta": "Diagnóstico previo - Terapia Ocupacional",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "5. Antecedentes relativos al desarrollo y a la salud del/la estudiante"
+ },
+ {
+  "pregunta": "Diagnóstico previo - Otro",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "5. Antecedentes relativos al desarrollo y a la salud del/la estudiante"
+ },
+ {
+  "pregunta": "Tipo de parto",
+  "respuesta": "Normal",
+  "estado": "TRANSCRITO",
+  "seccion": "5.1. Primer año de vida"
+ },
+ {
+  "pregunta": "Cesárea - señalar motivo",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "5.1. Primer año de vida"
+ },
+ {
+  "pregunta": "¿Tuvo asistencia médica durante el parto?",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.1. Primer año de vida"
+ },
+ {
+  "pregunta": "Peso",
+  "respuesta": "3.000",
+  "estado": "TRANSCRITO",
+  "seccion": "5.1. Primer año de vida"
+ },
+ {
+  "pregunta": "Talla",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "5.1. Primer año de vida"
+ },
+ {
+  "pregunta": "Señale antecedentes relevantes del Embarazo y Parto",
+  "respuesta": "Sin antecedentes.",
+  "estado": "TRANSCRITO",
+  "seccion": "5.1. Primer año de vida"
+ },
+ {
+  "pregunta": "Durante los doce primeros meses de vida presentó - Desnutrición",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.1. Primer año de vida"
+ },
+ {
+  "pregunta": "Durante los doce primeros meses de vida presentó - Obesidad",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.1. Primer año de vida"
+ },
+ {
+  "pregunta": "Durante los doce primeros meses de vida presentó - Fiebre alta",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.1. Primer año de vida"
+ },
+ {
+  "pregunta": "Durante los doce primeros meses de vida presentó - Convulsiones",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.1. Primer año de vida"
+ },
+ {
+  "pregunta": "Durante los doce primeros meses de vida presentó - Hospitalizaciones",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.1. Primer año de vida"
+ },
+ {
+  "pregunta": "Durante los doce primeros meses de vida presentó - Traumatismos",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.1. Primer año de vida"
+ },
+ {
+  "pregunta": "Durante los doce primeros meses de vida presentó - Intoxicación",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.1. Primer año de vida"
+ },
+ {
+  "pregunta": "Durante los doce primeros meses de vida presentó - Enfermedad respiratoria",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.1. Primer año de vida"
+ },
+ {
+  "pregunta": "Durante los doce primeros meses de vida presentó - Asma",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.1. Primer año de vida"
+ },
+ {
+  "pregunta": "Durante los doce primeros meses de vida presentó - Encefalitis",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.1. Primer año de vida"
+ },
+ {
+  "pregunta": "Durante los doce primeros meses de vida presentó - Meningitis",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.1. Primer año de vida"
+ },
+ {
+  "pregunta": "Durante los doce primeros meses de vida presentó - Otra(s)",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "5.1. Primer año de vida"
+ },
+ {
+  "pregunta": "Especifique motivos y duración",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "5.1. Primer año de vida"
+ },
+ {
+  "pregunta": "Se realizaron controles periódicos de salud",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.1. Primer año de vida"
+ },
+ {
+  "pregunta": "Vacunas",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.1. Primer año de vida"
+ },
+ {
+  "pregunta": "Observaciones",
+  "respuesta": "Sin antecedentes.",
+  "estado": "TRANSCRITO",
+  "seccion": "5.1. Primer año de vida"
+ },
+ {
+  "pregunta": "Edad en que fija la cabeza",
+  "respuesta": "4 meses",
+  "estado": "TRANSCRITO",
+  "seccion": "5.2. Desarrollo Sensorio Motriz"
+ },
+ {
+  "pregunta": "Edad en que se sienta sólo/a",
+  "respuesta": "6 meses",
+  "estado": "TRANSCRITO",
+  "seccion": "5.2. Desarrollo Sensorio Motriz"
+ },
+ {
+  "pregunta": "Edad en que camina sin apoyo",
+  "respuesta": "1 año",
+  "estado": "TRANSCRITO",
+  "seccion": "5.2. Desarrollo Sensorio Motriz"
+ },
+ {
+  "pregunta": "Edad de primeras palabras",
+  "respuesta": "1 año",
+  "estado": "TRANSCRITO",
+  "seccion": "5.2. Desarrollo Sensorio Motriz"
+ },
+ {
+  "pregunta": "Edad de primeras frases",
+  "respuesta": "18 meses",
+  "estado": "TRANSCRITO",
+  "seccion": "5.2. Desarrollo Sensorio Motriz"
+ },
+ {
+  "pregunta": "Edad en que se viste solo/a",
+  "respuesta": "2 años",
+  "estado": "TRANSCRITO",
+  "seccion": "5.2. Desarrollo Sensorio Motriz"
+ },
+ {
+  "pregunta": "Controla esfínter vesical - Diurno",
+  "respuesta": "3 años",
+  "estado": "TRANSCRITO",
+  "seccion": "5.2. Desarrollo Sensorio Motriz"
+ },
+ {
+  "pregunta": "Controla esfínter vesical - Nocturno",
+  "respuesta": "3 años",
+  "estado": "TRANSCRITO",
+  "seccion": "5.2. Desarrollo Sensorio Motriz"
+ },
+ {
+  "pregunta": "Controla esfínter anal - Diurno",
+  "respuesta": "3 años",
+  "estado": "TRANSCRITO",
+  "seccion": "5.2. Desarrollo Sensorio Motriz"
+ },
+ {
+  "pregunta": "Controla esfínter anal - Nocturno",
+  "respuesta": "3 años",
+  "estado": "TRANSCRITO",
+  "seccion": "5.2. Desarrollo Sensorio Motriz"
+ },
+ {
+  "pregunta": "Observaciones sobre edades de desarrollo",
+  "respuesta": "Sin antecedentes.",
+  "estado": "TRANSCRITO",
+  "seccion": "5.2. Desarrollo Sensorio Motriz"
+ },
+ {
+  "pregunta": "En su actividad motora general se aprecia",
+  "respuesta": "Normal",
+  "estado": "TRANSCRITO",
+  "seccion": "5.2. Desarrollo Sensorio Motriz"
+ },
+ {
+  "pregunta": "Su tono muscular general se aprecia",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "5.2. Desarrollo Sensorio Motriz"
+ },
+ {
+  "pregunta": "Estabilidad al caminar",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.2. Desarrollo Sensorio Motriz"
+ },
+ {
+  "pregunta": "Caídas frecuentes",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.2. Desarrollo Sensorio Motriz"
+ },
+ {
+  "pregunta": "Dominancia lateral",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.2. Desarrollo Sensorio Motriz"
+ },
+ {
+  "pregunta": "En relación con su motricidad fina el niño(a) logra - Garra",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.2. Desarrollo Sensorio Motriz"
+ },
+ {
+  "pregunta": "En relación con su motricidad fina el niño(a) logra - Prensión",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.2. Desarrollo Sensorio Motriz"
+ },
+ {
+  "pregunta": "En relación con su motricidad fina el niño(a) logra - Pinza",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.2. Desarrollo Sensorio Motriz"
+ },
+ {
+  "pregunta": "En relación con su motricidad fina el niño(a) logra - Ensarta",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.2. Desarrollo Sensorio Motriz"
+ },
+ {
+  "pregunta": "En relación con su motricidad fina el niño(a) logra - Dibuja",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.2. Desarrollo Sensorio Motriz"
+ },
+ {
+  "pregunta": "En relación con su motricidad fina el niño(a) logra - Escribe",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.2. Desarrollo Sensorio Motriz"
+ },
+ {
+  "pregunta": "Reacciona a voces o caras familiares",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.2. Desarrollo Sensorio Motriz"
+ },
+ {
+  "pregunta": "Demanda objetos y compañía",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.2. Desarrollo Sensorio Motriz"
+ },
+ {
+  "pregunta": "Sonríe, balbucea, grita, llora, indica o señala",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.2. Desarrollo Sensorio Motriz"
+ },
+ {
+  "pregunta": "Manipula y explora objetos",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.2. Desarrollo Sensorio Motriz"
+ },
+ {
+  "pregunta": "Comprende prohibiciones",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.2. Desarrollo Sensorio Motriz"
+ },
+ {
+  "pregunta": "Posee evidente descoordinación ojo-mano",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.2. Desarrollo Sensorio Motriz"
+ },
+ {
+  "pregunta": "Observaciones sobre actividad motora y signos cognitivos",
+  "respuesta": "Sin antecedentes.",
+  "estado": "TRANSCRITO",
+  "seccion": "5.2. Desarrollo Sensorio Motriz"
+ },
+ {
+  "pregunta": "Se interesa por los estímulos visuales (colores, formas, movimientos, etc.)",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.3. Visión - Audición"
+ },
+ {
+  "pregunta": "En ocasiones tiene los ojos irritados o llorosos",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.3. Visión - Audición"
+ },
+ {
+  "pregunta": "Presenta dolores frecuentes de cabeza",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.3. Visión - Audición"
+ },
+ {
+  "pregunta": "Se acerca o aleja demasiado los objetos a la vista (frunce el ceño)",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.3. Visión - Audición"
+ },
+ {
+  "pregunta": "Sigue con la vista el desplazamiento de los objetos o personas",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.3. Visión - Audición"
+ },
+ {
+  "pregunta": "Presenta movimientos oculares anormales",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.3. Visión - Audición"
+ },
+ {
+  "pregunta": "Manifiesta conductas erróneas (tropiezos, choques)",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.3. Visión - Audición"
+ },
+ {
+  "pregunta": "Presenta diagnóstico médico de miopía, estrabismo, astigmatismo, u otro",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.3. Visión - Audición"
+ },
+ {
+  "pregunta": "Se interesa por los estímulos auditivos (ruidos, voces, música, etc.)",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.3. Visión - Audición"
+ },
+ {
+  "pregunta": "Reacciona o reconoce voces o sonidos familiares",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.3. Visión - Audición"
+ },
+ {
+  "pregunta": "Gira la cabeza cuando se le llama o ante un ruido fuerte",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.3. Visión - Audición"
+ },
+ {
+  "pregunta": "Acerca los oídos a la TV, radio o fuente de sonido",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.3. Visión - Audición"
+ },
+ {
+  "pregunta": "En ocasiones se tapa o golpea los oídos",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.3. Visión - Audición"
+ },
+ {
+  "pregunta": "Presenta frecuentes dolores de oídos",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.3. Visión - Audición"
+ },
+ {
+  "pregunta": "La pronunciación oral es adecuada",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.3. Visión - Audición"
+ },
+ {
+  "pregunta": "Presenta diagnóstico médico de otitis crónica, hipoacusia u otra",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.3. Visión - Audición"
+ },
+ {
+  "pregunta": "Observaciones",
+  "respuesta": "Sin antecedentes.",
+  "estado": "TRANSCRITO",
+  "seccion": "5.3. Visión - Audición"
+ },
+ {
+  "pregunta": "El niño(a) se comunica preferentemente en forma",
+  "respuesta": "Mixto",
+  "estado": "TRANSCRITO",
+  "seccion": "5.4. Desarrollo del Lenguaje"
+ },
+ {
+  "pregunta": "Otra forma de comunicación - especifique",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "5.4. Desarrollo del Lenguaje"
+ },
+ {
+  "pregunta": "Balbucea (oral o señas)/emite sonidos",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.4. Desarrollo del Lenguaje"
+ },
+ {
+  "pregunta": "Vocaliza/realiza gestos o señas aisladas",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.4. Desarrollo del Lenguaje"
+ },
+ {
+  "pregunta": "Emite palabras/produce señas",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.4. Desarrollo del Lenguaje"
+ },
+ {
+  "pregunta": "Emite/produce frases",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.4. Desarrollo del Lenguaje"
+ },
+ {
+  "pregunta": "Relata experiencias",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.4. Desarrollo del Lenguaje"
+ },
+ {
+  "pregunta": "La emisión/pronunciación/producción es clara",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.4. Desarrollo del Lenguaje"
+ },
+ {
+  "pregunta": "Identifica objetos",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.4. Desarrollo del Lenguaje"
+ },
+ {
+  "pregunta": "Identifica personas",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.4. Desarrollo del Lenguaje"
+ },
+ {
+  "pregunta": "Comprende conceptos abstractos",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.4. Desarrollo del Lenguaje"
+ },
+ {
+  "pregunta": "Responde en forma coherente preguntas de la vida diaria",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.4. Desarrollo del Lenguaje"
+ },
+ {
+  "pregunta": "Sigue instrucciones simples",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.4. Desarrollo del Lenguaje"
+ },
+ {
+  "pregunta": "Sigue instrucciones complejas",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.4. Desarrollo del Lenguaje"
+ },
+ {
+  "pregunta": "Sigue instrucciones grupales",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.4. Desarrollo del Lenguaje"
+ },
+ {
+  "pregunta": "Comprende relatos, noticias, cuentos cortos",
+  "respuesta": null,
+  "estado": "REVISAR",
+  "seccion": "5.4. Desarrollo del Lenguaje"
+ },
+ {
+  "pregunta": "Manifestó pérdida del lenguaje oral (especifique edad y motivos)",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "5.4. Desarrollo del Lenguaje"
+ },
+ {
+  "pregunta": "Observaciones",
+  "respuesta": "Sin antecedentes.",
+  "estado": "TRANSCRITO",
+  "seccion": "5.4. Desarrollo del Lenguaje"
+ },
+ {
+  "pregunta": "Se relaciona espontáneamente con las personas de su entorno natural",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.5. Desarrollo Social"
+ },
+ {
+  "pregunta": "Explica razones de sus comportamientos y actitudes",
+  "respuesta": null,
+  "estado": "REVISAR",
+  "seccion": "5.5. Desarrollo Social"
+ },
+ {
+  "pregunta": "Participa en actividades grupales",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.5. Desarrollo Social"
+ },
+ {
+  "pregunta": "Opta por trabajo individual",
+  "respuesta": null,
+  "estado": "REVISAR",
+  "seccion": "5.5. Desarrollo Social"
+ },
+ {
+  "pregunta": "Presenta lenguaje ecolálico",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.5. Desarrollo Social"
+ },
+ {
+  "pregunta": "Exhibe dificultad para adaptarse a situaciones nuevas",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.5. Desarrollo Social"
+ },
+ {
+  "pregunta": "Se relaciona en forma colaborativa",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.5. Desarrollo Social"
+ },
+ {
+  "pregunta": "Respeta normas sociales",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.5. Desarrollo Social"
+ },
+ {
+  "pregunta": "Respeta normas escolares",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.5. Desarrollo Social"
+ },
+ {
+  "pregunta": "Muestra sentido del humor",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.5. Desarrollo Social"
+ },
+ {
+  "pregunta": "Movimientos estereotipados",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.5. Desarrollo Social"
+ },
+ {
+  "pregunta": "Pataletas frecuentes",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.5. Desarrollo Social"
+ },
+ {
+  "pregunta": "Ante las luces su reacción es",
+  "respuesta": "Natural",
+  "estado": "TRANSCRITO",
+  "seccion": "5.5. Desarrollo Social"
+ },
+ {
+  "pregunta": "Ante los sonidos su reacción es",
+  "respuesta": "Natural",
+  "estado": "TRANSCRITO",
+  "seccion": "5.5. Desarrollo Social"
+ },
+ {
+  "pregunta": "Ante personas extrañas su reacción es",
+  "respuesta": "Natural",
+  "estado": "TRANSCRITO",
+  "seccion": "5.5. Desarrollo Social"
+ },
+ {
+  "pregunta": "Observaciones",
+  "respuesta": "Sin antecedentes.",
+  "estado": "TRANSCRITO",
+  "seccion": "5.5. Desarrollo Social"
+ },
+ {
+  "pregunta": "Vacunas al día",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "5.6. Estado Actual de Salud del/la Estudiante"
+ },
+ {
+  "pregunta": "Epilepsia",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.6. Estado Actual de Salud del/la Estudiante"
+ },
+ {
+  "pregunta": "Problemas cardíacos",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.6. Estado Actual de Salud del/la Estudiante"
+ },
+ {
+  "pregunta": "Paraplejia",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.6. Estado Actual de Salud del/la Estudiante"
+ },
+ {
+  "pregunta": "Pérdida auditiva",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.6. Estado Actual de Salud del/la Estudiante"
+ },
+ {
+  "pregunta": "Pérdida visual",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.6. Estado Actual de Salud del/la Estudiante"
+ },
+ {
+  "pregunta": "Trastorno motor",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.6. Estado Actual de Salud del/la Estudiante"
+ },
+ {
+  "pregunta": "Problema bronco-respiratorio",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.6. Estado Actual de Salud del/la Estudiante"
+ },
+ {
+  "pregunta": "Enfermedad infecto-contagiosa",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.6. Estado Actual de Salud del/la Estudiante"
+ },
+ {
+  "pregunta": "Trastorno emocional",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.6. Estado Actual de Salud del/la Estudiante"
+ },
+ {
+  "pregunta": "Trastorno conductual",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "5.6. Estado Actual de Salud del/la Estudiante"
+ },
+ {
+  "pregunta": "Otro (especifique)",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "5.6. Estado Actual de Salud del/la Estudiante"
+ },
+ {
+  "pregunta": "El o los problemas de salud reciben control/tratamiento (especifique)",
+  "respuesta": "Pie plano. (realiza ejercicios en el hogar).",
+  "estado": "TRANSCRITO",
+  "seccion": "5.6. Estado Actual de Salud del/la Estudiante"
+ },
+ {
+  "pregunta": "Alimentación",
+  "respuesta": "Normal",
+  "estado": "TRANSCRITO",
+  "seccion": "5.6. Estado Actual de Salud del/la Estudiante"
+ },
+ {
+  "pregunta": "Alimentación - Otro (especifique)",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "5.6. Estado Actual de Salud del/la Estudiante"
+ },
+ {
+  "pregunta": "Peso (apreciación del informante)",
+  "respuesta": "Normal",
+  "estado": "TRANSCRITO",
+  "seccion": "5.6. Estado Actual de Salud del/la Estudiante"
+ },
+ {
+  "pregunta": "Sueño",
+  "respuesta": "Normal",
+  "estado": "TRANSCRITO",
+  "seccion": "5.6. Estado Actual de Salud del/la Estudiante"
+ },
+ {
+  "pregunta": "Horas que duerme",
+  "respuesta": "9 horas",
+  "estado": "TRANSCRITO",
+  "seccion": "5.6. Estado Actual de Salud del/la Estudiante"
+ },
+ {
+  "pregunta": "Duerme",
+  "respuesta": "Solo",
+  "estado": "TRANSCRITO",
+  "seccion": "5.6. Estado Actual de Salud del/la Estudiante"
+ },
+ {
+  "pregunta": "Duerme - Especifique",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "5.6. Estado Actual de Salud del/la Estudiante"
+ },
+ {
+  "pregunta": "Otros aspectos del sueño (insomnio, pesadillas, terrores nocturnos, sonambulismo, despierta de buen humor)",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "5.6. Estado Actual de Salud del/la Estudiante"
+ },
+ {
+  "pregunta": "Humor/comportamiento habitual",
+  "respuesta": "Juguetón/bromista",
+  "estado": "TRANSCRITO",
+  "seccion": "5.6. Estado Actual de Salud del/la Estudiante"
+ },
+ {
+  "pregunta": "Humor/comportamiento - Otro",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "5.6. Estado Actual de Salud del/la Estudiante"
+ },
+ {
+  "pregunta": "Observaciones",
+  "respuesta": "Sin antecedentes.",
+  "estado": "TRANSCRITO",
+  "seccion": "5.6. Estado Actual de Salud del/la Estudiante"
+ },
+ {
+  "pregunta": "Persona 1 que vive con el/la estudiante o es responsable de su cuidado - Nombre",
+  "respuesta": "Dafnie Albert",
+  "estado": "TRANSCRITO",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 1 que vive con el/la estudiante o es responsable de su cuidado - Parentesco",
+  "respuesta": "Mamá",
+  "estado": "TRANSCRITO",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 1 que vive con el/la estudiante o es responsable de su cuidado - Edad",
+  "respuesta": "35",
+  "estado": "TRANSCRITO",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 1 que vive con el/la estudiante o es responsable de su cuidado - Escolaridad",
+  "respuesta": "Básica incomp.",
+  "estado": "TRANSCRITO",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 1 que vive con el/la estudiante o es responsable de su cuidado - Ocupación actual",
+  "respuesta": "Dueña de casa",
+  "estado": "TRANSCRITO",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 2 que vive con el/la estudiante o es responsable de su cuidado - Nombre",
+  "respuesta": null,
+  "estado": "REVISAR",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 2 que vive con el/la estudiante o es responsable de su cuidado - Parentesco",
+  "respuesta": "Papá",
+  "estado": "TRANSCRITO",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 2 que vive con el/la estudiante o es responsable de su cuidado - Edad",
+  "respuesta": "34",
+  "estado": "TRANSCRITO",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 2 que vive con el/la estudiante o es responsable de su cuidado - Escolaridad",
+  "respuesta": "Ens. mda. incomp.",
+  "estado": "TRANSCRITO",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 2 que vive con el/la estudiante o es responsable de su cuidado - Ocupación actual",
+  "respuesta": "Temporero",
+  "estado": "TRANSCRITO",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 3 que vive con el/la estudiante o es responsable de su cuidado - Nombre",
+  "respuesta": "Ester Saint",
+  "estado": "TRANSCRITO",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 3 que vive con el/la estudiante o es responsable de su cuidado - Parentesco",
+  "respuesta": "Hermana",
+  "estado": "TRANSCRITO",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 3 que vive con el/la estudiante o es responsable de su cuidado - Edad",
+  "respuesta": "3",
+  "estado": "TRANSCRITO",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 3 que vive con el/la estudiante o es responsable de su cuidado - Escolaridad",
+  "respuesta": "Jardín",
+  "estado": "TRANSCRITO",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 3 que vive con el/la estudiante o es responsable de su cuidado - Ocupación actual",
+  "respuesta": "Estudiante",
+  "estado": "TRANSCRITO",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 4 que vive con el/la estudiante o es responsable de su cuidado - Nombre",
+  "respuesta": null,
+  "estado": "REVISAR",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 4 que vive con el/la estudiante o es responsable de su cuidado - Parentesco",
+  "respuesta": "Hermano",
+  "estado": "TRANSCRITO",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 4 que vive con el/la estudiante o es responsable de su cuidado - Edad",
+  "respuesta": "11",
+  "estado": "TRANSCRITO",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 4 que vive con el/la estudiante o es responsable de su cuidado - Escolaridad",
+  "respuesta": "Colegio",
+  "estado": "TRANSCRITO",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 4 que vive con el/la estudiante o es responsable de su cuidado - Ocupación actual",
+  "respuesta": "Estudiante",
+  "estado": "TRANSCRITO",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 5 que vive con el/la estudiante o es responsable de su cuidado - Nombre",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 5 que vive con el/la estudiante o es responsable de su cuidado - Parentesco",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 5 que vive con el/la estudiante o es responsable de su cuidado - Edad",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 5 que vive con el/la estudiante o es responsable de su cuidado - Escolaridad",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 5 que vive con el/la estudiante o es responsable de su cuidado - Ocupación actual",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 6 que vive con el/la estudiante o es responsable de su cuidado - Nombre",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 6 que vive con el/la estudiante o es responsable de su cuidado - Parentesco",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 6 que vive con el/la estudiante o es responsable de su cuidado - Edad",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 6 que vive con el/la estudiante o es responsable de su cuidado - Escolaridad",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 6 que vive con el/la estudiante o es responsable de su cuidado - Ocupación actual",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 7 que vive con el/la estudiante o es responsable de su cuidado - Nombre",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 7 que vive con el/la estudiante o es responsable de su cuidado - Parentesco",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 7 que vive con el/la estudiante o es responsable de su cuidado - Edad",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 7 que vive con el/la estudiante o es responsable de su cuidado - Escolaridad",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 7 que vive con el/la estudiante o es responsable de su cuidado - Ocupación actual",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 8 que vive con el/la estudiante o es responsable de su cuidado - Nombre",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 8 que vive con el/la estudiante o es responsable de su cuidado - Parentesco",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 8 que vive con el/la estudiante o es responsable de su cuidado - Edad",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 8 que vive con el/la estudiante o es responsable de su cuidado - Escolaridad",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Persona 8 que vive con el/la estudiante o es responsable de su cuidado - Ocupación actual",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Antecedentes de Salud de la Familia relevantes en función de la entrega de apoyos",
+  "respuesta": "Miastenia. Hipotiroidismo. La mamá.",
+  "estado": "TRANSCRITO",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Observaciones",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "6. Antecedentes familiares"
+ },
+ {
+  "pregunta": "Edad de ingreso al sistema escolar",
+  "respuesta": "6 m",
+  "estado": "TRANSCRITO",
+  "seccion": "7. Antecedentes escolares y apoyo de la familia"
+ },
+ {
+  "pregunta": "Asistió a jardín infantil",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "7. Antecedentes escolares y apoyo de la familia"
+ },
+ {
+  "pregunta": "N° de colegios en que ha estudiado",
+  "respuesta": "1",
+  "estado": "TRANSCRITO",
+  "seccion": "7. Antecedentes escolares y apoyo de la familia"
+ },
+ {
+  "pregunta": "Modalidad de enseñanza",
+  "respuesta": "Regular",
+  "estado": "TRANSCRITO",
+  "seccion": "7. Antecedentes escolares y apoyo de la familia"
+ },
+ {
+  "pregunta": "Motivo de los cambios",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "7. Antecedentes escolares y apoyo de la familia"
+ },
+ {
+  "pregunta": "Ha repetido curso/s",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "7. Antecedentes escolares y apoyo de la familia"
+ },
+ {
+  "pregunta": "Curso(s) repetido(s)",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "7. Antecedentes escolares y apoyo de la familia"
+ },
+ {
+  "pregunta": "Motivo de repetición",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "7. Antecedentes escolares y apoyo de la familia"
+ },
+ {
+  "pregunta": "Nivel/curso actual",
+  "respuesta": "2°",
+  "estado": "TRANSCRITO",
+  "seccion": "7. Antecedentes escolares y apoyo de la familia"
+ },
+ {
+  "pregunta": "Dificultad de aprendizaje",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "7. Antecedentes escolares y apoyo de la familia"
+ },
+ {
+  "pregunta": "Dificultad para participar",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "7. Antecedentes escolares y apoyo de la familia"
+ },
+ {
+  "pregunta": "Conducta disruptiva",
+  "respuesta": "No",
+  "estado": "TRANSCRITO",
+  "seccion": "7. Antecedentes escolares y apoyo de la familia"
+ },
+ {
+  "pregunta": "Asiste regularmente",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "7. Antecedentes escolares y apoyo de la familia"
+ },
+ {
+  "pregunta": "Asiste con agrado",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "7. Antecedentes escolares y apoyo de la familia"
+ },
+ {
+  "pregunta": "Apoyo familiar en tareas",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "7. Antecedentes escolares y apoyo de la familia"
+ },
+ {
+  "pregunta": "Amigos(as)",
+  "respuesta": "Sí",
+  "estado": "TRANSCRITO",
+  "seccion": "7. Antecedentes escolares y apoyo de la familia"
+ },
+ {
+  "pregunta": "¿Cómo evalúa la familia el desempeño escolar del estudiante?",
+  "respuesta": "Satisfactorio",
+  "estado": "TRANSCRITO",
+  "seccion": "7. Antecedentes escolares y apoyo de la familia"
+ },
+ {
+  "pregunta": "Desempeño escolar insatisfactorio - motivos",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "7. Antecedentes escolares y apoyo de la familia"
+ },
+ {
+  "pregunta": "¿Cuál es la respuesta de la familia frente a las dificultades escolares del estudiante?",
+  "respuesta": "Apoyo",
+  "estado": "TRANSCRITO",
+  "seccion": "7. Antecedentes escolares y apoyo de la familia"
+ },
+ {
+  "pregunta": "Respuesta frente a las dificultades - otra",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "7. Antecedentes escolares y apoyo de la familia"
+ },
+ {
+  "pregunta": "¿Cuál es la respuesta de la familia frente a los éxitos escolares del estudiante?",
+  "respuesta": "Apoyo",
+  "estado": "TRANSCRITO",
+  "seccion": "7. Antecedentes escolares y apoyo de la familia"
+ },
+ {
+  "pregunta": "Respuesta frente a los éxitos - otra",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "7. Antecedentes escolares y apoyo de la familia"
+ },
+ {
+  "pregunta": "Especifique el tipo de refuerzos o premios",
+  "respuesta": "Expresiones afectivas",
+  "estado": "TRANSCRITO",
+  "seccion": "7. Antecedentes escolares y apoyo de la familia"
+ },
+ {
+  "pregunta": "Refuerzos o premios - otro(s)",
+  "respuesta": null,
+  "estado": "SIN_RESPUESTA",
+  "seccion": "7. Antecedentes escolares y apoyo de la familia"
+ },
+ {
+  "pregunta": "¿Quiénes apoyan el proceso de aprendizaje y desarrollo del estudiante?",
+  "respuesta": "Madre; padre; otros familiares (tía cuidadora)",
+  "estado": "TRANSCRITO",
+  "seccion": "7. Antecedentes escolares y apoyo de la familia"
+ },
+ {
+  "pregunta": "¿Qué expectativas muestra la familia frente al futuro escolar del estudiante?",
+  "respuesta": "Alta (incluye al grupo familiar)",
+  "estado": "TRANSCRITO",
+  "seccion": "7. Antecedentes escolares y apoyo de la familia"
+ },
+ {
+  "pregunta": "¿Ofrece la familia un ambiente físico y emocional adecuado para el aprendizaje?",
+  "respuesta": "Ambos",
+  "estado": "TRANSCRITO",
+  "seccion": "7. Antecedentes escolares y apoyo de la familia"
+ },
+ {
+  "pregunta": "Comentarios u otras observaciones relevantes que no se han registrado o explorado",
+  "respuesta": "Sin antecedentes.",
+  "estado": "TRANSCRITO",
+  "seccion": "7. Antecedentes escolares y apoyo de la familia"
+ }
+]

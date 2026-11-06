@@ -1079,6 +1079,22 @@ class FaqModel(Base):
     added_date = Column(DateTime)
     updated_date = Column(DateTime)
 
+
+class WebPageModel(Base):
+    """Contenido editable del portal público (Página Web / Superadmin)."""
+    __tablename__ = 'web_pages'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    slug = Column(String(100), nullable=False, unique=True)
+    title = Column(String(255), nullable=False)
+    menu_label = Column(String(255), nullable=True)
+    sort_order = Column(Integer, nullable=False, default=0)
+    is_published = Column(Integer, nullable=False, default=1)
+    content_json = Column(Text, nullable=True)
+    added_date = Column(DateTime, nullable=True)
+    updated_date = Column(DateTime, nullable=True)
+
+
 class ContactModel(Base):
     __tablename__ = 'contacts'
 

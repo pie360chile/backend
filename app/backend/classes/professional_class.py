@@ -172,8 +172,8 @@ class ProfessionalClass:
 
     def _base_users_at_school_query(self, school_id, period_year=None):
         """
-        Usuarios con rol en el contexto del colegio/cliente.
-        Excluye Super Administrador (1) y Administrador global/plantilla (2).
+        Usuarios con rol Profesional en el contexto del colegio/cliente.
+        No lista Administrador / Evaluador / Coordinador (ni Super Admin 1/2).
         Incluye roles del colegio (rols.school_id) o roles del mismo cliente sin escuela (NULL/0).
         """
         q = (
@@ -199,6 +199,7 @@ class ProfessionalClass:
                 _active_ur_filter(),
                 _active_user_filter(),
                 RolModel.id.notin_((1, 2)),
+                RolModel.rol.ilike("Profesional"),
                 users_rol_period_clause(period_year, bypass_global_rol_ids=()),
             )
         )
@@ -812,6 +813,7 @@ class ProfessionalClass:
                     _active_ur_filter(),
                     _active_user_filter(),
                     RolModel.id.notin_((1, 2)),
+                    RolModel.rol.ilike("Profesional"),
                     users_rol_period_clause(period_year, bypass_global_rol_ids=()),
                 )
             )

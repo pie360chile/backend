@@ -1,0 +1,41 @@
+{
+  "parsed": {
+    "school_entry_age": "6 m",
+    "attended_kindergarten": 1,
+    "schools_count": "1",
+    "teaching_modality": "regular",
+    "changes_reason": null,
+    "repeated_grade": 2,
+    "repeated_courses": null,
+    "repeated_reason": null,
+    "current_level": "2°",
+    "learning_difficulty": 1,
+    "participation_difficulty": 2,
+    "disruptive_behavior": 2,
+    "attends_regularly": 1,
+    "attends_gladly": 1,
+    "family_support_homework": 1,
+    "friends": 1,
+    "family_attitude": "satisfactorio",
+    "performance_assessment": "satisfactorio",
+    "performance_reasons": null,
+    "response_difficulties": ["Apoyo"],
+    "response_difficulties_other": null,
+    "response_success": ["Apoyo"],
+    "response_success_other": null,
+    "rewards": ["Expresiones afectivas"],
+    "rewards_other": null,
+    "supporters": ["Madre", "Padre", "Otros familiares"],
+    "supporters_other_professionals": "Tía cuidadora",
+    "expectations": "alta",
+    "environment": "ambos",
+    "final_comments": "Sin antecedentes."
+  },
+  "usage": {
+    "prompt_tokens": 4320,
+    "completion_tokens": 327,
+    "total_tokens": 4647,
+    "prompt_cache_hit_tokens": 0,
+    "prompt_cache_miss_tokens": 4320
+  }
+}

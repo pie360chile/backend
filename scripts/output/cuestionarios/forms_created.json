@@ -1,0 +1,95 @@
+{
+  "created": [
+    {
+      "school_id": 1,
+      "name": "Cuestionario de Observación Familiar (Básica)",
+      "id": 8,
+      "fields": 41
+    },
+    {
+      "school_id": 2,
+      "name": "Cuestionario de Observación Familiar (Básica)",
+      "id": 9,
+      "fields": 41
+    },
+    {
+      "school_id": 4,
+      "name": "Cuestionario de Observación Familiar (Básica)",
+      "id": 10,
+      "fields": 41
+    },
+    {
+      "school_id": 3,
+      "name": "Cuestionario de Observación Familiar (Media)",
+      "id": 11,
+      "fields": 47
+    },
+    {
+      "school_id": 5,
+      "name": "Cuestionario de Observación Familiar (Media)",
+      "id": 12,
+      "fields": 47
+    },
+    {
+      "school_id": 1,
+      "name": "Cuestionario Básica Contexto Escolar",
+      "id": 13,
+      "fields": 115
+    },
+    {
+      "school_id": 2,
+      "name": "Cuestionario Básica Contexto Escolar",
+      "id": 14,
+      "fields": 115
+    },
+    {
+      "school_id": 4,
+      "name": "Cuestionario Básica Contexto Escolar",
+      "id": 15,
+      "fields": 115
+    },
+    {
+      "school_id": 1,
+      "name": "Cuestionario Especialistas Básica",
+      "id": 16,
+      "fields": 19
+    },
+    {
+      "school_id": 2,
+      "name": "Cuestionario Especialistas Básica",
+      "id": 17,
+      "fields": 19
+    },
+    {
+      "school_id": 4,
+      "name": "Cuestionario Especialistas Básica",
+      "id": 18,
+      "fields": 19
+    },
+    {
+      "school_id": 3,
+      "name": "Cuestionario Especialistas Media",
+      "id": 19,
+      "fields": 45
+    },
+    {
+      "school_id": 5,
+      "name": "Cuestionario Especialistas Media",
+      "id": 20,
+      "fields": 45
+    },
+    {
+      "school_id": 3,
+      "name": "Cuestionario de Observación Psicopedagógica Media",
+      "id": 21,
+      "fields": 50
+    },
+    {
+      "school_id": 5,
+      "name": "Cuestionario de Observación Psicopedagógica Media",
+      "id": 22,
+      "fields": 50
+    }
+  ],
+  "skipped": []
+}

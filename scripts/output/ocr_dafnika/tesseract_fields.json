@@ -1,0 +1,36 @@
+{
+  "keys": [
+    "changes_reason",
+    "final_comments",
+    "first_year_vaccines",
+    "health_behavioral_disorder",
+    "health_diet",
+    "health_hearing_loss",
+    "health_heart_problems",
+    "health_infectious_disease",
+    "health_vaccines_up_to_date",
+    "health_vision_loss",
+    "health_weight",
+    "schools_count",
+    "sm_motor_activity",
+    "sm_muscle_tone",
+    "student_full_name"
+  ],
+  "filled": {
+    "schools_count": "estudiado regular especial tecnica : motivo de los",
+    "changes_reason": "TER [BT",
+    "first_year_vaccines": 2,
+    "health_vaccines_up_to_date": 2,
+    "health_heart_problems": 1,
+    "health_hearing_loss": 1,
+    "health_vision_loss": 2,
+    "health_infectious_disease": 1,
+    "health_behavioral_disorder": 1,
+    "sm_motor_activity": "Normal",
+    "sm_muscle_tone": "Normal",
+    "health_diet": "Malo",
+    "health_weight": "Bajo peso",
+    "student_full_name": "DAFNIKA SAINT FORT ALBERT",
+    "final_comments": "Importado desde PDF escaneado ANAMNESIS (OCR local). Revisar casillas y textos manuscritos."
+  }
+}
