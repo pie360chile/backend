@@ -63,6 +63,19 @@ def _submission_has_answers(answers_json: Any) -> bool:
     return any(_format_answer_value(value) for value in answers.values())
 
 
+def _student_school_id(db: Session, student_id: int) -> int | None:
+    """Colegio real del alumno (no el de la sesión del chat)."""
+    student = db.query(StudentModel).filter(StudentModel.id == int(student_id)).first()
+    if student and student.school_id:
+        try:
+            sid = int(student.school_id)
+            if sid > 0:
+                return sid
+        except (TypeError, ValueError):
+            pass
+    return None
+
+
 def student_has_nonempty_form_answers(
     db: Session,
     *,
@@ -70,41 +83,48 @@ def student_has_nonempty_form_answers(
     school_id: int | None = None,
     period_year: int | None = None,
 ) -> bool:
-    """True solo si hay al menos una respuesta con texto en un formulario vigente."""
+    """True solo si hay al menos una respuesta con texto en un formulario vigente.
+
+    El colegio se toma del alumno. El school_id de sesión del agente solo se usa
+    si el alumno no tiene colegio (antes filtraba por sesión y falsos negativos
+    cuando el chat estaba en otro liceo, p. ej. Media vs Básica).
+    """
     if not student_id or int(student_id) < 1:
         return False
     sid = int(student_id)
-    resolved_school = school_id
-    if resolved_school is None:
-        student = db.query(StudentModel).filter(StudentModel.id == sid).first()
-        if student and student.school_id:
-            resolved_school = int(student.school_id)
-    q = (
-        db.query(DynamicFormSubmissionModel.answers_json)
-        .join(
-            DynamicFormModel,
-            DynamicFormModel.id == DynamicFormSubmissionModel.dynamic_form_id,
-        )
-        .filter(DynamicFormSubmissionModel.student_id == sid)
-        .filter(DynamicFormModel.deleted_date.is_(None))
+    resolved_school = _student_school_id(db, sid) or (
+        int(school_id) if school_id else None
     )
-    if resolved_school is not None:
-        q = q.filter(DynamicFormModel.school_id == int(resolved_school))
-    if period_year is None and resolved_school is not None:
-        latest = (
-            db.query(DynamicFormModel.period_year)
+
+    def _query(*, year: int | None):
+        q = (
+            db.query(DynamicFormSubmissionModel.answers_json)
+            .join(
+                DynamicFormModel,
+                DynamicFormModel.id == DynamicFormSubmissionModel.dynamic_form_id,
+            )
+            .filter(DynamicFormSubmissionModel.student_id == sid)
             .filter(DynamicFormModel.deleted_date.is_(None))
-            .filter(DynamicFormModel.school_id == int(resolved_school))
-            .order_by(DynamicFormModel.period_year.desc())
-            .first()
         )
-        if latest and latest[0]:
-            period_year = int(latest[0])
+        if resolved_school is not None:
+            q = q.filter(DynamicFormModel.school_id == int(resolved_school))
+        if year is not None:
+            q = q.filter(DynamicFormSubmissionModel.period_year == int(year))
+        return q
+
+    years: list[int | None] = []
     if period_year is not None:
-        q = q.filter(DynamicFormSubmissionModel.period_year == int(period_year))
-    for (answers_json,) in q.all():
-        if _submission_has_answers(answers_json):
-            return True
+        years.append(int(period_year))
+    years.append(None)  # fallback: cualquier período del alumno
+
+    seen: set[int | None] = set()
+    for year in years:
+        if year in seen:
+            continue
+        seen.add(year)
+        for (answers_json,) in _query(year=year).all():
+            if _submission_has_answers(answers_json):
+                return True
     return False
 
 
@@ -118,14 +138,24 @@ def student_has_dynamic_form_answers(
     """True si el estudiante tiene al menos una respuesta en formularios dinámicos."""
     if not student_id or int(student_id) < 1:
         return False
-    q = db.query(DynamicFormSubmissionModel.id).filter(
-        DynamicFormSubmissionModel.student_id == int(student_id)
+    sid = int(student_id)
+    resolved_school = _student_school_id(db, sid) or (
+        int(school_id) if school_id else None
     )
-    if period_year is not None:
-        q = q.filter(DynamicFormSubmissionModel.period_year == int(period_year))
-    if school_id is not None:
-        q = q.filter(DynamicFormSubmissionModel.school_id == int(school_id))
-    return q.first() is not None
+
+    def _exists(*, year: int | None) -> bool:
+        q = db.query(DynamicFormSubmissionModel.id).filter(
+            DynamicFormSubmissionModel.student_id == sid
+        )
+        if year is not None:
+            q = q.filter(DynamicFormSubmissionModel.period_year == int(year))
+        if resolved_school is not None:
+            q = q.filter(DynamicFormSubmissionModel.school_id == int(resolved_school))
+        return q.first() is not None
+
+    if period_year is not None and _exists(year=int(period_year)):
+        return True
+    return _exists(year=None)
 
 
 def collect_dynamic_form_answers_payload(
@@ -223,27 +253,30 @@ def build_dynamic_form_answers_block(
         return ""
 
     sid = int(student_id)
-    resolved_school = school_id
-    if resolved_school is None:
-        student = db.query(StudentModel).filter(StudentModel.id == sid).first()
-        if student and student.school_id:
-            resolved_school = int(student.school_id)
-
-    q = (
-        db.query(DynamicFormSubmissionModel, DynamicFormModel)
-        .join(
-            DynamicFormModel,
-            DynamicFormModel.id == DynamicFormSubmissionModel.dynamic_form_id,
-        )
-        .filter(DynamicFormSubmissionModel.student_id == sid)
-        .filter(DynamicFormModel.deleted_date.is_(None))
+    # Siempre el colegio del alumno; el de sesión del chat suele ser otro liceo.
+    resolved_school = _student_school_id(db, sid) or (
+        int(school_id) if school_id else None
     )
-    if period_year is not None:
-        q = q.filter(DynamicFormSubmissionModel.period_year == int(period_year))
-    if resolved_school is not None:
-        q = q.filter(DynamicFormModel.school_id == int(resolved_school))
 
-    rows = q.order_by(DynamicFormSubmissionModel.id.desc()).all()
+    def _load_rows(*, year: int | None):
+        q = (
+            db.query(DynamicFormSubmissionModel, DynamicFormModel)
+            .join(
+                DynamicFormModel,
+                DynamicFormModel.id == DynamicFormSubmissionModel.dynamic_form_id,
+            )
+            .filter(DynamicFormSubmissionModel.student_id == sid)
+            .filter(DynamicFormModel.deleted_date.is_(None))
+        )
+        if year is not None:
+            q = q.filter(DynamicFormSubmissionModel.period_year == int(year))
+        if resolved_school is not None:
+            q = q.filter(DynamicFormModel.school_id == int(resolved_school))
+        return q.order_by(DynamicFormSubmissionModel.id.desc()).all()
+
+    rows = _load_rows(year=int(period_year) if period_year is not None else None)
+    if not rows and period_year is not None:
+        rows = _load_rows(year=None)
     if respondent_type_id is not None:
         wanted = int(respondent_type_id)
         rows = [
