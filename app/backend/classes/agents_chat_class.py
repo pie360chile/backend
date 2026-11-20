@@ -835,7 +835,8 @@ class AgentsChatClass:
             yield {"type": "step", "message": "Elaborando el Informe a la Familia…"}
         else:
             yield {"type": "step", "message": "Redactando respuesta…"}
-        llm_timeout = 240 if want_doc else 120
+        # Informes largos: más margen entre chunks (DeepSeek a veces pausa).
+        llm_timeout = 600 if want_doc else 180
         llm_max_tokens = 8192 if want_doc else None
 
         reply_text = ""
@@ -1563,7 +1564,7 @@ class AgentsChatClass:
             messages,
             model=model_code,
             db=self.db,
-            timeout=240,
+            timeout=600,
             max_tokens=8192,
         ):
             if event.get("type") == "text_delta":
@@ -1595,7 +1596,7 @@ class AgentsChatClass:
                 retry_messages,
                 model=model_code,
                 db=self.db,
-                timeout=240,
+                timeout=600,
                 max_tokens=8192,
             ):
                 if event.get("type") == "text_delta":

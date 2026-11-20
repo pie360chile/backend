@@ -100,7 +100,7 @@ def stream_chat_completion(
     model: str | None = None,
     api_key: str | None = None,
     db: Session | None = None,
-    timeout: int = 120,
+    timeout: int | tuple[int, int] = 120,
     max_tokens: int | None = None,
 ) -> Iterator[dict[str, Any]]:
     """
@@ -130,6 +130,14 @@ def stream_chat_completion(
     }
     if max_tokens is not None and int(max_tokens) > 0:
         payload["max_tokens"] = int(max_tokens)
+
+    # (connect, read): el read es entre chunks; informes largos pausan >120s a veces.
+    if isinstance(timeout, tuple):
+        req_timeout = timeout
+    else:
+        read_s = max(120, int(timeout or 120))
+        req_timeout = (30, read_s)
+
     try:
         response = requests.post(
             llm_chat_completions_url(),
@@ -139,7 +147,7 @@ def stream_chat_completion(
             },
             json=payload,
             stream=True,
-            timeout=timeout,
+            timeout=req_timeout,
         )
     except requests.RequestException as exc:
         yield {
@@ -152,10 +160,10 @@ def stream_chat_completion(
     if response.status_code >= 400:
         detail = response.text[:400]
         try:
-            payload = response.json()
+            err_payload = response.json()
             detail = (
-                payload.get("error", {}).get("message")
-                or payload.get("message")
+                err_payload.get("error", {}).get("message")
+                or err_payload.get("message")
                 or detail
             )
         except Exception:
@@ -169,6 +177,7 @@ def stream_chat_completion(
 
     full_reply = ""
     usage_raw: dict[str, Any] | None = None
+    stream_warning: str | None = None
     try:
         for raw_line in response.iter_lines(decode_unicode=True):
             if raw_line is None:
@@ -196,16 +205,27 @@ def stream_chat_completion(
                 continue
             full_reply += delta
             yield {"type": "text_delta", "delta": delta}
-    except requests.RequestException as exc:
-        yield {
-            "type": "error",
-            "message": f"Error leyendo stream del LLM: {exc}",
-            "code": "llm_stream",
-        }
-        return
+    except (requests.RequestException, ValueError, OSError) as exc:
+        # "Response ended prematurely" / IncompleteRead: el proveedor o el proxy
+        # cerró el stream. Si ya hay texto, no tumbar toda la generación.
+        msg = str(exc).strip() or type(exc).__name__
+        if full_reply.strip():
+            stream_warning = (
+                f"El stream del LLM se cortó antes de terminar ({msg}). "
+                "Se usa la respuesta parcial recibida."
+            )
+        else:
+            yield {
+                "type": "error",
+                "message": f"Error leyendo stream del LLM: {msg}",
+                "code": "llm_stream",
+            }
+            return
 
     done_payload: dict[str, Any] = {"reply": full_reply}
     normalized = normalize_usage(usage_raw)
     if normalized:
         done_payload["usage"] = normalized
+    if stream_warning:
+        done_payload["warning"] = stream_warning
     yield {"type": "done", "data": done_payload}

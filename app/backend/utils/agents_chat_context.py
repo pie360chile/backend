@@ -637,10 +637,16 @@ def student_identification_hint(
     school = (pie.get("student_school") or "").strip()
     course = (pie.get("student_course") or "").strip()
     age = (pie.get("student_age") or "").strip()
+    born = (
+        (pie.get("student_born_date") or pie.get("student_birth_date") or pie.get("birth_day") or "")
+        .strip()
+    )
     if school:
         parts.append(f"Establecimiento (PIE360): {school}")
     if course:
         parts.append(f"Curso (PIE360): {course}")
+    if born:
+        parts.append(f"Fecha de nacimiento (PIE360): {born}")
     if age:
         parts.append(f"Edad (PIE360): {age}")
     try:
