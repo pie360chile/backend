@@ -122,6 +122,34 @@ def _is_family_report(document_id: int | None, agent_name: str | None) -> bool:
     return "familia" in (agent_name or "").lower()
 
 
+def _psychoped_scope_only_reply() -> str:
+    return (
+        "Fui creado solo para elaborar el Informe de Evaluación Psicopedagógica "
+        "profesional. Si necesitas ese informe, indícame el estudiante "
+        "(nombre o RUT) y pídeme generarlo o elaborarlo."
+    )
+
+
+def _family_scope_only_reply() -> str:
+    return (
+        "Fui creado solo para elaborar el Informe a la Familia. "
+        "Si necesitas ese informe, indícame el estudiante (nombre o RUT) "
+        "y pídeme generarlo o elaborarlo."
+    )
+
+
+def _report_agent_scope_reply(
+    document_id: int | None,
+    agent_name: str | None,
+) -> str | None:
+    """Si es agente de informe psico/familia, el mensaje fuera de generación."""
+    if _is_family_report(document_id, agent_name):
+        return _family_scope_only_reply()
+    if _is_psychoped_report(document_id, agent_name):
+        return _psychoped_scope_only_reply()
+    return None
+
+
 _PSYCHOPED_DODGE_MARKERS = (
     "quedan pendientes",
     "queda pendiente",
@@ -640,6 +668,25 @@ class AgentsChatClass:
         bulk_request = looks_like_bulk_request(text, history)
         # Psicopedagógico: no rechazar solo por falta de Files; el estudiante puede tener
         # respuestas vía MCP get_student_psychopedagogical_form_answers (se valida abajo).
+
+        # Agentes psico/familia: solo atienden pedidos de creación del informe.
+        if not want_doc_early and not bulk_request:
+            scope_ask = _report_agent_scope_reply(
+                resolved_document_id, agent_row.name or ""
+            )
+            if scope_ask:
+                yield {"type": "text_delta", "delta": scope_ask}
+                yield {
+                    "type": "done",
+                    "data": {
+                        "reply": scope_ask,
+                        "usage": None,
+                        "model": None,
+                        "responseFiles": [],
+                        "warning": None,
+                    },
+                }
+                return
 
         if bulk_request:
             yield from self._stream_bulk_reports(
