@@ -1,4 +1,4 @@
-"""KPI: avance de documentación transversal (document_type_id = 1) por curso y por estudiante."""
+"""KPI: avance de documentación (transversales + familia + psicopedagógico) por curso y estudiante."""
 
 from typing import List, Optional
 

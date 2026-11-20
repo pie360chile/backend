@@ -243,29 +243,54 @@ class StudentDriveSyncClass:
             .first()
         )
 
-        metadata = self._metadata_for_folder(folder)
         drive_file_id = (job.drive_file_id if job else None) or None
-        if not drive_file_id:
-            local_name = Path(folder.file or "").name
-            ext = Path(local_name).suffix.lstrip(".") if local_name else "bin"
-            drive_file_id = find_student_document_file_id(
-                db=self.db,
-                customer_id=metadata["customer_id"],
-                school_name=metadata["school_name"],
-                year=metadata["year"],
-                course_name=metadata["course_name"],
-                student_rut=metadata["student_rut"],
-                document_type_name=metadata["document_type_name"],
-                file_extension=ext or "bin",
+        customer_id: int | None = None
+
+        # Si ya hay drive_file_id del sync, no exigir curso/RUT completos:
+        # basta el customer del colegio (falla típica de informes legacy).
+        if drive_file_id:
+            school_id = int(folder.school_id or 0)
+            if not school_id and folder.student_id:
+                student = (
+                    self.db.query(StudentModel)
+                    .filter(StudentModel.id == int(folder.student_id))
+                    .first()
+                )
+                school_id = int(getattr(student, "school_id", 0) or 0) if student else 0
+            school = (
+                self.db.query(SchoolModel).filter(SchoolModel.id == school_id).first()
+                if school_id
+                else None
             )
+            if school and int(school.customer_id or 0) > 0:
+                customer_id = int(school.customer_id)
+
+        if not drive_file_id or not customer_id:
+            metadata = self._metadata_for_folder(folder)
+            customer_id = int(metadata["customer_id"])
+            if not drive_file_id:
+                local_name = Path(folder.file or "").name
+                ext = Path(local_name).suffix.lstrip(".") if local_name else "bin"
+                drive_file_id = find_student_document_file_id(
+                    db=self.db,
+                    customer_id=customer_id,
+                    school_name=metadata["school_name"],
+                    year=metadata["year"],
+                    course_name=metadata["course_name"],
+                    student_rut=metadata["student_rut"],
+                    document_type_name=metadata["document_type_name"],
+                    file_extension=ext or "bin",
+                )
         if not drive_file_id:
             raise FileNotFoundError(
                 "Archivo no encontrado en el servidor ni en Google Drive"
             )
+        if not customer_id:
+            raise ValueError("No se pudo determinar el cliente de Google Drive")
 
         payload = download_drive_file(
             db=self.db,
-            customer_id=metadata["customer_id"],
+            customer_id=int(customer_id),
             file_id=str(drive_file_id),
         )
         data: bytes = payload["data"]

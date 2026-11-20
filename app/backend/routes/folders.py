@@ -363,12 +363,14 @@ async def download_document(
                     logger.warning(
                         "Fallback Drive falló para folder %s: %s", id, drive_exc
                     )
+                    detail = str(drive_exc).strip() or type(drive_exc).__name__
                     return JSONResponse(
                         status_code=status.HTTP_404_NOT_FOUND,
                         content={
                             "status": 404,
                             "message": (
                                 f"Archivo no encontrado en el servidor ni en Google Drive: {filename}"
+                                f" (Drive: {detail})"
                             ),
                             "data": None
                         }

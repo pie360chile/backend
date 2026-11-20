@@ -16,9 +16,13 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+import os
+
 from dotenv import load_dotenv
 
-load_dotenv(ROOT / ".env")
+TUNNEL = "mysql+pymysql://admin:ChileChile2026!!!@127.0.0.1:3307/pie360"
+load_dotenv(ROOT / ".env", override=True)
+os.environ["DATABASE_URL"] = os.environ.get("IMPORT_DATABASE_URL") or TUNNEL
 
 from app.backend.classes.commune_class import CommuneClass
 from app.backend.classes.course_class import CourseClass
@@ -28,8 +32,13 @@ from app.backend.classes.province_class import ProvinceClass
 from app.backend.classes.region_class import RegionClass
 from app.backend.classes.student_class import StudentClass
 from app.backend.classes.teaching_class import TeachingClass
-from app.backend.db.database import SessionLocal
 from app.backend.db.models import SchoolModel
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+os.environ["DATABASE_URL"] = TUNNEL
+_engine = create_engine(TUNNEL, pool_pre_ping=True)
+SessionLocal = sessionmaker(bind=_engine, autocommit=False, autoflush=False)
 
 OUT = ROOT / "scripts" / "output" / "import_missing_inspection_result.txt"
 

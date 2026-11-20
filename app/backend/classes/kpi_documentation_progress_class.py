@@ -1,22 +1,29 @@
 """
-KPI: avance de documentación transversal (document_type_id = 1 en catálogo `documents`).
+KPI: avance de documentación del alumno con NEE.
 
-Por estudiante: cuenta documentos cargados vs faltantes en carpeta / tablas asociadas
-(misma lógica que FolderClass.check_document_existence para ese tipo).
-Agregado por curso: suma de cargados y faltantes de todos los estudiantes del curso en el período.
+Incluye:
+- sección transversal (document_type_id = 1)
+- Informe a la familia (catálogo id 7) e Informe de Evaluación Psicopedagógica (id 27),
+  contados por archivo en carpeta del período (aunque no sean transversales)
+
+Misma lógica de existencia que FolderClass.check_document_existence para transversales.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Tuple
 
 from sqlalchemy.orm import Session
 
 from app.backend.classes.student_class import StudentClass
 from app.backend.classes.student_document_file_class import FolderClass
-from app.backend.db.models import CourseModel, SchoolModel
+from app.backend.db.models import CourseModel, DocumentModel, FolderModel, SchoolModel
 
-# Misma convención que documents/list y EditStudent: sección transversal.
+# Misma convención que documents/list y EditStudent.
 DOCUMENT_SECTION_TRANSVERSAL = 1
+
+# Catálogo: deben contar en el KPI aunque no sean transversales.
+# 7 = Informe a la familia, 27 = Informe de Evaluación Psicopedagógica
+KPI_EXTRA_CATALOG_IDS = frozenset({7, 27})
 
 
 def _student_label(row: Dict[str, Any]) -> str:
@@ -28,6 +35,85 @@ def _student_label(row: Dict[str, Any]) -> str:
     ]
     name = " ".join(p for p in parts if p).strip()
     return name or f"Estudiante #{row.get('id')}"
+
+
+def _counts_excluding_catalog_ids(
+    result: Dict[str, Any] | None, exclude_ids: frozenset[int]
+) -> Tuple[int, int]:
+    """Totales de check_document_existence sin los document_id exclusivos del KPI extra."""
+    if not isinstance(result, dict) or result.get("status") == "error":
+        return 0, 0
+    loaded = 0
+    for item in result.get("data") or []:
+        if not isinstance(item, dict):
+            continue
+        try:
+            if int(item.get("document_id") or 0) in exclude_ids:
+                continue
+        except Exception:
+            continue
+        loaded += 1
+    missing = 0
+    for item in result.get("missing") or []:
+        if not isinstance(item, dict):
+            continue
+        try:
+            if int(item.get("document_id") or 0) in exclude_ids:
+                continue
+        except Exception:
+            continue
+        missing += 1
+    return loaded, missing
+
+
+def _extra_catalog_doc_loaded(
+    db, student_id: int, document_id: int, period_year: int
+) -> bool:
+    """True si hay carpeta del período con archivo para ese document_id."""
+    py = str(int(period_year))
+    row = (
+        db.query(FolderModel.id)
+        .filter(
+            FolderModel.student_id == int(student_id),
+            FolderModel.document_id == int(document_id),
+            FolderModel.deleted_date.is_(None),
+            FolderModel.file.isnot(None),
+            FolderModel.period_year == py,
+        )
+        .order_by(FolderModel.version_id.desc())
+        .first()
+    )
+    return row is not None
+
+
+def _student_doc_counts(
+    folder: FolderClass, student_id: int, period_year: int
+) -> Tuple[int, int]:
+    """Cargados / faltantes: transversales + familia (7) + psicopedagógico (27)."""
+    sid = int(student_id)
+    py = int(period_year)
+    loaded, missing = _counts_excluding_catalog_ids(
+        folder.check_document_existence(sid, DOCUMENT_SECTION_TRANSVERSAL, py),
+        KPI_EXTRA_CATALOG_IDS,
+    )
+    # Contar 7 y 27 por existencia en carpeta (independiente de la sección del catálogo).
+    active_extra = {
+        int(r.id)
+        for r in folder.db.query(DocumentModel.id)
+        .filter(
+            DocumentModel.id.in_(list(KPI_EXTRA_CATALOG_IDS)),
+            DocumentModel.deleted_date.is_(None),
+        )
+        .all()
+    }
+    for doc_id in sorted(KPI_EXTRA_CATALOG_IDS):
+        if doc_id not in active_extra:
+            continue
+        if _extra_catalog_doc_loaded(folder.db, sid, doc_id, py):
+            loaded += 1
+        else:
+            missing += 1
+    return loaded, missing
 
 
 class KpiDocumentationProgressClass:
@@ -71,7 +157,7 @@ class KpiDocumentationProgressClass:
         school_id: int,
         period_year: int,
     ) -> Dict[str, Any]:
-        """Una fila por curso del colegio: totales de docs cargados / faltantes (tipo transversal)."""
+        """Una fila por curso: transversales + familia + psicopedagógico."""
         try:
             py = int(period_year)
             courses = (
@@ -90,14 +176,9 @@ class KpiDocumentationProgressClass:
                 total_loaded = 0
                 total_missing = 0
                 for row in students:
-                    sid = int(row["id"])
-                    r = folder.check_document_existence(
-                        sid, DOCUMENT_SECTION_TRANSVERSAL, py
-                    )
-                    if isinstance(r, dict) and r.get("status") == "error":
-                        continue
-                    total_loaded += int(r.get("total") or 0)
-                    total_missing += int(r.get("total_missing") or 0)
+                    loaded, missing = _student_doc_counts(folder, int(row["id"]), py)
+                    total_loaded += loaded
+                    total_missing += missing
 
                 expected_slots = total_loaded + total_missing
                 rate = (
@@ -128,7 +209,7 @@ class KpiDocumentationProgressClass:
         school_ids: List[int],
         period_year: int,
     ) -> Dict[str, Any]:
-        """Una fila por establecimiento: suma de todos los cursos (documentación transversal, alumnos con NEE)."""
+        """Una fila por establecimiento (alumnos con NEE)."""
         try:
             py = int(period_year)
             ids = sorted({int(s) for s in school_ids if s is not None and int(s) > 0})
@@ -217,13 +298,7 @@ class KpiDocumentationProgressClass:
 
             for row in students:
                 sid = int(row["id"])
-                r = folder.check_document_existence(
-                    sid, DOCUMENT_SECTION_TRANSVERSAL, py
-                )
-                if isinstance(r, dict) and r.get("status") == "error":
-                    continue
-                loaded = int(r.get("total") or 0)
-                missing = int(r.get("total_missing") or 0)
+                loaded, missing = _student_doc_counts(folder, sid, py)
                 expected = loaded + missing
                 pct = round(100.0 * loaded / expected, 1) if expected > 0 else 0.0
                 rows.append(
