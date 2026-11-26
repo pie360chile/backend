@@ -510,7 +510,11 @@ class CourseClass:
             rows = _extract_courses_rows(inspection_body)
             imported = 0
             skipped = 0
+            reactivated = 0
+            soft_deleted = 0
             errors: List[Dict[str, str]] = []
+            inspection_ids: set = set()
+            session_school_id = int(school_id)
 
             for row in rows:
                 if not isinstance(row, dict):
@@ -524,9 +528,12 @@ class CourseClass:
                     row,
                     ("colegio_id", "colegioId", "colegio", "school_id", "schoolId"),
                 )
-                if remote_school is not None and int(remote_school) != int(school_id):
+                if remote_school is not None and int(remote_school) != session_school_id:
                     skipped += 1
                     continue
+
+                # RUTs/ids del listado Inspection del colegio (aunque luego falle la enseñanza).
+                inspection_ids.add(int(ext_id))
 
                 tipo_tid = _row_int_optional(
                     row,
@@ -581,12 +588,23 @@ class CourseClass:
                         existing.deleted_status_id = 0
                         existing.updated_date = datetime.now()
                         self.db.commit()
-                        imported += 1
+                        reactivated += 1
                         continue
 
-                    same_school = int(existing.school_id or 0) == int(school_id)
+                    same_school = int(existing.school_id or 0) == session_school_id
                     same_name = (existing.course_name or "").strip().lower() == name_norm
                     if same_school and same_name:
+                        # Alinea teaching/año por si Inspection cambió datos.
+                        changed = False
+                        if int(existing.teaching_id or 0) != int(teaching_id):
+                            existing.teaching_id = teaching_id
+                            changed = True
+                        if existing.period_year != period_year:
+                            existing.period_year = period_year
+                            changed = True
+                        if changed:
+                            existing.updated_date = datetime.now()
+                            self.db.commit()
                         skipped += 1
                         continue
                     if same_school and not same_name:
@@ -623,10 +641,33 @@ class CourseClass:
                 else:
                     errors.append({"name": nombre, "message": str(res.get("message", "Error"))})
 
+            # Baja pasiva: cursos activos del colegio que ya no vienen en Inspection.
+            if inspection_ids:
+                now_ts = datetime.now()
+                active = (
+                    self.db.query(CourseModel)
+                    .filter(
+                        CourseModel.school_id == session_school_id,
+                        CourseModel.deleted_status_id == 0,
+                    )
+                    .all()
+                )
+                for course in active:
+                    if int(course.id) in inspection_ids:
+                        continue
+                    course.deleted_status_id = 1
+                    course.updated_date = now_ts
+                    soft_deleted += 1
+                if soft_deleted:
+                    self.db.commit()
+
             return {
                 "status": "success",
                 "imported": imported,
                 "skipped": skipped,
+                "reactivated": reactivated,
+                "soft_deleted": soft_deleted,
+                "inspection_courses": len(inspection_ids),
                 "errors": errors,
             }
         except Exception as e:

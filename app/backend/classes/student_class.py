@@ -1729,9 +1729,9 @@ class StudentClass:
     def get_totals(self, customer_id=None, school_id=None, rol_id=None):
         try:
             from app.backend.db.models import SchoolModel
-            
+
             query = self.db.query(StudentModel).filter(StudentModel.deleted_status_id == 0)
-            
+
             # Si rol_id = 1 (administrador), devolver todos sin filtrar
             # Si es rol_id = 2, filtrar por customer_id
             # Si es cualquier otro rol, filtrar por school_id
@@ -1740,10 +1740,37 @@ class StudentClass:
                 query = query.filter(SchoolModel.customer_id == customer_id)
             elif rol_id not in [1, 2] and school_id:
                 query = query.filter(StudentModel.school_id == school_id)
-            
+
             total = query.count()
-            
-            return {"total": total}
+
+            # Estudiantes con NEE/NEET asignada en ficha (mismo alcance de colegio/cliente).
+            nee_query = (
+                self.db.query(StudentModel.id)
+                .join(
+                    StudentAcademicInfoModel,
+                    StudentAcademicInfoModel.student_id == StudentModel.id,
+                )
+                .outerjoin(
+                    SpecialEducationalNeedModel,
+                    SpecialEducationalNeedModel.id
+                    == StudentAcademicInfoModel.special_educational_need_id,
+                )
+                .filter(
+                    StudentModel.deleted_status_id == 0,
+                    StudentAcademicInfoModel.special_educational_need_id.isnot(None),
+                    SpecialEducationalNeedModel.special_educational_need_type_id.in_([1, 2]),
+                )
+            )
+            if rol_id == 2 and customer_id:
+                nee_query = nee_query.join(
+                    SchoolModel, StudentModel.school_id == SchoolModel.id
+                ).filter(SchoolModel.customer_id == customer_id)
+            elif rol_id not in [1, 2] and school_id:
+                nee_query = nee_query.filter(StudentModel.school_id == school_id)
+
+            nee_total = nee_query.distinct().count()
+
+            return {"total": total, "nee": nee_total}
 
         except Exception as e:
             return {"status": "error", "message": str(e)}

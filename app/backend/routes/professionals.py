@@ -286,7 +286,9 @@ def import_from_inspection(
         )
     msg = (
         f"Importación de profesionales finalizada: {result.get('imported', 0)} nuevos, "
-        f"{result.get('updated', 0)} actualizados, {result.get('skipped', 0)} sin cambios. "
+        f"{result.get('updated', 0)} actualizados, {result.get('skipped', 0)} sin cambios, "
+        f"{result.get('reactivated', 0)} reactivados, "
+        f"{result.get('soft_deleted', 0)} baja pasiva (ya no están en Inspection). "
         "El rol asignado es Profesional."
     )
     return JSONResponse(

@@ -295,7 +295,12 @@ def import_from_inspection(
 
     imported = result.get("imported", 0)
     skipped = result.get("skipped", 0)
-    msg = f"Importación de cursos finalizada: {imported} nuevos, {skipped} omitidos (duplicados o sin datos)."
+    reactivated = result.get("reactivated", 0)
+    soft_deleted = result.get("soft_deleted", 0)
+    msg = (
+        f"Importación de cursos finalizada: {imported} nuevos, {skipped} omitidos, "
+        f"{reactivated} reactivados, {soft_deleted} baja pasiva (ya no están en Inspection)."
+    )
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={

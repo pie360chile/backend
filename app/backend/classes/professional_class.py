@@ -853,7 +853,11 @@ class ProfessionalClass:
         return None
 
     def import_from_inspection(self, school_id: int, inspection_body: dict, period_year=None) -> dict:
-        """Alta o actualización desde POST listado/funcionarios. El rol siempre es Profesional."""
+        """Alta o actualización desde POST listado/funcionarios. El rol siempre es Profesional.
+
+        Al final: baja pasiva del vínculo colegio (users_rols) si el RUT ya no viene en Inspection;
+        si vuelve, se reactiva el users_rols borrado.
+        """
         try:
             rol_id = self._profesional_rol_id(school_id)
             if rol_id is None:
@@ -867,6 +871,8 @@ class ProfessionalClass:
             imported = 0
             updated = 0
             skipped = 0
+            reactivated = 0
+            soft_deleted = 0
             errors = []
             seen = set()
             school = (
@@ -877,6 +883,7 @@ class ProfessionalClass:
             if not school:
                 return {"status": "error", "message": "Colegio no encontrado."}
 
+            sid = int(school_id)
             for row in rows:
                 if not isinstance(row, dict):
                     continue
@@ -901,8 +908,42 @@ class ProfessionalClass:
 
                 email = str(row.get("email") or "").strip() or None
                 phone = str(row.get("celular") or row.get("telefono") or "").strip() or None
+
+                # Reactivar vínculo colegio si estaba en baja pasiva.
+                soft_ur = (
+                    self.db.query(UsersRolModel, UserModel)
+                    .join(UserModel, UsersRolModel.user_id == UserModel.id)
+                    .join(RolModel, UsersRolModel.rol_id == RolModel.id)
+                    .filter(
+                        UserModel.customer_id == school.customer_id,
+                        _rut_normalized_sql(UserModel.rut) == rut_norm,
+                        RolModel.school_id == sid,
+                        RolModel.rol.ilike("Profesional"),
+                        UsersRolModel.deleted_status_id.isnot(None),
+                        UsersRolModel.deleted_status_id != 0,
+                        users_rol_period_clause(period_year, bypass_global_rol_ids=()),
+                    )
+                    .order_by(UsersRolModel.id.desc())
+                    .first()
+                )
+                if soft_ur is not None:
+                    ur_row, user_row = soft_ur
+                    ur_row.deleted_status_id = 0
+                    ur_row.updated_date = datetime.now()
+                    full_name = f"{names} {lastnames}".strip()
+                    if full_name:
+                        user_row.full_name = full_name
+                    if email:
+                        user_row.email = email
+                    if phone:
+                        user_row.phone = phone
+                    user_row.updated_date = datetime.now()
+                    self.db.commit()
+                    reactivated += 1
+                    continue
+
                 if self._duplicate_rut_for_school(
-                    rut_norm, school.customer_id, int(school_id), period_year
+                    rut_norm, school.customer_id, sid, period_year
                 ):
                     action = self._update_inspection_professional(
                         rut_norm, school.customer_id, names, lastnames, email, phone
@@ -926,7 +967,7 @@ class ProfessionalClass:
                         "password": secrets.token_urlsafe(18),
                         "period_year": period_year,
                     },
-                    school_id=int(school_id),
+                    school_id=sid,
                 )
                 if isinstance(result, dict) and result.get("status") == "success":
                     imported += 1
@@ -937,11 +978,57 @@ class ProfessionalClass:
                     continue
                 errors.append({"name": rut_raw, "message": msg})
 
+            # Baja pasiva del rol Profesional en este colegio si ya no viene en Inspection.
+            if seen:
+                now = datetime.now()
+                active_urs = (
+                    self.db.query(UsersRolModel, UserModel)
+                    .join(UserModel, UsersRolModel.user_id == UserModel.id)
+                    .join(RolModel, UsersRolModel.rol_id == RolModel.id)
+                    .filter(
+                        RolModel.school_id == sid,
+                        RolModel.rol.ilike("Profesional"),
+                        _active_ur_filter(),
+                        _active_user_filter(),
+                        users_rol_period_clause(period_year, bypass_global_rol_ids=()),
+                    )
+                    .all()
+                )
+                for ur_row, user_row in active_urs:
+                    key = _normalize_rut(user_row.rut or "")
+                    if not key or key in seen:
+                        continue
+                    ur_row.deleted_status_id = 1
+                    ur_row.updated_date = now
+                    soft_deleted += 1
+                    prof = (
+                        self.db.query(ProfessionalModel)
+                        .filter(ProfessionalModel.user_id == user_row.id)
+                        .order_by(ProfessionalModel.id.desc())
+                        .first()
+                    )
+                    if prof:
+                        for ptc in (
+                            self.db.query(ProfessionalTeachingCourseModel)
+                            .filter(
+                                ProfessionalTeachingCourseModel.professional_id == prof.id,
+                                ProfessionalTeachingCourseModel.deleted_status_id == 0,
+                            )
+                            .all()
+                        ):
+                            ptc.deleted_status_id = 1
+                            ptc.updated_date = now
+                if soft_deleted:
+                    self.db.commit()
+
             return {
                 "status": "success",
                 "imported": imported,
                 "updated": updated,
                 "skipped": skipped,
+                "reactivated": reactivated,
+                "soft_deleted": soft_deleted,
+                "inspection_ruts": len(seen),
                 "errors": errors,
             }
         except Exception as e:
