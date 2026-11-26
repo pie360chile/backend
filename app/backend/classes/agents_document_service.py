@@ -147,6 +147,63 @@ def _basic_student_context(db: Session, student_id: int) -> dict[str, Any]:
     }
 
 
+def _stock_template_candidates(
+    doc_id: int, ext: str, roots: list[Path] | None = None
+) -> list[Path]:
+    """Plantillas de respaldo (mismo criterio que documentos clásicos / lucIA)."""
+    search_roots = list(roots or [])
+    primary = storage.files_dir()
+    if primary not in search_roots:
+        search_roots.insert(0, primary)
+    # Dev local: también ./files si FILES_DIR apunta al path de producción.
+    local_files = Path("files").resolve()
+    if local_files.is_dir() and local_files not in {p.resolve() for p in search_roots}:
+        search_roots.append(local_files)
+
+    found: list[Path] = []
+    for root in search_roots:
+        if doc_id == _FAMILY_DOCUMENT_ID and ext == "docx":
+            for name in ("family_report.docx", "family_inform.docx"):
+                hit = root / "original_student_files" / name
+                if hit.is_file():
+                    found.append(hit)
+        elif doc_id == PSYCHOPED_DOCUMENT_ID and ext == "docx":
+            lucia = root / "agent_v2" / "lucIA" / "lucia"
+            if lucia.is_dir():
+                found.extend(sorted(lucia.glob("Formato_Informe_Psico*.docx")))
+            agent_v2 = root / "agent_v2"
+            if agent_v2.is_dir():
+                found.extend(sorted(agent_v2.rglob("Formato_Informe_Psico*.docx")))
+    # Dedup
+    seen: set[str] = set()
+    out: list[Path] = []
+    for p in found:
+        try:
+            key = str(p.resolve()).lower()
+        except Exception:
+            key = str(p).lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(p)
+    return out
+
+
+def _heal_template_to_registered_path(source: Path, registered_rel: str) -> Path | None:
+    """Si la ruta de BD no tiene archivo, copia el stock ahí para próximos usos."""
+    rel = (registered_rel or "").replace("\\", "/").lstrip("/")
+    if not rel or not source.is_file():
+        return None
+    try:
+        target = (storage.files_dir() / rel).resolve()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if not target.is_file():
+            shutil.copy2(source, target)
+        return target if target.is_file() else None
+    except Exception:
+        return None
+
+
 def _resolve_template_absolute(template: AgentDocumentTemplateModel) -> Path | None:
     """Resuelve la plantilla en disco; prueba rutas alternativas si la registrada falló."""
     rel = (template.template_path or "").replace("\\", "/").lstrip("/")
@@ -172,6 +229,11 @@ def _resolve_template_absolute(template: AgentDocumentTemplateModel) -> Path | N
         if len(parts) >= 3:
             agent_root = root / parts[0] / parts[1] / parts[2]
             candidates.append(agent_root / "documentos" / str(doc_id) / f"formato.{ext}")
+        # Legacy agent_v2 / AgentName / documentos / {id} / formato.ext
+        if parts and parts[0] == "agent_v2" and len(parts) >= 2:
+            candidates.append(
+                root / "agent_v2" / parts[1] / "documentos" / str(doc_id) / f"formato.{ext}"
+            )
 
     agents_root = storage.files_dir() / "agents"
     if agents_root.is_dir():
@@ -185,6 +247,9 @@ def _resolve_template_absolute(template: AgentDocumentTemplateModel) -> Path | N
                 if hit.is_file():
                     candidates.append(hit)
 
+    # Respaldo tipo psicopedagógico: plantilla stock del sistema.
+    candidates.extend(_stock_template_candidates(doc_id, ext, roots))
+
     seen: set[str] = set()
     for cand in candidates:
         try:
@@ -193,7 +258,13 @@ def _resolve_template_absolute(template: AgentDocumentTemplateModel) -> Path | N
                 continue
             seen.add(key)
             if cand.is_file():
-                return cand.resolve()
+                resolved = cand.resolve()
+                # Si BD apunta a agents/... pero el archivo solo está en stock, regenera la ruta.
+                if rel and "agents/" in rel.replace("\\", "/"):
+                    healed = _heal_template_to_registered_path(resolved, rel)
+                    if healed is not None:
+                        return healed
+                return resolved
         except Exception:
             continue
     return None

@@ -29,6 +29,7 @@ from app.backend.utils.agents_chat_context import (
     resolve_document_id_for_agent,
     resolve_student_id,
     student_identification_hint,
+    continues_document_generation,
     wants_document_generation,
     build_ask_rut_reply,
     build_invalid_rut_reply,
@@ -664,12 +665,14 @@ class AgentsChatClass:
             message=text,
             history=history,
         )
-        want_doc_early = wants_document_generation(text, history)
+        # Incluye respuesta con RUT/nombre tras «haz el informe» o tras pedir identificación.
+        want_doc_early = continues_document_generation(text, history)
         bulk_request = looks_like_bulk_request(text, history)
         # Psicopedagógico: no rechazar solo por falta de Files; el estudiante puede tener
         # respuestas vía MCP get_student_psychopedagogical_form_answers (se valida abajo).
 
-        # Agentes psico/familia: solo atienden pedidos de creación del informe.
+        # Agentes psico/familia: solo atienden pedidos de creación del informe
+        # (o la identificación del alumno que continúa ese pedido).
         if not want_doc_early and not bulk_request:
             scope_ask = _report_agent_scope_reply(
                 resolved_document_id, agent_row.name or ""
@@ -876,7 +879,7 @@ class AgentsChatClass:
             history=history,
         )
 
-        want_doc = wants_document_generation(text, history)
+        want_doc = continues_document_generation(text, history)
         hide_family_draft = _is_family_report(resolved_document_id, agent_row.name or "")
         if hide_family_draft:
             yield {"type": "step", "message": "Elaborando el Informe a la Familia…"}

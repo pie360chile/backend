@@ -375,12 +375,15 @@ def import_from_inspection(
 
     imported = result.get("imported", 0)
     skipped = result.get("skipped", 0)
+    reactivated = result.get("reactivated", 0)
+    soft_deleted = result.get("soft_deleted", 0)
     excluded = result.get("excluded_other_school", 0)
     guardians_added = result.get("guardians_added", 0)
     guardians_updated = result.get("guardians_updated", 0)
     msg = (
         f"Importación de estudiantes finalizada: {imported} nuevos, {skipped} omitidos "
-        f"(duplicados o ya existentes), {excluded} filas de otros colegios ignoradas. "
+        f"(duplicados o ya existentes), {reactivated} reactivados, {soft_deleted} "
+        f"baja pasiva (ya no están en Inspection), {excluded} filas de otros colegios ignoradas. "
         f"Apoderados: {guardians_added} agregados, {guardians_updated} actualizados."
     )
     return JSONResponse(

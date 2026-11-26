@@ -221,6 +221,67 @@ def wants_document_generation(message: str, history: list[dict[str, str]] | None
     return False
 
 
+_ASK_STUDENT_ID_MARKERS = (
+    "rut",
+    "indícame el",
+    "indicame el",
+    "indícame el estudiante",
+    "indicame el estudiante",
+    "identificar",
+    "nombre o rut",
+    "dígito verificador",
+    "digito verificador",
+    "cuando lo envíes",
+    "cuando lo envies",
+)
+
+
+def continues_document_generation(
+    message: str, history: list[dict[str, str]] | None = None
+) -> bool:
+    """
+    True si el turno pide el informe o continúa ese pedido (p. ej. responde con RUT
+    después de que el bot lo pidió o tras «haz el informe de…»).
+    """
+    if wants_document_generation(message, history):
+        return True
+
+    text = (message or "").strip()
+    if not text:
+        return False
+    low = text.lower()
+    if low in _SHORT_NON_GENERATION:
+        return False
+
+    has_rut = bool(extract_rut_from_text(text))
+    name_tokens = extract_name_tokens_from_text(text)
+    if not has_rut and not name_tokens:
+        return False
+
+    hist = history or []
+    prior_gen = any(
+        (item.get("role") == "user")
+        and wants_document_generation(item.get("content") or "")
+        for item in hist
+    )
+    assistant_asked_id = False
+    for item in reversed(hist):
+        if item.get("role") != "assistant":
+            continue
+        alow = (item.get("content") or "").lower()
+        if any(m in alow for m in _ASK_STUDENT_ID_MARKERS):
+            assistant_asked_id = True
+            break
+
+    if prior_gen or assistant_asked_id:
+        return True
+
+    # Mensaje corto que es solo (o casi solo) un RUT → identificación del alumno.
+    if has_rut and len(text) <= 40:
+        return True
+    return False
+
+
 def lookup_student_id_by_rut(db: Session, rut: str) -> int | None:
     """Coincidencia exacta del RUT normalizado. No completa ni recorta dígitos."""
     target = normalize_rut(rut)

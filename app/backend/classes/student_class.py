@@ -1459,6 +1459,8 @@ class StudentClass:
         1) Se excluyen filas con colegio_id distinto al school_id de sesión (si viene en JSON).
         2) Si la fila no trae colegio_id, se asume el colegio de sesión.
         3) Por fila: sin RUT duplicado en el lote; sin insertar si ya existe identification_number activo en el colegio.
+        4) Al final: borrado pasivo (deleted_status_id=1) de alumnos activos del colegio cuyo RUT
+           no viene en Inspection; si un RUT vuelve, se reactiva el registro borrado.
         No se persiste el id remoto del alumno en students.id (PK autoincrement local).
         """
         try:
@@ -1466,15 +1468,22 @@ class StudentClass:
             session_school_id = int(school_id)
             rows: List[Dict[str, Any]] = []
             excluded_other_school = 0
+            inspection_rut_keys: set = set()
             for row in raw_rows:
                 cid = _row_colegio_id_for_inspection(row)
                 if cid is not None and cid != session_school_id:
                     excluded_other_school += 1
                     continue
                 rows.append(row)
+                rut_for_sync = (row.get("rut") or row.get("identification_number") or "").strip()
+                key_for_sync = _identification_key_for_dedupe(rut_for_sync)
+                if key_for_sync:
+                    inspection_rut_keys.add(key_for_sync)
 
             imported = 0
             skipped = 0
+            reactivated = 0
+            soft_deleted = 0
             guardians_added = 0
             guardians_updated = 0
             errors: List[Dict[str, str]] = []
@@ -1544,26 +1553,36 @@ class StudentClass:
 
                 rut_stored = _format_rut_display(rut_raw)
 
-                already = (
-                    self.db.query(StudentModel.id)
+                already_row = (
+                    self.db.query(StudentModel)
                     .outerjoin(
                         StudentPersonalInfoModel,
                         StudentPersonalInfoModel.student_id == StudentModel.id,
                     )
                     .filter(
                         StudentModel.school_id == session_school_id,
-                        StudentModel.deleted_status_id == 0,
                         or_(
                             _rut_normalized_sql(StudentModel.identification_number) == id_key,
                             _rut_normalized_sql(StudentPersonalInfoModel.identification_number) == id_key,
                         ),
                     )
+                    .order_by(StudentModel.deleted_status_id.asc(), StudentModel.id.desc())
                     .first()
                 )
-                if already is not None:
-                    skipped += 1
+                if already_row is not None:
+                    student_id = int(already_row.id)
+                    was_deleted = int(already_row.deleted_status_id or 0) != 0
+                    if was_deleted:
+                        already_row.deleted_status_id = 0
+                        already_row.period_year = str(period_year) if period_year is not None else already_row.period_year
+                        already_row.identification_number = rut_stored or already_row.identification_number
+                        already_row.updated_date = datetime.now()
+                        self.db.commit()
+                        reactivated += 1
+                    else:
+                        skipped += 1
                     action = self._sync_inspection_guardian(
-                        int(getattr(already, "id", None) or already[0]),
+                        student_id,
                         row,
                         errors,
                         rut_raw,
@@ -1583,7 +1602,8 @@ class StudentClass:
 
                 student_inputs: Dict[str, Any] = {
                     "school_id": school_id,
-                    "identification_number": rut_stored,                    "period_year": period_year,
+                    "identification_number": rut_stored,
+                    "period_year": period_year,
                     "course_id": course_remote,
                     "names": nombres or "—",
                     "father_lastname": paterno or "",
@@ -1641,13 +1661,48 @@ class StudentClass:
                     }
                 )
 
+            # Borrado pasivo: activos del colegio cuyo RUT no está en el listado Inspection.
+            # No se ejecuta si Inspection vino vacío (evita borrar todo por error de payload).
+            if inspection_rut_keys:
+                active_students = (
+                    self.db.query(StudentModel)
+                    .filter(
+                        StudentModel.school_id == session_school_id,
+                        StudentModel.deleted_status_id == 0,
+                    )
+                    .all()
+                )
+                now_ts = datetime.now()
+                for st in active_students:
+                    key = _identification_key_for_dedupe(st.identification_number or "")
+                    if not key:
+                        personal = (
+                            self.db.query(StudentPersonalInfoModel)
+                            .filter(StudentPersonalInfoModel.student_id == st.id)
+                            .first()
+                        )
+                        if personal:
+                            key = _identification_key_for_dedupe(
+                                personal.identification_number or ""
+                            )
+                    if not key or key in inspection_rut_keys:
+                        continue
+                    st.deleted_status_id = 1
+                    st.updated_date = now_ts
+                    soft_deleted += 1
+                if soft_deleted:
+                    self.db.commit()
+
             return {
                 "status": "success",
                 "imported": imported,
                 "skipped": skipped,
+                "reactivated": reactivated,
+                "soft_deleted": soft_deleted,
                 "guardians_added": guardians_added,
                 "guardians_updated": guardians_updated,
                 "excluded_other_school": excluded_other_school,
+                "inspection_ruts": len(inspection_rut_keys),
                 "errors": errors,
             }
         except Exception as e:
