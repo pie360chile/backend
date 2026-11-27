@@ -171,9 +171,16 @@ def totals(
     body: Optional[dict] = Body(default=None),
 ):
     body = body or {}
-    customer_id = session_user.customer_id if session_user else None
-    school_id = _school_id_from_request_or_session(db, session_user, body.get("school_id"))
-    rol_id = session_user.rol_id if session_user else None
+    from app.backend.classes.session_role_scope import resolve_totals_scope
+
+    customer_id, school_id_scoped, rol_id = resolve_totals_scope(session_user, db)
+    # Admin de cliente: no forzar school_id del body/sesión (sumatoria de todos sus colegios).
+    if rol_id == 2:
+        school_id = None
+    else:
+        school_id = _school_id_from_request_or_session(db, session_user, body.get("school_id"))
+        if school_id is None:
+            school_id = school_id_scoped
     py = resolve_period_year_for_session(session_user, body.get("period_year"))
     only_uid = session_restricted_user_id(db, session_user, py)
     result = ProfessionalClass(db).get_totals(

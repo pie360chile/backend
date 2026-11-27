@@ -291,9 +291,9 @@ def counts_by_sen_type_and_pie_years_by_school(
 
 @students.post("/totals")
 def totals(session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    customer_id = session_user.customer_id if session_user else None
-    school_id = session_user.school_id if session_user else None
-    rol_id = session_user.rol_id if session_user else None
+    from app.backend.classes.session_role_scope import resolve_totals_scope
+
+    customer_id, school_id, rol_id = resolve_totals_scope(session_user, db)
     result = StudentClass(db).get_totals(customer_id=customer_id, school_id=school_id, rol_id=rol_id)
 
     if isinstance(result, dict) and result.get("status") == "error":
