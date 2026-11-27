@@ -128,6 +128,7 @@ def store(
 def edit(session_user: UserLogin = Depends(get_current_active_user), db: Session = Depends(get_db)):
     # Obtener customer_id del usuario en sesión
     customer_id = session_user.customer_id if session_user else None
+    school_id = session_user.school_id if session_user else None
     
     if not customer_id:
         return JSONResponse(
@@ -139,8 +140,8 @@ def edit(session_user: UserLogin = Depends(get_current_active_user), db: Session
             }
         )
     
-    # Obtener escuela directamente por customer_id usando get()
-    result = SchoolClass(db).get(customer_id=customer_id)
+    # Preferir el colegio de sesión (admin multi-colegio); si no hay, el del customer.
+    result = SchoolClass(db).get(customer_id=customer_id, school_id=school_id)
 
     # Si no hay escuela, devolver 200 con data null
     if isinstance(result, dict) and (result.get("error") or result.get("status") == "error"):
@@ -170,6 +171,7 @@ def update(
 ):
     # Obtener customer_id del usuario en sesión
     customer_id = session_user.customer_id if session_user else None
+    session_school_id = session_user.school_id if session_user else None
     
     if not customer_id:
         return JSONResponse(
@@ -181,8 +183,8 @@ def update(
             }
         )
     
-    # Obtener la escuela del customer para obtener su ID
-    existing_school = SchoolClass(db).get(customer_id=customer_id)
+    # Actualizar el colegio de sesión (no el primero del customer).
+    existing_school = SchoolClass(db).get(customer_id=customer_id, school_id=session_school_id)
     
     if isinstance(existing_school, dict) and (existing_school.get("error") or existing_school.get("status") == "error"):
         return JSONResponse(
