@@ -186,6 +186,30 @@ def _inspection_int(v):
         return None
 
 
+def _inspection_bool(v) -> Optional[bool]:
+    """Acepta true/false, 1/0, yes/no, on/off (mismo criterio que Inspection)."""
+    if v is None:
+        return None
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        if int(v) == 1:
+            return True
+        if int(v) == 0:
+            return False
+        return None
+    s = str(v).strip().lower()
+    if s in ("true", "1", "yes", "on", "si", "sí"):
+        return True
+    if s in ("false", "0", "no", "off"):
+        return False
+    return None
+
+
+# Inspection solo envía pie (contrato PIE); no trae diagnóstico/NEE concreto.
+INSPECTION_PIE_NEE_LABEL = "En PIE (sin diagnóstico)"
+
+
 def _row_colegio_id_for_inspection(row: Dict[str, Any]) -> Optional[int]:
     """Id de establecimiento en fila Inspection (import alumnos)."""
     for key in ("colegio_id", "colegioId", "colegio", "id_colegio"):
@@ -245,6 +269,82 @@ class StudentClass:
         if row is not None and getattr(row, "region_id", None) is not None:
             return int(row.region_id)
         return None
+
+    def _ensure_inspection_pie_nee_id(self) -> int:
+        """
+        Catálogo global para marcar alumnos con pie=true en Inspection sin diagnóstico.
+        type_id=2 (NEET) para que cuente en el card NEE (tipos 1 y 2).
+        """
+        existing = (
+            self.db.query(SpecialEducationalNeedModel)
+            .filter(
+                SpecialEducationalNeedModel.special_educational_needs == INSPECTION_PIE_NEE_LABEL,
+                SpecialEducationalNeedModel.school_id.is_(None),
+                SpecialEducationalNeedModel.deleted_status_id == 0,
+            )
+            .order_by(SpecialEducationalNeedModel.id.asc())
+            .first()
+        )
+        if existing is not None:
+            if existing.special_educational_need_type_id not in (1, 2):
+                existing.special_educational_need_type_id = 2
+                existing.updated_date = datetime.now()
+                self.db.commit()
+            return int(existing.id)
+
+        now_ts = datetime.now()
+        row = SpecialEducationalNeedModel(
+            school_id=None,
+            special_educational_need_type_id=2,
+            deleted_status_id=0,
+            special_educational_needs=INSPECTION_PIE_NEE_LABEL,
+            added_date=now_ts,
+            updated_date=now_ts,
+        )
+        self.db.add(row)
+        self.db.commit()
+        self.db.refresh(row)
+        return int(row.id)
+
+    def _sync_inspection_pie_nee(self, student_id: int, pie: Optional[bool]) -> str:
+        """
+        Sincroniza special_educational_need_id con el flag pie de Inspection.
+        - pie=True y sin NEE → asigna 'En PIE (sin diagnóstico)'
+        - pie=True y ya tiene NEE → no pisa el diagnóstico
+        - pie=False → limpia special_educational_need_id
+        - pie=None → no cambia
+        """
+        if pie is None:
+            return "skipped"
+
+        academic = (
+            self.db.query(StudentAcademicInfoModel)
+            .filter(StudentAcademicInfoModel.student_id == int(student_id))
+            .order_by(StudentAcademicInfoModel.id.desc())
+            .first()
+        )
+        if academic is None:
+            return "skipped"
+
+        current = academic.special_educational_need_id
+        now_ts = datetime.now()
+
+        if pie is True:
+            if current is not None:
+                return "kept"
+            placeholder_id = self._ensure_inspection_pie_nee_id()
+            academic.special_educational_need_id = placeholder_id
+            academic.updated_date = now_ts
+            self.db.commit()
+            return "set"
+
+        # pie=False → fuera de contrato PIE
+        if current is None:
+            return "kept"
+        academic.special_educational_need_id = None
+        academic.updated_date = now_ts
+        self.db.commit()
+        return "cleared"
 
     def _provision_inspection_import_extras(
         self,
@@ -767,6 +867,7 @@ class StudentClass:
                     StudentAcademicInfoModel.sip_admission_year,
                     StudentAcademicInfoModel.special_educational_need_id,
                     SpecialEducationalNeedModel.special_educational_need_type_id,
+                    SpecialEducationalNeedModel.special_educational_needs,
                     CourseModel.course_name,
                 )
                 .join(
@@ -796,6 +897,7 @@ class StudentClass:
 
             # by_course: course_id -> { course_name, by_type: { type_id -> { one_year, more_than_one_year } }, totals }
             by_course = {}
+            need_meta = {}
             for row in rows:
                 course_id = row.course_id or 0
                 course_name = (row.course_name or "").strip() if row.course_name else ""
@@ -812,10 +914,19 @@ class StudentClass:
                     }
                 if course_name and not by_course[course_id]["course_name"]:
                     by_course[course_id]["course_name"] = course_name
-                sip_year = row.sip_admission_year
+                sip_raw = row.sip_admission_year
+                try:
+                    sip_year = int(sip_raw) if sip_raw is not None and str(sip_raw).strip() != "" else None
+                except (TypeError, ValueError):
+                    sip_year = None
                 years_in_pie = (current_year - sip_year) if sip_year else 0
                 t = by_course[course_id]["by_type"].setdefault(type_id, {"one_year": 0, "more_than_one_year": 0})
                 need_id = row.special_educational_need_id
+                if need_id is not None and need_id not in need_meta:
+                    need_meta[need_id] = {
+                        "special_educational_need_name": (row.special_educational_needs or "").strip() or None,
+                        "special_educational_need_type_id": type_id,
+                    }
                 n = by_course[course_id]["by_need"].setdefault(need_id, {"one_year": 0, "more_than_one_year": 0})
                 if years_in_pie == 0:
                     t["one_year"] += 1
@@ -841,6 +952,12 @@ class StudentClass:
                 by_need_list = [
                     {
                         "special_educational_need_id": nid,
+                        "special_educational_need_name": (need_meta.get(nid) or {}).get(
+                            "special_educational_need_name"
+                        ),
+                        "special_educational_need_type_id": (need_meta.get(nid) or {}).get(
+                            "special_educational_need_type_id"
+                        ),
                         "one_year": data["one_year"],
                         "more_than_one_year": data["more_than_one_year"],
                         "total": data["one_year"] + data["more_than_one_year"],
@@ -880,6 +997,7 @@ class StudentClass:
                     StudentAcademicInfoModel.sip_admission_year,
                     StudentAcademicInfoModel.special_educational_need_id,
                     SpecialEducationalNeedModel.special_educational_need_type_id,
+                    SpecialEducationalNeedModel.special_educational_needs,
                     CourseModel.course_name,
                 )
                 .join(
@@ -913,6 +1031,7 @@ class StudentClass:
 
             # by_school: school_id -> { school_name, by_course: { course_id -> { ... } }, totals }
             by_school = {}
+            need_meta = {}
             for row in rows:
                 school_id = row.school_id or 0
                 school_name = (row.school_name or "").strip() if row.school_name else ""
@@ -940,11 +1059,20 @@ class StudentClass:
                     }
                 if course_name and not by_school[school_id]["by_course"][course_id]["course_name"]:
                     by_school[school_id]["by_course"][course_id]["course_name"] = course_name
-                sip_year = row.sip_admission_year
+                sip_raw = row.sip_admission_year
+                try:
+                    sip_year = int(sip_raw) if sip_raw is not None and str(sip_raw).strip() != "" else None
+                except (TypeError, ValueError):
+                    sip_year = None
                 years_in_pie = (current_year - sip_year) if sip_year else 0
                 c = by_school[school_id]["by_course"][course_id]
                 t = c["by_type"].setdefault(type_id, {"one_year": 0, "more_than_one_year": 0})
                 need_id = row.special_educational_need_id
+                if need_id is not None and need_id not in need_meta:
+                    need_meta[need_id] = {
+                        "special_educational_need_name": (row.special_educational_needs or "").strip() or None,
+                        "special_educational_need_type_id": type_id,
+                    }
                 n = c["by_need"].setdefault(need_id, {"one_year": 0, "more_than_one_year": 0})
                 if years_in_pie == 0:
                     t["one_year"] += 1
@@ -975,6 +1103,12 @@ class StudentClass:
                     by_need_list = [
                         {
                             "special_educational_need_id": nid,
+                            "special_educational_need_name": (need_meta.get(nid) or {}).get(
+                                "special_educational_need_name"
+                            ),
+                            "special_educational_need_type_id": (need_meta.get(nid) or {}).get(
+                                "special_educational_need_type_id"
+                            ),
                             "one_year": data["one_year"],
                             "more_than_one_year": data["more_than_one_year"],
                             "total": data["one_year"] + data["more_than_one_year"],
@@ -1486,8 +1620,12 @@ class StudentClass:
             soft_deleted = 0
             guardians_added = 0
             guardians_updated = 0
+            nee_set = 0
+            nee_cleared = 0
+            nee_kept = 0
             errors: List[Dict[str, str]] = []
             seen_identification_keys: set = set()
+            pie_nee_id = self._ensure_inspection_pie_nee_id()
 
             for row in rows:
                 rut_raw = (row.get("rut") or row.get("identification_number") or "").strip()
@@ -1569,6 +1707,8 @@ class StudentClass:
                     .order_by(StudentModel.deleted_status_id.asc(), StudentModel.id.desc())
                     .first()
                 )
+                pie_flag = _inspection_bool(row.get("pie"))
+
                 if already_row is not None:
                     student_id = int(already_row.id)
                     was_deleted = int(already_row.deleted_status_id or 0) != 0
@@ -1581,6 +1721,13 @@ class StudentClass:
                         reactivated += 1
                     else:
                         skipped += 1
+                    nee_action = self._sync_inspection_pie_nee(student_id, pie_flag)
+                    if nee_action == "set":
+                        nee_set += 1
+                    elif nee_action == "cleared":
+                        nee_cleared += 1
+                    elif nee_action == "kept":
+                        nee_kept += 1
                     action = self._sync_inspection_guardian(
                         student_id,
                         row,
@@ -1616,11 +1763,22 @@ class StudentClass:
                     "gender_id": sex,
                     "commune_id": comuna,
                 }
+                if pie_flag is True:
+                    student_inputs["special_educational_need_id"] = pie_nee_id
 
                 result = self.store(student_inputs)
                 if isinstance(result, dict) and result.get("status") == "success":
                     new_student_id = result.get("student_id")
                     if new_student_id is not None:
+                        nee_action = self._sync_inspection_pie_nee(int(new_student_id), pie_flag)
+                        if nee_action == "set":
+                            nee_set += 1
+                        elif nee_action == "cleared":
+                            nee_cleared += 1
+                        elif nee_action == "kept":
+                            nee_kept += 1
+                        elif pie_flag is True:
+                            nee_set += 1
                         action = self._sync_inspection_guardian(
                             int(new_student_id),
                             row,
@@ -1701,6 +1859,9 @@ class StudentClass:
                 "soft_deleted": soft_deleted,
                 "guardians_added": guardians_added,
                 "guardians_updated": guardians_updated,
+                "nee_set": nee_set,
+                "nee_cleared": nee_cleared,
+                "nee_kept": nee_kept,
                 "excluded_other_school": excluded_other_school,
                 "inspection_ruts": len(inspection_rut_keys),
                 "errors": errors,
